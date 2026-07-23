@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+.gradle
+**/build
+pnpm-lock.yaml
+AGENTS.md
+docs/AGENTS.md
+docs/product-build-brief.md

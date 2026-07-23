@@ -1,0 +1,28 @@
+{
+  "name": "beacon-secureview",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Milestone 0 foundation for Beacon SecureView",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22.13.0 <23"
+  },
+  "scripts": {
+    "build": "pnpm --recursive --if-present build",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "dev": "pnpm --parallel --filter @beacon/backend --filter @beacon/web-viewer dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "test": "pnpm --recursive --if-present test",
+    "typecheck": "pnpm --recursive --if-present typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.7.0",
+    "globals": "17.4.0",
+    "prettier": "3.9.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.65.0"
+  }
+}
