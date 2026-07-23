@@ -1,0 +1,7 @@
+packages:
+  - apps/backend
+  - apps/web-viewer
+  - packages/*
+
+allowBuilds:
+  esbuild: true

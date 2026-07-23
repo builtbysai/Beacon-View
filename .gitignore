@@ -1,0 +1,28 @@
+# Dependencies and build output
+node_modules/
+.pnpm-store/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Android and Gradle
+.gradle/
+local.properties
+**/build/
+*.jks
+*.keystore
+
+# Logs
+*.log
+pnpm-debug.log*
