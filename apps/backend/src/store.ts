@@ -27,6 +27,12 @@ export interface CameraRecord {
   credentialRevokedAt: Date | null;
 }
 
+export interface CameraIdentity {
+  cameraId: string;
+  householdId: string;
+  publicDeviceId: string;
+}
+
 export interface AuditInput {
   eventType: string;
   success: boolean;
@@ -84,6 +90,13 @@ export interface MilestoneStore {
     householdId: string,
     publicDeviceId: string,
   ): Promise<string | null>;
+  findDeviceByCredential(
+    credentialHash: string,
+  ): Promise<CameraIdentity | null>;
+  findOwnedCamera(
+    householdId: string,
+    publicDeviceId: string,
+  ): Promise<CameraIdentity | null>;
 }
 
 export class PostgresStore implements MilestoneStore {
@@ -356,6 +369,36 @@ export class PostgresStore implements MilestoneStore {
       [publicDeviceId, householdId],
     );
     return result.rows[0]?.cameraId ?? null;
+  }
+
+  async findDeviceByCredential(
+    credentialHash: string,
+  ): Promise<CameraIdentity | null> {
+    const result = await this.pool.query<CameraIdentity>(
+      `SELECT c.id AS "cameraId", c.household_id AS "householdId",
+              c.public_device_id AS "publicDeviceId"
+       FROM cameras c
+       JOIN device_credentials dc ON dc.camera_id = c.id
+       WHERE dc.credential_hash = $1 AND dc.revoked_at IS NULL`,
+      [credentialHash],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async findOwnedCamera(
+    householdId: string,
+    publicDeviceId: string,
+  ): Promise<CameraIdentity | null> {
+    const result = await this.pool.query<CameraIdentity>(
+      `SELECT c.id AS "cameraId", c.household_id AS "householdId",
+              c.public_device_id AS "publicDeviceId"
+       FROM cameras c
+       JOIN device_credentials dc ON dc.camera_id = c.id
+       WHERE c.household_id = $1 AND c.public_device_id = $2
+         AND dc.revoked_at IS NULL`,
+      [householdId, publicDeviceId],
+    );
+    return result.rows[0] ?? null;
   }
 
   private async insertAudit(

@@ -1,12 +1,15 @@
 # Architecture
 
-## Milestone 1 scope
+## Milestone 2 scope
 
 The Fastify backend owns identity, authorization, device pairing, credential
-revocation, and presence. PostgreSQL is the security state authority. The React
-viewer uses cookie-authenticated JSON endpoints, while the Android app uses a
-separate bearer credential for heartbeat. No media capture, signaling, WebRTC,
-audio, recording, or background service exists.
+revocation, presence, and signaling authorization. PostgreSQL is the security
+state authority. The React viewer uses cookie-authenticated JSON and WebSocket
+endpoints, while Android uses a separate bearer credential.
+
+Android binds rear-camera CameraX preview and analysis to the visible activity.
+YUV frames feed a WebRTC I420 video source at a target 640×480 and 15 fps. The
+peer connection has one send-only video transceiver and no audio source or track.
 
 ## Ownership and credentials
 
@@ -28,7 +31,24 @@ transaction.
 
 The Android client heartbeats every 30 seconds while its activity participates.
 The server updates `last_seen_at`; a camera is online through exactly 90 seconds
-after its last successful heartbeat. There are no push channels or signaling.
+after its last successful heartbeat. There are no push channels.
+
+## WebRTC signaling and media
+
+The device keeps one authenticated WebSocket open while its activity is visible.
+An owner opening a live view is reauthorized by browser session, Origin,
+household ownership, and active device credential. One viewer is allowed per
+camera.
+
+The camera creates the offer; the browser returns the answer. Both peers exchange
+ICE candidates through the authorized connection. A 30-second unanswered
+negotiation timeout and WebSocket close handlers remove state. The backend never
+receives or relays media.
+
+WebRTC uses DTLS-SRTP transport encryption. The backend can see SDP and ICE but
+does not log their contents. Coturn may relay encrypted packets and observe
+connection metadata, but cannot decrypt the WebRTC media. This is not an
+application-level end-to-end-encryption claim.
 
 ## API surface
 
@@ -40,6 +60,7 @@ after its last successful heartbeat. There are no push channels or signaling.
 - `GET /api/cameras` and
   `DELETE /api/cameras/:cameraId/credential`
 - `POST /api/device/heartbeat`
+- `GET /api/signaling` as an authenticated WebSocket upgrade
 
 Browser state changes require CSRF validation. Device heartbeat uses a bearer
 credential and never accepts credentials in URLs.
@@ -47,6 +68,5 @@ credential and never accepts credentials in URLs.
 ## Boundaries
 
 Drizzle defines and migrates the PostgreSQL schema through explicit checked-in
-SQL. Production startup never mutates schema. Coturn remains local foundation
-only and is not used by Milestone 1. TypeScript packages are not imported by
-Android.
+SQL. Production startup never mutates schema. Coturn is an ICE relay fallback,
+not a media processor. TypeScript packages are not imported by Android.

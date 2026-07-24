@@ -145,3 +145,23 @@ button:disabled {
 [role='alert'] {
   color: #ffadad;
 }
+
+.video-frame {
+  overflow: hidden;
+  width: 100%;
+  margin-top: 1.5rem;
+  border: 1px solid #2e4a64;
+  border-radius: 0.75rem;
+  aspect-ratio: 4 / 3;
+  background: #000;
+}
+
+.video-frame video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.notice {
+  font-size: 0.9rem;
+}

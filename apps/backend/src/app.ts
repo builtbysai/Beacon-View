@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
 import { RateLimiter } from './rate-limit.js';
+import { registerSignaling } from './signaling-route.js';
 import {
   generatePairingCode,
   generateToken,
@@ -85,6 +86,7 @@ export function buildApp(
   const dummyPasswordHash = hashPassword(generateToken());
 
   void app.register(cookie);
+  registerSignaling(app, config, store);
   app.addHook('onClose', async () => store.close());
 
   async function authenticate(

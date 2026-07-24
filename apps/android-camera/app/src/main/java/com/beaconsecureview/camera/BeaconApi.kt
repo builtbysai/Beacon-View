@@ -24,7 +24,7 @@ class BeaconApi(private val baseUrl: String) {
     fun heartbeat(credential: String): Boolean {
         val connection = connection("/api/device/heartbeat", "POST")
         connection.setRequestProperty("Authorization", "Bearer $credential")
-        connection.outputStream.use { it.write(ByteArray(0)) }
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
         responseBody(connection)
         return connection.responseCode == HttpURLConnection.HTTP_NO_CONTENT
     }
