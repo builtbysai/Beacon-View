@@ -22,6 +22,7 @@ class WebRtcCameraSession(
     lifecycleOwner: LifecycleOwner,
     previewView: PreviewView,
     servers: List<SignalingIceServer>,
+    relayOnly: Boolean,
     private val connectionId: String,
     private val signaling: CameraSignalingClient,
     private val onState: (StreamingState) -> Unit,
@@ -61,6 +62,12 @@ class WebRtcCameraSession(
             requireNotNull(
                 factory.createPeerConnection(
                     PeerConnection.RTCConfiguration(iceServers).apply {
+                        iceTransportsType =
+                            if (relayOnly) {
+                                PeerConnection.IceTransportsType.RELAY
+                            } else {
+                                PeerConnection.IceTransportsType.ALL
+                            }
                         sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
                         continualGatheringPolicy =
                             PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY

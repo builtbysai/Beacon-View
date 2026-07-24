@@ -1,13 +1,14 @@
 package com.beaconsecureview.camera
 
 enum class StreamingState {
-    Waiting,
+    Ready,
     Connecting,
-    Streaming,
-    Disconnected,
+    Connected,
+    Reconnecting,
+    Offline,
     Failed,
     PermissionRequired,
 }
 
 fun stateAfterPeerConnection(connected: Boolean): StreamingState =
-    if (connected) StreamingState.Streaming else StreamingState.Disconnected
+    if (connected) StreamingState.Connected else StreamingState.Reconnecting
