@@ -21,9 +21,9 @@ process environment values take precedence. It listens on `127.0.0.1:3000`, and
 the viewer on `127.0.0.1:5173`.
 
 Backend variables are `NODE_ENV`, `HOST`, `PORT`, `LOG_LEVEL`, `DATABASE_URL`,
-`WEB_ORIGIN`, and `SESSION_COOKIE_NAME`. `DATABASE_URL` is required; the others
-have safe local defaults shown in `.env.example`. Do not place production secrets
-in the example file or commit a real `.env`.
+`WEB_ORIGIN`, `SESSION_COOKIE_NAME`, role-specific viewer/device STUN and TURN
+URLs, and TURN username/credential values. `DATABASE_URL` is required; local
+defaults are shown in `.env.example`. Do not commit a real `.env`.
 
 ## Migrations
 
@@ -51,17 +51,31 @@ shared or production database.
 ## Android
 
 The emulator uses `http://10.0.2.2:3000`. Cleartext is allowed only for that
-emulator host; other cleartext destinations remain blocked.
+emulator host; other cleartext destinations remain blocked. Browser ICE uses
+`127.0.0.1`, while emulator ICE uses the host alias `10.0.2.2`.
 
 ```sh
 apps\android-camera\gradlew.bat -p apps/android-camera :app:assembleDebug
 apps\android-camera\gradlew.bat -p apps/android-camera :app:testDebugUnitTest
 ```
 
-The app has the minimum `INTERNET` permission for registration and heartbeat. It
-has no camera, microphone, foreground-service, or media behavior. Physical-device
-network setup requires a separately reviewed secure endpoint; do not expose the
-development services broadly.
+The app requests `CAMERA` only for visible live streaming and binds capture to
+the activity lifecycle. It also declares the normal `INTERNET` and
+`ACCESS_NETWORK_STATE` permissions required for signaling, ICE, and
+network-change handling. It has no microphone, audio, foreground-service,
+recording, or background capture.
+
+## Manual live-video check
+
+1. Start PostgreSQL and Coturn, apply migrations, and run backend and viewer.
+2. Pair the Android emulator, grant camera permission, and leave it visible.
+3. Sign in as the owner, select the online camera, and choose **View live**.
+4. Confirm Android preview/capture indicator, connected browser status, and video.
+5. Close the viewer and confirm Android returns to waiting and capture stops.
+6. Repeat with direct ICE and relay-only ICE when validating TURN.
+
+Physical devices require HTTPS/WSS and LAN-reachable or public backend and TURN
+hostnames. Do not expose the local Compose credentials.
 
 Local PostgreSQL, Coturn, and their deliberately weak example credentials are
 loopback-only. Never reuse those credentials outside an isolated developer

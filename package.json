@@ -2,7 +2,7 @@
   "name": "beacon-secureview",
   "version": "0.0.0",
   "private": true,
-  "description": "Milestone 1 authentication and device pairing for Beacon SecureView",
+  "description": "Android-first secure peer-to-peer camera viewing for Beacon SecureView",
   "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=22.13.0 <23"
