@@ -1,10 +1,10 @@
 # Beacon SecureView
 
 Beacon SecureView is an Android-first system intended to turn an unused Android
-phone into a remotely accessible smart security camera. Milestone 2 adds a
-single-viewer, video-only WebRTC path from one paired Android camera to its
-authenticated household owner. Audio, recording, analysis, and background
-streaming are not implemented.
+phone into a remotely accessible smart security camera. Milestone 3 makes the
+single-viewer, video-only WebRTC path resilient to transient connectivity loss
+and adds production-style HTTPS/WSS and ephemeral TURN credentials. Audio,
+recording, analysis, and background streaming are not implemented.
 
 ## Repository layout
 
@@ -33,3 +33,4 @@ The backend development entry point loads `apps/backend/.env` without
 overriding environment variables already defined by the shell. See
 [local development](docs/local-development.md) for migrations, reset commands,
 Android emulator setup, and validation. This project is not production-ready.
+The same guide includes the HTTPS/WSS and physical-device validation procedure.

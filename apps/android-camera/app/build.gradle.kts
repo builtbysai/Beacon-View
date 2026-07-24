@@ -16,7 +16,12 @@ android {
         versionName = "0.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "BEACON_API_URL", "\"http://10.0.2.2:3000\"")
+        val beaconApiUrl =
+            providers.gradleProperty("beaconApiUrl")
+                .orElse(providers.environmentVariable("BEACON_API_URL"))
+                .orElse("http://10.0.2.2:3000")
+                .get()
+        buildConfigField("String", "BEACON_API_URL", "\"$beaconApiUrl\"")
     }
 
     buildFeatures {

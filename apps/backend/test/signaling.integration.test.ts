@@ -22,10 +22,16 @@ const config: AppConfig | null = databaseUrl
       SESSION_COOKIE_NAME: 'beacon_session',
       DEVICE_STUN_URL: 'stun:10.0.2.2:3478',
       DEVICE_TURN_URL: 'turn:10.0.2.2:3478',
-      TURN_CREDENTIAL: 'test-only',
+      ALLOW_INSECURE_LOCAL_DEV: true,
+      PUBLIC_BACKEND_ORIGIN: 'http://127.0.0.1:3000',
+      SIGNALING_PUBLIC_URL: 'ws://127.0.0.1:3000/api/signaling',
+      DEVICE_TURN_TCP_URL: 'turn:10.0.2.2:3478?transport=tcp',
+      TURN_CREDENTIAL_TTL_SECONDS: 600,
+      TURN_SHARED_SECRET: 'test-shared-secret-with-at-least-32-bytes',
       VIEWER_STUN_URL: 'stun:127.0.0.1:3478',
       VIEWER_TURN_URL: 'turn:127.0.0.1:3478',
-      TURN_USERNAME: 'test-only',
+      VIEWER_TURN_TCP_URL: 'turn:127.0.0.1:3478?transport=tcp',
+      ICE_TRANSPORT_POLICY: 'all',
       WEB_ORIGIN: 'http://127.0.0.1:5173',
     }
   : null;
@@ -132,6 +138,26 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
     expect(viewerReady).toMatchObject({ type: 'ready' });
     expect(deviceReady).toMatchObject({ type: 'viewer-ready' });
     expect(viewerReady).not.toHaveProperty('householdId');
+    expect(viewerReady).toMatchObject({ iceTransportPolicy: 'all' });
+    const serializedReady = JSON.stringify([viewerReady, deviceReady]);
+    expect(serializedReady).not.toContain(config!.TURN_SHARED_SECRET);
+    const viewerTurn = (
+      viewerReady.iceServers as Array<{
+        credential?: string;
+        username?: string;
+      }>
+    ).find((server) => server.credential);
+    const deviceTurn = (
+      deviceReady.iceServers as Array<{
+        credential?: string;
+        username?: string;
+      }>
+    ).find((server) => server.credential);
+    expect(viewerTurn?.username).toMatch(/^\d+:/);
+    expect(viewerTurn?.credential).toBeTruthy();
+    expect(deviceTurn?.username).toMatch(/^\d+:/);
+    expect(deviceTurn?.credential).toBeTruthy();
+    expect(deviceTurn?.username).not.toBe(viewerTurn?.username);
     const connectionId = viewerReady.connectionId as string;
 
     device.send(

@@ -21,6 +21,12 @@ deterministic negotiation timeout cleanup. Web tests cover the connecting state
 and absence of recording controls. Android unit tests cover streaming-state
 boundaries; the debug build validates CameraX/WebRTC integration.
 
+Milestone 3 adds deterministic tests for Coturn HMAC credential expiry,
+production transport validation, role/camera isolation, periodic revocation,
+sanitized failure handling, retry exhaustion, exponential backoff, and stale
+generation cancellation. Browser and Android retry tests inject deterministic
+jitter rather than sleeping.
+
 Automated tests do not prove a particular handset, browser, NAT, or relay can
 render video. Run the manual direct and TURN-relayed matrix before release.
 
@@ -30,3 +36,4 @@ published ports separately. Android validation runs `assembleDebug` and
 `testDebugUnitTest`, followed by a manifest review for prohibited permissions.
 
 Future milestones must add audio and privacy shutdown tests only when approved.
+Audio remains explicitly outside Milestone 3.

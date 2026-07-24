@@ -45,6 +45,7 @@ type PeerRole = 'device' | 'viewer';
 
 interface DevicePeer {
   cameraId: string;
+  publicCameraId: string;
   socket: WebSocket;
 }
 
@@ -52,8 +53,19 @@ interface ActiveSession {
   cameraId: string;
   connectionId: string;
   device: WebSocket;
+  publicCameraId: string;
+  startedAt: number;
   viewer: WebSocket;
   timeout: NodeJS.Timeout | null;
+}
+
+export interface SignalingDiagnostic {
+  connectionId?: string;
+  durationMs?: number;
+  event: 'connected' | 'device_ready' | 'session_ended' | 'viewer_ready';
+  publicCameraId: string;
+  reasonCode?: string;
+  role?: PeerRole;
 }
 
 export class SignalingHub {
@@ -61,15 +73,23 @@ export class SignalingHub {
   readonly #sessions = new Map<string, ActiveSession>();
 
   constructor(
-    private readonly viewerIceServers: IceServer[],
-    private readonly deviceIceServers: IceServer[],
+    private readonly createViewerIceServers: () => IceServer[],
+    private readonly createDeviceIceServers: () => IceServer[],
     private readonly negotiationTimeoutMs = 30_000,
+    private readonly iceTransportPolicy: 'all' | 'relay' = 'all',
+    private readonly onDiagnostic: (
+      diagnostic: SignalingDiagnostic,
+    ) => void = () => undefined,
   ) {}
 
-  connectDevice(cameraId: string, socket: WebSocket): void {
+  connectDevice(
+    cameraId: string,
+    publicCameraId: string,
+    socket: WebSocket,
+  ): void {
     const existing = this.#devices.get(cameraId);
     if (existing) existing.socket.close(4001, 'Device connection replaced');
-    this.#devices.set(cameraId, { cameraId, socket });
+    this.#devices.set(cameraId, { cameraId, publicCameraId, socket });
     this.#listen(socket, 'device', cameraId);
     socket.once('close', () => {
       if (this.#devices.get(cameraId)?.socket === socket) {
@@ -78,9 +98,18 @@ export class SignalingHub {
       this.#cleanup(cameraId, socket, 'camera_disconnected');
     });
     this.#send(socket, { type: 'device-ready' });
+    this.onDiagnostic({
+      event: 'device_ready',
+      publicCameraId,
+      role: 'device',
+    });
   }
 
-  connectViewer(cameraId: string, socket: WebSocket): boolean {
+  connectViewer(
+    cameraId: string,
+    publicCameraId: string,
+    socket: WebSocket,
+  ): boolean {
     const device = this.#devices.get(cameraId);
     if (!device) {
       this.#reject(socket, 'camera_unavailable');
@@ -96,6 +125,8 @@ export class SignalingHub {
       cameraId,
       connectionId,
       device: device.socket,
+      publicCameraId,
+      startedAt: Date.now(),
       timeout: null,
       viewer: socket,
     };
@@ -110,13 +141,21 @@ export class SignalingHub {
     });
     this.#send(device.socket, {
       connectionId,
-      iceServers: this.deviceIceServers,
+      iceServers: this.createDeviceIceServers(),
+      iceTransportPolicy: this.iceTransportPolicy,
       type: 'viewer-ready',
     });
     this.#send(socket, {
       connectionId,
-      iceServers: this.viewerIceServers,
+      iceServers: this.createViewerIceServers(),
+      iceTransportPolicy: this.iceTransportPolicy,
       type: 'ready',
+    });
+    this.onDiagnostic({
+      connectionId,
+      event: 'viewer_ready',
+      publicCameraId,
+      role: 'viewer',
     });
     return true;
   }
@@ -186,6 +225,12 @@ export class SignalingHub {
     if (message.type === 'connected' && role === 'device' && session.timeout) {
       clearTimeout(session.timeout);
       session.timeout = null;
+      this.onDiagnostic({
+        connectionId: session.connectionId,
+        event: 'connected',
+        publicCameraId: session.publicCameraId,
+        role,
+      });
     }
     if (message.type === 'disconnect') {
       this.#cleanup(cameraId, socket, 'peer_disconnected');
@@ -206,6 +251,13 @@ export class SignalingHub {
     }
     this.#sessions.delete(cameraId);
     if (session.timeout) clearTimeout(session.timeout);
+    this.onDiagnostic({
+      connectionId: session.connectionId,
+      durationMs: Date.now() - session.startedAt,
+      event: 'session_ended',
+      publicCameraId: session.publicCameraId,
+      reasonCode: code,
+    });
     for (const socket of [session.viewer, session.device]) {
       if (socket !== source) this.#send(socket, { code, type: 'peer-left' });
     }

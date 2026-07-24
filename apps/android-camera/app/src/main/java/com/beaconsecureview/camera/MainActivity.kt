@@ -33,6 +33,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -74,7 +76,8 @@ private fun BeaconRegistration(
         mutableStateOf(if (credential == null) "This device is not registered." else "Registered")
     }
     var busy by remember { mutableStateOf(false) }
-    var streamingState by remember { mutableStateOf(StreamingState.Waiting) }
+    var streamingState by remember { mutableStateOf(StreamingState.Ready) }
+    var retryAttempt by remember { mutableStateOf(0) }
     var cameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -120,6 +123,7 @@ private fun BeaconRegistration(
                     override fun onViewerReady(
                         connectionId: String,
                         iceServers: List<SignalingIceServer>,
+                        relayOnly: Boolean,
                     ) {
                         webRtcSession?.close()
                         webRtcSession =
@@ -128,13 +132,14 @@ private fun BeaconRegistration(
                                 lifecycleOwner,
                                 previewView,
                                 iceServers,
+                                relayOnly,
                                 connectionId,
                                 client,
                             ) { state ->
                                 lifecycleOwner.runOnUiThread {
                                     streamingState = state
                                     if (
-                                        state == StreamingState.Disconnected ||
+                                        state == StreamingState.Reconnecting ||
                                             state == StreamingState.Failed
                                     ) {
                                         val existing = webRtcSession
@@ -158,13 +163,13 @@ private fun BeaconRegistration(
                         val existing = webRtcSession
                         webRtcSession = null
                         existing?.close()
-                        streamingState = StreamingState.Waiting
+                        streamingState = StreamingState.Ready
                     }
 
                     override fun onSignalingState(state: StreamingState) {
                         streamingState = state
                         if (
-                            state == StreamingState.Disconnected ||
+                            state == StreamingState.Reconnecting ||
                                 state == StreamingState.Failed
                         ) {
                             val existing = webRtcSession
@@ -172,17 +177,47 @@ private fun BeaconRegistration(
                             existing?.close()
                         }
                     }
+
+                    override fun onRetryAttempt(attempt: Int) {
+                        retryAttempt = attempt
+                    }
                 }
-            client = CameraSignalingClient(BuildConfig.BEACON_API_URL, currentCredential, listener)
+            client =
+                CameraSignalingClient(
+                    context,
+                    BuildConfig.BEACON_API_URL,
+                    currentCredential,
+                    listener,
+                )
             signalingClient = client
             client.connect()
-        }
-        onDispose {
-            val existing = webRtcSession
-            webRtcSession = null
-            existing?.close()
-            signalingClient?.disconnect(null)
-            signalingClient = null
+            val observer =
+                LifecycleEventObserver { _, event ->
+                    when (event) {
+                        Lifecycle.Event.ON_STOP -> {
+                            webRtcSession?.close()
+                            webRtcSession = null
+                            client.pause(null)
+                        }
+                        Lifecycle.Event.ON_START -> client.connect()
+                        else -> Unit
+                    }
+                }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+                webRtcSession?.close()
+                webRtcSession = null
+                client.disconnect(null)
+                signalingClient = null
+            }
+        } else {
+            onDispose {
+                webRtcSession?.close()
+                webRtcSession = null
+                signalingClient?.disconnect(null)
+                signalingClient = null
+            }
         }
     }
 
@@ -236,10 +271,11 @@ private fun BeaconRegistration(
                         }
                     } else {
                         Text("Streaming status: ${streamingState.name}")
+                        Text("Connection diagnostics: retries $retryAttempt")
                     }
                     if (
                         streamingState == StreamingState.Connecting ||
-                            streamingState == StreamingState.Streaming
+                            streamingState == StreamingState.Connected
                     ) {
                         Text(
                             "Camera active — live video capture is visible",

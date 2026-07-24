@@ -6,11 +6,11 @@ import kotlin.test.assertEquals
 class StreamingStateTest {
     @Test
     fun connectedPeerIsStreaming() {
-        assertEquals(StreamingState.Streaming, stateAfterPeerConnection(connected = true))
+        assertEquals(StreamingState.Connected, stateAfterPeerConnection(connected = true))
     }
 
     @Test
     fun disconnectedPeerIsNotStreaming() {
-        assertEquals(StreamingState.Disconnected, stateAfterPeerConnection(connected = false))
+        assertEquals(StreamingState.Reconnecting, stateAfterPeerConnection(connected = false))
     }
 }

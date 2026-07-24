@@ -44,10 +44,27 @@ Android, backend, PostgreSQL, and TURN are separate trust zones.
   encrypted packets. Beacon does not claim application-level end-to-end
   encryption.
 
+## Milestone 3 transport and reliability controls
+
+- Production requires HTTPS/WSS and exact browser Origin matching. Local HTTP is
+  available only through an explicit non-production opt-in.
+- Coturn credentials expire after at most ten minutes and are HMAC-derived from
+  a server-held secret only after participant authorization. Clients cannot
+  supply ICE URLs.
+- Production rejects the documented local TURN secret and invalid or insecure
+  transport configuration.
+- Active sockets are periodically re-authorized; revoked sessions, ownership,
+  and device credentials close signaling promptly.
+- Retry budgets, generation checks, and lifecycle cleanup prevent endless retry,
+  stale peer replacement, background capture, and orphaned signaling state.
+- Structured diagnostics exclude credentials, SDP, raw candidates, private
+  ownership identifiers, and raw exception details.
+
 ## Residual risk and deferrals
 
-TLS/WSS termination, short-lived TURN credentials, secret management,
+Production secret management, CA lifecycle, TURN abuse controls and capacity,
 distributed signaling and rate limiting, account recovery,
 email verification, MFA, device attestation, credential rotation, audit retention,
-and production operations require later design. Signaling is single-instance and
-ends on backend restart. Local emulator HTTP is permitted only for `10.0.2.2`.
+and production operations require later design. Signaling is single-instance
+and ends on backend restart. Local emulator HTTP is permitted only for
+`10.0.2.2` in debug builds.
