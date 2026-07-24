@@ -67,10 +67,18 @@ private fun BeaconRegistration(
         while (credential != null) {
             delay(30_000)
             val current = credential ?: break
-            val accepted = withContext(Dispatchers.IO) { api.heartbeat(current) }
-            message = if (accepted) "Heartbeat sent" else "Credential revoked or unavailable"
-            if (!retainCredentialAfterHeartbeat(credentialStore, accepted)) {
-                credential = null
+            val accepted =
+                withContext(Dispatchers.IO) {
+                    runCatching { api.heartbeat(current) }.getOrNull()
+                }
+            when (accepted) {
+                true -> message = "Heartbeat sent"
+                false -> {
+                    message = "Credential revoked or unavailable"
+                    retainCredentialAfterHeartbeat(credentialStore, accepted = false)
+                    credential = null
+                }
+                null -> message = "Heartbeat temporarily unavailable; retrying"
             }
         }
     }
