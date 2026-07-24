@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import { LiveVideo } from './LiveVideo';
 
 interface User {
   id: string;
@@ -53,6 +54,7 @@ export function App() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [error, setError] = useState('');
   const [pairingCode, setPairingCode] = useState('');
+  const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
 
   const loadCameras = useCallback(async () => {
     const result = await request<{ cameras: Camera[] }>('/api/cameras');
@@ -160,6 +162,15 @@ export function App() {
     );
   }
 
+  if (selectedCamera) {
+    return (
+      <LiveVideo
+        camera={selectedCamera}
+        onBack={() => setSelectedCamera(null)}
+      />
+    );
+  }
+
   return (
     <main className="shell">
       <section className="card wide" aria-labelledby="page-title">
@@ -201,6 +212,12 @@ export function App() {
                   onClick={() => void revoke(camera.id)}
                 >
                   {camera.credentialRevoked ? 'Credential revoked' : 'Revoke'}
+                </button>
+                <button
+                  disabled={!camera.online || camera.credentialRevoked}
+                  onClick={() => setSelectedCamera(camera)}
+                >
+                  View live
                 </button>
               </li>
             ))}
