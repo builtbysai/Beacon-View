@@ -1,23 +1,52 @@
 # Architecture
 
-## Milestone 0 scope
+## Milestone 1 scope
 
-Beacon SecureView is an Android-first camera system with three planned runtime
-components: an Android camera agent, a responsive web viewer, and a backend API
-and signaling service. Milestone 0 creates buildable boundaries only; it does not
-implement accounts, pairing, capture, signaling, media, or event processing.
+The Fastify backend owns identity, authorization, device pairing, credential
+revocation, and presence. PostgreSQL is the security state authority. The React
+viewer uses cookie-authenticated JSON endpoints, while the Android app uses a
+separate bearer credential for heartbeat. No media capture, signaling, WebRTC,
+audio, recording, or background service exists.
 
-## Component boundaries
+## Ownership and credentials
 
-- The Android app is an independent Kotlin/Compose client. It must not import
-  TypeScript packages or request camera/microphone permissions in this milestone.
-- The web viewer is a browser client built with React and Vite.
-- The backend is a Node.js 22 Fastify service. It owns runtime configuration and
-  future authorization boundaries. The current `/health` route exposes no data.
-- `shared-types` contains transport-neutral TypeScript contracts shared only by
-  TypeScript applications.
-- PostgreSQL and Coturn are isolated local-development services. Neither is yet
-  connected to application behavior.
+Account creation transactionally creates one household owned by that user.
+Cameras belong to one household. Only that household owner can create pairing
+codes, list cameras, and revoke camera credentials.
 
-Future camera access must be authorized by the backend; signaling messages and
-client-provided identifiers must never be treated as authorization.
+Browser session and device tokens contain at least 32 random bytes. Only SHA-256
+token hashes are stored. Passwords use Argon2id. Browser sessions have a 7-day
+rolling idle limit bounded by a 30-day absolute limit. The session cookie is
+HttpOnly, `SameSite=Lax`, and `Secure` outside local HTTP development.
+
+Pairing codes use ten characters from an unambiguous 32-character alphabet
+(50 bits). They expire after ten minutes. Redemption locks the code row and
+creates the camera and credential before marking the code consumed in the same
+transaction.
+
+## Presence
+
+The Android client heartbeats every 30 seconds while its activity participates.
+The server updates `last_seen_at`; a camera is online through exactly 90 seconds
+after its last successful heartbeat. There are no push channels or signaling.
+
+## API surface
+
+- `POST /api/auth/register`, `/api/auth/login`, and `/api/auth/logout`
+- `GET /api/auth/me`
+- `POST /api/pairing-codes` and
+  `DELETE /api/pairing-codes/:pairingCodeId`
+- `POST /api/devices/register`
+- `GET /api/cameras` and
+  `DELETE /api/cameras/:cameraId/credential`
+- `POST /api/device/heartbeat`
+
+Browser state changes require CSRF validation. Device heartbeat uses a bearer
+credential and never accepts credentials in URLs.
+
+## Boundaries
+
+Drizzle defines and migrates the PostgreSQL schema through explicit checked-in
+SQL. Production startup never mutates schema. Coturn remains local foundation
+only and is not used by Milestone 1. TypeScript packages are not imported by
+Android.

@@ -1,19 +1,24 @@
 # Testing plan
 
-## Milestone 0 automation
+`pnpm check` runs formatting, ESLint, strict TypeScript, backend and web tests,
+and all TypeScript builds. Backend unit tests cover security primitives, rate
+windows, and the exact presence boundary.
 
-- Backend integration test verifies the public health response through Fastify's
-  in-process injection API.
-- Web component test verifies the placeholder page and explicit inactive-capture
-  message.
-- CI runs formatting, linting, strict type checking, tests, and production builds.
+PostgreSQL integration suites run when `TEST_DATABASE_URL` is defined:
 
-Run all TypeScript checks with `pnpm check`. Validate infrastructure configuration
-with `docker compose -f infrastructure/docker/compose.yaml config --quiet`. Build
-Android on Windows with
-`apps\android-camera\gradlew.bat -p apps/android-camera :app:assembleDebug`, or use
-`./apps/android-camera/gradlew` on macOS and Linux, when the SDK/JDK are available.
+```sh
+TEST_DATABASE_URL=postgresql://... pnpm --filter @beacon/backend test
+```
 
-Later milestones must add authorization, pairing expiry, credential revocation,
-signaling state-machine, reconnect, privacy shutdown, and network-path test cases.
-Manual WebRTC testing is intentionally out of scope until streaming exists.
+They cover normalized duplicate accounts, generic login errors, session expiry,
+logout revocation, CSRF, transactional concurrent pairing, expired/invalid/reused
+codes, heartbeat authorization, and credential revocation. Each suite truncates
+only its designated test database tables.
+
+Validate migration state with `db:check`, apply migrations to a clean local
+database with `db:migrate`, and inspect the SQL. Validate Compose health and
+published ports separately. Android validation runs `assembleDebug` and
+`testDebugUnitTest`, followed by a manifest review for prohibited permissions.
+
+Future milestones must add capture lifecycle, signaling, media, reconnect, and
+privacy shutdown tests only when those features are approved.

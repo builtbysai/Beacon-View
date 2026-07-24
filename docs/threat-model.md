@@ -1,32 +1,37 @@
-# Threat model draft
+# Threat model
 
-## Scope and assets
+## Protected assets and trust boundaries
 
-This draft covers the planned Android camera, web viewer, backend, PostgreSQL,
-signaling channel, and TURN relay. Protected assets include account and device
-credentials, camera authorization, presence data, private media, event metadata,
-and access audit history.
+Passwords, browser sessions, CSRF tokens, device credentials, pairing codes,
+household ownership, presence, and audit history are protected assets. Browser,
+Android, backend, PostgreSQL, and TURN are separate trust zones.
 
-## Trust boundaries and principal threats
+## Milestone 1 controls
 
-- Untrusted clients cross the backend API boundary: validate every input and
-  authorize every camera action to prevent spoofing and insecure direct access.
-- Browser, Android, backend, database, and TURN are separate trust zones. Use TLS
-  in production and protect credentials at rest.
-- Logs may become a disclosure channel. Redact authorization and session headers;
-  never log secrets, pairing codes, or media.
-- Pairing and authentication endpoints will face guessing, replay, enumeration,
-  and denial-of-service threats. Later milestones require expiry, rate limits,
-  credential rotation/revocation, and audit events.
-- TURN can be abused as an open relay. Production configuration requires dynamic,
-  short-lived credentials, TLS, network controls, monitoring, and capacity limits.
-- A compromised or misleading camera UI can violate physical privacy. Capture must
-  always have unmistakable local indicators and privacy mode must stop it.
+- Passwords are Argon2id hashes and login errors do not disclose account
+  existence.
+- Session and device tokens contain at least 32 random bytes; only SHA-256 hashes
+  are stored. Authorization and cookie headers and sensitive body fields are
+  redacted from logs.
+- State-changing browser requests require the HttpOnly session cookie, matching
+  CSRF cookie/header values, the stored CSRF hash, and the expected Origin when
+  supplied.
+- Household ownership is enforced in database queries. Public camera IDs do not
+  grant access.
+- Pairing codes provide 50 bits of entropy, expire after ten minutes, and are
+  locked and consumed transactionally.
+- Single-instance in-memory limits reduce guessing and abuse. They reset on
+  restart and do not coordinate across replicas; distributed deployment requires
+  shared rate-limit storage.
+- Android credentials are encrypted using an Android Keystore-backed AES-GCM key.
+  Revocation immediately prevents subsequent heartbeat authorization.
+- Audit events record security outcomes but not passwords, tokens, credentials,
+  cookies, or pairing codes.
 
-## Milestone 0 controls
+## Residual risk and deferrals
 
-Environment values are validated without logging their contents; sensitive HTTP
-headers are redacted; services bind to loopback for local development; sample
-credentials are explicitly local-only; no capture permissions or media paths
-exist. This is a draft, not a production security assessment or an encryption
-claim.
+TLS termination, secret management, distributed rate limiting, account recovery,
+email verification, MFA, device attestation, credential rotation, audit retention,
+and production operations require later design. Local emulator HTTP is permitted
+only for `10.0.2.2`. Coturn is not connected to the application. There is no media
+capture or end-to-end encryption claim.
