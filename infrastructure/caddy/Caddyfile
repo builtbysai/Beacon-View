@@ -1,0 +1,3 @@
+https://{$BEACON_HTTPS_HOST:localhost}:8443 {
+	reverse_proxy host.docker.internal:5173
+}

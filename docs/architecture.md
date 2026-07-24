@@ -1,6 +1,6 @@
 # Architecture
 
-## Milestone 2 scope
+## Milestone 3 scope
 
 The Fastify backend owns identity, authorization, device pairing, credential
 revocation, presence, and signaling authorization. PostgreSQL is the security
@@ -44,6 +44,22 @@ The camera creates the offer; the browser returns the answer. Both peers exchang
 ICE candidates through the authorized connection. A 30-second unanswered
 negotiation timeout and WebSocket close handlers remove state. The backend never
 receives or relays media.
+
+The backend derives ten-minute Coturn REST credentials only after participant
+authorization. STUN/TURN URLs and the `all` or diagnostic `relay` ICE policy are
+validated server configuration, not user input. UDP and TCP TURN transports may
+be supplied together, while `all` preserves direct ICE.
+
+Active signaling sockets are periodically checked against current browser
+session, household ownership, and device credential state. Revocation closes the
+socket. Lifecycle diagnostics contain a correlation ID, public camera ID, role,
+bounded state/reason categories, and duration—never SDP, raw candidates, tokens,
+TURN credentials, household IDs, or database IDs.
+
+Browser and Android reconnect with bounded exponential backoff and jitter. Each
+connection generation invalidates stale sockets, peer connections, and timers.
+Android also observes network availability and releases CameraX/WebRTC when its
+screen stops. Authorization loss is terminal rather than endlessly retried.
 
 WebRTC uses DTLS-SRTP transport encryption. The backend can see SDP and ICE but
 does not log their contents. Coturn may relay encrypted packets and observe

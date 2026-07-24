@@ -29,5 +29,20 @@ services:
       - ../coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
     restart: unless-stopped
 
+  secure-proxy:
+    profiles: ['secure']
+    image: caddy:2.10.2-alpine
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    ports:
+      - '${BEACON_HTTPS_BIND:-127.0.0.1}:8443:8443'
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
 volumes:
+  caddy-config:
+  caddy-data:
   postgres-data:
