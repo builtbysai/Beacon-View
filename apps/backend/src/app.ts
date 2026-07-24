@@ -19,6 +19,7 @@ import {
   verifyPassword,
 } from './security.js';
 import {
+  DEVICE_REGISTRATION_RATE_LIMITED,
   PostgresStore,
   type MilestoneStore,
   type SessionRecord,
@@ -301,7 +302,7 @@ export function buildApp(
       return reply.code(429).send({ error: 'Too many requests' });
     }
     const credential = generateToken();
-    const camera = await store.redeemPairingCode({
+    const result = await store.redeemPairingCode({
       codeHash: hashSecret(parsed.data.pairingCode.toUpperCase()),
       credentialHash: hashSecret(credential),
       installationId: parsed.data.installationId,
@@ -309,11 +310,14 @@ export function buildApp(
       name: parsed.data.name,
       now: new Date(),
     });
-    if (!camera) {
+    if (result === DEVICE_REGISTRATION_RATE_LIMITED) {
+      return reply.code(429).send({ error: 'Too many requests' });
+    }
+    if (!result) {
       return reply.code(400).send({ error: 'Unable to pair device' });
     }
     return reply.code(201).send({
-      camera: { id: camera.publicDeviceId, name: camera.name },
+      camera: { id: result.publicDeviceId, name: result.name },
       credential,
     });
   });
