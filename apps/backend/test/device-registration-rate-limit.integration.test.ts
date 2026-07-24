@@ -19,6 +19,12 @@ const config: AppConfig | null = databaseUrl
       NODE_ENV: 'test',
       PORT: 3000,
       SESSION_COOKIE_NAME: 'beacon_session',
+      DEVICE_STUN_URL: 'stun:10.0.2.2:3478',
+      DEVICE_TURN_URL: 'turn:10.0.2.2:3478',
+      TURN_CREDENTIAL: 'test-only',
+      VIEWER_STUN_URL: 'stun:127.0.0.1:3478',
+      VIEWER_TURN_URL: 'turn:127.0.0.1:3478',
+      TURN_USERNAME: 'test-only',
       WEB_ORIGIN: 'http://127.0.0.1:5173',
     }
   : null;

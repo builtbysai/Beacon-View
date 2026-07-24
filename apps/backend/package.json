@@ -16,6 +16,7 @@
   "dependencies": {
     "@beacon/shared-types": "workspace:*",
     "@fastify/cookie": "11.1.2",
+    "@fastify/websocket": "11.2.0",
     "@node-rs/argon2": "2.0.2",
     "dotenv": "17.4.2",
     "drizzle-orm": "0.45.2",
@@ -26,9 +27,11 @@
   "devDependencies": {
     "@types/node": "26.1.1",
     "@types/pg": "8.20.0",
+    "@types/ws": "8.18.1",
     "drizzle-kit": "0.31.10",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
-    "vitest": "4.1.10"
+    "vitest": "4.1.10",
+    "ws": "8.18.3"
   }
 }
