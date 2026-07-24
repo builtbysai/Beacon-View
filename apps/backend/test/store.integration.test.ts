@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { hashSecret } from '../src/security.js';
-import { PostgresStore } from '../src/store.js';
+import {
+  DEVICE_REGISTRATION_RATE_LIMITED,
+  PostgresStore,
+} from '../src/store.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const store = databaseUrl ? new PostgresStore(databaseUrl) : null;
@@ -132,12 +135,16 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
       now: new Date(),
     });
     expect(camera).not.toBeNull();
+    expect(camera).not.toBe(DEVICE_REGISTRATION_RATE_LIMITED);
+    if (!camera || camera === DEVICE_REGISTRATION_RATE_LIMITED) {
+      throw new Error('Expected camera registration to succeed');
+    }
     await expect(
       store!.heartbeat(hashSecret(credential), new Date()),
-    ).resolves.toBe(camera!.id);
+    ).resolves.toBe(camera.id);
     await expect(
-      store!.revokeDevice(owner.householdId, camera!.publicDeviceId),
-    ).resolves.toBe(camera!.id);
+      store!.revokeDevice(owner.householdId, camera.publicDeviceId),
+    ).resolves.toBe(camera.id);
     await expect(
       store!.heartbeat(hashSecret(credential), new Date()),
     ).resolves.toBeNull();

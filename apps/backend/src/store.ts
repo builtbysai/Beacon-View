@@ -37,6 +37,12 @@ export interface AuditInput {
   metadata?: Record<string, string>;
 }
 
+export const DEVICE_REGISTRATION_RATE_LIMITED =
+  'device_registration_rate_limited' as const;
+
+export type PairingRedemptionResult =
+  CameraRecord | null | typeof DEVICE_REGISTRATION_RATE_LIMITED;
+
 export interface MilestoneStore {
   close(): Promise<void>;
   createAccount(
@@ -71,7 +77,7 @@ export interface MilestoneStore {
     name: string;
     ipAddress: string;
     now: Date;
-  }): Promise<CameraRecord | null>;
+  }): Promise<PairingRedemptionResult>;
   listCameras(householdId: string): Promise<CameraRecord[]>;
   heartbeat(credentialHash: string, now: Date): Promise<string | null>;
   revokeDevice(
@@ -225,7 +231,7 @@ export class PostgresStore implements MilestoneStore {
     name: string;
     ipAddress: string;
     now: Date;
-  }): Promise<CameraRecord | null> {
+  }): Promise<PairingRedemptionResult> {
     const client = await this.pool.connect();
     let pairingHouseholdId: string | undefined;
     try {
@@ -263,7 +269,7 @@ export class PostgresStore implements MilestoneStore {
           success: false,
         });
         await client.query('COMMIT');
-        return null;
+        return DEVICE_REGISTRATION_RATE_LIMITED;
       }
       const camera = await client.query<CameraRecord>(
         `INSERT INTO cameras (household_id, installation_id, name)
