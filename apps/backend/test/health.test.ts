@@ -9,6 +9,8 @@ const config: AppConfig = {
   LOG_LEVEL: 'silent',
   NODE_ENV: 'test',
   PORT: 3000,
+  SESSION_COOKIE_NAME: 'beacon_session',
+  WEB_ORIGIN: 'http://127.0.0.1:5173',
 };
 
 const apps = new Set<ReturnType<typeof buildApp>>();

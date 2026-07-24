@@ -4,48 +4,65 @@
 
 - Node.js 22.13+ (Node 22 only) and pnpm 11.9.0
 - Docker with the Compose plugin
-- For Android: JDK 17 and Android SDK 35 (or a compatible Android Studio)
+- JDK 17 and Android SDK Platform 35 for Android
 
-## TypeScript applications
+## Startup
 
 ```sh
 pnpm install --frozen-lockfile
 cp apps/backend/.env.example apps/backend/.env
+docker compose -f infrastructure/docker/compose.yaml up -d
+pnpm --filter @beacon/backend db:migrate
 pnpm dev
 ```
 
-The backend listens on `127.0.0.1:3000` and the viewer on `127.0.0.1:5173`.
-Check backend health with `curl http://127.0.0.1:3000/health`.
+The backend loads `apps/backend/.env` in development using `dotenv`; existing
+process environment values take precedence. It listens on `127.0.0.1:3000`, and
+the viewer on `127.0.0.1:5173`.
 
-## Local infrastructure
+Backend variables are `NODE_ENV`, `HOST`, `PORT`, `LOG_LEVEL`, `DATABASE_URL`,
+`WEB_ORIGIN`, and `SESSION_COOKIE_NAME`. `DATABASE_URL` is required; the others
+have safe local defaults shown in `.env.example`. Do not place production secrets
+in the example file or commit a real `.env`.
+
+## Migrations
+
+Set `DATABASE_URL` or copy the example file, then use:
 
 ```sh
-docker compose -f infrastructure/docker/compose.yaml up -d
-docker compose -f infrastructure/docker/compose.yaml ps
-docker compose -f infrastructure/docker/compose.yaml down
+pnpm --filter @beacon/backend db:generate
+pnpm --filter @beacon/backend db:migrate
+pnpm --filter @beacon/backend db:check
 ```
 
-PostgreSQL and Coturn bind to loopback. Credentials in Compose and the example env
-are deliberately weak, local-only defaults. Never reuse them outside an isolated
-developer machine. A physical Android device cannot reach loopback services; use
-the development computer's LAN address only after applying host firewall rules and
-changing credentials. TURN behind NAT may also require an explicit external IP and
-forwarded relay range; see Coturn documentation before exposing it.
+Review generated SQL before committing it. Application startup never applies
+migrations. To reset only the local Compose database, destroy its named volume
+and recreate it:
+
+```sh
+docker compose -f infrastructure/docker/compose.yaml down --volumes
+docker compose -f infrastructure/docker/compose.yaml up -d postgres
+pnpm --filter @beacon/backend db:migrate
+```
+
+This permanently deletes local development database data; never use it for a
+shared or production database.
 
 ## Android
 
-Open `apps/android-camera` in Android Studio, install SDK 35, select JDK 17, and
-build the `app` debug variant. From the repository root on Windows:
+The emulator uses `http://10.0.2.2:3000`. Cleartext is allowed only for that
+emulator host; other cleartext destinations remain blocked.
 
 ```sh
 apps\android-camera\gradlew.bat -p apps/android-camera :app:assembleDebug
+apps\android-camera\gradlew.bat -p apps/android-camera :app:testDebugUnitTest
 ```
 
-On macOS or Linux:
+The app has the minimum `INTERNET` permission for registration and heartbeat. It
+has no camera, microphone, foreground-service, or media behavior. Physical-device
+network setup requires a separately reviewed secure endpoint; do not expose the
+development services broadly.
 
-```sh
-./apps/android-camera/gradlew -p apps/android-camera :app:assembleDebug
-```
-
-The skeleton declares no camera, microphone, networking, or background-service
-permissions or behavior.
+Local PostgreSQL, Coturn, and their deliberately weak example credentials are
+loopback-only. Never reuse those credentials outside an isolated developer
+machine.
