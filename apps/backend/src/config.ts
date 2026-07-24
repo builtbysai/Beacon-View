@@ -10,6 +10,8 @@ const environmentSchema = z.object({
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
   DATABASE_URL: z.string().url().startsWith('postgresql://'),
+  WEB_ORIGIN: z.string().url().default('http://127.0.0.1:5173'),
+  SESSION_COOKIE_NAME: z.string().min(1).default('beacon_session'),
 });
 
 export type AppConfig = z.infer<typeof environmentSchema>;

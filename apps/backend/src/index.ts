@@ -1,5 +1,13 @@
+import { fileURLToPath } from 'node:url';
+import { config as loadEnvironment } from 'dotenv';
+
 import { buildApp } from './app.js';
 import { parseConfig } from './config.js';
+
+loadEnvironment({
+  override: false,
+  path: fileURLToPath(new URL('../.env', import.meta.url)),
+});
 
 const config = parseConfig(process.env);
 const app = buildApp(config);
