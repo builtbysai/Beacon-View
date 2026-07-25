@@ -1,4 +1,5 @@
 import cookie from '@fastify/cookie';
+import websocket from '@fastify/websocket';
 import type { HealthResponse } from '@beacon/shared-types';
 import Fastify, {
   type FastifyInstance,
@@ -44,7 +45,33 @@ const registerDeviceSchema = z.object({
   name: z.string().trim().min(1).max(100),
   pairingCode: z.string().trim().min(1).max(32),
 });
+const cameraSourceSchema = z.object({
+  sourceKey: z.string().trim().min(1).max(200),
+  name: z.string().trim().min(1).max(100),
+  facing: z.enum(['front', 'rear', 'external', 'unknown']),
+  capabilities: z
+    .record(z.string(), z.union([z.boolean(), z.number(), z.string()]))
+    .optional(),
+});
+const syncCameraSourcesSchema = z.object({
+  sources: z.array(cameraSourceSchema).min(1).max(12),
+});
+const browserDeviceSchema = z.object({
+  installationId: z.string().uuid(),
+  name: z.string().trim().min(1).max(100),
+  sources: z.array(cameraSourceSchema).min(1).max(12),
+});
 const cameraParameterSchema = z.object({ cameraId: z.string().uuid() });
+const deviceParameterSchema = z.object({ deviceId: z.string().uuid() });
+const updateDeviceSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+});
+const updateCameraSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    name: z.string().trim().min(1).max(100).optional(),
+  })
+  .refine((value) => value.enabled !== undefined || value.name !== undefined);
 const pairingCodeParameterSchema = z.object({
   pairingCodeId: z.string().uuid(),
 });
@@ -87,8 +114,9 @@ export function buildApp(
   const dummyPasswordHash = hashPassword(generateToken());
 
   void app.register(cookie);
+  void app.register(websocket, { options: { maxPayload: 1_100_000 } });
   const householdEvents = registerHouseholdEvents(app, config, store);
-  registerSignaling(app, config, store);
+  const signaling = registerSignaling(app, config, store, householdEvents);
   app.addHook('onClose', async () => store.close());
 
   async function authenticate(
@@ -325,14 +353,76 @@ export function buildApp(
     );
     if (pairedIdentity) {
       householdEvents.publish(pairedIdentity.householdId, {
-        cameraId: result.publicDeviceId,
+        cameraId: result.publicCameraId,
         pairingState: 'completed',
         type: 'camera-paired',
       });
     }
     return reply.code(201).send({
-      camera: { id: result.publicDeviceId, name: result.name },
+      camera: { id: result.publicCameraId, name: result.name },
+      device: { id: result.publicDeviceId, name: result.name },
       credential,
+    });
+  });
+
+  app.put('/api/device/cameras', async (request, reply) => {
+    const authorization = request.headers.authorization;
+    const token = authorization?.startsWith('Bearer ')
+      ? authorization.slice('Bearer '.length)
+      : '';
+    const parsed = syncCameraSourcesSchema.safeParse(request.body);
+    if (!token || !parsed.success) return unauthorized(reply);
+    const cameras = await store.syncDeviceCameras(
+      hashSecret(token),
+      parsed.data.sources,
+      new Date(),
+    );
+    if (!cameras) return unauthorized(reply);
+    return {
+      cameras: cameras.map((camera) => ({
+        facing: camera.facing,
+        id: camera.publicCameraId,
+        name: camera.name,
+        sourceKey: camera.sourceKey,
+        streaming:
+          signaling.cameraStatus(camera.publicCameraId).viewerCount > 0,
+        viewerCount: signaling.cameraStatus(camera.publicCameraId).viewerCount,
+      })),
+    };
+  });
+
+  app.post('/api/browser-devices', async (request, reply) => {
+    const session = await authenticateStateChange(request, reply);
+    if (!session) return;
+    const parsed = browserDeviceSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid browser camera details' });
+    }
+    const result = await store.registerBrowserDevice({
+      householdId: session.householdId,
+      installationId: parsed.data.installationId,
+      name: parsed.data.name,
+      now: new Date(),
+      sources: parsed.data.sources,
+    });
+    for (const camera of result.cameras) {
+      householdEvents.publish(session.householdId, {
+        cameraId: camera.publicCameraId,
+        type: 'camera-presence-changed',
+      });
+    }
+    return reply.code(201).send({
+      cameras: result.cameras.map((camera) => ({
+        facing: camera.facing,
+        id: camera.publicCameraId,
+        name: camera.name,
+        sourceKey: camera.sourceKey,
+      })),
+      device: {
+        id: result.device.publicDeviceId,
+        name: result.device.name,
+        platform: result.device.platform,
+      },
     });
   });
 
@@ -342,12 +432,143 @@ export function buildApp(
     const now = Date.now();
     const cameras = await store.listCameras(session.householdId);
     return {
-      cameras: cameras.map((camera) => ({
-        credentialRevoked: camera.credentialRevokedAt !== null,
-        id: camera.publicDeviceId,
-        lastSeenAt: camera.lastSeenAt?.toISOString() ?? null,
-        name: camera.name,
-        online: isCameraOnline(camera.lastSeenAt, new Date(now)),
+      cameras: cameras.map((camera) => {
+        const status = signaling.cameraStatus(camera.publicCameraId);
+        return {
+          credentialRevoked: camera.credentialRevokedAt !== null,
+          deviceId: camera.publicDeviceId,
+          deviceName: camera.deviceName,
+          enabled: camera.enabled,
+          facing: camera.facing,
+          id: camera.publicCameraId,
+          lastSeenAt: camera.lastSeenAt?.toISOString() ?? null,
+          name: camera.name,
+          online:
+            status.producerConnected ||
+            isCameraOnline(camera.lastSeenAt, new Date(now)),
+          platform: camera.platform,
+          sourceKey: camera.sourceKey,
+          streaming: status.viewerCount > 0,
+          viewerCount: status.viewerCount,
+        };
+      }),
+    };
+  });
+
+  app.get('/api/devices', async (request, reply) => {
+    const session = await authenticate(request, reply);
+    if (!session) return;
+    const devices = await store.listDevices(session.householdId);
+    return {
+      devices: devices.map((device) => ({
+        deviceType: device.deviceType,
+        id: device.publicDeviceId,
+        lastSeenAt: device.lastSeenAt?.toISOString() ?? null,
+        name: device.name,
+        online: isCameraOnline(device.lastSeenAt),
+        platform: device.platform,
+        revoked: device.revokedAt !== null,
+        softwareVersion: device.softwareVersion,
+      })),
+    };
+  });
+
+  app.patch('/api/devices/:deviceId', async (request, reply) => {
+    const session = await authenticateStateChange(request, reply);
+    if (!session) return;
+    const parameters = deviceParameterSchema.safeParse(request.params);
+    const body = updateDeviceSchema.safeParse(request.body);
+    if (
+      !parameters.success ||
+      !body.success ||
+      !(await store.updateDevice(
+        session.householdId,
+        parameters.data.deviceId,
+        body.data.name,
+      ))
+    ) {
+      return reply.code(404).send({ error: 'Device not found' });
+    }
+    return reply.code(204).send();
+  });
+
+  app.patch('/api/cameras/:cameraId', async (request, reply) => {
+    const session = await authenticateStateChange(request, reply);
+    if (!session) return;
+    const parameters = cameraParameterSchema.safeParse(request.params);
+    const body = updateCameraSchema.safeParse(request.body);
+    if (
+      !parameters.success ||
+      !body.success ||
+      !(await store.updateCamera(
+        session.householdId,
+        parameters.data.cameraId,
+        body.data,
+      ))
+    ) {
+      return reply.code(404).send({ error: 'Camera not found' });
+    }
+    householdEvents.publish(session.householdId, {
+      cameraId: parameters.data.cameraId,
+      type: 'camera-presence-changed',
+    });
+    return reply.code(204).send();
+  });
+
+  app.delete('/api/devices/:deviceId', async (request, reply) => {
+    const session = await authenticateStateChange(request, reply);
+    if (!session) return;
+    const parameters = deviceParameterSchema.safeParse(request.params);
+    const revoked = parameters.success
+      ? await store.revokeDevice(session.householdId, parameters.data.deviceId)
+      : null;
+    if (!revoked) return reply.code(404).send({ error: 'Device not found' });
+    await store.audit({
+      cameraId: revoked,
+      eventType: 'device_credential_revoked',
+      householdId: session.householdId,
+      ipAddress: request.ip,
+      success: true,
+      userId: session.userId,
+    });
+    householdEvents.publish(session.householdId, {
+      type: 'device-credential-revoked',
+    });
+    return reply.code(204).send();
+  });
+
+  app.get('/api/diagnostics', async (request, reply) => {
+    const session = await authenticate(request, reply);
+    if (!session) return;
+    const [cameras, devices] = await Promise.all([
+      store.listCameras(session.householdId),
+      store.listDevices(session.householdId),
+    ]);
+    return {
+      cameras: cameras.map((camera) => {
+        const status = signaling.cameraStatus(camera.publicCameraId);
+        return {
+          availability: status.producerConnected ? 'online' : 'offline',
+          cameraId: camera.publicCameraId,
+          captureState: status.viewerCount > 0 ? 'streaming' : 'idle',
+          deviceId: camera.publicDeviceId,
+          facing: camera.facing,
+          producerConnected: status.producerConnected,
+          sourceKey: camera.sourceKey,
+          viewerConnectionIds: status.connectionIds,
+          viewerCount: status.viewerCount,
+        };
+      }),
+      devices: devices.map((device) => ({
+        connectionState: device.revokedAt
+          ? 'revoked'
+          : isCameraOnline(device.lastSeenAt)
+            ? 'online'
+            : 'offline',
+        deviceId: device.publicDeviceId,
+        lastHeartbeatAt: device.lastSeenAt?.toISOString() ?? null,
+        platform: device.platform,
+        softwareVersion: device.softwareVersion,
       })),
     };
   });
@@ -359,10 +580,16 @@ export function buildApp(
     if (!parsed.success) {
       return reply.code(404).send({ error: 'Camera not found' });
     }
-    const revokedCameraId = await store.revokeDevice(
+    const ownedCamera = await store.findOwnedCamera(
       session.householdId,
       parsed.data.cameraId,
     );
+    const revokedCameraId = ownedCamera
+      ? await store.revokeDevice(
+          session.householdId,
+          ownedCamera.publicDeviceId,
+        )
+      : null;
     if (!revokedCameraId) {
       return reply.code(404).send({ error: 'Camera not found' });
     }
@@ -395,7 +622,7 @@ export function buildApp(
         : null;
     if (!cameraId) return unauthorized(reply);
     householdEvents.publish(identity!.householdId, {
-      cameraId: identity!.publicDeviceId,
+      cameraId: identity!.publicCameraId,
       type: 'camera-presence-changed',
     });
     return reply.code(204).send();

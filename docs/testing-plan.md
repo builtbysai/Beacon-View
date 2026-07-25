@@ -10,6 +10,10 @@ PostgreSQL integration suites run when `TEST_DATABASE_URL` is defined:
 TEST_DATABASE_URL=postgresql://... pnpm --filter @beacon/backend test
 ```
 
+The database name must end in `_test`; the suite refuses any other name because
+its isolation setup truncates tables. Never point it at `beacon_secureview` or
+another development, shared, staging, or production database.
+
 They cover normalized duplicate accounts, generic login errors, session expiry,
 logout revocation, CSRF, transactional concurrent pairing, expired/invalid/reused
 codes, heartbeat authorization, and credential revocation. Each suite truncates
@@ -26,6 +30,19 @@ production transport validation, role/camera isolation, periodic revocation,
 sanitized failure handling, retry exhaustion, exponential backoff, and stale
 generation cancellation. Browser and Android retry tests inject deterministic
 jitter rather than sleeping.
+
+The device-agnostic milestone adds migration coverage for default sources,
+household-isolated source synchronization, stale producer replacement,
+simultaneous browser-producer peers, stale reconnect cancellation, explicit
+browser permission/registration, and duplicate Android retry prevention. Run
+the manual matrices in
+[`multi-viewer-testing.md`](multi-viewer-testing.md) and
+[`browser-camera-mode.md`](browser-camera-mode.md).
+
+Physical acceptance includes Android Wi-Fi loss for 15-30 seconds and automatic
+recovery without restart or repair; Android and browser producers as distinct
+devices; two webcams beneath one browser device; two independent viewers; a
+background-tab warning; and repeated LAN startup with reuse/restart/quit.
 
 Automated tests do not prove a particular handset, browser, NAT, or relay can
 render video. Run the manual direct and TURN-relayed matrix before release.

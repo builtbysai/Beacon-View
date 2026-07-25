@@ -84,6 +84,10 @@ export const cameras = pgTable(
     installationId: uuid('installation_id').notNull(),
     name: text('name').notNull(),
     platform: text('platform').notNull().default('android'),
+    deviceType: text('device_type').notNull().default('phone'),
+    capabilities: jsonb('capabilities').notNull().default({}),
+    softwareVersion: text('software_version'),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     ...timestamps,
   },
@@ -91,7 +95,44 @@ export const cameras = pgTable(
     uniqueIndex('cameras_public_device_id_unique').on(table.publicDeviceId),
     uniqueIndex('cameras_installation_id_unique').on(table.installationId),
     index('cameras_household_idx').on(table.householdId),
-    check('cameras_platform_android', sql`${table.platform} = 'android'`),
+    check(
+      'cameras_platform_supported',
+      sql`${table.platform} in ('android', 'browser')`,
+    ),
+  ],
+);
+
+// The physical-device table retains its historical SQL name (`cameras`) so
+// existing credentials and pairings migrate without rewriting device IDs.
+export const devices = cameras;
+
+export const cameraSources = pgTable(
+  'camera_sources',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'cascade' }),
+    publicCameraId: uuid('public_camera_id').notNull().defaultRandom(),
+    displayName: text('display_name').notNull(),
+    sourceKey: text('source_key').notNull(),
+    facing: text('facing').notNull().default('unknown'),
+    capabilities: jsonb('capabilities').notNull().default({}),
+    enabled: boolean('enabled').notNull().default(true),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('camera_sources_public_id_unique').on(table.publicCameraId),
+    uniqueIndex('camera_sources_device_source_unique').on(
+      table.deviceId,
+      table.sourceKey,
+    ),
+    index('camera_sources_device_idx').on(table.deviceId),
+    check(
+      'camera_sources_facing_supported',
+      sql`${table.facing} in ('front', 'rear', 'external', 'unknown')`,
+    ),
   ],
 );
 

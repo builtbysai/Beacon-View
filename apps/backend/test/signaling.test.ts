@@ -118,6 +118,45 @@ describe('SignalingHub', () => {
     hub.close();
   });
 
+  it('replaces a stale producer and preserves deterministic presence events', () => {
+    const states: Array<[string, string, boolean]> = [];
+    const hub = new SignalingHub(
+      () => [],
+      () => [],
+      30_000,
+      'all',
+      () => undefined,
+      (householdId, cameraId, connected) =>
+        states.push([householdId, cameraId, connected]),
+    );
+    const stale = socket();
+    const replacement = socket();
+    hub.connectDevice(
+      'internal-camera',
+      'public-camera',
+      stale.ws,
+      'household',
+    );
+    hub.connectDevice(
+      'internal-camera',
+      'public-camera',
+      replacement.ws,
+      'household',
+    );
+
+    expect(stale.mock.readyState).toBe(3);
+    expect(hub.cameraStatus('public-camera').producerConnected).toBe(true);
+    stale.mock.emit('close');
+    expect(hub.cameraStatus('public-camera').producerConnected).toBe(true);
+    replacement.mock.close();
+    expect(states).toEqual([
+      ['household', 'public-camera', true],
+      ['household', 'public-camera', true],
+      ['household', 'public-camera', false],
+    ]);
+    hub.close();
+  });
+
   it('emits only sanitized lifecycle diagnostics', () => {
     const diagnostics: unknown[] = [];
     const hub = new SignalingHub(

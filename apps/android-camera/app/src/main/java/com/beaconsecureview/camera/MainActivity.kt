@@ -177,6 +177,9 @@ private fun BeaconCameraApp(
                         },
                         onStart = { CameraForegroundService.start(context) },
                         onStop = { CameraForegroundService.stop(context) },
+                        onSelectCamera = {
+                            CameraForegroundService.selectCamera(context, it)
+                        },
                         onPairNewAccount = {
                             CameraForegroundService.stop(context)
                             credentialStore.clear()
@@ -247,6 +250,7 @@ private fun CameraHome(
     onAllowNotifications: () -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    onSelectCamera: (String) -> Unit,
     onPairNewAccount: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -301,6 +305,23 @@ private fun CameraHome(
         }
         Text("Network: ${runtime.diagnostic}")
         Text("Reconnect attempts: ${runtime.retryAttempt}")
+        if (runtime.cameras.size > 1) {
+            Text("Camera source", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                runtime.cameras.forEach { camera ->
+                    if (camera.id == runtime.selectedCameraId) {
+                        Button(onClick = { onSelectCamera(camera.id) }) {
+                            Text(camera.name)
+                        }
+                    } else {
+                        OutlinedButton(onClick = { onSelectCamera(camera.id) }) {
+                            Text(camera.name)
+                        }
+                    }
+                }
+            }
+            Text("This device can stream one camera source at a time.")
+        }
         if (!cameraPermission) {
             Button(onClick = onAllowCamera, modifier = Modifier.fillMaxWidth()) {
                 Text("Allow camera")

@@ -6,8 +6,9 @@ import {
   DEVICE_REGISTRATION_RATE_LIMITED,
   PostgresStore,
 } from '../src/store.js';
+import { testDatabaseUrl } from './test-database.js';
 
-const databaseUrl = process.env.TEST_DATABASE_URL;
+const databaseUrl = testDatabaseUrl();
 const store = databaseUrl ? new PostgresStore(databaseUrl) : null;
 
 describe.skipIf(!store)('PostgreSQL security invariants', () => {
@@ -156,5 +157,101 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
     await expect(store!.listCameras(otherOwner.householdId)).resolves.toEqual(
       [],
     );
+  });
+
+  it('creates a default camera for an existing Android registration and isolates source sync', async () => {
+    const owner = await store!.createAccount(
+      'multi-camera-owner@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    const other = await store!.createAccount(
+      'isolated-owner@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    const code = 'ABCDEFGH23';
+    const credential = 'multi-camera-credential';
+    await store!.createPairingCode(
+      owner.householdId,
+      hashSecret(code),
+      new Date(Date.now() + 60_000),
+    );
+    const paired = await store!.redeemPairingCode({
+      codeHash: hashSecret(code),
+      credentialHash: hashSecret(credential),
+      installationId: randomUUID(),
+      ipAddress: '127.0.0.1',
+      name: 'Pixel device',
+      now: new Date(),
+    });
+    if (!paired || paired === DEVICE_REGISTRATION_RATE_LIMITED) {
+      throw new Error('Expected registration');
+    }
+    expect(await store!.listCameras(owner.householdId)).toMatchObject([
+      {
+        deviceName: 'Pixel device',
+        publicCameraId: paired.publicCameraId,
+        sourceKey: 'legacy-default',
+      },
+    ]);
+
+    const synchronized = await store!.syncDeviceCameras(
+      hashSecret(credential),
+      [
+        { facing: 'rear', name: 'Rear Wide', sourceKey: 'android:0' },
+        { facing: 'front', name: 'Front', sourceKey: 'android:1' },
+      ],
+      new Date(),
+    );
+    expect(synchronized).toHaveLength(2);
+    expect(synchronized?.every((camera) => camera.deviceId === paired.id)).toBe(
+      true,
+    );
+    await expect(store!.listCameras(other.householdId)).resolves.toEqual([]);
+
+    const browser = await store!.registerBrowserDevice({
+      householdId: owner.householdId,
+      installationId: randomUUID(),
+      name: 'Office laptop',
+      now: new Date(),
+      sources: [
+        {
+          facing: 'external',
+          name: 'Built-in webcam',
+          sourceKey: 'browser:built-in',
+        },
+        {
+          facing: 'external',
+          name: 'USB webcam',
+          sourceKey: 'browser:usb',
+        },
+      ],
+    });
+    expect(browser.cameras).toHaveLength(2);
+    const browserCamera = browser.cameras[0]!;
+    await expect(
+      store!.updateCamera(other.householdId, browserCamera.publicCameraId, {
+        enabled: false,
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      store!.updateCamera(owner.householdId, browserCamera.publicCameraId, {
+        enabled: false,
+        name: 'Desk camera',
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      store!.findOwnedCamera(owner.householdId, browserCamera.publicCameraId),
+    ).resolves.toBeNull();
+    await store!.updateCamera(owner.householdId, browserCamera.publicCameraId, {
+      enabled: true,
+    });
+    await expect(
+      store!.revokeDevice(owner.householdId, browser.device.publicDeviceId),
+    ).resolves.toBe(browser.device.id);
+    await expect(
+      store!.findOwnedCamera(owner.householdId, browserCamera.publicCameraId),
+    ).resolves.toBeNull();
   });
 });

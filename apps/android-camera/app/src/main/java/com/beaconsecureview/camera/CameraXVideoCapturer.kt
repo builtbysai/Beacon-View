@@ -22,6 +22,7 @@ class CameraXVideoCapturer(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner,
     private val previewView: PreviewView,
+    private val cameraSelector: CameraSelector,
 ) : VideoCapturer {
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private var observer: CapturerObserver? = null
@@ -61,7 +62,7 @@ class CameraXVideoCapturer(
                     cameraProvider.unbindAll()
                     cameraProvider.bindToLifecycle(
                         lifecycleOwner,
-                        CameraSelector.DEFAULT_BACK_CAMERA,
+                        cameraSelector,
                         preview,
                         analysis,
                     )

@@ -2,6 +2,7 @@ package com.beaconsecureview.camera
 
 import android.content.Context
 import androidx.camera.view.PreviewView
+import androidx.camera.core.CameraSelector
 import androidx.lifecycle.LifecycleOwner
 import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
@@ -19,6 +20,7 @@ class CameraMediaSource(
     context: Context,
     lifecycleOwner: LifecycleOwner,
     previewView: PreviewView,
+    facing: String,
 ) {
     private val eglBase = EglBase.create()
     private val source: VideoSource
@@ -42,7 +44,17 @@ class CameraMediaSource(
                 .createPeerConnectionFactory()
         source = factory.createVideoSource(false)
         track = factory.createVideoTrack("beacon-video", source)
-        capturer = CameraXVideoCapturer(context, lifecycleOwner, previewView)
+        capturer =
+            CameraXVideoCapturer(
+                context,
+                lifecycleOwner,
+                previewView,
+                if (facing == "front") {
+                    CameraSelector.DEFAULT_FRONT_CAMERA
+                } else {
+                    CameraSelector.DEFAULT_BACK_CAMERA
+                },
+            )
         capturer.initialize(null, context, source.capturerObserver)
     }
 

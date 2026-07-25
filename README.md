@@ -1,10 +1,8 @@
 # Beacon SecureView
 
-Beacon SecureView treats a paired Android phone as an independent camera
-appliance. Camera Mode stays online through browser navigation and Android
-activity recreation, and the web dashboard receives pairing and presence
-changes in realtime. See [`docs/device-lifecycle.md`](docs/device-lifecycle.md)
-for the explicit device, viewer, and pairing state machines.
+Beacon SecureView is a device-agnostic camera platform. Android devices and
+attended HTTPS browsers can produce video; responsive browsers can view it; and
+one device may expose several independently named camera sources.
 
 Beacon SecureView is an Android-first system intended to turn an unused Android
 phone into a remotely accessible smart security camera. Milestone 3 makes the
@@ -42,3 +40,23 @@ Android emulator setup, and validation. For a physical phone on the Windows
 development LAN, follow the dedicated
 [physical Android device guide](docs/physical-android-device-development.md).
 This project is not production-ready.
+
+## Product surfaces
+
+- Dashboard: `/`
+- Cameras: `/cameras`
+- Devices: `/devices`
+- Browser Camera Mode: `/camera-mode`
+- Development diagnostics: `/diagnostics`
+
+Browser Camera Mode requires explicit permission and trusted HTTPS. It is for
+attended use because browsers may throttle background tabs. See
+[Browser Camera Mode](docs/browser-camera-mode.md),
+[multi-camera architecture](docs/multi-camera-architecture.md), and
+[multi-viewer testing](docs/multi-viewer-testing.md).
+
+This milestone establishes resilient producer reconnect, device/camera
+separation, browser producers, and independent multi-viewer sessions. Recording,
+motion/events, notifications, distributed presence/signaling, production
+deployment, SFU fan-out, iOS/desktop agents, and IP-camera adapters remain
+future roadmap work.

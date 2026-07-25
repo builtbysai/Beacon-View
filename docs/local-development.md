@@ -94,6 +94,26 @@ Replace the documentation address. The script configures strict Vite port 5173,
 trusted HTTPS/WSS, exact origins, LAN-reachable STUN/TURN, and debug Android
 endpoint injection while retaining localhost/emulator defaults.
 
+Repeated startup is explicit and safe:
+
+```powershell
+.\scripts\Start-BeaconLanDev.ps1 -ReuseExisting -NonInteractive
+.\scripts\Start-BeaconLanDev.ps1 -RestartExisting -NonInteractive
+.\scripts\Start-BeaconLanDev.ps1 -Status
+.\scripts\Open-BeaconLanDev.ps1 -Page Dashboard
+.\scripts\Open-BeaconLanDev.ps1 -Page CameraMode
+.\scripts\Stop-BeaconLanDev.ps1
+```
+
+When ports 3000 or 5173 are occupied, interactive startup offers reuse,
+restart, or quit only for a process proven to belong to this repository. It
+prints PID, executable, command line, and listener details for unrelated
+processes and never terminates them. `.beacon-dev/lan-dev.json` records owned
+PIDs, ports, URLs, commands, and logs; it is gitignored.
+
+LAN surfaces are `https://LAN_HOST:8443/`, `/camera-mode`, `/health`, and
+`wss://LAN_HOST:8443/api/signaling`.
+
 ## Physical-device validation checklist
 
 Record browser, handset/Android, network, and time with the result:
@@ -106,8 +126,9 @@ Record browser, handset/Android, network, and time with the result:
    candidate when the network permits.
 4. Restart with `ICE_TRANSPORT_POLICY=relay`; confirm a relay candidate and
    advancing video through Coturn.
-5. Disable phone Wi-Fi briefly, restore it, and verify bounded
-   `offline`/`reconnecting` recovery.
+5. Disable phone Wi-Fi for 15-30 seconds, restore it, and verify
+   `offline` -> `reconnecting` -> `online/idle` recovery. Confirm live video
+   resumes without Stop Camera, Start Camera, or re-pairing.
 6. Close the browser and verify viewer teardown; leave the Android streaming
    screen and verify camera release.
 7. Revoke the device credential and verify new signaling and TURN issuance stop.

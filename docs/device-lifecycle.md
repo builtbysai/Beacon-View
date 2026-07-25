@@ -36,7 +36,9 @@ stateDiagram-v2
   Streaming --> Idle: last viewer leaves
   Idle --> Offline: network unavailable
   Streaming --> Offline: network unavailable
-  Offline --> Idle: bounded reconnect succeeds
+  Offline --> Reconnecting: network restored
+  Reconnecting --> Idle: signaling reauthenticated
+  Reconnecting --> Reconnecting: capped backoff retry
   Idle --> Updating
   Updating --> Idle
   Offline --> Error: authorization revoked
@@ -104,11 +106,12 @@ relay.
   recents does not stop signaling or heartbeat.
 - `Stop camera`, credential revocation, or pairing a new account closes every
   peer connection and releases CameraX resources.
-- Android network callbacks and bounded exponential backoff reconnect the
+- Android default-network callbacks and capped exponential backoff reconnect the
   existing credential; network loss never causes re-pairing.
 
 ## Current limits
 
-Video is rear-camera, 640×480 at 15 fps, with no audio or recording. Running
+Video is one selected source at 640×480 and 15 fps, with no audio or recording.
+Front and rear sources are registered when available. Running
 several independent peer encoders on an older phone can be resource-intensive;
 production fan-out limits and thermal policy still need device profiling.

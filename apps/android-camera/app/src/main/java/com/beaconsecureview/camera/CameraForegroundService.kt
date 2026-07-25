@@ -6,7 +6,10 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.os.Build
+import android.util.Log
 import androidx.camera.view.PreviewView
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -39,6 +42,9 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     private var media: CameraMediaSource? = null
     private var signaling: CameraSignalingClient? = null
     private var signalingOnline = false
+    private var initializing = false
+    private var cameras: List<RegisteredCameraSource> = emptyList()
+    private var selectedCamera: RegisteredCameraSource? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -78,12 +84,18 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
             stopCamera()
             return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_SELECT_CAMERA) {
+            selectCamera(intent.getStringExtra(EXTRA_CAMERA_ID))
+            return START_STICKY
+        }
         val storedCredential = CredentialStore(this).read()
         if (storedCredential == null) {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (::credential.isInitialized && signaling != null) return START_STICKY
+        if ((::credential.isInitialized && signaling != null) || initializing) {
+            return START_STICKY
+        }
         credential = storedCredential
         api = BeaconApi(BuildConfig.BEACON_API_URL)
         CameraRuntime.update {
@@ -93,14 +105,59 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 diagnostic = "Connecting to Beacon",
             )
         }
-        signaling =
-            CameraSignalingClient(
-                this,
-                BuildConfig.BEACON_API_URL,
-                credential,
-                this,
-            ).also { it.connect() }
+        initializing = true
         lifecycleScope.launch {
+            val synchronization =
+                withContext(Dispatchers.IO) {
+                    runCatching { api.syncCameras(credential, enumerateCameraSources()) }
+                }
+            if (synchronization.exceptionOrNull() is AuthorizationLostException) {
+                initializing = false
+                CredentialStore(this@CameraForegroundService).clear()
+                CameraRuntime.update {
+                    it.copy(
+                        cameraEnabled = false,
+                        device = DeviceLifecycle.Error,
+                        diagnostic = "Credential revoked",
+                    )
+                }
+                stopCamera()
+                return@launch
+            }
+            val synchronized = synchronization.getOrNull()
+            if (synchronized == null) {
+                initializing = false
+                CameraRuntime.update {
+                    it.copy(
+                        device = DeviceLifecycle.Offline,
+                        diagnostic = "Backend unavailable; retrying camera registration",
+                    )
+                }
+                lifecycleScope.launch {
+                    delay(2_000)
+                    startRuntimeAgain()
+                }
+                return@launch
+            }
+            cameras =
+                synchronized.map {
+                    RegisteredCameraSource(it.id, it.sourceKey, it.name, it.facing)
+                }
+            val preferred =
+                getSharedPreferences(PREFERENCES, MODE_PRIVATE)
+                    .getString(SELECTED_CAMERA_ID, null)
+            selectedCamera =
+                cameras.find { it.id == preferred }
+                    ?: cameras.find { it.facing == "rear" }
+                    ?: cameras.first()
+            CameraRuntime.update {
+                it.copy(
+                    cameras = cameras,
+                    selectedCameraId = selectedCamera?.id,
+                )
+            }
+            startSignaling()
+            initializing = false
             while (true) {
                 val accepted =
                     withContext(Dispatchers.IO) {
@@ -120,13 +177,15 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                         stopCamera()
                         break
                     }
-                    null ->
+                    null -> {
+                        signaling?.requestReconnect()
                         CameraRuntime.update {
                             it.copy(
                                 device = DeviceLifecycle.Offline,
                                 diagnostic = "Network unavailable; reconnecting",
                             )
                         }
+                    }
                 }
                 delay(30_000)
             }
@@ -139,11 +198,13 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         iceServers: List<SignalingIceServer>,
         relayOnly: Boolean,
     ) {
+        val firstViewer = sessions.isEmpty()
         sessions.remove(connectionId)?.close()
         val preview = CameraRuntime.previewView ?: PreviewView(applicationContext)
+        val activeCamera = selectedCamera ?: return
         val sharedMedia =
             media
-                ?: CameraMediaSource(this, this, preview).also {
+                ?: CameraMediaSource(this, this, preview, activeCamera.facing).also {
                     media = it
                 }
         sessions[connectionId] =
@@ -157,6 +218,8 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 if (state == StreamingState.Failed) closeViewer(connectionId)
                 updateRuntime(state.name)
             }.also { it.start() }
+        Log.i(LOG_TAG, "event=viewer_joined connectionId=$connectionId")
+        if (firstViewer) Log.i(LOG_TAG, "event=capture_started")
         updateRuntime("Viewer connecting")
     }
 
@@ -201,7 +264,12 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     }
 
     private fun closeViewer(connectionId: String) {
-        sessions.remove(connectionId)?.close()
+        val removed = sessions.remove(connectionId)
+        removed?.close()
+        if (removed != null) {
+            Log.i(LOG_TAG, "event=viewer_left connectionId=$connectionId")
+            if (sessions.isEmpty()) Log.i(LOG_TAG, "event=capture_stopped")
+        }
         updateRuntime("Viewer disconnected")
     }
 
@@ -218,6 +286,67 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     private fun stopCamera() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun enumerateCameraSources(): List<BeaconApi.CameraSource> {
+        val manager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        return manager.cameraIdList.mapNotNull { cameraId ->
+            val characteristics = manager.getCameraCharacteristics(cameraId)
+            when (characteristics.get(CameraCharacteristics.LENS_FACING)) {
+                CameraCharacteristics.LENS_FACING_FRONT ->
+                    BeaconApi.CameraSource("", "android:$cameraId", "Front camera", "front")
+                CameraCharacteristics.LENS_FACING_BACK ->
+                    BeaconApi.CameraSource("", "android:$cameraId", "Rear camera", "rear")
+                CameraCharacteristics.LENS_FACING_EXTERNAL ->
+                    BeaconApi.CameraSource("", "android:$cameraId", "External camera", "external")
+                else -> null
+            }
+        }.ifEmpty {
+            listOf(BeaconApi.CameraSource("", "android:default", "Camera", "unknown"))
+        }
+    }
+
+    private fun startSignaling() {
+        val camera = selectedCamera ?: return
+        signaling =
+            CameraSignalingClient(
+                this,
+                BuildConfig.BEACON_API_URL,
+                camera.id,
+                credential,
+                this,
+            ).also { it.connect() }
+    }
+
+    private fun selectCamera(cameraId: String?) {
+        val next = cameras.find { it.id == cameraId } ?: return
+        if (next.id == selectedCamera?.id) return
+        signaling?.disconnect(sessions.keys)
+        signaling = null
+        sessions.values.forEach(WebRtcCameraSession::close)
+        sessions.clear()
+        media?.close()
+        media = null
+        selectedCamera = next
+        Log.i(LOG_TAG, "event=camera_source_changed cameraId=${next.id}")
+        getSharedPreferences(PREFERENCES, MODE_PRIVATE)
+            .edit()
+            .putString(SELECTED_CAMERA_ID, next.id)
+            .apply()
+        CameraRuntime.update {
+            it.copy(
+                activeViewers = 0,
+                selectedCameraId = next.id,
+                diagnostic = "Camera source changed; reconnecting",
+            )
+        }
+        startSignaling()
+    }
+
+    private fun startRuntimeAgain() {
+        if (signaling == null && !initializing) {
+            onStartCommand(Intent(this, CameraForegroundService::class.java), 0, 0)
+        }
     }
 
     private fun createNotificationChannel() {
@@ -238,6 +367,11 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         private const val CHANNEL_ID = "beacon_camera_status"
         private const val NOTIFICATION_ID = 1001
         private const val ACTION_STOP = "com.beaconsecureview.camera.STOP"
+        private const val ACTION_SELECT_CAMERA = "com.beaconsecureview.camera.SELECT_CAMERA"
+        private const val EXTRA_CAMERA_ID = "camera_id"
+        private const val PREFERENCES = "beacon_camera_runtime"
+        private const val SELECTED_CAMERA_ID = "selected_camera_id"
+        private const val LOG_TAG = "BeaconLifecycle"
 
         fun start(context: Context) {
             androidx.core.content.ContextCompat.startForegroundService(
@@ -249,6 +383,14 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         fun stop(context: Context) {
             context.startService(
                 Intent(context, CameraForegroundService::class.java).setAction(ACTION_STOP),
+            )
+        }
+
+        fun selectCamera(context: Context, cameraId: String) {
+            context.startService(
+                Intent(context, CameraForegroundService::class.java)
+                    .setAction(ACTION_SELECT_CAMERA)
+                    .putExtra(EXTRA_CAMERA_ID, cameraId),
             )
         }
     }

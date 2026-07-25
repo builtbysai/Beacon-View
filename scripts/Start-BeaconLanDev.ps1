@@ -5,12 +5,37 @@ param(
     [int]$TurnMinPort = 49160,
     [ValidateRange(1024, 65535)]
     [int]$TurnMaxPort = 49200,
-    [switch]$SkipAdbCheck
+    [switch]$SkipAdbCheck,
+    [switch]$ReuseExisting,
+    [switch]$RestartExisting,
+    [switch]$FailOnPortConflict,
+    [switch]$NonInteractive,
+    [switch]$Status
 )
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repositoryRoot
+Import-Module (Join-Path $PSScriptRoot 'BeaconDevProcesses.psm1') -Force
+$stateDirectory = Join-Path $repositoryRoot '.beacon-dev'
+$statePath = Join-Path $stateDirectory 'lan-dev.json'
+Remove-StaleBeaconDevState $statePath
+
+if ($Status) {
+    $state = Read-BeaconDevState $statePath
+    if (-not $state) {
+        Write-Host 'Beacon LAN development is not running.'
+        exit 0
+    }
+    Write-Host "Beacon LAN development started $($state.startTime)."
+    Write-Host "Dashboard: $($state.urls.dashboard)"
+    Write-Host "Browser Camera: $($state.urls.browserCamera)"
+    foreach ($tracked in $state.processes) {
+        $alive = [bool](Get-Process -Id $tracked.pid -ErrorAction SilentlyContinue)
+        Write-Host "$($tracked.name): PID $($tracked.pid) alive=$alive"
+    }
+    exit 0
+}
 
 function Get-BeaconLanAddress {
     $candidate = [Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() |
@@ -61,28 +86,6 @@ function Resolve-Adb {
     throw 'adb is unavailable in PATH and the default Android SDK location.'
 }
 
-function Assert-TcpPortAvailable([int]$Port) {
-    $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Any, $Port)
-    try {
-        $listener.Start()
-    } catch {
-        throw "TCP port $Port is occupied. Stop the existing process and retry."
-    } finally {
-        $listener.Stop()
-    }
-}
-
-function Assert-UdpPortAvailable([int]$Port) {
-    $client = [Net.Sockets.UdpClient]::new()
-    try {
-        $client.Client.Bind([Net.IPEndPoint]::new([Net.IPAddress]::Any, $Port))
-    } catch {
-        throw "UDP port $Port is occupied. Stop the existing process and retry."
-    } finally {
-        $client.Dispose()
-    }
-}
-
 if (-not $LanHost) {
     $LanHost = Get-BeaconLanAddress
 }
@@ -107,13 +110,6 @@ if ((& pnpm.cmd --version).Trim() -ne '11.9.0') {
 & docker info *> $null
 if ($LASTEXITCODE -ne 0) {
     throw 'Docker Server is not reachable.'
-}
-
-foreach ($port in @(3000, 5173, 8443, 3478)) {
-    Assert-TcpPortAvailable $port
-}
-foreach ($port in (@(3478) + ($TurnMinPort..$TurnMaxPort))) {
-    Assert-UdpPortAvailable $port
 }
 
 $httpsOrigin = "https://${LanHost}:8443"
@@ -144,11 +140,48 @@ $env:DEVICE_TURN_URL = "turn:${LanHost}:3478?transport=udp"
 $env:DEVICE_TURN_TCP_URL = "turn:${LanHost}:3478?transport=tcp"
 $env:TURN_SHARED_SECRET = 'local-development-turn-shared-secret'
 
-$stateDirectory = Join-Path $repositoryRoot '.beacon-dev'
 New-Item -ItemType Directory -Force -Path $stateDirectory | Out-Null
-$statePath = Join-Path $stateDirectory 'lan-dev.json'
-if (Test-Path $statePath) {
-    throw "LAN development state already exists at $statePath. Run Stop-BeaconLanDev.ps1 first."
+$reusePorts = @{}
+$reuseOwnerPids = @{}
+$existingState = Read-BeaconDevState $statePath
+foreach ($port in @(3000, 5173)) {
+    $listener = Get-BeaconListener $port
+    if (-not $listener) { continue }
+    $trackedListener = @($existingState.processes | Where-Object {
+        $_.pid -eq $listener.Pid -and $_.port -eq $port
+    }).Count -eq 1 -and
+        $existingState.repositoryPath -eq $repositoryRoot
+    $legacyOwnerPid =
+        if ($port -eq 3000) { $existingState.backendPid }
+        else { $existingState.viewerPid }
+    $legacyTracked =
+        $legacyOwnerPid -and
+        (Get-Process -Id $legacyOwnerPid -ErrorAction SilentlyContinue)
+    $belongsToBeacon =
+        $trackedListener -or
+        $legacyTracked -or
+        (Test-BeaconProcess $listener $repositoryRoot)
+    if (-not $belongsToBeacon) {
+        Write-Host "Port $port is occupied by an unrelated process."
+        Write-Host (Format-BeaconProcess $listener)
+        throw 'Beacon will not terminate an unrelated process.'
+    }
+    $choice = $null
+    if ($RestartExisting) { $choice = 'S' }
+    elseif ($ReuseExisting) { $choice = 'R' }
+    elseif ($FailOnPortConflict -or $NonInteractive) { $choice = 'Q' }
+    else {
+        Write-Host "Beacon development process detected on port $port."
+        $choice = (Read-Host '[R] Reuse  [S] Stop and restart  [Q] Quit').Trim().ToUpperInvariant()
+    }
+    switch ($choice) {
+        'R' {
+            $reusePorts[$port] = $listener
+            if ($legacyTracked) { $reuseOwnerPids[$port] = $legacyOwnerPid }
+        }
+        'S' { Stop-BeaconTrackedProcess $listener.Pid $repositoryRoot }
+        default { throw "Startup cancelled because port $port is occupied." }
+    }
 }
 
 try {
@@ -157,35 +190,74 @@ try {
         throw 'Docker Compose startup failed.'
     }
 
-    $backend = Start-Process -FilePath 'pnpm.cmd' `
-        -ArgumentList @('--filter', '@beacon/backend', 'dev') `
-        -WorkingDirectory $repositoryRoot `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput (Join-Path $stateDirectory 'backend.out.log') `
-        -RedirectStandardError (Join-Path $stateDirectory 'backend.err.log') `
-        -PassThru
-    $viewer = Start-Process -FilePath 'pnpm.cmd' `
-        -ArgumentList @('--filter', '@beacon/web-viewer', 'dev') `
-        -WorkingDirectory $repositoryRoot `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput (Join-Path $stateDirectory 'viewer.out.log') `
-        -RedirectStandardError (Join-Path $stateDirectory 'viewer.err.log') `
-        -PassThru
+    if (-not $reusePorts.ContainsKey(3000)) {
+        $backend = Start-Process -FilePath 'pnpm.cmd' `
+            -ArgumentList @('--filter', '@beacon/backend', 'dev') `
+            -WorkingDirectory $repositoryRoot `
+            -WindowStyle Hidden `
+            -RedirectStandardOutput (Join-Path $stateDirectory 'backend.out.log') `
+            -RedirectStandardError (Join-Path $stateDirectory 'backend.err.log') `
+            -PassThru
+    }
+    if (-not $reusePorts.ContainsKey(5173)) {
+        $viewer = Start-Process -FilePath 'pnpm.cmd' `
+            -ArgumentList @('--filter', '@beacon/web-viewer', 'dev') `
+            -WorkingDirectory $repositoryRoot `
+            -WindowStyle Hidden `
+            -RedirectStandardOutput (Join-Path $stateDirectory 'viewer.out.log') `
+            -RedirectStandardError (Join-Path $stateDirectory 'viewer.err.log') `
+            -PassThru
+    }
 
     Start-Sleep -Seconds 2
-    if ($backend.HasExited) {
+    if ($backend -and $backend.HasExited) {
         throw "Backend exited during startup. Inspect .beacon-dev/backend.err.log."
     }
-    if ($viewer.HasExited) {
+    if ($viewer -and $viewer.HasExited) {
         throw "Vite exited during startup. Port 5173 is strict; inspect .beacon-dev/viewer.err.log."
     }
 
+    $trackedProcesses = @(
+        if ($backend) { @{ name = 'backend'; pid = $backend.Id; port = 3000; owned = $true } }
+        elseif ($reusePorts[3000]) {
+            @{
+                name = 'backend'
+                pid = if ($reuseOwnerPids[3000]) { $reuseOwnerPids[3000] } else { $reusePorts[3000].Pid }
+                port = 3000
+                owned = [bool]$reuseOwnerPids[3000]
+            }
+        }
+        if ($viewer) { @{ name = 'web-viewer'; pid = $viewer.Id; port = 5173; owned = $true } }
+        elseif ($reusePorts[5173]) {
+            @{
+                name = 'web-viewer'
+                pid = if ($reuseOwnerPids[5173]) { $reuseOwnerPids[5173] } else { $reusePorts[5173].Pid }
+                port = 5173
+                owned = [bool]$reuseOwnerPids[5173]
+            }
+        }
+    )
     @{
-        backendPid = $backend.Id
-        browserUrl = $httpsOrigin
+        commands = @{
+            androidInstall = '.\scripts\Build-Install-BeaconAndroidDebug.ps1'
+            test = '.\scripts\Test-BeaconLanDev.ps1'
+        }
         lanHost = $LanHost
-        viewerPid = $viewer.Id
-    } | ConvertTo-Json | Set-Content -Encoding utf8 $statePath
+        logs = @{
+            backend = (Join-Path $stateDirectory 'backend.out.log')
+            viewer = (Join-Path $stateDirectory 'viewer.out.log')
+        }
+        ports = @{ api = 3000; https = 8443; turn = 3478; viewer = 5173 }
+        processes = $trackedProcesses
+        repositoryPath = $repositoryRoot
+        startTime = [DateTimeOffset]::Now.ToString('o')
+        urls = @{
+            apiHealth = "$httpsOrigin/health"
+            browserCamera = "$httpsOrigin/camera-mode"
+            dashboard = $httpsOrigin
+            signaling = "wss://${LanHost}:8443/api/signaling"
+        }
+    } | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 $statePath
 } catch {
     if ($backend -and -not $backend.HasExited) { & taskkill.exe /PID $backend.Id /T /F *> $null }
     if ($viewer -and -not $viewer.HasExited) { & taskkill.exe /PID $viewer.Id /T /F *> $null }
@@ -195,6 +267,13 @@ try {
 
 Write-Host "Beacon LAN development is starting."
 Write-Host "Browser and phone URL: $httpsOrigin"
+Write-Host "Dashboard: $httpsOrigin"
+Write-Host "Browser Camera: $httpsOrigin/camera-mode"
+Write-Host "API health: $httpsOrigin/health"
+Write-Host "Signaling: wss://${LanHost}:8443/api/signaling"
+Write-Host "TURN: ${LanHost}:3478 (relay UDP $TurnMinPort-$TurnMaxPort)"
 Write-Host "Android API endpoint: $httpsOrigin"
+Write-Host "Logs: $stateDirectory"
+Write-Host "Android install: .\scripts\Build-Install-BeaconAndroidDebug.ps1"
 Write-Host "Export the CA: .\scripts\Export-BeaconDevCertificate.ps1"
 Write-Host "Validate: .\scripts\Test-BeaconLanDev.ps1"

@@ -42,6 +42,15 @@ data class CameraRuntimeState(
     val retryAttempt: Int = 0,
     val cameraEnabled: Boolean = false,
     val diagnostic: String = "Camera service stopped",
+    val cameras: List<RegisteredCameraSource> = emptyList(),
+    val selectedCameraId: String? = null,
+)
+
+data class RegisteredCameraSource(
+    val id: String,
+    val sourceKey: String,
+    val name: String,
+    val facing: String,
 )
 
 fun deviceStateFor(

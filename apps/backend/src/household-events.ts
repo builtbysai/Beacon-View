@@ -1,4 +1,3 @@
-import websocket from '@fastify/websocket';
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
 
@@ -14,7 +13,11 @@ export type HouseholdEvent =
     }
   | {
       cameraId: string;
-      type: 'camera-presence-changed' | 'device-credential-revoked';
+      type: 'camera-presence-changed';
+    }
+  | {
+      cameraId?: string;
+      type: 'device-credential-revoked';
     };
 
 export class HouseholdEventHub {
@@ -55,8 +58,7 @@ export function registerHouseholdEvents(
   store: MilestoneStore,
 ): HouseholdEventHub {
   const hub = new HouseholdEventHub();
-  void app.register(async (eventApp) => {
-    await eventApp.register(websocket);
+  void app.register((eventApp) => {
     eventApp.addHook('onClose', () => hub.close());
     eventApp.get(
       '/api/events',

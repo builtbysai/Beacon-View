@@ -8,8 +8,9 @@ import {
   DEVICE_REGISTRATION_RATE_LIMITED,
   PostgresStore,
 } from '../src/store.js';
+import { testDatabaseUrl } from './test-database.js';
 
-const databaseUrl = process.env.TEST_DATABASE_URL;
+const databaseUrl = testDatabaseUrl();
 const store = databaseUrl ? new PostgresStore(databaseUrl) : null;
 const config: AppConfig | null = databaseUrl
   ? {

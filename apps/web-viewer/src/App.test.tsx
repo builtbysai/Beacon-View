@@ -12,6 +12,7 @@ import { App } from './App';
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState({}, '', '/');
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -70,6 +71,11 @@ describe('App', () => {
           json: () => Promise.resolve({ cameras: [] }),
           ok: true,
           status: 200,
+        })
+        .mockResolvedValueOnce({
+          json: () => Promise.resolve({ devices: [] }),
+          ok: true,
+          status: 200,
         }),
     );
     render(<App />);
@@ -95,6 +101,11 @@ describe('App', () => {
         status: 200,
       })
       .mockResolvedValueOnce({
+        json: () => Promise.resolve({ devices: [] }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
         json: () => Promise.resolve({ code: 'ABCD2345' }),
         ok: true,
         status: 201,
@@ -114,12 +125,19 @@ describe('App', () => {
           }),
         ok: true,
         status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: () => Promise.resolve({ devices: [] }),
+        ok: true,
+        status: 200,
       });
     vi.stubGlobal('fetch', fetch);
     render(<App />);
 
     await screen.findByText('No cameras are paired with this household.');
-    fireEvent.click(screen.getByRole('button', { name: 'Pair device' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Pair Android device' }),
+    );
     fireEvent.click(
       screen.getByRole('button', { name: 'Create pairing code' }),
     );

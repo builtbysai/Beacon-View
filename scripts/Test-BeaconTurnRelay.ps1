@@ -22,10 +22,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Unable to start the temporary TURN peer.' }
     $peerIp = (& docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $peerName).Trim()
     if (-not $peerIp) { throw 'Temporary TURN peer has no network address.' }
-    & docker exec beacon-secureview-local-coturn-1 turnutils_uclient `
+    & docker exec beacon-secureview-local-coturn-1 timeout 30 turnutils_uclient `
         -W $SharedSecret -e $peerIp -r 3480 -c -n 3 $LanHost
     if ($LASTEXITCODE -ne 0) { throw 'Authenticated TURN relay traffic failed.' }
     Write-Host 'Authenticated TURN relay traffic passed with zero required packet loss.'
 } finally {
-    & docker stop $peerName *> $null
+    $runningPeer = (& docker ps -q --filter "name=^${peerName}$").Trim()
+    if ($runningPeer) { & docker stop $peerName *> $null }
 }

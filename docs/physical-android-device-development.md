@@ -133,8 +133,9 @@ After the CA is installed, the phone URL can be opened through ADB:
    permits direct ICE.
 2. Stop development, set `ICE_TRANSPORT_POLICY=relay` in the environment, and
    restart. Confirm the selected candidate is `relay` and video advances.
-3. Temporarily disable phone Wi-Fi, restore it, and confirm bounded
-   `offline`/`reconnecting` recovery.
+3. Disable phone Wi-Fi for 15-30 seconds, restore it, and confirm
+   `offline`/`reconnecting`/`online` recovery. An existing or reopened viewer
+   must resume without Stop Camera, Start Camera, or re-pairing.
 4. Leave the Android screen and close the browser; confirm camera, peer, and
    signaling resources close.
 5. Revoke the device credential and confirm reconnection is rejected.

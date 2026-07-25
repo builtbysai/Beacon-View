@@ -3,8 +3,9 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import type { AppConfig } from '../src/config.js';
 import { PostgresStore } from '../src/store.js';
+import { testDatabaseUrl } from './test-database.js';
 
-const databaseUrl = process.env.TEST_DATABASE_URL;
+const databaseUrl = testDatabaseUrl();
 const store = databaseUrl ? new PostgresStore(databaseUrl) : null;
 const config: AppConfig | null = databaseUrl
   ? {

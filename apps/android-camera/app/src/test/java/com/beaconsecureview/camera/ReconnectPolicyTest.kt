@@ -23,4 +23,13 @@ class ReconnectPolicyTest {
         generations.cancel()
         assertFalse(generations.isCurrent(second))
     }
+
+    @Test
+    fun onlyOneReconnectMayBeScheduledAtATime() {
+        val gate = RetryGate()
+        assertTrue(gate.schedule())
+        assertFalse(gate.schedule())
+        gate.clear()
+        assertTrue(gate.schedule())
+    }
 }

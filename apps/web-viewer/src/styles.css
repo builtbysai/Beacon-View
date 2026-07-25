@@ -16,7 +16,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -189,6 +190,60 @@ input {
   border-radius: 0.6rem;
   color: #fff;
   background: #07131f;
+}
+
+select {
+  padding: 0.8rem;
+  border: 1px solid #46617a;
+  border-radius: 0.6rem;
+  color: #fff;
+  background: #07131f;
+}
+
+.heading-actions,
+.camera-mode-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.camera-mode-controls {
+  align-items: end;
+  margin: 1.5rem 0;
+}
+
+.camera-mode-controls label {
+  min-width: 12rem;
+}
+
+.device-list {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.device-list li {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border: 1px solid #2e4a64;
+  border-radius: 0.75rem;
+  background: #0c1c2b;
+}
+
+.device-list li > div {
+  display: grid;
+}
+
+.warning {
+  padding: 0.85rem;
+  border: 1px solid #d7a13d;
+  border-radius: 0.65rem;
+  color: #ffe0a4;
+  background: #2b210e;
 }
 
 .secondary,

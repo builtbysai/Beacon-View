@@ -26,3 +26,14 @@ Caddy profile and its development CA are not a deployment solution.
 Signaling remains single-instance and in-memory. Horizontal deployment requires
 shared signaling state and shared rate-limit storage. This milestone is not
 production-ready and makes no application-level end-to-end-encryption claim.
+
+Browser Camera Mode requires a secure context and explicit permission. Browsers
+may suspend hidden producers, and Screen Wake Lock is advisory, so it is an
+attended producer rather than an always-on deployment agent. Production must
+serve the dashboard and `/camera-mode` from the configured HTTPS origin and
+retain exact WSS Origin enforcement.
+
+Peer-to-peer multi-viewer publishing creates one encoder/peer path per viewer.
+Before broad deployment, define producer resource limits and thermal policy.
+Large fan-out will require an approved SFU design; the current device/camera and
+connection-ID boundaries are intentionally independent of that media topology.

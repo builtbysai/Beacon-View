@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
+import { request } from './api';
 import { deviceLifecycle, nextPairingState } from './lifecycle';
 import type { PairingLifecycle } from './lifecycle';
 import { LiveVideo } from './LiveVideo';
+import { BrowserCameraMode } from './BrowserCameraMode';
 
 interface User {
   id: string;
@@ -11,44 +13,52 @@ interface User {
 
 interface Camera {
   id: string;
+  deviceId: string;
+  deviceName: string;
   name: string;
   online: boolean;
+  platform: 'android' | 'browser';
+  facing: string;
+  enabled: boolean;
+  streaming: boolean;
+  viewerCount: number;
   lastSeenAt: string | null;
   credentialRevoked: boolean;
 }
 
-type Page = 'dashboard' | 'cameras' | 'settings';
-
-function csrfToken(): string {
-  return (
-    document.cookie
-      .split('; ')
-      .find((value) => value.startsWith('beacon_csrf='))
-      ?.split('=')[1] ?? ''
-  );
+interface Device {
+  id: string;
+  name: string;
+  platform: 'android' | 'browser';
+  deviceType: string;
+  online: boolean;
+  lastSeenAt: string | null;
+  revoked: boolean;
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    credentials: 'same-origin',
-    ...options,
-    headers: {
-      'content-type': 'application/json',
-      ...(options?.method && options.method !== 'GET'
-        ? { 'x-csrf-token': csrfToken() }
-        : {}),
-      ...options?.headers,
-    },
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as {
-      error?: string;
-    };
-    throw new Error(payload.error ?? 'Request failed');
-  }
-  return response.status === 204
-    ? (undefined as T)
-    : ((await response.json()) as T);
+type Page =
+  | 'dashboard'
+  | 'cameras'
+  | 'devices'
+  | 'camera mode'
+  | 'settings'
+  | 'diagnostics';
+
+const pagePaths: Record<Page, string> = {
+  'camera mode': '/camera-mode',
+  cameras: '/cameras',
+  dashboard: '/',
+  devices: '/devices',
+  diagnostics: '/diagnostics',
+  settings: '/settings',
+};
+
+function pageFromPath(): Page {
+  return (
+    (Object.entries(pagePaths).find(
+      ([, path]) => path === window.location.pathname,
+    )?.[0] as Page | undefined) ?? 'dashboard'
+  );
 }
 
 function eventsUrl(): string {
@@ -60,10 +70,11 @@ function eventsUrl(): string {
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [error, setError] = useState('');
-  const [page, setPage] = useState<Page>('dashboard');
+  const [page, setPage] = useState<Page>(pageFromPath);
   const [pairingOpen, setPairingOpen] = useState(false);
   const [pairingCode, setPairingCode] = useState('');
   const [pairingState, setPairingState] = useState<PairingLifecycle>('pending');
@@ -73,10 +84,25 @@ export function App() {
   );
   const returnPage = useRef<Page>('cameras');
 
+  const navigate = useCallback((next: Page) => {
+    window.history.pushState({}, '', pagePaths[next]);
+    setPage(next);
+  }, []);
+
+  useEffect(() => {
+    const onPopState = () => setPage(pageFromPath());
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
   const loadCameras = useCallback(async () => {
-    const result = await request<{ cameras: Camera[] }>('/api/cameras');
-    setCameras(result.cameras);
-    return result.cameras;
+    const [cameraResult, deviceResult] = await Promise.all([
+      request<{ cameras: Camera[] }>('/api/cameras'),
+      request<{ devices: Device[] }>('/api/devices'),
+    ]);
+    setCameras(cameraResult.cameras);
+    setDevices(deviceResult.devices);
+    return cameraResult.cameras;
   }, []);
 
   useEffect(() => {
@@ -120,7 +146,7 @@ export function App() {
               window.setTimeout(() => {
                 setPairingOpen(false);
                 setPairingCode('');
-                setPage('cameras');
+                navigate('cameras');
               }, 900);
             }
           });
@@ -139,7 +165,7 @@ export function App() {
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       socket?.close();
     };
-  }, [loadCameras, user]);
+  }, [loadCameras, navigate, user]);
 
   async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -164,6 +190,7 @@ export function App() {
     await request('/api/auth/logout', { method: 'POST' });
     setUser(null);
     setCameras([]);
+    setDevices([]);
     setPairingOpen(false);
   }
 
@@ -192,11 +219,32 @@ export function App() {
     setPairingState((state) => nextPairingState(state, 'cancelled'));
     setPairingOpen(false);
     setPairingCode('');
-    setPage(returnPage.current);
+    navigate(returnPage.current);
   }
 
-  async function revoke(cameraId: string) {
-    await request(`/api/cameras/${cameraId}/credential`, { method: 'DELETE' });
+  async function updateCamera(
+    cameraId: string,
+    changes: { enabled?: boolean; name?: string },
+  ) {
+    await request(`/api/cameras/${cameraId}`, {
+      body: JSON.stringify(changes),
+      method: 'PATCH',
+    });
+    await loadCameras();
+  }
+
+  async function renameDevice(device: Device) {
+    const name = window.prompt('Device name', device.name)?.trim();
+    if (!name || name === device.name) return;
+    await request(`/api/devices/${device.id}`, {
+      body: JSON.stringify({ name }),
+      method: 'PATCH',
+    });
+    await loadCameras();
+  }
+
+  async function revokeDevice(deviceId: string) {
+    await request(`/api/devices/${deviceId}`, { method: 'DELETE' });
     await loadCameras();
   }
 
@@ -255,7 +303,16 @@ export function App() {
     );
   }
 
+  if (page === 'camera mode') {
+    return <BrowserCameraMode onBack={() => navigate('dashboard')} />;
+  }
+
   const onlineCount = cameras.filter((camera) => camera.online).length;
+  const streamingCount = cameras.filter((camera) => camera.streaming).length;
+  const activeViewers = cameras.reduce(
+    (total, camera) => total + camera.viewerCount,
+    0,
+  );
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -264,11 +321,20 @@ export function App() {
           <h1>SecureView</h1>
         </div>
         <nav aria-label="Primary navigation">
-          {(['dashboard', 'cameras', 'settings'] as const).map((item) => (
+          {(
+            [
+              'dashboard',
+              'cameras',
+              'devices',
+              'camera mode',
+              'settings',
+              'diagnostics',
+            ] as const
+          ).map((item) => (
             <button
               className={page === item ? 'nav-active' : 'nav-button'}
               key={item}
-              onClick={() => setPage(item)}
+              onClick={() => navigate(item)}
             >
               {item[0]!.toUpperCase() + item.slice(1)}
             </button>
@@ -284,14 +350,34 @@ export function App() {
             <p className="eyebrow">{user.email}</p>
             <h2>{page[0]!.toUpperCase() + page.slice(1)}</h2>
           </div>
-          <button onClick={openPairing}>Pair device</button>
+          <div className="heading-actions">
+            <button
+              className="secondary"
+              onClick={() => navigate('camera mode')}
+            >
+              Use this browser as a camera
+            </button>
+            <button onClick={openPairing}>Pair Android device</button>
+          </div>
         </header>
         {error && <p role="alert">{error}</p>}
         {page === 'dashboard' && (
           <section className="dashboard-grid">
             <article className="metric-card">
+              <span>Devices</span>
+              <strong>{devices.length}</strong>
+            </article>
+            <article className="metric-card">
               <span>Cameras</span>
               <strong>{cameras.length}</strong>
+            </article>
+            <article className="metric-card">
+              <span>Streaming</span>
+              <strong>{streamingCount}</strong>
+            </article>
+            <article className="metric-card">
+              <span>Active viewers</span>
+              <strong>{activeViewers}</strong>
             </article>
             <article className="metric-card">
               <span>Online now</span>
@@ -303,7 +389,7 @@ export function App() {
                 cameras={cameras}
                 highlightedCameraId={highlightedCameraId}
                 onLive={setSelectedCamera}
-                onRevoke={(id) => void revoke(id)}
+                onUpdate={(id, changes) => void updateCamera(id, changes)}
               />
             </article>
           </section>
@@ -315,10 +401,51 @@ export function App() {
               cameras={cameras}
               highlightedCameraId={highlightedCameraId}
               onLive={setSelectedCamera}
-              onRevoke={(id) => void revoke(id)}
+              onUpdate={(id, changes) => void updateCamera(id, changes)}
             />
           </section>
         )}
+        {page === 'devices' && (
+          <section className="card wide">
+            <h3>Devices</h3>
+            <ul className="device-list">
+              {devices.map((device) => (
+                <li key={device.id}>
+                  <div>
+                    <strong>{device.name}</strong>
+                    <span>
+                      {device.platform} · {device.deviceType}
+                    </span>
+                  </div>
+                  <span className={device.online ? 'online' : 'offline'}>
+                    {device.online ? 'ONLINE' : 'OFFLINE'}
+                  </span>
+                  <span>
+                    {
+                      cameras.filter((camera) => camera.deviceId === device.id)
+                        .length
+                    }{' '}
+                    camera sources
+                  </span>
+                  <button
+                    className="secondary"
+                    onClick={() => void renameDevice(device)}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    className="secondary"
+                    disabled={device.revoked}
+                    onClick={() => void revokeDevice(device.id)}
+                  >
+                    {device.revoked ? 'Revoked' : 'Revoke device'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {page === 'diagnostics' && <Diagnostics />}
         {page === 'settings' && (
           <section className="card wide">
             <h3>Household settings</h3>
@@ -372,16 +499,82 @@ export function App() {
   );
 }
 
+function Diagnostics() {
+  const [diagnostics, setDiagnostics] = useState<{
+    cameras: Array<{
+      cameraId: string;
+      captureState: string;
+      facing: string;
+      viewerConnectionIds: string[];
+      viewerCount: number;
+    }>;
+    devices: Array<{
+      connectionState: string;
+      deviceId: string;
+      lastHeartbeatAt: string | null;
+      platform: string;
+    }>;
+  } | null>(null);
+
+  useEffect(() => {
+    void request<NonNullable<typeof diagnostics>>('/api/diagnostics').then(
+      setDiagnostics,
+    );
+  }, []);
+
+  return (
+    <section className="card wide">
+      <h3>Development diagnostics</h3>
+      {!diagnostics ? (
+        <p>Loading sanitized connection diagnostics...</p>
+      ) : (
+        <>
+          <h4>Devices</h4>
+          <ul className="device-list">
+            {diagnostics.devices.map((device) => (
+              <li key={device.deviceId}>
+                <strong>{device.platform}</strong>
+                <span>{device.connectionState}</span>
+                <span>{device.lastHeartbeatAt ?? 'No heartbeat'}</span>
+              </li>
+            ))}
+          </ul>
+          <h4>Camera sessions</h4>
+          <ul className="device-list">
+            {diagnostics.cameras.map((camera) => (
+              <li key={camera.cameraId}>
+                <strong>{camera.facing}</strong>
+                <span>Capture: {camera.captureState}</span>
+                <span>Viewers: {camera.viewerCount}</span>
+                <span>
+                  Connections: {camera.viewerConnectionIds.join(', ') || 'none'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p className="notice">
+        Diagnostics use public identifiers and never include credentials, SDP,
+        raw ICE candidates, or household IDs.
+      </p>
+    </section>
+  );
+}
+
 function CameraList({
   cameras,
   highlightedCameraId,
   onLive,
-  onRevoke,
+  onUpdate,
 }: {
   cameras: Camera[];
   highlightedCameraId: string | null;
   onLive: (camera: Camera) => void;
-  onRevoke: (cameraId: string) => void;
+  onUpdate: (
+    cameraId: string,
+    changes: { enabled?: boolean; name?: string },
+  ) => void;
 }) {
   if (cameras.length === 0) {
     return <p className="empty">No cameras are paired with this household.</p>;
@@ -399,17 +592,35 @@ function CameraList({
           >
             <div>
               <strong>{camera.name}</strong>
+              <span>
+                {camera.deviceName} · {camera.facing}
+              </span>
               <span className={state}>{state.toUpperCase()}</span>
+              <span>
+                {camera.viewerCount}{' '}
+                {camera.viewerCount === 1 ? 'viewer' : 'viewers'}
+              </span>
             </div>
             <button
               className="secondary"
-              disabled={camera.credentialRevoked}
-              onClick={() => onRevoke(camera.id)}
+              onClick={() => {
+                const name = window.prompt('Camera name', camera.name)?.trim();
+                if (name && name !== camera.name) onUpdate(camera.id, { name });
+              }}
             >
-              {camera.credentialRevoked ? 'Credential revoked' : 'Revoke'}
+              Rename
             </button>
             <button
-              disabled={!camera.online || camera.credentialRevoked}
+              className="secondary"
+              disabled={camera.credentialRevoked}
+              onClick={() => onUpdate(camera.id, { enabled: !camera.enabled })}
+            >
+              {camera.enabled ? 'Disable' : 'Enable'}
+            </button>
+            <button
+              disabled={
+                !camera.enabled || !camera.online || camera.credentialRevoked
+              }
               onClick={() => onLive(camera)}
             >
               View live

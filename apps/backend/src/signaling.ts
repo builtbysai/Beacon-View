@@ -38,6 +38,7 @@ type SignalingMessage = z.infer<typeof messageSchema>;
 type PeerRole = 'device' | 'viewer';
 
 interface DevicePeer {
+  householdId?: string | undefined;
   publicCameraId: string;
   socket: WebSocket;
 }
@@ -55,7 +56,12 @@ interface ActiveSession {
 export interface SignalingDiagnostic {
   connectionId?: string;
   durationMs?: number;
-  event: 'connected' | 'device_ready' | 'session_ended' | 'viewer_ready';
+  event:
+    | 'connected'
+    | 'device_ready'
+    | 'session_ended'
+    | 'stale_connection_replaced'
+    | 'viewer_ready';
   publicCameraId: string;
   reasonCode?: string;
   role?: PeerRole;
@@ -79,24 +85,37 @@ export class SignalingHub {
     private readonly onDiagnostic: (
       diagnostic: SignalingDiagnostic,
     ) => void = () => undefined,
+    private readonly onProducerState: (
+      householdId: string,
+      publicCameraId: string,
+      connected: boolean,
+    ) => void = () => undefined,
   ) {}
 
   connectDevice(
     cameraId: string,
     publicCameraId: string,
     socket: WebSocket,
+    householdId?: string,
   ): void {
     const existing = this.#devices.get(cameraId);
     if (existing) {
       this.#cleanupCamera(cameraId, 'device_replaced');
-      existing.socket.close(4001, 'Device connection replaced');
+      this.onDiagnostic({
+        event: 'stale_connection_replaced',
+        publicCameraId,
+        reasonCode: 'authenticated_reconnect',
+        role: 'device',
+      });
     }
-    this.#devices.set(cameraId, { publicCameraId, socket });
+    this.#devices.set(cameraId, { householdId, publicCameraId, socket });
+    if (existing) existing.socket.close(4001, 'Device connection replaced');
     this.#listen(socket, 'device');
     socket.once('close', () => {
       if (this.#devices.get(cameraId)?.socket !== socket) return;
       this.#devices.delete(cameraId);
       this.#cleanupCamera(cameraId, 'camera_disconnected');
+      if (householdId) this.onProducerState(householdId, publicCameraId, false);
     });
     this.#send(socket, { type: 'device-ready' });
     this.onDiagnostic({
@@ -104,6 +123,7 @@ export class SignalingHub {
       publicCameraId,
       role: 'device',
     });
+    if (householdId) this.onProducerState(householdId, publicCameraId, true);
   }
 
   connectViewer(
@@ -172,6 +192,23 @@ export class SignalingHub {
 
   get activeSessionCount(): number {
     return this.#sessions.size;
+  }
+
+  cameraStatus(publicCameraId: string): {
+    producerConnected: boolean;
+    viewerCount: number;
+    connectionIds: string[];
+  } {
+    const sessions = [...this.#sessions.values()].filter(
+      (session) => session.publicCameraId === publicCameraId,
+    );
+    return {
+      connectionIds: sessions.map((session) => session.connectionId),
+      producerConnected: [...this.#devices.values()].some(
+        (device) => device.publicCameraId === publicCameraId,
+      ),
+      viewerCount: sessions.length,
+    };
   }
 
   #listen(socket: WebSocket, role: PeerRole): void {
