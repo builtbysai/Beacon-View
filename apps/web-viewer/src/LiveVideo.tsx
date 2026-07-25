@@ -264,8 +264,9 @@ export function LiveVideo({
             <button onClick={reconnect}>Reconnect</button>
           )}
         <p className="notice">
-          Video is live only while this page and the camera app are open. Audio
-          and recording are disabled.
+          Closing this view ends only your viewer session. The camera remains
+          online and ready for the next authorized viewer. Audio and recording
+          are disabled.
         </p>
       </section>
     </main>

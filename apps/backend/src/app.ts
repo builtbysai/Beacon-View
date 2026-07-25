@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
 import { RateLimiter } from './rate-limit.js';
+import { registerHouseholdEvents } from './household-events.js';
 import { registerSignaling } from './signaling-route.js';
 import {
   generatePairingCode,
@@ -86,6 +87,7 @@ export function buildApp(
   const dummyPasswordHash = hashPassword(generateToken());
 
   void app.register(cookie);
+  const householdEvents = registerHouseholdEvents(app, config, store);
   registerSignaling(app, config, store);
   app.addHook('onClose', async () => store.close());
 
@@ -318,6 +320,16 @@ export function buildApp(
     if (!result) {
       return reply.code(400).send({ error: 'Unable to pair device' });
     }
+    const pairedIdentity = await store.findDeviceByCredential(
+      hashSecret(credential),
+    );
+    if (pairedIdentity) {
+      householdEvents.publish(pairedIdentity.householdId, {
+        cameraId: result.publicDeviceId,
+        pairingState: 'completed',
+        type: 'camera-paired',
+      });
+    }
     return reply.code(201).send({
       camera: { id: result.publicDeviceId, name: result.name },
       credential,
@@ -362,6 +374,10 @@ export function buildApp(
       success: true,
       userId: session.userId,
     });
+    householdEvents.publish(session.householdId, {
+      cameraId: parsed.data.cameraId,
+      type: 'device-credential-revoked',
+    });
     return reply.code(204).send();
   });
 
@@ -370,10 +386,18 @@ export function buildApp(
     const token = authorization?.startsWith('Bearer ')
       ? authorization.slice('Bearer '.length)
       : '';
-    const cameraId = token
-      ? await store.heartbeat(hashSecret(token), new Date())
+    const identity = token
+      ? await store.findDeviceByCredential(hashSecret(token))
       : null;
+    const cameraId =
+      token && identity
+        ? await store.heartbeat(hashSecret(token), new Date())
+        : null;
     if (!cameraId) return unauthorized(reply);
+    householdEvents.publish(identity!.householdId, {
+      cameraId: identity!.publicDeviceId,
+      type: 'camera-presence-changed',
+    });
     return reply.code(204).send();
   });
 

@@ -30,21 +30,14 @@ const messageSchema = z.discriminatedUnion('type', [
     connectionId: z.string().uuid(),
     type: z.literal('ice'),
   }),
-  z.object({
-    connectionId: z.string().uuid(),
-    type: z.literal('connected'),
-  }),
-  z.object({
-    connectionId: z.string().uuid(),
-    type: z.literal('disconnect'),
-  }),
+  z.object({ connectionId: z.string().uuid(), type: z.literal('connected') }),
+  z.object({ connectionId: z.string().uuid(), type: z.literal('disconnect') }),
 ]);
 
 type SignalingMessage = z.infer<typeof messageSchema>;
 type PeerRole = 'device' | 'viewer';
 
 interface DevicePeer {
-  cameraId: string;
   publicCameraId: string;
   socket: WebSocket;
 }
@@ -55,8 +48,8 @@ interface ActiveSession {
   device: WebSocket;
   publicCameraId: string;
   startedAt: number;
-  viewer: WebSocket;
   timeout: NodeJS.Timeout | null;
+  viewer: WebSocket;
 }
 
 export interface SignalingDiagnostic {
@@ -68,9 +61,15 @@ export interface SignalingDiagnostic {
   role?: PeerRole;
 }
 
+/**
+ * Signaling state is indexed by connection ID, not camera ID. A camera keeps one
+ * authenticated device socket and may negotiate independent peer connections
+ * for multiple viewers without replacing an existing viewer.
+ */
 export class SignalingHub {
   readonly #devices = new Map<string, DevicePeer>();
   readonly #sessions = new Map<string, ActiveSession>();
+  readonly #cameraSessions = new Map<string, Set<string>>();
 
   constructor(
     private readonly createViewerIceServers: () => IceServer[],
@@ -88,14 +87,16 @@ export class SignalingHub {
     socket: WebSocket,
   ): void {
     const existing = this.#devices.get(cameraId);
-    if (existing) existing.socket.close(4001, 'Device connection replaced');
-    this.#devices.set(cameraId, { cameraId, publicCameraId, socket });
-    this.#listen(socket, 'device', cameraId);
+    if (existing) {
+      this.#cleanupCamera(cameraId, 'device_replaced');
+      existing.socket.close(4001, 'Device connection replaced');
+    }
+    this.#devices.set(cameraId, { publicCameraId, socket });
+    this.#listen(socket, 'device');
     socket.once('close', () => {
-      if (this.#devices.get(cameraId)?.socket === socket) {
-        this.#devices.delete(cameraId);
-      }
-      this.#cleanup(cameraId, socket, 'camera_disconnected');
+      if (this.#devices.get(cameraId)?.socket !== socket) return;
+      this.#devices.delete(cameraId);
+      this.#cleanupCamera(cameraId, 'camera_disconnected');
     });
     this.#send(socket, { type: 'device-ready' });
     this.onDiagnostic({
@@ -115,11 +116,6 @@ export class SignalingHub {
       this.#reject(socket, 'camera_unavailable');
       return false;
     }
-    const existing = this.#sessions.get(cameraId);
-    if (existing) {
-      existing.viewer.close(4001, 'Viewer connection replaced');
-      this.#cleanup(cameraId, existing.viewer, 'viewer_replaced');
-    }
     const connectionId = randomUUID();
     const session: ActiveSession = {
       cameraId,
@@ -130,15 +126,19 @@ export class SignalingHub {
       timeout: null,
       viewer: socket,
     };
-    session.timeout = setTimeout(() => {
-      this.#cleanup(cameraId, undefined, 'negotiation_timeout');
-    }, this.negotiationTimeoutMs);
+    session.timeout = setTimeout(
+      () => this.#cleanup(connectionId, undefined, 'negotiation_timeout'),
+      this.negotiationTimeoutMs,
+    );
     session.timeout.unref();
-    this.#sessions.set(cameraId, session);
-    this.#listen(socket, 'viewer', cameraId);
-    socket.once('close', () => {
-      this.#cleanup(cameraId, socket, 'viewer_disconnected');
-    });
+    this.#sessions.set(connectionId, session);
+    const cameraSessions = this.#cameraSessions.get(cameraId) ?? new Set();
+    cameraSessions.add(connectionId);
+    this.#cameraSessions.set(cameraId, cameraSessions);
+    this.#listen(socket, 'viewer');
+    socket.once('close', () =>
+      this.#cleanup(connectionId, socket, 'viewer_disconnected'),
+    );
     this.#send(device.socket, {
       connectionId,
       iceServers: this.createDeviceIceServers(),
@@ -161,8 +161,8 @@ export class SignalingHub {
   }
 
   close(): void {
-    for (const cameraId of this.#sessions.keys()) {
-      this.#cleanup(cameraId, undefined, 'server_shutdown');
+    for (const connectionId of [...this.#sessions.keys()]) {
+      this.#cleanup(connectionId, undefined, 'server_shutdown');
     }
     for (const peer of this.#devices.values()) {
       peer.socket.close(1001, 'Server shutdown');
@@ -174,7 +174,7 @@ export class SignalingHub {
     return this.#sessions.size;
   }
 
-  #listen(socket: WebSocket, role: PeerRole, cameraId: string): void {
+  #listen(socket: WebSocket, role: PeerRole): void {
     socket.on('message', (data) => {
       if (typeof data !== 'string' && !Buffer.isBuffer(data)) return;
       const raw = Buffer.isBuffer(data) ? data.toString('utf8') : data;
@@ -194,20 +194,14 @@ export class SignalingHub {
         this.#send(socket, { code: 'invalid_message', type: 'error' });
         return;
       }
-      this.#forward(role, cameraId, socket, parsed.data);
+      this.#forward(role, socket, parsed.data);
     });
   }
 
-  #forward(
-    role: PeerRole,
-    cameraId: string,
-    socket: WebSocket,
-    message: SignalingMessage,
-  ): void {
-    const session = this.#sessions.get(cameraId);
+  #forward(role: PeerRole, socket: WebSocket, message: SignalingMessage): void {
+    const session = this.#sessions.get(message.connectionId);
     if (
       !session ||
-      message.connectionId !== session.connectionId ||
       (role === 'device' && session.device !== socket) ||
       (role === 'viewer' && session.viewer !== socket)
     ) {
@@ -233,33 +227,45 @@ export class SignalingHub {
       });
     }
     if (message.type === 'disconnect') {
-      this.#cleanup(cameraId, socket, 'peer_disconnected');
+      this.#cleanup(message.connectionId, socket, 'peer_disconnected');
       return;
     }
     this.#send(role === 'device' ? session.viewer : session.device, message);
   }
 
+  #cleanupCamera(cameraId: string, code: string): void {
+    for (const connectionId of [
+      ...(this.#cameraSessions.get(cameraId) ?? []),
+    ]) {
+      this.#cleanup(connectionId, undefined, code);
+    }
+  }
+
   #cleanup(
-    cameraId: string,
+    connectionId: string,
     source: WebSocket | undefined,
     code: string,
   ): void {
-    const session = this.#sessions.get(cameraId);
+    const session = this.#sessions.get(connectionId);
     if (!session) return;
-    if (source && source !== session.viewer && source !== session.device) {
+    if (source && source !== session.viewer && source !== session.device)
       return;
-    }
-    this.#sessions.delete(cameraId);
+    this.#sessions.delete(connectionId);
+    const cameraSessions = this.#cameraSessions.get(session.cameraId);
+    cameraSessions?.delete(connectionId);
+    if (cameraSessions?.size === 0)
+      this.#cameraSessions.delete(session.cameraId);
     if (session.timeout) clearTimeout(session.timeout);
     this.onDiagnostic({
-      connectionId: session.connectionId,
+      connectionId,
       durationMs: Date.now() - session.startedAt,
       event: 'session_ended',
       publicCameraId: session.publicCameraId,
       reasonCode: code,
     });
     for (const socket of [session.viewer, session.device]) {
-      if (socket !== source) this.#send(socket, { code, type: 'peer-left' });
+      if (socket !== source)
+        this.#send(socket, { code, connectionId, type: 'peer-left' });
     }
     if (code === 'negotiation_timeout' || code === 'server_shutdown') {
       session.viewer.close(4000, 'Signaling session ended');
@@ -272,8 +278,6 @@ export class SignalingHub {
   }
 
   #send(socket: WebSocket, message: object): void {
-    if (socket.readyState === socket.OPEN) {
-      socket.send(JSON.stringify(message));
-    }
+    if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
   }
 }

@@ -69,4 +69,28 @@ describe('environment configuration', () => {
       }),
     ).toThrow('TURN_SHARED_SECRET');
   });
+
+  it('accepts an explicit secure LAN development origin and reachable ICE URLs', () => {
+    const lan = parseConfig({
+      ALLOW_INSECURE_LOCAL_DEV: 'false',
+      DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/test',
+      DEVICE_STUN_URL: 'stun:192.0.2.10:3478',
+      DEVICE_TURN_TCP_URL: 'turn:192.0.2.10:3478?transport=tcp',
+      DEVICE_TURN_URL: 'turn:192.0.2.10:3478?transport=udp',
+      HOST: '0.0.0.0',
+      PUBLIC_BACKEND_ORIGIN: 'https://192.0.2.10:8443',
+      SIGNALING_PUBLIC_URL: 'wss://192.0.2.10:8443/api/signaling',
+      TURN_SHARED_SECRET: 'test-shared-secret-with-at-least-32-bytes',
+      VIEWER_STUN_URL: 'stun:192.0.2.10:3478',
+      VIEWER_TURN_TCP_URL: 'turn:192.0.2.10:3478?transport=tcp',
+      VIEWER_TURN_URL: 'turn:192.0.2.10:3478?transport=udp',
+      WEB_ORIGIN: 'https://192.0.2.10:8443',
+    });
+
+    expect(lan).toMatchObject({
+      HOST: '0.0.0.0',
+      WEB_ORIGIN: 'https://192.0.2.10:8443',
+      DEVICE_STUN_URL: 'stun:192.0.2.10:3478',
+    });
+  });
 });

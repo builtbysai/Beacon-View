@@ -29,6 +29,8 @@ jitter rather than sleeping.
 
 Automated tests do not prove a particular handset, browser, NAT, or relay can
 render video. Run the manual direct and TURN-relayed matrix before release.
+The PowerShell preflight and deterministic physical-device procedure are in
+`docs/physical-android-device-development.md`.
 
 Validate migration state with `db:check`, apply migrations to a clean local
 database with `db:migrate`, and inspect the SQL. Validate Compose health and

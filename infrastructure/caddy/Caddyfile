@@ -1,3 +1,7 @@
+{
+	default_sni {$BEACON_HTTPS_HOST:localhost}
+}
+
 https://{$BEACON_HTTPS_HOST:localhost}:8443 {
-	reverse_proxy host.docker.internal:5173
+	reverse_proxy {$BEACON_WEB_UPSTREAM:host.docker.internal:5173}
 }

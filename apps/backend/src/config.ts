@@ -108,10 +108,10 @@ export function parseConfig(environment: NodeJS.ProcessEnv): AppConfig {
   const result = environmentSchema.safeParse(environment);
 
   if (!result.success) {
-    const fields = result.error.issues
-      .map((issue) => issue.path.join('.'))
-      .join(', ');
-    throw new Error(`Invalid environment configuration for: ${fields}`);
+    const details = result.error.issues
+      .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+      .join('; ');
+    throw new Error(`Invalid environment configuration: ${details}`);
   }
 
   return result.data;

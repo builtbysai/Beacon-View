@@ -1,26 +1,34 @@
 package com.beaconsecureview.camera
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.os.BatteryManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,11 +38,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -44,7 +50,6 @@ import java.util.UUID
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val credentialStore = CredentialStore(this)
         val preferences = getSharedPreferences("beacon_installation", MODE_PRIVATE)
         val installationId =
             preferences.getString("installation_id", null)
@@ -52,254 +57,274 @@ class MainActivity : ComponentActivity() {
                     preferences.edit().putString("installation_id", it).apply()
                 }
         setContent {
-            BeaconRegistration(
+            BeaconCameraApp(
                 api = BeaconApi(BuildConfig.BEACON_API_URL),
-                credentialStore = credentialStore,
+                credentialStore = CredentialStore(this),
                 installationId = installationId,
-                lifecycleOwner = this,
             )
         }
     }
 }
 
 @Composable
-private fun BeaconRegistration(
+private fun BeaconCameraApp(
     api: BeaconApi,
     credentialStore: CredentialStore,
     installationId: String,
-    lifecycleOwner: ComponentActivity,
 ) {
     val context = LocalContext.current
     var credential by remember { mutableStateOf(credentialStore.read()) }
     var pairingCode by remember { mutableStateOf("") }
-    var message by remember {
-        mutableStateOf(if (credential == null) "This device is not registered." else "Registered")
+    var pairingState by remember {
+        mutableStateOf(
+            if (credential == null) PairingLifecycle.Pending else PairingLifecycle.Completed,
+        )
     }
+    var message by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    var streamingState by remember { mutableStateOf(StreamingState.Ready) }
-    var retryAttempt by remember { mutableStateOf(0) }
     var cameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
                 PackageManager.PERMISSION_GRANTED,
         )
     }
+    var notificationPermission by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS,
+                ) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val runtime by CameraRuntime.state.collectAsState()
+    val scope = rememberCoroutineScope()
     val permissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             cameraPermission = it
-            if (!it) streamingState = StreamingState.PermissionRequired
         }
-    val previewView = remember { PreviewView(context) }
-    var webRtcSession by remember { mutableStateOf<WebRtcCameraSession?>(null) }
-    var signalingClient by remember { mutableStateOf<CameraSignalingClient?>(null) }
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(credential) {
-        while (credential != null) {
-            delay(30_000)
-            val current = credential ?: break
-            val accepted =
-                withContext(Dispatchers.IO) {
-                    runCatching { api.heartbeat(current) }.getOrNull()
-                }
-            when (accepted) {
-                true -> message = "Heartbeat sent"
-                false -> {
-                    message = "Credential revoked or unavailable"
-                    retainCredentialAfterHeartbeat(credentialStore, accepted = false)
-                    credential = null
-                }
-                null -> message = "Heartbeat temporarily unavailable; retrying"
-            }
+    val notificationPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+            notificationPermission = it
         }
-    }
 
-    DisposableEffect(credential, cameraPermission) {
-        val currentCredential = credential
-        if (currentCredential != null && cameraPermission) {
-            lateinit var client: CameraSignalingClient
-            val listener =
-                object : CameraSignalingListener {
-                    override fun onViewerReady(
-                        connectionId: String,
-                        iceServers: List<SignalingIceServer>,
-                        relayOnly: Boolean,
-                    ) {
-                        webRtcSession?.close()
-                        webRtcSession =
-                            WebRtcCameraSession(
-                                context,
-                                lifecycleOwner,
-                                previewView,
-                                iceServers,
-                                relayOnly,
-                                connectionId,
-                                client,
-                            ) { state ->
-                                lifecycleOwner.runOnUiThread {
-                                    streamingState = state
-                                    if (
-                                        state == StreamingState.Reconnecting ||
-                                            state == StreamingState.Failed
-                                    ) {
-                                        val existing = webRtcSession
-                                        webRtcSession = null
-                                        existing?.close()
-                                    }
-                                }
-                            }
-                        webRtcSession?.start()
-                    }
-
-                    override fun onAnswer(connectionId: String, sdp: String) {
-                        webRtcSession?.setAnswer(sdp)
-                    }
-
-                    override fun onIce(connectionId: String, candidate: org.webrtc.IceCandidate) {
-                        webRtcSession?.addIce(candidate)
-                    }
-
-                    override fun onPeerLeft() {
-                        val existing = webRtcSession
-                        webRtcSession = null
-                        existing?.close()
-                        streamingState = StreamingState.Ready
-                    }
-
-                    override fun onSignalingState(state: StreamingState) {
-                        streamingState = state
-                        if (
-                            state == StreamingState.Reconnecting ||
-                                state == StreamingState.Failed
-                        ) {
-                            val existing = webRtcSession
-                            webRtcSession = null
-                            existing?.close()
-                        }
-                    }
-
-                    override fun onRetryAttempt(attempt: Int) {
-                        retryAttempt = attempt
-                    }
-                }
-            client =
-                CameraSignalingClient(
-                    context,
-                    BuildConfig.BEACON_API_URL,
-                    currentCredential,
-                    listener,
-                )
-            signalingClient = client
-            client.connect()
-            val observer =
-                LifecycleEventObserver { _, event ->
-                    when (event) {
-                        Lifecycle.Event.ON_STOP -> {
-                            webRtcSession?.close()
-                            webRtcSession = null
-                            client.pause(null)
-                        }
-                        Lifecycle.Event.ON_START -> client.connect()
-                        else -> Unit
-                    }
-                }
-            lifecycleOwner.lifecycle.addObserver(observer)
-            onDispose {
-                lifecycleOwner.lifecycle.removeObserver(observer)
-                webRtcSession?.close()
-                webRtcSession = null
-                client.disconnect(null)
-                signalingClient = null
-            }
-        } else {
-            onDispose {
-                webRtcSession?.close()
-                webRtcSession = null
-                signalingClient?.disconnect(null)
-                signalingClient = null
-            }
+    LaunchedEffect(credential, cameraPermission, notificationPermission) {
+        if (credential != null && cameraPermission && notificationPermission) {
+            CameraForegroundService.start(context)
+        } else if (credential != null && !cameraPermission) {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        } else if (credential != null && !notificationPermission) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text("Beacon SecureView", style = MaterialTheme.typography.headlineMedium)
-                Text(message, modifier = Modifier.padding(vertical = 16.dp))
-                if (credential == null) {
-                    OutlinedTextField(
-                        value = pairingCode,
-                        onValueChange = { pairingCode = it.uppercase() },
-                        label = { Text("Pairing code") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                    Button(
-                        enabled = pairingCode.isNotBlank() && !busy,
-                        onClick = {
+            when {
+                pairingState == PairingLifecycle.Accepted -> PairingSuccess()
+                credential == null ->
+                    PairingScreen(
+                        pairingCode = pairingCode,
+                        message = message,
+                        busy = busy,
+                        onCodeChange = { pairingCode = it.uppercase() },
+                        onPair = {
                             busy = true
-                            message = "Pairing…"
+                            pairingState = PairingLifecycle.Waiting
+                            message = "Securely pairing…"
                             scope.launch {
-                                runCatching {
+                                val result =
+                                    runCatching {
                                     withContext(Dispatchers.IO) {
-                                        api.register(installationId, "Android Camera", pairingCode)
+                                        api.register(
+                                            installationId,
+                                            "Android Camera",
+                                            pairingCode,
+                                        )
                                     }
-                                }.onSuccess {
+                                }
+                                result.onSuccess {
                                     credentialStore.save(it)
-                                    credential = it
+                                    pairingState = PairingLifecycle.Accepted
                                     pairingCode = ""
-                                    message = "Pairing succeeded"
+                                    message = ""
                                     busy = false
                                 }.onFailure {
-                                    message = "Pairing failed"
+                                    pairingState = PairingLifecycle.Pending
+                                    message = "Pairing failed. Check the code and try again."
                                     busy = false
+                                }
+                                result.getOrNull()?.let {
+                                    delay(900)
+                                    credential = it
+                                    pairingState = PairingLifecycle.Completed
                                 }
                             }
                         },
-                    ) {
-                        Text("Pair device")
-                    }
-                } else {
-                    if (!cameraPermission) {
-                        Text("Camera permission is required only for visible live streaming.")
-                        Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }) {
-                            Text("Allow camera")
-                        }
-                    } else {
-                        Text("Streaming status: ${streamingState.name}")
-                        Text("Connection diagnostics: retries $retryAttempt")
-                    }
-                    if (
-                        streamingState == StreamingState.Connecting ||
-                            streamingState == StreamingState.Connected
-                    ) {
-                        Text(
-                            "Camera active — live video capture is visible",
-                            color = Color.Red,
-                            modifier = Modifier.padding(vertical = 8.dp),
-                        )
-                        AndroidView(
-                            factory = { previewView },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                    Button(
-                        onClick = {
-                            webRtcSession?.close()
-                            signalingClient?.disconnect(null)
+                    )
+                else ->
+                    CameraHome(
+                        runtime = runtime,
+                        cameraPermission = cameraPermission,
+                        notificationPermission = notificationPermission,
+                        onAllowCamera = {
+                            permissionLauncher.launch(Manifest.permission.CAMERA)
+                        },
+                        onAllowNotifications = {
+                            notificationPermissionLauncher.launch(
+                                Manifest.permission.POST_NOTIFICATIONS,
+                            )
+                        },
+                        onStart = { CameraForegroundService.start(context) },
+                        onStop = { CameraForegroundService.stop(context) },
+                        onPairNewAccount = {
+                            CameraForegroundService.stop(context)
                             credentialStore.clear()
                             credential = null
-                            message = "Local credential cleared"
+                            pairingState = PairingLifecycle.Pending
+                            message = "Ready to pair with another account."
                         },
-                    ) {
-                        Text("Clear local credential")
-                    }
-                }
+                    )
             }
         }
+    }
+}
+
+@Composable
+private fun PairingScreen(
+    pairingCode: String,
+    message: String,
+    busy: Boolean,
+    onCodeChange: (String) -> Unit,
+    onPair: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("Beacon SecureView", style = MaterialTheme.typography.headlineLarge)
+        Text(
+            "Turn this phone into a household camera.",
+            modifier = Modifier.padding(vertical = 12.dp),
+        )
+        OutlinedTextField(
+            value = pairingCode,
+            onValueChange = onCodeChange,
+            label = { Text("Pairing code") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
+        Button(
+            enabled = pairingCode.isNotBlank() && !busy,
+            onClick = onPair,
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        ) {
+            Text(if (busy) "Pairing…" else "Pair device")
+        }
+        if (message.isNotBlank()) Text(message, modifier = Modifier.padding(top = 12.dp))
+    }
+}
+
+@Composable
+private fun PairingSuccess() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("✓", color = Color(0xFF12805C), style = MaterialTheme.typography.displayLarge)
+        Text("Camera connected", style = MaterialTheme.typography.headlineMedium)
+        Text("Starting Camera Mode…")
+    }
+}
+
+@Composable
+private fun CameraHome(
+    runtime: CameraRuntimeState,
+    cameraPermission: Boolean,
+    notificationPermission: Boolean,
+    onAllowCamera: () -> Unit,
+    onAllowNotifications: () -> Unit,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    onPairNewAccount: () -> Unit,
+) {
+    val context = LocalContext.current
+    val battery =
+        remember {
+            val manager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            manager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        }
+    Column(
+        modifier = Modifier.fillMaxSize().padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Camera Home", style = MaterialTheme.typography.headlineLarge)
+        Row(
+            modifier =
+                Modifier.fillMaxWidth()
+                    .background(Color(0xFFE6F6EF), RoundedCornerShape(12.dp))
+                    .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column {
+                Text("Android Camera", style = MaterialTheme.typography.titleLarge)
+                Text(runtime.device.name.uppercase(), color = Color(0xFF12805C))
+            }
+            Text("$battery% battery")
+        }
+        if (runtime.activeViewers > 0) {
+            Text(
+                "● LIVE · ${runtime.activeViewers} viewer${if (runtime.activeViewers == 1) "" else "s"}",
+                color = Color.Red,
+                style = MaterialTheme.typography.titleMedium,
+            )
+        } else {
+            Text("Ready for an authorized viewer")
+        }
+        if (runtime.activeViewers > 0 && CameraRuntime.previewView != null) {
+            AndroidView(
+                factory = { CameraRuntime.previewView ?: PreviewView(it) },
+                modifier = Modifier.fillMaxWidth().height(260.dp),
+            )
+        } else {
+            Column(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .height(180.dp)
+                        .background(Color(0xFF101820), RoundedCornerShape(12.dp)),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text("Preview appears while streaming", color = Color.White)
+            }
+        }
+        Text("Network: ${runtime.diagnostic}")
+        Text("Reconnect attempts: ${runtime.retryAttempt}")
+        if (!cameraPermission) {
+            Button(onClick = onAllowCamera, modifier = Modifier.fillMaxWidth()) {
+                Text("Allow camera")
+            }
+        } else if (!notificationPermission) {
+            Button(onClick = onAllowNotifications, modifier = Modifier.fillMaxWidth()) {
+                Text("Allow camera status notification")
+            }
+        } else if (runtime.cameraEnabled) {
+            OutlinedButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) {
+                Text("Stop camera")
+            }
+        } else {
+            Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
+                Text("Start camera")
+            }
+        }
+        OutlinedButton(onClick = onPairNewAccount, modifier = Modifier.fillMaxWidth()) {
+            Text("Pair new account")
+        }
+        Text(
+            "Camera operation continues when this screen is closed. A persistent notification " +
+                "shows whenever Camera Mode is active.",
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }

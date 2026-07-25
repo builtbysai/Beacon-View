@@ -211,7 +211,7 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
 
     const devicePeerLeft = nextMessage(device);
     viewer.close();
-    expect(await devicePeerLeft).toEqual({
+    expect(await devicePeerLeft).toMatchObject({
       code: 'viewer_disconnected',
       type: 'peer-left',
     });

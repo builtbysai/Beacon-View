@@ -80,37 +80,19 @@ recording, or background capture.
 
 ## HTTPS/WSS and a physical phone
 
-The optional `secure` Compose profile terminates locally trusted HTTPS and WSS
-with Caddy. Start the web development server on a container-reachable interface
-and bind Caddy to the selected LAN interface:
+Use the repeatable Windows workflow in
+[physical Android device development](physical-android-device-development.md):
 
 ```powershell
-$env:VITE_DEV_HOST = "0.0.0.0"
-$env:BEACON_HTTPS_HOST = "beacon.test"
-$env:BEACON_HTTPS_BIND = "192.0.2.10"
-pnpm dev
-docker compose -f infrastructure/docker/compose.yaml --profile secure up -d
+.\scripts\Start-BeaconLanDev.ps1 -LanHost 192.0.2.10
+.\scripts\Export-BeaconDevCertificate.ps1
+.\scripts\Test-BeaconLanDev.ps1 -LanHost 192.0.2.10
+.\scripts\Build-Install-BeaconAndroidDebug.ps1 -LanHost 192.0.2.10
 ```
 
-Replace the documentation address with the development computer's stable LAN
-address. Add a matching DNS or hosts entry. Export Caddy's local root
-certificate from the `caddy-data` volume and install it explicitly as a trusted
-development CA in the test browser and phone. Android debug builds trust
-user-installed CAs; release builds trust only system CAs. Never disable
-certificate verification and never commit the CA private key.
-
-Set backend origins and signaling URL to the exact HTTPS/WSS endpoints, leave
-`ALLOW_INSECURE_LOCAL_DEV=false`, and build Android with:
-
-```powershell
-$env:BEACON_API_URL = "https://beacon.test:8443"
-apps\android-camera\gradlew.bat -p apps/android-camera :app:assembleDebug
-```
-
-Allow inbound TCP 8443 and the configured Coturn TCP/UDP 3478 plus UDP
-49160–49200 only from the intended test networks. A TURN server behind NAT also
-needs its advertised external address configured. The default Compose bindings
-remain loopback-only and therefore cannot serve a physical phone.
+Replace the documentation address. The script configures strict Vite port 5173,
+trusted HTTPS/WSS, exact origins, LAN-reachable STUN/TURN, and debug Android
+endpoint injection while retaining localhost/emulator defaults.
 
 ## Physical-device validation checklist
 
@@ -132,8 +114,7 @@ Record browser, handset/Android, network, and time with the result:
 8. Inspect backend, browser, Android, and Coturn logs for secrets, SDP, raw ICE
    candidates, crashes, and restart loops.
 
-No handset was connected during the automated repository run for this
-milestone, so this checklist must be executed before release.
+Record physical-device evidence before claiming completion.
 
 Local PostgreSQL, Coturn, and their deliberately weak example credentials are
 loopback-only. Never reuse those credentials outside an isolated developer

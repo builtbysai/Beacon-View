@@ -63,7 +63,7 @@ describe('SignalingHub', () => {
 
     viewer.mock.close();
     expect(hub.activeSessionCount).toBe(0);
-    expect(device.mock.sent.at(-1)).toEqual({
+    expect(device.mock.sent.at(-1)).toMatchObject({
       code: 'viewer_disconnected',
       type: 'peer-left',
     });
@@ -84,14 +84,14 @@ describe('SignalingHub', () => {
     await new Promise((resolve) => setTimeout(resolve, 15));
 
     expect(hub.activeSessionCount).toBe(0);
-    expect(viewer.mock.sent.at(-1)).toEqual({
+    expect(viewer.mock.sent.at(-1)).toMatchObject({
       code: 'negotiation_timeout',
       type: 'peer-left',
     });
     hub.close();
   });
 
-  it('lets an authorized reconnect replace a stale viewer safely', () => {
+  it('keeps independent sessions for multiple authorized viewers', () => {
     const servers = [{ urls: ['stun:localhost:3478'] }];
     const hub = new SignalingHub(
       () => servers,
@@ -106,11 +106,11 @@ describe('SignalingHub', () => {
     expect(
       hub.connectViewer('camera-1', 'public-camera-1', replacementViewer.ws),
     ).toBe(true);
-    expect(firstViewer.mock.readyState).toBe(3);
+    expect(firstViewer.mock.readyState).toBe(1);
     expect(replacementViewer.mock.sent.at(-1)).toMatchObject({
       type: 'ready',
     });
-    expect(hub.activeSessionCount).toBe(1);
+    expect(hub.activeSessionCount).toBe(2);
 
     firstViewer.mock.emit('close');
     expect(hub.activeSessionCount).toBe(1);

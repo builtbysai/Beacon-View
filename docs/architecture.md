@@ -1,5 +1,11 @@
 # Architecture
 
+The runtime lifecycle and state-machine design is specified in
+[`device-lifecycle.md`](device-lifecycle.md). Android camera operation is owned
+by a foreground service rather than the activity. Signaling sessions are keyed
+by connection ID, allowing independent viewer cleanup, while an authenticated
+household event WebSocket keeps browser camera state current without polling.
+
 ## Milestone 3 scope
 
 The Fastify backend owns identity, authorization, device pairing, credential
@@ -86,3 +92,9 @@ credential and never accepts credentials in URLs.
 Drizzle defines and migrates the PostgreSQL schema through explicit checked-in
 SQL. Production startup never mutates schema. Coturn is an ICE relay fallback,
 not a media processor. TypeScript packages are not imported by Android.
+
+LAN development is an explicit orchestration mode around one validated laptop
+IPv4 address. Caddy terminates trusted development HTTPS/WSS, Vite retains a
+strict upstream port, and Coturn advertises and binds the selected address.
+PostgreSQL remains loopback-only. These bindings do not change deployment
+architecture or release trust policy.

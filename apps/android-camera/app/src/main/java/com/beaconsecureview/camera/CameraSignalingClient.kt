@@ -33,7 +33,7 @@ interface CameraSignalingListener {
 
     fun onIce(connectionId: String, candidate: IceCandidate)
 
-    fun onPeerLeft()
+    fun onPeerLeft(connectionId: String)
 
     fun onSignalingState(state: StreamingState)
 
@@ -122,11 +122,11 @@ class CameraSignalingClient(
         send(JSONObject().put("type", "connected").put("connectionId", connectionId))
     }
 
-    fun pause(connectionId: String?) {
+    fun pause(connectionIds: Collection<String> = emptyList()) {
         stopped = true
         cancelRetry()
         generations.cancel()
-        if (connectionId != null) {
+        for (connectionId in connectionIds) {
             send(JSONObject().put("type", "disconnect").put("connectionId", connectionId))
         }
         socket?.close(1000, "Streaming screen stopped")
@@ -134,8 +134,8 @@ class CameraSignalingClient(
         unregisterNetworkCallback()
     }
 
-    fun disconnect(connectionId: String?) {
-        pause(connectionId)
+    fun disconnect(connectionIds: Collection<String> = emptyList()) {
+        pause(connectionIds)
         client.dispatcher.executorService.shutdown()
         client.connectionPool.evictAll()
     }
@@ -285,7 +285,10 @@ class CameraSignalingClient(
                     )
                 }
             }
-            "peer-left" -> handler.post { listener.onPeerLeft() }
+            "peer-left" ->
+                handler.post {
+                    listener.onPeerLeft(message.getString("connectionId"))
+                }
         }
     }
 

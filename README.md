@@ -1,5 +1,11 @@
 # Beacon SecureView
 
+Beacon SecureView treats a paired Android phone as an independent camera
+appliance. Camera Mode stays online through browser navigation and Android
+activity recreation, and the web dashboard receives pairing and presence
+changes in realtime. See [`docs/device-lifecycle.md`](docs/device-lifecycle.md)
+for the explicit device, viewer, and pairing state machines.
+
 Beacon SecureView is an Android-first system intended to turn an unused Android
 phone into a remotely accessible smart security camera. Milestone 3 makes the
 single-viewer, video-only WebRTC path resilient to transient connectivity loss
@@ -32,5 +38,7 @@ pnpm dev
 The backend development entry point loads `apps/backend/.env` without
 overriding environment variables already defined by the shell. See
 [local development](docs/local-development.md) for migrations, reset commands,
-Android emulator setup, and validation. This project is not production-ready.
-The same guide includes the HTTPS/WSS and physical-device validation procedure.
+Android emulator setup, and validation. For a physical phone on the Windows
+development LAN, follow the dedicated
+[physical Android device guide](docs/physical-android-device-development.md).
+This project is not production-ready.
