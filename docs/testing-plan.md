@@ -4,15 +4,27 @@
 and all TypeScript builds. Backend unit tests cover security primitives, rate
 windows, and the exact presence boundary.
 
-PostgreSQL integration suites run when `TEST_DATABASE_URL` is defined:
+PostgreSQL integration suites run only when both `NODE_ENV=test` and a
+dedicated `TEST_DATABASE_URL` are defined:
 
-```sh
-TEST_DATABASE_URL=postgresql://... pnpm --filter @beacon/backend test
+```powershell
+docker exec beacon-secureview-local-postgres-1 createdb `
+  -U beacon_local beacon_secureview_test
+$env:NODE_ENV = 'test'
+$env:TEST_DATABASE_URL = `
+  'postgresql://beacon_local:local-development-only@127.0.0.1:5432/beacon_secureview_test'
+$developmentDatabaseUrl = $env:DATABASE_URL
+$env:DATABASE_URL = $env:TEST_DATABASE_URL
+pnpm.cmd --filter @beacon/backend db:migrate
+$env:DATABASE_URL = $developmentDatabaseUrl
+pnpm.cmd --filter @beacon/backend test
 ```
 
-The database name must end in `_test`; the suite refuses any other name because
-its isolation setup truncates tables. Never point it at `beacon_secureview` or
-another development, shared, staging, or production database.
+The commands set `DATABASE_URL` to the dedicated test URL only for migration,
+then restore the development URL before tests. The destructive helper rechecks the explicit
+test marker, `_test` suffix, forbidden default/development names, and inequality
+with `DATABASE_URL` immediately before every truncation. It prints only the
+target host and database name.
 
 They cover normalized duplicate accounts, generic login errors, session expiry,
 logout revocation, CSRF, transactional concurrent pairing, expired/invalid/reused

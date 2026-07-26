@@ -157,4 +157,72 @@ describe('App', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     vi.useRealTimers();
   });
+
+  it('opens a device detail with its child camera sources', async () => {
+    vi.stubGlobal('WebSocket', TestSocket);
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          json: () =>
+            Promise.resolve({
+              user: { email: 'owner@example.com', id: 'owner' },
+            }),
+          ok: true,
+          status: 200,
+        })
+        .mockResolvedValueOnce({
+          json: () =>
+            Promise.resolve({
+              cameras: [
+                {
+                  credentialRevoked: false,
+                  deviceId: 'device-1',
+                  deviceName: 'Pixel',
+                  enabled: true,
+                  facing: 'rear',
+                  id: 'rear-camera',
+                  lastSeenAt: new Date().toISOString(),
+                  name: 'Rear camera',
+                  online: true,
+                  platform: 'android',
+                  streaming: false,
+                  viewerCount: 2,
+                },
+              ],
+            }),
+          ok: true,
+          status: 200,
+        })
+        .mockResolvedValueOnce({
+          json: () =>
+            Promise.resolve({
+              devices: [
+                {
+                  deviceType: 'phone',
+                  id: 'device-1',
+                  lastSeenAt: new Date().toISOString(),
+                  name: 'Pixel',
+                  online: true,
+                  platform: 'android',
+                  revoked: false,
+                },
+              ],
+            }),
+          ok: true,
+          status: 200,
+        }),
+    );
+    render(<App />);
+
+    await screen.findByText('Rear camera');
+    fireEvent.click(screen.getByRole('button', { name: 'Devices' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open device' }));
+
+    expect(screen.getByRole('heading', { name: 'Pixel' })).toBeInTheDocument();
+    expect(screen.getByText(/Total viewers: 2/)).toBeVisible();
+    expect(screen.getByText('Rear camera')).toBeVisible();
+    expect(window.location.pathname).toBe('/devices/device-1');
+  });
 });

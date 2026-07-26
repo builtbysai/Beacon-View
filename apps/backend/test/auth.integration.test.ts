@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import type { AppConfig } from '../src/config.js';
 import { PostgresStore } from '../src/store.js';
-import { testDatabaseUrl } from './test-database.js';
+import { resetTestDatabase, testDatabaseUrl } from './test-database.js';
 
 const databaseUrl = testDatabaseUrl();
 const store = databaseUrl ? new PostgresStore(databaseUrl) : null;
@@ -50,9 +50,7 @@ function sessionCookies(headers: Record<string, unknown>): {
 
 describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
   beforeEach(async () => {
-    await store!.pool.query(
-      'TRUNCATE audit_events, pairing_codes, device_credentials, cameras, browser_sessions, households, users CASCADE',
-    );
+    await resetTestDatabase(store!.pool);
   });
 
   afterAll(async () => {

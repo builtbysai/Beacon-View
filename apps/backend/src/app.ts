@@ -473,6 +473,100 @@ export function buildApp(
     };
   });
 
+  app.get('/api/devices/:deviceId', async (request, reply) => {
+    const session = await authenticate(request, reply);
+    if (!session) return;
+    const parameters = deviceParameterSchema.safeParse(request.params);
+    if (!parameters.success) {
+      return reply.code(404).send({ error: 'Device not found' });
+    }
+    const [devices, cameras] = await Promise.all([
+      store.listDevices(session.householdId),
+      store.listCameras(session.householdId),
+    ]);
+    const device = devices.find(
+      (candidate) => candidate.publicDeviceId === parameters.data.deviceId,
+    );
+    if (!device) return reply.code(404).send({ error: 'Device not found' });
+    const now = new Date();
+    const childCameras = cameras
+      .filter((camera) => camera.publicDeviceId === device.publicDeviceId)
+      .map((camera) => {
+        const status = signaling.cameraStatus(camera.publicCameraId);
+        return {
+          availability: status.producerConnected ? 'available' : 'unavailable',
+          credentialRevoked: camera.credentialRevokedAt !== null,
+          deviceId: camera.publicDeviceId,
+          deviceName: camera.deviceName,
+          enabled: camera.enabled,
+          facing: camera.facing,
+          id: camera.publicCameraId,
+          lastSeenAt: camera.lastSeenAt?.toISOString() ?? null,
+          name: camera.name,
+          online:
+            status.producerConnected || isCameraOnline(camera.lastSeenAt, now),
+          platform: camera.platform,
+          sourceKey: camera.sourceKey,
+          streaming: status.viewerCount > 0,
+          viewerCount: status.viewerCount,
+        };
+      });
+    return {
+      cameras: childCameras,
+      device: {
+        aggregateViewerCount: childCameras.reduce(
+          (total, camera) => total + camera.viewerCount,
+          0,
+        ),
+        capabilities: {
+          maxSimultaneousSources: 1,
+          simultaneousCapture: false,
+        },
+        deviceType: device.deviceType,
+        id: device.publicDeviceId,
+        lastSeenAt: device.lastSeenAt?.toISOString() ?? null,
+        name: device.name,
+        online: isCameraOnline(device.lastSeenAt, now),
+        platform: device.platform,
+        revoked: device.revokedAt !== null,
+        softwareVersion: device.softwareVersion,
+      },
+    };
+  });
+
+  app.get('/api/cameras/:cameraId', async (request, reply) => {
+    const session = await authenticate(request, reply);
+    if (!session) return;
+    const parameters = cameraParameterSchema.safeParse(request.params);
+    if (!parameters.success) {
+      return reply.code(404).send({ error: 'Camera not found' });
+    }
+    const cameras = await store.listCameras(session.householdId);
+    const camera = cameras.find(
+      (candidate) => candidate.publicCameraId === parameters.data.cameraId,
+    );
+    if (!camera) return reply.code(404).send({ error: 'Camera not found' });
+    const status = signaling.cameraStatus(camera.publicCameraId);
+    return {
+      camera: {
+        availability: status.producerConnected ? 'available' : 'unavailable',
+        credentialRevoked: camera.credentialRevokedAt !== null,
+        deviceId: camera.publicDeviceId,
+        deviceName: camera.deviceName,
+        enabled: camera.enabled,
+        facing: camera.facing,
+        id: camera.publicCameraId,
+        lastSeenAt: camera.lastSeenAt?.toISOString() ?? null,
+        name: camera.name,
+        online: status.producerConnected || isCameraOnline(camera.lastSeenAt),
+        platform: camera.platform,
+        sourceKey: camera.sourceKey,
+        streaming: status.viewerCount > 0,
+        viewerCount: status.viewerCount,
+      },
+    };
+  });
+
   app.patch('/api/devices/:deviceId', async (request, reply) => {
     const session = await authenticateStateChange(request, reply);
     if (!session) return;

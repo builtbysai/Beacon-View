@@ -105,6 +105,16 @@ Repeated startup is explicit and safe:
 .\scripts\Stop-BeaconLanDev.ps1
 ```
 
+Run the automated portion of Milestone 7 acceptance after LAN startup:
+
+```powershell
+.\scripts\Test-BeaconFunctionalMilestone.ps1 -LanHost 192.0.2.10
+```
+
+This intentionally reports physical Android, real webcam, multi-viewer, and
+forced-relay media checks as manual; service reachability alone does not prove
+that media traversed TURN.
+
 When ports 3000 or 5173 are occupied, interactive startup offers reuse,
 restart, or quit only for a process proven to belong to this repository. It
 prints PID, executable, command line, and listener details for unrelated

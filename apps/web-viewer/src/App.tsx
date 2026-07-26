@@ -54,6 +54,8 @@ const pagePaths: Record<Page, string> = {
 };
 
 function pageFromPath(): Page {
+  if (window.location.pathname.startsWith('/devices/')) return 'devices';
+  if (window.location.pathname.startsWith('/cameras/')) return 'cameras';
   return (
     (Object.entries(pagePaths).find(
       ([, path]) => path === window.location.pathname,
@@ -79,6 +81,12 @@ export function App() {
   const [pairingCode, setPairingCode] = useState('');
   const [pairingState, setPairingState] = useState<PairingLifecycle>('pending');
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(
+    () => {
+      const match = window.location.pathname.match(/^\/devices\/([^/]+)$/);
+      return match ? decodeURIComponent(match[1]!) : null;
+    },
+  );
   const [highlightedCameraId, setHighlightedCameraId] = useState<string | null>(
     null,
   );
@@ -87,13 +95,31 @@ export function App() {
   const navigate = useCallback((next: Page) => {
     window.history.pushState({}, '', pagePaths[next]);
     setPage(next);
+    setSelectedDeviceId(null);
+    setSelectedCamera(null);
   }, []);
 
   useEffect(() => {
-    const onPopState = () => setPage(pageFromPath());
+    const onPopState = () => {
+      setPage(pageFromPath());
+      const deviceMatch =
+        window.location.pathname.match(/^\/devices\/([^/]+)$/);
+      const cameraMatch =
+        window.location.pathname.match(/^\/cameras\/([^/]+)$/);
+      setSelectedDeviceId(
+        deviceMatch ? decodeURIComponent(deviceMatch[1]!) : null,
+      );
+      setSelectedCamera(
+        cameraMatch
+          ? (cameras.find(
+              (camera) => camera.id === decodeURIComponent(cameraMatch[1]!),
+            ) ?? null)
+          : null,
+      );
+    };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, []);
+  }, [cameras]);
 
   const loadCameras = useCallback(async () => {
     const [cameraResult, deviceResult] = await Promise.all([
@@ -102,6 +128,14 @@ export function App() {
     ]);
     setCameras(cameraResult.cameras);
     setDevices(deviceResult.devices);
+    const cameraMatch = window.location.pathname.match(/^\/cameras\/([^/]+)$/);
+    if (cameraMatch) {
+      setSelectedCamera(
+        cameraResult.cameras.find(
+          (camera) => camera.id === decodeURIComponent(cameraMatch[1]!),
+        ) ?? null,
+      );
+    }
     return cameraResult.cameras;
   }, []);
 
@@ -248,6 +282,26 @@ export function App() {
     await loadCameras();
   }
 
+  function openDevice(deviceId: string) {
+    window.history.pushState(
+      {},
+      '',
+      `/devices/${encodeURIComponent(deviceId)}`,
+    );
+    setPage('devices');
+    setSelectedDeviceId(deviceId);
+    setSelectedCamera(null);
+  }
+
+  function openCamera(camera: Camera) {
+    window.history.pushState(
+      {},
+      '',
+      `/cameras/${encodeURIComponent(camera.id)}`,
+    );
+    setSelectedCamera(camera);
+  }
+
   if (loading)
     return <main className="shell">Loading your secure workspace…</main>;
 
@@ -295,10 +349,21 @@ export function App() {
   }
 
   if (selectedCamera) {
+    const siblings = cameras.filter(
+      (camera) => camera.deviceId === selectedCamera.deviceId,
+    );
     return (
       <LiveVideo
         camera={selectedCamera}
-        onBack={() => setSelectedCamera(null)}
+        onBack={() => {
+          setSelectedCamera(null);
+          openDevice(selectedCamera.deviceId);
+        }}
+        onSelectCamera={(cameraId) => {
+          const sibling = siblings.find((camera) => camera.id === cameraId);
+          if (sibling) openCamera(sibling);
+        }}
+        siblingCameras={siblings}
       />
     );
   }
@@ -407,42 +472,60 @@ export function App() {
         )}
         {page === 'devices' && (
           <section className="card wide">
-            <h3>Devices</h3>
-            <ul className="device-list">
-              {devices.map((device) => (
-                <li key={device.id}>
-                  <div>
-                    <strong>{device.name}</strong>
-                    <span>
-                      {device.platform} · {device.deviceType}
-                    </span>
-                  </div>
-                  <span className={device.online ? 'online' : 'offline'}>
-                    {device.online ? 'ONLINE' : 'OFFLINE'}
-                  </span>
-                  <span>
-                    {
-                      cameras.filter((camera) => camera.deviceId === device.id)
-                        .length
-                    }{' '}
-                    camera sources
-                  </span>
-                  <button
-                    className="secondary"
-                    onClick={() => void renameDevice(device)}
-                  >
-                    Rename
-                  </button>
-                  <button
-                    className="secondary"
-                    disabled={device.revoked}
-                    onClick={() => void revokeDevice(device.id)}
-                  >
-                    {device.revoked ? 'Revoked' : 'Revoke device'}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {selectedDeviceId ? (
+              <DeviceDetail
+                cameras={cameras.filter(
+                  (camera) => camera.deviceId === selectedDeviceId,
+                )}
+                device={devices.find(
+                  (device) => device.id === selectedDeviceId,
+                )}
+                onBack={() => {
+                  window.history.pushState({}, '', '/devices');
+                  setSelectedDeviceId(null);
+                }}
+                onLive={openCamera}
+                onRename={(device) => void renameDevice(device)}
+                onRevoke={(deviceId) => void revokeDevice(deviceId)}
+                onUpdate={(id, changes) => void updateCamera(id, changes)}
+              />
+            ) : (
+              <>
+                <h3>Devices</h3>
+                {devices.length === 0 && (
+                  <p className="empty">
+                    No devices yet. Pair Android or use this browser as a
+                    camera.
+                  </p>
+                )}
+                <ul className="device-list">
+                  {devices.map((device) => (
+                    <li key={device.id}>
+                      <div>
+                        <strong>{device.name}</strong>
+                        <span>
+                          {device.platform} · {device.deviceType}
+                        </span>
+                      </div>
+                      <span className={device.online ? 'online' : 'offline'}>
+                        {device.online ? 'ONLINE' : 'OFFLINE'}
+                      </span>
+                      <span>
+                        {
+                          cameras.filter(
+                            (camera) => camera.deviceId === device.id,
+                          ).length
+                        }{' '}
+                        camera sources
+                      </span>
+                      <button onClick={() => openDevice(device.id)}>
+                        Open device
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </section>
         )}
         {page === 'diagnostics' && <Diagnostics />}
@@ -496,6 +579,89 @@ export function App() {
         </div>
       )}
     </div>
+  );
+}
+
+function DeviceDetail({
+  cameras,
+  device,
+  onBack,
+  onLive,
+  onRename,
+  onRevoke,
+  onUpdate,
+}: {
+  cameras: Camera[];
+  device: Device | undefined;
+  onBack: () => void;
+  onLive: (camera: Camera) => void;
+  onRename: (device: Device) => void;
+  onRevoke: (deviceId: string) => void;
+  onUpdate: (
+    cameraId: string,
+    changes: { enabled?: boolean; name?: string },
+  ) => void;
+}) {
+  if (!device) {
+    return (
+      <>
+        <h3>Device not found</h3>
+        <p>This device is unavailable or does not belong to your household.</p>
+        <button onClick={onBack}>Back to devices</button>
+      </>
+    );
+  }
+  const viewers = cameras.reduce(
+    (total, camera) => total + camera.viewerCount,
+    0,
+  );
+  return (
+    <>
+      <div className="heading">
+        <div>
+          <p className="eyebrow">
+            {device.platform} · {device.deviceType}
+          </p>
+          <h3>{device.name}</h3>
+        </div>
+        <button className="secondary" onClick={onBack}>
+          Back to devices
+        </button>
+      </div>
+      <p>
+        Device:{' '}
+        {device.revoked
+          ? 'authentication revoked'
+          : device.online
+            ? 'online'
+            : 'offline'}
+        {' · '}Last seen: {device.lastSeenAt ?? 'never'}
+        {' · '}Total viewers: {viewers}
+      </p>
+      <p className="notice">
+        This device currently supports one active camera source at a time.
+        Switching sources preserves the device registration.
+      </p>
+      <div className="heading-actions">
+        <button className="secondary" onClick={() => onRename(device)}>
+          Rename device
+        </button>
+        <button
+          className="secondary"
+          disabled={device.revoked}
+          onClick={() => onRevoke(device.id)}
+        >
+          {device.revoked ? 'Device revoked' : 'Revoke device'}
+        </button>
+      </div>
+      <h4>Camera sources</h4>
+      <CameraList
+        cameras={cameras}
+        highlightedCameraId={null}
+        onLive={onLive}
+        onUpdate={onUpdate}
+      />
+    </>
   );
 }
 

@@ -100,6 +100,8 @@ application-level end-to-end-encryption claim.
 - `PUT /api/device/cameras` and `POST /api/browser-devices`
 - `GET /api/devices`, `GET /api/cameras`, `GET /api/diagnostics`, and
   `DELETE /api/cameras/:cameraId/credential`
+- `GET /api/devices/:deviceId` with its child sources and aggregate viewer count
+- `GET /api/cameras/:cameraId` for an independently addressable source
 - `POST /api/device/heartbeat`
 - `GET /api/signaling` as an authenticated WebSocket upgrade
 

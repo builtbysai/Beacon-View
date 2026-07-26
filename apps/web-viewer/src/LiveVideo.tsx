@@ -51,9 +51,13 @@ function signalingUrl(cameraId: string): string {
 export function LiveVideo({
   camera,
   onBack,
+  onSelectCamera,
+  siblingCameras = [],
 }: {
   camera: Camera;
   onBack: () => void;
+  onSelectCamera?: (cameraId: string) => void;
+  siblingCameras?: Camera[];
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -258,6 +262,21 @@ export function LiveVideo({
         </div>
         <p role="status">Connection: {status}</p>
         <p className="notice">Reconnect attempts: {retryDisplay}</p>
+        {siblingCameras.length > 1 && (
+          <div className="heading-actions" aria-label="Sibling camera sources">
+            {siblingCameras.map((sibling) => (
+              <button
+                className={sibling.id === camera.id ? '' : 'secondary'}
+                disabled={sibling.id === camera.id}
+                key={sibling.id}
+                onClick={() => onSelectCamera?.(sibling.id)}
+                type="button"
+              >
+                {sibling.name}
+              </button>
+            ))}
+          </div>
+        )}
         {status !== 'connected' &&
           status !== 'connecting' &&
           status !== 'reconnecting' && (
