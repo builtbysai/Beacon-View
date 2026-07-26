@@ -18,7 +18,14 @@ foundation: semantic light/dark tokens, a responsive household shell, consumer
 dashboard and cards, advanced-only diagnostics, a context-preserving Live View,
 clear Browser Camera Mode limitations, and aligned Android color semantics.
 
-Rooms, Activity, People, recording, AI modules, and a multi-camera grid remain
-future work because the current platform does not yet provide their required
-data or complete behavior. The extension boundaries and manual acceptance
-matrix are documented in `product-experience.md`.
+Rooms, Activity, People, recording, and AI modules remain future work because
+the current platform does not yet provide their required data or complete
+behavior. The extension boundaries and manual acceptance matrix are documented
+in `product-experience.md`.
+
+Milestone 9 adds the Monitor route and local workspace layouts for 1 through 16
+cameras. Each tile owns an independent WebRTC lifecycle, preserves its stream
+while reordered, suspends when distant or in a hidden tab, and supports
+source-local switching and in-application fullscreen. Workspace ordering,
+layout, and refresh preference are stored as versioned user-scoped browser
+preferences. Room filtering remains deferred until room metadata exists.

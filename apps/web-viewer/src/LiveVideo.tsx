@@ -54,17 +54,23 @@ function signalingUrl(cameraId: string): string {
 }
 
 export function LiveVideo({
+  enabled = true,
   camera,
+  compact = false,
   deviceName,
+  onDevice,
   viewerCount = 0,
   onBack,
   onSelectCamera,
   siblingCameras = [],
 }: {
+  enabled?: boolean;
   camera: Camera;
+  compact?: boolean;
   deviceName?: string;
+  onDevice?: () => void;
   viewerCount?: number;
-  onBack: () => void;
+  onBack?: () => void;
   onSelectCamera?: (cameraId: string) => Promise<void> | void;
   siblingCameras?: Camera[];
 }) {
@@ -91,6 +97,10 @@ export function LiveVideo({
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      setStatus('stream unavailable');
+      return;
+    }
     const currentGeneration = generation.current.next();
     let active = true;
     let completed = false;
@@ -245,7 +255,7 @@ export function LiveVideo({
       completed = true;
       cleanup();
     };
-  }, [attempt, camera.id]);
+  }, [enabled, attempt, camera.id]);
 
   useEffect(
     () => () => {
@@ -255,9 +265,9 @@ export function LiveVideo({
     [],
   );
 
-  return (
-    <main className="shell">
-      <section className="card wide" aria-labelledby="live-title">
+  const content = (
+    <>
+      {!compact && (
         <div className="heading">
           <div>
             <p className="eyebrow">
@@ -268,80 +278,116 @@ export function LiveVideo({
               {viewerCount} {viewerCount === 1 ? 'viewer' : 'viewers'}
             </span>
           </div>
-          <button className="secondary" onClick={onBack}>
+          <button className="secondary" onClick={onBack} type="button">
             Back to cameras
           </button>
         </div>
-        <div className="video-frame" ref={stageRef}>
-          <video ref={videoRef} autoPlay playsInline muted />
-          {status !== 'connected' && (
-            <div className="video-overlay">
-              <strong>
-                {status === 'connecting'
-                  ? 'Connecting to camera'
-                  : status === 'reconnecting'
-                    ? 'Connection interrupted'
-                    : status === 'switching source'
-                      ? 'Switching camera'
-                      : status}
-              </strong>
-              <span>
-                {status === 'connecting'
-                  ? 'Waiting for the secure live stream.'
-                  : status === 'reconnecting'
-                    ? `Beacon is retrying${retryDisplay ? ` · attempt ${retryDisplay}` : ''}.`
-                    : status === 'switching source'
-                      ? 'The device is releasing the previous camera source.'
-                      : 'This stream needs your attention.'}
-              </span>
+      )}
+      <div className="video-frame" ref={stageRef}>
+        <video ref={videoRef} autoPlay playsInline muted />
+        {status !== 'connected' && (
+          <div className="video-overlay">
+            <strong>
+              {status === 'connecting'
+                ? 'Connecting to camera'
+                : status === 'reconnecting'
+                  ? 'Connection interrupted'
+                  : status === 'switching source'
+                    ? 'Switching camera'
+                    : status}
+            </strong>
+            <span>
+              {status === 'connecting'
+                ? 'Waiting for the secure live stream.'
+                : status === 'reconnecting'
+                  ? `Beacon is retrying${retryDisplay ? ` · attempt ${retryDisplay}` : ''}.`
+                  : status === 'switching source'
+                    ? 'The device is releasing the previous camera source.'
+                    : 'This stream needs your attention.'}
+            </span>
+          </div>
+        )}
+      </div>
+      <p className="visually-hidden" role="status">
+        Connection: {status}
+      </p>
+      {!compact && (
+        <>
+          <div className="heading-actions">
+            <span className={status === 'connected' ? 'streaming' : 'offline'}>
+              {status === 'connected' ? 'LIVE' : status.toUpperCase()}
+            </span>
+            <button
+              className="secondary"
+              onClick={() => void stageRef.current?.requestFullscreen()}
+              type="button"
+            >
+              Full screen
+            </button>
+          </div>
+          {siblingCameras.length > 1 && (
+            <div
+              className="heading-actions"
+              aria-label="Sibling camera sources"
+            >
+              {siblingCameras.map((sibling) => (
+                <button
+                  className={sibling.id === camera.id ? '' : 'secondary'}
+                  disabled={sibling.id === camera.id}
+                  key={sibling.id}
+                  onClick={() => {
+                    setStatus('switching source');
+                    void Promise.resolve(onSelectCamera?.(sibling.id)).catch(
+                      () => setStatus('stream unavailable'),
+                    );
+                  }}
+                  type="button"
+                >
+                  {sibling.name}
+                </button>
+              ))}
             </div>
           )}
-        </div>
-        <p className="visually-hidden" role="status">
-          Connection: {status}
-        </p>
-        <div className="heading-actions">
+          {status !== 'connected' &&
+            status !== 'connecting' &&
+            status !== 'reconnecting' && (
+              <button onClick={reconnect}>Reconnect</button>
+            )}
+          <p className="notice">
+            Closing this view ends only your viewer session. The camera remains
+            online and ready for the next authorized viewer. Audio and recording
+            are disabled.
+          </p>
+        </>
+      )}
+      {compact && (
+        <div className="tile-controls">
           <span className={status === 'connected' ? 'streaming' : 'offline'}>
             {status === 'connected' ? 'LIVE' : status.toUpperCase()}
           </span>
-          <button
-            className="secondary"
-            onClick={() => void stageRef.current?.requestFullscreen()}
-            type="button"
-          >
-            Full screen
-          </button>
-        </div>
-        {siblingCameras.length > 1 && (
-          <div className="heading-actions" aria-label="Sibling camera sources">
-            {siblingCameras.map((sibling) => (
-              <button
-                className={sibling.id === camera.id ? '' : 'secondary'}
-                disabled={sibling.id === camera.id}
-                key={sibling.id}
-                onClick={() => {
-                  setStatus('switching source');
-                  void Promise.resolve(onSelectCamera?.(sibling.id)).catch(() =>
-                    setStatus('stream unavailable'),
-                  );
-                }}
-                type="button"
-              >
-                {sibling.name}
-              </button>
-            ))}
-          </div>
-        )}
-        {status !== 'connected' &&
-          status !== 'connecting' &&
-          status !== 'reconnecting' && (
-            <button onClick={reconnect}>Reconnect</button>
+          {onDevice && (
+            <button className="link" onClick={onDevice} type="button">
+              Device
+            </button>
           )}
-        <p className="notice">
-          Closing this view ends only your viewer session. The camera remains
-          online and ready for the next authorized viewer. Audio and recording
-          are disabled.
-        </p>
+          {status !== 'connected' &&
+            status !== 'connecting' &&
+            status !== 'reconnecting' && (
+              <button className="link" onClick={reconnect} type="button">
+                Retry
+              </button>
+            )}
+        </div>
+      )}
+    </>
+  );
+
+  return compact ? (
+    content
+  ) : (
+    <main className="shell">
+      <section className="card wide" aria-labelledby="live-title">
+        {content}
       </section>
     </main>
   );

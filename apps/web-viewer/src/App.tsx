@@ -5,6 +5,7 @@ import { deviceLifecycle, nextPairingState } from './lifecycle';
 import type { PairingLifecycle } from './lifecycle';
 import { LiveVideo } from './LiveVideo';
 import { BrowserCameraMode } from './BrowserCameraMode';
+import { Monitoring } from './Monitoring';
 
 interface User {
   id: string;
@@ -44,6 +45,7 @@ interface Device {
 
 type Page =
   | 'dashboard'
+  | 'monitor'
   | 'cameras'
   | 'devices'
   | 'camera mode'
@@ -56,6 +58,7 @@ const pagePaths: Record<Page, string> = {
   dashboard: '/',
   devices: '/devices',
   diagnostics: '/diagnostics',
+  monitor: '/monitor',
   settings: '/settings',
 };
 
@@ -176,8 +179,8 @@ export function App() {
   useEffect(() => {
     void request<{ user: User }>('/api/auth/me')
       .then(async (result) => {
-        setUser(result.user);
         await loadCameras();
+        setUser(result.user);
       })
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
@@ -248,8 +251,8 @@ export function App() {
         }),
         method: 'POST',
       });
-      setUser(result.user);
       await loadCameras();
+      setUser(result.user);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Request failed');
     }
@@ -488,6 +491,7 @@ export function App() {
           {(
             [
               'dashboard',
+              'monitor',
               'cameras',
               'devices',
               'camera mode',
@@ -575,6 +579,20 @@ export function App() {
               />
             </article>
           </section>
+        )}
+        {page === 'monitor' && (
+          <Monitoring
+            cameras={cameras}
+            devices={devices}
+            onDevice={openDevice}
+            onSwitchSource={async (cameraId) => {
+              await request(`/api/cameras/${cameraId}/activate`, {
+                body: '{}',
+                method: 'POST',
+              });
+            }}
+            storageKey={`beacon_workspaces_${user.id}`}
+          />
         )}
         {page === 'cameras' && (
           <section className="card wide">
