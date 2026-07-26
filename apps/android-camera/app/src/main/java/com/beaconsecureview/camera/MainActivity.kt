@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -34,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -118,7 +121,7 @@ private fun BeaconCameraApp(
         }
     }
 
-    MaterialTheme {
+    BeaconTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
             when {
                 pairingState == PairingLifecycle.Accepted -> PairingSuccess()
@@ -191,6 +194,32 @@ private fun BeaconCameraApp(
             }
         }
     }
+}
+
+@Composable
+private fun BeaconTheme(content: @Composable () -> Unit) {
+    val light =
+        lightColorScheme(
+            primary = Color(0xFF176B57),
+            onPrimary = Color.White,
+            primaryContainer = Color(0xFFDFF1EB),
+            onPrimaryContainer = Color(0xFF113D32),
+            background = Color(0xFFF4F7F6),
+            surface = Color.White,
+            onSurface = Color(0xFF14231F),
+            error = Color(0xFFA33B43),
+        )
+    val dark =
+        darkColorScheme(
+            primary = Color(0xFF6BD0B2),
+            onPrimary = Color(0xFF07382C),
+            primaryContainer = Color(0xFF184A3D),
+            background = Color(0xFF0B1513),
+            surface = Color(0xFF12201D),
+            onSurface = Color(0xFFEDF6F3),
+            error = Color(0xFFEF8D94),
+        )
+    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) dark else light, content = content)
 }
 
 @Composable
@@ -267,20 +296,26 @@ private fun CameraHome(
         Row(
             modifier =
                 Modifier.fillMaxWidth()
-                    .background(Color(0xFFE6F6EF), RoundedCornerShape(12.dp))
+                    .background(
+                        MaterialTheme.colorScheme.primaryContainer,
+                        RoundedCornerShape(16.dp),
+                    )
                     .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column {
                 Text("Android Camera", style = MaterialTheme.typography.titleLarge)
-                Text(runtime.device.name.uppercase(), color = Color(0xFF12805C))
+                Text(
+                    runtime.device.name.uppercase(),
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
             Text("$battery% battery")
         }
         if (runtime.activeViewers > 0) {
             Text(
                 "● LIVE · ${runtime.activeViewers} viewer${if (runtime.activeViewers == 1) "" else "s"}",
-                color = Color.Red,
+                color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.titleMedium,
             )
         } else {

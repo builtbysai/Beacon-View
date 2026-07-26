@@ -55,11 +55,15 @@ function signalingUrl(cameraId: string): string {
 
 export function LiveVideo({
   camera,
+  deviceName,
+  viewerCount = 0,
   onBack,
   onSelectCamera,
   siblingCameras = [],
 }: {
   camera: Camera;
+  deviceName?: string;
+  viewerCount?: number;
   onBack: () => void;
   onSelectCamera?: (cameraId: string) => Promise<void> | void;
   siblingCameras?: Camera[];
@@ -75,6 +79,7 @@ export function LiveVideo({
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const [attempt, setAttempt] = useState(0);
   const [retryDisplay, setRetryDisplay] = useState(0);
+  const stageRef = useRef<HTMLDivElement>(null);
 
   const reconnect = useCallback(() => {
     retryCount.current = 0;
@@ -255,18 +260,58 @@ export function LiveVideo({
       <section className="card wide" aria-labelledby="live-title">
         <div className="heading">
           <div>
-            <p className="eyebrow">Live video</p>
+            <p className="eyebrow">
+              {deviceName ? `${deviceName} / Live view` : 'Live view'}
+            </p>
             <h1 id="live-title">{camera.name}</h1>
+            <span>
+              {viewerCount} {viewerCount === 1 ? 'viewer' : 'viewers'}
+            </span>
           </div>
           <button className="secondary" onClick={onBack}>
             Back to cameras
           </button>
         </div>
-        <div className="video-frame">
+        <div className="video-frame" ref={stageRef}>
           <video ref={videoRef} autoPlay playsInline muted />
+          {status !== 'connected' && (
+            <div className="video-overlay">
+              <strong>
+                {status === 'connecting'
+                  ? 'Connecting to camera'
+                  : status === 'reconnecting'
+                    ? 'Connection interrupted'
+                    : status === 'switching source'
+                      ? 'Switching camera'
+                      : status}
+              </strong>
+              <span>
+                {status === 'connecting'
+                  ? 'Waiting for the secure live stream.'
+                  : status === 'reconnecting'
+                    ? `Beacon is retrying${retryDisplay ? ` · attempt ${retryDisplay}` : ''}.`
+                    : status === 'switching source'
+                      ? 'The device is releasing the previous camera source.'
+                      : 'This stream needs your attention.'}
+              </span>
+            </div>
+          )}
         </div>
-        <p role="status">Connection: {status}</p>
-        <p className="notice">Reconnect attempts: {retryDisplay}</p>
+        <p className="visually-hidden" role="status">
+          Connection: {status}
+        </p>
+        <div className="heading-actions">
+          <span className={status === 'connected' ? 'streaming' : 'offline'}>
+            {status === 'connected' ? 'LIVE' : status.toUpperCase()}
+          </span>
+          <button
+            className="secondary"
+            onClick={() => void stageRef.current?.requestFullscreen()}
+            type="button"
+          >
+            Full screen
+          </button>
+        </div>
         {siblingCameras.length > 1 && (
           <div className="heading-actions" aria-label="Sibling camera sources">
             {siblingCameras.map((sibling) => (

@@ -75,6 +75,32 @@ function eventsUrl(): string {
   return url.toString();
 }
 
+function relativeLastSeen(value: string | null): string {
+  if (!value) return 'Never';
+  const elapsed = Date.now() - new Date(value).getTime();
+  if (elapsed < 60_000) return 'Just now';
+  if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)} min ago`;
+  if (elapsed < 86_400_000) return `${Math.floor(elapsed / 3_600_000)} hr ago`;
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
+    new Date(value),
+  );
+}
+
+function capabilitySummary(
+  capabilities: Record<string, boolean | number | string> | undefined,
+): string {
+  if (!capabilities || Object.keys(capabilities).length === 0)
+    return 'Standard video';
+  return Object.entries(capabilities)
+    .filter(([, value]) => value !== false)
+    .map(([key, value]) =>
+      value === true
+        ? key.replaceAll('_', ' ')
+        : `${key.replaceAll('_', ' ')}: ${String(value)}`,
+    )
+    .join(' · ');
+}
+
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
@@ -86,6 +112,7 @@ export function App() {
   const [pairingOpen, setPairingOpen] = useState(false);
   const [pairingCode, setPairingCode] = useState('');
   const [pairingState, setPairingState] = useState<PairingLifecycle>('pending');
+  const [browserCameraActive, setBrowserCameraActive] = useState(false);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(
     () => {
@@ -103,6 +130,7 @@ export function App() {
     setPage(next);
     setSelectedDeviceId(null);
     setSelectedCamera(null);
+    setBrowserCameraActive(false);
   }, []);
 
   useEffect(() => {
@@ -419,6 +447,8 @@ export function App() {
     return (
       <LiveVideo
         camera={selectedCamera}
+        deviceName={selectedCamera.deviceName}
+        viewerCount={selectedCamera.viewerCount}
         onBack={() => {
           setSelectedCamera(null);
           openDevice(selectedCamera.deviceId);
@@ -437,8 +467,8 @@ export function App() {
     );
   }
 
-  if (page === 'camera mode') {
-    return <BrowserCameraMode onBack={() => navigate('dashboard')} />;
+  if (page === 'camera mode' && browserCameraActive) {
+    return <BrowserCameraMode onBack={() => setBrowserCameraActive(false)} />;
   }
 
   const onlineCount = cameras.filter((camera) => camera.online).length;
@@ -462,7 +492,6 @@ export function App() {
               'devices',
               'camera mode',
               'settings',
-              'diagnostics',
             ] as const
           ).map((item) => (
             <button
@@ -470,7 +499,11 @@ export function App() {
               key={item}
               onClick={() => navigate(item)}
             >
-              {item[0]!.toUpperCase() + item.slice(1)}
+              {item === 'dashboard'
+                ? 'Home'
+                : item === 'camera mode'
+                  ? 'Add camera'
+                  : item[0]!.toUpperCase() + item.slice(1)}
             </button>
           ))}
         </nav>
@@ -518,7 +551,22 @@ export function App() {
               <strong>{onlineCount}</strong>
             </article>
             <article className="card camera-summary">
-              <h3>Camera status</h3>
+              <p className="eyebrow">Household overview</p>
+              <h3>
+                {cameras.length === 0
+                  ? 'Set up your first camera'
+                  : streamingCount > 0
+                    ? `${streamingCount} camera${streamingCount === 1 ? ' is' : 's are'} live`
+                    : onlineCount > 0
+                      ? 'Your cameras are ready'
+                      : 'Your cameras need attention'}
+              </h3>
+              {cameras.length === 0 && (
+                <p>
+                  Turn an Android phone or tablet into a dependable camera, or
+                  use this browser for a temporary setup.
+                </p>
+              )}
               <CameraList
                 cameras={cameras}
                 highlightedCameraId={highlightedCameraId}
@@ -530,6 +578,7 @@ export function App() {
         )}
         {page === 'cameras' && (
           <section className="card wide">
+            <p className="eyebrow">All camera sources</p>
             <h3>Your cameras</h3>
             <CameraList
               cameras={cameras}
@@ -572,6 +621,7 @@ export function App() {
               />
             ) : (
               <>
+                <p className="eyebrow">Registered endpoints</p>
                 <h3>Devices</h3>
                 {devices.length === 0 && (
                   <p className="empty">
@@ -599,6 +649,9 @@ export function App() {
                         }{' '}
                         camera sources
                       </span>
+                      <span>
+                        Last seen {relativeLastSeen(device.lastSeenAt)}
+                      </span>
                       <button onClick={() => openDevice(device.id)}>
                         Open device
                       </button>
@@ -612,10 +665,57 @@ export function App() {
         {page === 'diagnostics' && <Diagnostics />}
         {page === 'settings' && (
           <section className="card wide">
+            <p className="eyebrow">Account and privacy</p>
             <h3>Household settings</h3>
             <p>
-              Camera credentials can be revoked from the Cameras page. Audio,
-              recording, and cloud storage are not enabled.
+              Signed in as {user.email}. Device access and credentials are
+              managed from each device. Audio, recording, cloud storage, and
+              activity history are not enabled.
+            </p>
+            <button className="secondary" onClick={() => void logout()}>
+              Sign out
+            </button>
+          </section>
+        )}
+        {page === 'camera mode' && (
+          <section className="card wide">
+            <p className="eyebrow">Add a camera</p>
+            <h3>Choose how you want to use Beacon</h3>
+            <p>
+              Android is the best choice for a camera that stays on. Browser
+              Camera Mode is convenient for a laptop, desktop, or temporary
+              setup.
+            </p>
+            <div className="setup-options">
+              <article>
+                <span className="online">RECOMMENDED</span>
+                <h4>Android phone or tablet</h4>
+                <p>
+                  Install or update Beacon, keep the device on continuous power,
+                  and allow unrestricted battery use for the most reliable
+                  background operation.
+                </p>
+                <button onClick={openPairing}>Pair Android device</button>
+              </article>
+              <article>
+                <span>ATTENDED SETUP</span>
+                <h4>Use this browser</h4>
+                <p>
+                  Camera permission is required and this tab generally needs to
+                  remain open. Browsers cannot match Android background
+                  reliability.
+                </p>
+                <button
+                  className="secondary"
+                  onClick={() => setBrowserCameraActive(true)}
+                >
+                  Use this browser as a camera
+                </button>
+              </article>
+            </div>
+            <p className="notice">
+              Other device types are planned, but no unavailable setup option is
+              shown as functional.
             </p>
           </section>
         )}
@@ -728,15 +828,10 @@ function DeviceDetail({
           : device.online
             ? 'online'
             : 'offline'}
-        {' · '}Last seen: {device.lastSeenAt ?? 'never'}
+        {' · '}Last seen: {relativeLastSeen(device.lastSeenAt)}
         {' · '}Total viewers: {viewers}
       </p>
-      <p>
-        Capabilities:{' '}
-        {device.capabilities && Object.keys(device.capabilities).length > 0
-          ? JSON.stringify(device.capabilities)
-          : 'single active source'}
-      </p>
+      <p>Capabilities: {capabilitySummary(device.capabilities)}</p>
       <p>
         Version: {device.softwareVersion ?? 'not reported'}
         {' · '}Registration: {device.enabled ? 'enabled' : 'disabled'}
@@ -899,13 +994,7 @@ function CameraList({
                 {camera.viewerCount}{' '}
                 {camera.viewerCount === 1 ? 'viewer' : 'viewers'}
               </span>
-              <span>
-                Capabilities:{' '}
-                {camera.capabilities &&
-                Object.keys(camera.capabilities).length > 0
-                  ? JSON.stringify(camera.capabilities)
-                  : 'standard video'}
-              </span>
+              <span>{capabilitySummary(camera.capabilities)}</span>
             </div>
             <button
               className="secondary"

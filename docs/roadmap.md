@@ -13,7 +13,12 @@ management semantics, safe deletion, realtime management updates, coordinated
 exclusive-source switching, background-operation diagnostics, and lifecycle
 documentation.
 
-Milestone 8 is the next approved boundary and is intentionally not started here.
-It covers the full UI/UX redesign: design system, dashboard, navigation, rooms,
-camera cards, responsive layouts, animations, design tokens, and Android visual
-redesign.
+Milestone 8 establishes the Beacon product experience and design-system
+foundation: semantic light/dark tokens, a responsive household shell, consumer
+dashboard and cards, advanced-only diagnostics, a context-preserving Live View,
+clear Browser Camera Mode limitations, and aligned Android color semantics.
+
+Rooms, Activity, People, recording, AI modules, and a multi-camera grid remain
+future work because the current platform does not yet provide their required
+data or complete behavior. The extension boundaries and manual acceptance
+matrix are documented in `product-experience.md`.
