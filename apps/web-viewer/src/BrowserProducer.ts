@@ -17,6 +17,7 @@ type ProducerMessage =
       type: 'ice';
     }
   | { code: string; connectionId?: string; type: 'peer-left' | 'error' }
+  | { cameraId: string; type: 'switch-source' }
   | { type: 'device-ready' };
 
 function producerUrl(cameraId: string): string {
@@ -43,6 +44,8 @@ export class BrowserProducer {
       viewerCount: number,
       retryCount: number,
     ) => void,
+    private readonly onSourceSwitch: (cameraId: string) => void = () =>
+      undefined,
   ) {}
 
   start(): void {
@@ -155,6 +158,10 @@ export class BrowserProducer {
     }
     if (message.type === 'peer-left' && message.connectionId) {
       this.#closePeer(message.connectionId);
+      return;
+    }
+    if (message.type === 'switch-source') {
+      this.onSourceSwitch(message.cameraId);
     }
   }
 

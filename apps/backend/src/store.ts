@@ -32,6 +32,7 @@ export interface CameraRecord {
   name: string;
   lastSeenAt: Date | null;
   credentialRevokedAt: Date | null;
+  capabilities: Record<string, boolean | number | string>;
 }
 
 export interface CameraIdentity {
@@ -51,6 +52,8 @@ export interface DeviceRecord {
   lastSeenAt: Date | null;
   revokedAt: Date | null;
   softwareVersion: string | null;
+  enabled: boolean;
+  capabilities: Record<string, boolean | number | string>;
 }
 
 export interface CameraSourceInput {
@@ -135,7 +138,7 @@ export interface MilestoneStore {
   updateDevice(
     householdId: string,
     publicDeviceId: string,
-    name: string,
+    changes: { enabled?: boolean | undefined; name?: string | undefined },
   ): Promise<boolean>;
   updateCamera(
     householdId: string,
@@ -150,6 +153,11 @@ export interface MilestoneStore {
     householdId: string,
     publicDeviceId: string,
   ): Promise<string | null>;
+  deleteDevice(
+    householdId: string,
+    publicDeviceId: string,
+  ): Promise<string | null>;
+  deleteCamera(householdId: string, publicCameraId: string): Promise<boolean>;
   findDeviceByCredential(
     credentialHash: string,
   ): Promise<CameraIdentity | null>;
@@ -160,6 +168,10 @@ export interface MilestoneStore {
   findOwnedCamera(
     householdId: string,
     publicDeviceId: string,
+  ): Promise<CameraIdentity | null>;
+  findManagedCamera(
+    householdId: string,
+    publicCameraId: string,
   ): Promise<CameraIdentity | null>;
 }
 
@@ -417,13 +429,13 @@ export class PostgresStore implements MilestoneStore {
               d.public_device_id AS "publicDeviceId",
               d.name AS "deviceName", d.platform,
               cs.display_name AS name, cs.source_key AS "sourceKey",
-              cs.facing, cs.enabled,
+              cs.facing, cs.enabled, cs.capabilities,
               COALESCE(cs.last_seen_at, d.last_seen_at) AS "lastSeenAt",
               COALESCE(dc.revoked_at, d.revoked_at) AS "credentialRevokedAt"
        FROM camera_sources cs
        JOIN cameras d ON d.id = cs.device_id
        LEFT JOIN device_credentials dc ON dc.camera_id = d.id
-       WHERE d.household_id = $1
+       WHERE d.household_id = $1 AND cs.removed_at IS NULL
        ORDER BY d.created_at, cs.created_at`,
       [householdId],
     );
@@ -436,7 +448,8 @@ export class PostgresStore implements MilestoneStore {
               d.platform, d.device_type AS "deviceType",
               d.last_seen_at AS "lastSeenAt",
               COALESCE(dc.revoked_at, d.revoked_at) AS "revokedAt",
-              d.software_version AS "softwareVersion"
+              d.software_version AS "softwareVersion", d.enabled,
+              d.capabilities
        FROM cameras d
        LEFT JOIN device_credentials dc ON dc.camera_id = d.id
        WHERE d.household_id = $1
@@ -491,7 +504,8 @@ export class PostgresStore implements MilestoneStore {
              facing = EXCLUDED.facing,
              capabilities = EXCLUDED.capabilities,
              last_seen_at = EXCLUDED.last_seen_at,
-             updated_at = EXCLUDED.updated_at`,
+             updated_at = EXCLUDED.updated_at
+           WHERE camera_sources.removed_at IS NULL`,
           [
             deviceId,
             source.name,
@@ -545,7 +559,8 @@ export class PostgresStore implements MilestoneStore {
          RETURNING id, public_device_id AS "publicDeviceId", name, platform,
                    device_type AS "deviceType", last_seen_at AS "lastSeenAt",
                    revoked_at AS "revokedAt",
-                   software_version AS "softwareVersion"`,
+                   software_version AS "softwareVersion", enabled,
+                   capabilities`,
         [input.householdId, input.installationId, input.name, input.now],
       );
       const created = device.rows[0];
@@ -561,7 +576,8 @@ export class PostgresStore implements MilestoneStore {
              facing = EXCLUDED.facing,
              capabilities = EXCLUDED.capabilities,
              last_seen_at = EXCLUDED.last_seen_at,
-             updated_at = EXCLUDED.updated_at`,
+             updated_at = EXCLUDED.updated_at
+           WHERE camera_sources.removed_at IS NULL`,
           [
             created.id,
             source.name,
@@ -602,13 +618,19 @@ export class PostgresStore implements MilestoneStore {
   async updateDevice(
     householdId: string,
     publicDeviceId: string,
-    name: string,
+    changes: { enabled?: boolean | undefined; name?: string | undefined },
   ): Promise<boolean> {
     const result = await this.pool.query(
-      `UPDATE cameras SET name = $3, updated_at = now()
+      `UPDATE cameras SET name = COALESCE($3, name),
+         enabled = COALESCE($4, enabled), updated_at = now()
        WHERE household_id = $1 AND public_device_id = $2
          AND revoked_at IS NULL`,
-      [householdId, publicDeviceId, name],
+      [
+        householdId,
+        publicDeviceId,
+        changes.name ?? null,
+        changes.enabled ?? null,
+      ],
     );
     return (result.rowCount ?? 0) === 1;
   }
@@ -628,7 +650,8 @@ export class PostgresStore implements MilestoneStore {
          updated_at = now()
        FROM cameras d
        WHERE cs.device_id = d.id AND d.household_id = $1
-         AND cs.public_camera_id = $2 AND d.revoked_at IS NULL`,
+         AND cs.public_camera_id = $2 AND d.revoked_at IS NULL
+         AND cs.removed_at IS NULL`,
       [
         householdId,
         publicCameraId,
@@ -660,6 +683,34 @@ export class PostgresStore implements MilestoneStore {
     return result.rows[0]?.cameraId ?? null;
   }
 
+  async deleteDevice(
+    householdId: string,
+    publicDeviceId: string,
+  ): Promise<string | null> {
+    const result = await this.pool.query<{ cameraId: string }>(
+      `DELETE FROM cameras
+       WHERE household_id = $1 AND public_device_id = $2
+       RETURNING id AS "cameraId"`,
+      [householdId, publicDeviceId],
+    );
+    return result.rows[0]?.cameraId ?? null;
+  }
+
+  async deleteCamera(
+    householdId: string,
+    publicCameraId: string,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE camera_sources cs SET removed_at = now(), enabled = false,
+         updated_at = now()
+       FROM cameras d
+       WHERE cs.device_id = d.id AND d.household_id = $1
+         AND cs.public_camera_id = $2 AND cs.removed_at IS NULL`,
+      [householdId, publicCameraId],
+    );
+    return (result.rowCount ?? 0) === 1;
+  }
+
   async findDeviceByCredential(
     credentialHash: string,
   ): Promise<CameraIdentity | null> {
@@ -672,7 +723,7 @@ export class PostgresStore implements MilestoneStore {
        JOIN device_credentials dc ON dc.camera_id = d.id
        JOIN LATERAL (
          SELECT id, public_camera_id FROM camera_sources
-         WHERE device_id = d.id AND enabled = true
+         WHERE device_id = d.id
          ORDER BY created_at LIMIT 1
        ) cs ON true
        WHERE dc.credential_hash = $1 AND dc.revoked_at IS NULL
@@ -695,7 +746,7 @@ export class PostgresStore implements MilestoneStore {
        JOIN cameras d ON d.id = cs.device_id
        JOIN device_credentials dc ON dc.camera_id = d.id
        WHERE dc.credential_hash = $1 AND dc.revoked_at IS NULL
-         AND d.revoked_at IS NULL AND cs.enabled = true
+         AND d.revoked_at IS NULL AND cs.removed_at IS NULL
          AND cs.public_camera_id = $2`,
       [credentialHash, publicCameraId],
     );
@@ -716,8 +767,29 @@ export class PostgresStore implements MilestoneStore {
        LEFT JOIN device_credentials dc ON dc.camera_id = d.id
        WHERE d.household_id = $1 AND cs.public_camera_id = $2
          AND cs.enabled = true AND d.revoked_at IS NULL
+         AND d.enabled = true AND cs.removed_at IS NULL
          AND (d.platform = 'browser' OR dc.revoked_at IS NULL)`,
       [householdId, publicDeviceId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async findManagedCamera(
+    householdId: string,
+    publicCameraId: string,
+  ): Promise<CameraIdentity | null> {
+    const result = await this.pool.query<CameraIdentity>(
+      `SELECT cs.id AS "cameraId", d.id AS "deviceId",
+              d.household_id AS "householdId",
+              cs.public_camera_id AS "publicCameraId",
+              d.public_device_id AS "publicDeviceId"
+       FROM camera_sources cs
+       JOIN cameras d ON d.id = cs.device_id
+       LEFT JOIN device_credentials dc ON dc.camera_id = d.id
+       WHERE d.household_id = $1 AND cs.public_camera_id = $2
+         AND d.revoked_at IS NULL AND cs.removed_at IS NULL
+         AND (d.platform = 'browser' OR dc.revoked_at IS NULL)`,
+      [householdId, publicCameraId],
     );
     return result.rows[0] ?? null;
   }

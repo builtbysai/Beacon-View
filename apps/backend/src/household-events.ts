@@ -18,6 +18,9 @@ export type HouseholdEvent =
   | {
       cameraId?: string;
       type: 'device-credential-revoked';
+    }
+  | {
+      type: 'device-management-changed';
     };
 
 export class HouseholdEventHub {

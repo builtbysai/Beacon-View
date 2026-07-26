@@ -63,9 +63,12 @@ const browserDeviceSchema = z.object({
 });
 const cameraParameterSchema = z.object({ cameraId: z.string().uuid() });
 const deviceParameterSchema = z.object({ deviceId: z.string().uuid() });
-const updateDeviceSchema = z.object({
-  name: z.string().trim().min(1).max(100),
-});
+const updateDeviceSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    name: z.string().trim().min(1).max(100).optional(),
+  })
+  .refine((value) => value.enabled !== undefined || value.name !== undefined);
 const updateCameraSchema = z
   .object({
     enabled: z.boolean().optional(),
@@ -435,7 +438,9 @@ export function buildApp(
       cameras: cameras.map((camera) => {
         const status = signaling.cameraStatus(camera.publicCameraId);
         return {
+          availability: status.producerConnected ? 'available' : 'unavailable',
           credentialRevoked: camera.credentialRevokedAt !== null,
+          capabilities: camera.capabilities,
           deviceId: camera.publicDeviceId,
           deviceName: camera.deviceName,
           enabled: camera.enabled,
@@ -444,8 +449,9 @@ export function buildApp(
           lastSeenAt: camera.lastSeenAt?.toISOString() ?? null,
           name: camera.name,
           online:
-            status.producerConnected ||
-            isCameraOnline(camera.lastSeenAt, new Date(now)),
+            camera.enabled &&
+            (status.producerConnected ||
+              isCameraOnline(camera.lastSeenAt, new Date(now))),
           platform: camera.platform,
           sourceKey: camera.sourceKey,
           streaming: status.viewerCount > 0,
@@ -462,10 +468,12 @@ export function buildApp(
     return {
       devices: devices.map((device) => ({
         deviceType: device.deviceType,
+        capabilities: device.capabilities,
+        enabled: device.enabled,
         id: device.publicDeviceId,
         lastSeenAt: device.lastSeenAt?.toISOString() ?? null,
         name: device.name,
-        online: isCameraOnline(device.lastSeenAt),
+        online: device.enabled && isCameraOnline(device.lastSeenAt),
         platform: device.platform,
         revoked: device.revokedAt !== null,
         softwareVersion: device.softwareVersion,
@@ -495,6 +503,7 @@ export function buildApp(
         const status = signaling.cameraStatus(camera.publicCameraId);
         return {
           availability: status.producerConnected ? 'available' : 'unavailable',
+          capabilities: camera.capabilities,
           credentialRevoked: camera.credentialRevokedAt !== null,
           deviceId: camera.publicDeviceId,
           deviceName: camera.deviceName,
@@ -504,7 +513,9 @@ export function buildApp(
           lastSeenAt: camera.lastSeenAt?.toISOString() ?? null,
           name: camera.name,
           online:
-            status.producerConnected || isCameraOnline(camera.lastSeenAt, now),
+            camera.enabled &&
+            (status.producerConnected ||
+              isCameraOnline(camera.lastSeenAt, now)),
           platform: camera.platform,
           sourceKey: camera.sourceKey,
           streaming: status.viewerCount > 0,
@@ -521,12 +532,14 @@ export function buildApp(
         capabilities: {
           maxSimultaneousSources: 1,
           simultaneousCapture: false,
+          ...device.capabilities,
         },
         deviceType: device.deviceType,
+        enabled: device.enabled,
         id: device.publicDeviceId,
         lastSeenAt: device.lastSeenAt?.toISOString() ?? null,
         name: device.name,
-        online: isCameraOnline(device.lastSeenAt, now),
+        online: device.enabled && isCameraOnline(device.lastSeenAt, now),
         platform: device.platform,
         revoked: device.revokedAt !== null,
         softwareVersion: device.softwareVersion,
@@ -550,6 +563,7 @@ export function buildApp(
     return {
       camera: {
         availability: status.producerConnected ? 'available' : 'unavailable',
+        capabilities: camera.capabilities,
         credentialRevoked: camera.credentialRevokedAt !== null,
         deviceId: camera.publicDeviceId,
         deviceName: camera.deviceName,
@@ -558,7 +572,9 @@ export function buildApp(
         id: camera.publicCameraId,
         lastSeenAt: camera.lastSeenAt?.toISOString() ?? null,
         name: camera.name,
-        online: status.producerConnected || isCameraOnline(camera.lastSeenAt),
+        online:
+          camera.enabled &&
+          (status.producerConnected || isCameraOnline(camera.lastSeenAt)),
         platform: camera.platform,
         sourceKey: camera.sourceKey,
         streaming: status.viewerCount > 0,
@@ -578,10 +594,26 @@ export function buildApp(
       !(await store.updateDevice(
         session.householdId,
         parameters.data.deviceId,
-        body.data.name,
+        body.data,
       ))
     ) {
       return reply.code(404).send({ error: 'Device not found' });
+    }
+    if (body.data.enabled === false) {
+      const cameras = await store.listCameras(session.householdId);
+      for (const camera of cameras.filter(
+        (candidate) => candidate.publicDeviceId === parameters.data.deviceId,
+      )) {
+        signaling.disconnectCamera(camera.publicCameraId, 'device_disabled');
+        householdEvents.publish(session.householdId, {
+          cameraId: camera.publicCameraId,
+          type: 'camera-presence-changed',
+        });
+      }
+    } else {
+      householdEvents.publish(session.householdId, {
+        type: 'device-management-changed',
+      });
     }
     return reply.code(204).send();
   });
@@ -606,17 +638,28 @@ export function buildApp(
       cameraId: parameters.data.cameraId,
       type: 'camera-presence-changed',
     });
+    if (body.data.enabled === false) {
+      signaling.disconnectCamera(parameters.data.cameraId, 'camera_disabled');
+    }
     return reply.code(204).send();
   });
 
-  app.delete('/api/devices/:deviceId', async (request, reply) => {
+  app.post('/api/devices/:deviceId/revoke', async (request, reply) => {
     const session = await authenticateStateChange(request, reply);
     if (!session) return;
     const parameters = deviceParameterSchema.safeParse(request.params);
-    const revoked = parameters.success
-      ? await store.revokeDevice(session.householdId, parameters.data.deviceId)
-      : null;
+    if (!parameters.success) {
+      return reply.code(404).send({ error: 'Device not found' });
+    }
+    const deviceId = parameters.data.deviceId;
+    const revoked = await store.revokeDevice(session.householdId, deviceId);
     if (!revoked) return reply.code(404).send({ error: 'Device not found' });
+    const cameras = await store.listCameras(session.householdId);
+    for (const camera of cameras.filter(
+      (candidate) => candidate.publicDeviceId === deviceId,
+    )) {
+      signaling.disconnectCamera(camera.publicCameraId, 'device_revoked');
+    }
     await store.audit({
       cameraId: revoked,
       eventType: 'device_credential_revoked',
@@ -631,6 +674,135 @@ export function buildApp(
     return reply.code(204).send();
   });
 
+  app.delete('/api/devices/:deviceId', async (request, reply) => {
+    const session = await authenticateStateChange(request, reply);
+    if (!session) return;
+    const parameters = deviceParameterSchema.safeParse(request.params);
+    if (!parameters.success) {
+      return reply.code(404).send({ error: 'Device not found' });
+    }
+    const cameras = (await store.listCameras(session.householdId)).filter(
+      (camera) => camera.publicDeviceId === parameters.data.deviceId,
+    );
+    for (const camera of cameras) {
+      signaling.disconnectCamera(camera.publicCameraId, 'device_deleted');
+    }
+    const deleted = await store.deleteDevice(
+      session.householdId,
+      parameters.data.deviceId,
+    );
+    if (!deleted) return reply.code(404).send({ error: 'Device not found' });
+    await store.audit({
+      eventType: 'device_deleted',
+      householdId: session.householdId,
+      ipAddress: request.ip,
+      success: true,
+      userId: session.userId,
+    });
+    householdEvents.publish(session.householdId, {
+      type: 'device-management-changed',
+    });
+    return reply.code(204).send();
+  });
+
+  app.delete('/api/cameras/:cameraId', async (request, reply) => {
+    const session = await authenticateStateChange(request, reply);
+    if (!session) return;
+    const parameters = cameraParameterSchema.safeParse(request.params);
+    if (
+      !parameters.success ||
+      !(await store.deleteCamera(session.householdId, parameters.data.cameraId))
+    ) {
+      return reply.code(404).send({ error: 'Camera not found' });
+    }
+    signaling.disconnectCamera(parameters.data.cameraId, 'camera_removed');
+    householdEvents.publish(session.householdId, {
+      cameraId: parameters.data.cameraId,
+      type: 'camera-presence-changed',
+    });
+    return reply.code(204).send();
+  });
+
+  app.post('/api/devices/:deviceId/restart', async (request, reply) => {
+    const session = await authenticateStateChange(request, reply);
+    if (!session) return;
+    const parameters = deviceParameterSchema.safeParse(request.params);
+    const devices = await store.listDevices(session.householdId);
+    if (
+      !parameters.success ||
+      !devices.some(
+        (device) => device.publicDeviceId === parameters.data.deviceId,
+      )
+    ) {
+      return reply.code(404).send({ error: 'Device not found' });
+    }
+    const cameras = await store.listCameras(session.householdId);
+    for (const camera of cameras.filter(
+      (candidate) => candidate.publicDeviceId === parameters.data.deviceId,
+    )) {
+      signaling.disconnectCamera(camera.publicCameraId, 'device_restart');
+    }
+    householdEvents.publish(session.householdId, {
+      type: 'device-management-changed',
+    });
+    return reply.code(202).send({ state: 'reconnecting' });
+  });
+
+  app.post('/api/cameras/:cameraId/restart', async (request, reply) => {
+    const session = await authenticateStateChange(request, reply);
+    if (!session) return;
+    const parameters = cameraParameterSchema.safeParse(request.params);
+    const cameras = await store.listCameras(session.householdId);
+    if (
+      !parameters.success ||
+      !cameras.some(
+        (camera) => camera.publicCameraId === parameters.data.cameraId,
+      )
+    ) {
+      return reply.code(404).send({ error: 'Camera not found' });
+    }
+    signaling.disconnectCamera(parameters.data.cameraId, 'source_restart');
+    householdEvents.publish(session.householdId, {
+      cameraId: parameters.data.cameraId,
+      type: 'camera-presence-changed',
+    });
+    return reply.code(202).send({ state: 'reconnecting' });
+  });
+
+  app.post('/api/cameras/:cameraId/activate', async (request, reply) => {
+    const session = await authenticateStateChange(request, reply);
+    if (!session) return;
+    const parameters = cameraParameterSchema.safeParse(request.params);
+    const cameras = await store.listCameras(session.householdId);
+    const target = parameters.success
+      ? cameras.find(
+          (camera) =>
+            camera.publicCameraId === parameters.data.cameraId &&
+            camera.enabled &&
+            camera.credentialRevokedAt === null,
+        )
+      : undefined;
+    if (!target) return reply.code(404).send({ error: 'Camera not found' });
+    const siblings = cameras
+      .filter((camera) => camera.publicDeviceId === target.publicDeviceId)
+      .map((camera) => camera.publicCameraId);
+    const requested = signaling.requestSourceSwitch(
+      siblings,
+      target.publicCameraId,
+    );
+    if (!requested) {
+      return reply.code(409).send({
+        error:
+          'Device is offline; source switch will be available when it reconnects',
+      });
+    }
+    householdEvents.publish(session.householdId, {
+      cameraId: target.publicCameraId,
+      type: 'camera-presence-changed',
+    });
+    return reply.code(202).send({ state: 'switching' });
+  });
+
   app.get('/api/diagnostics', async (request, reply) => {
     const session = await authenticate(request, reply);
     if (!session) return;
@@ -643,6 +815,7 @@ export function buildApp(
         const status = signaling.cameraStatus(camera.publicCameraId);
         return {
           availability: status.producerConnected ? 'online' : 'offline',
+          capabilities: camera.capabilities,
           cameraId: camera.publicCameraId,
           captureState: status.viewerCount > 0 ? 'streaming' : 'idle',
           deviceId: camera.publicDeviceId,
@@ -656,10 +829,14 @@ export function buildApp(
       devices: devices.map((device) => ({
         connectionState: device.revokedAt
           ? 'revoked'
-          : isCameraOnline(device.lastSeenAt)
-            ? 'online'
-            : 'offline',
+          : !device.enabled
+            ? 'disabled'
+            : isCameraOnline(device.lastSeenAt)
+              ? 'online'
+              : 'offline',
         deviceId: device.publicDeviceId,
+        capabilities: device.capabilities,
+        enabled: device.enabled,
         lastHeartbeatAt: device.lastSeenAt?.toISOString() ?? null,
         platform: device.platform,
         softwareVersion: device.softwareVersion,
@@ -674,9 +851,9 @@ export function buildApp(
     if (!parsed.success) {
       return reply.code(404).send({ error: 'Camera not found' });
     }
-    const ownedCamera = await store.findOwnedCamera(
-      session.householdId,
-      parsed.data.cameraId,
+    const householdCameras = await store.listCameras(session.householdId);
+    const ownedCamera = householdCameras.find(
+      (camera) => camera.publicCameraId === parsed.data.cameraId,
     );
     const revokedCameraId = ownedCamera
       ? await store.revokeDevice(
@@ -686,6 +863,11 @@ export function buildApp(
       : null;
     if (!revokedCameraId) {
       return reply.code(404).send({ error: 'Camera not found' });
+    }
+    for (const camera of householdCameras.filter(
+      (camera) => camera.publicDeviceId === ownedCamera!.publicDeviceId,
+    )) {
+      signaling.disconnectCamera(camera.publicCameraId, 'device_revoked');
     }
     await store.audit({
       cameraId: revokedCameraId,

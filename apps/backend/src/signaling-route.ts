@@ -86,28 +86,24 @@ export function registerSignaling(
         }
         const publicCameraId = query.data.cameraId;
         const session = await authenticateViewer(request, config, store);
-        const camera = session
-          ? await store.findOwnedCamera(session.householdId, publicCameraId)
-          : null;
-        if (!session || !camera) {
-          if (session) {
-            await store.audit({
-              eventType: 'live_view_rejected',
-              householdId: session.householdId,
-              ipAddress: request.ip,
-              success: false,
-              userId: session.userId,
-            });
-          }
+        if (!session) {
           socket.close(4003, 'Connection rejected');
           return;
         }
         if (query.data.role === 'producer') {
+          const managedCamera = await store.findManagedCamera(
+            session.householdId,
+            publicCameraId,
+          );
+          if (!managedCamera) {
+            socket.close(4003, 'Connection rejected');
+            return;
+          }
           hub.connectDevice(
-            camera.cameraId,
-            camera.publicCameraId,
+            managedCamera.cameraId,
+            managedCamera.publicCameraId,
             socket,
-            camera.householdId,
+            managedCamera.householdId,
           );
           const sessionToken =
             request.cookies[config.SESSION_COOKIE_NAME] ?? '';
@@ -116,12 +112,27 @@ export function registerSignaling(
             const current = await store.findSession(sessionHash, new Date());
             return Boolean(
               current &&
-              (await store.findOwnedCamera(
+              (await store.findManagedCamera(
                 current.householdId,
                 publicCameraId,
               )),
             );
           });
+          return;
+        }
+        const camera = await store.findOwnedCamera(
+          session.householdId,
+          publicCameraId,
+        );
+        if (!camera) {
+          await store.audit({
+            eventType: 'live_view_rejected',
+            householdId: session.householdId,
+            ipAddress: request.ip,
+            success: false,
+            userId: session.userId,
+          });
+          socket.close(4003, 'Connection rejected');
           return;
         }
         const admitted = hub.connectViewer(

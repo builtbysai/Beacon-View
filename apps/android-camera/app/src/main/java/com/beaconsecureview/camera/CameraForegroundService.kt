@@ -9,6 +9,7 @@ import android.content.pm.ServiceInfo
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.os.Build
+import android.os.PowerManager
 import android.util.Log
 import androidx.camera.view.PreviewView
 import androidx.core.app.NotificationCompat
@@ -76,6 +77,13 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
             },
         )
         CameraRuntime.previewView = PreviewView(applicationContext)
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        CameraRuntime.update {
+            it.copy(
+                batteryOptimizationRestricted =
+                    !powerManager.isIgnoringBatteryOptimizations(packageName),
+            )
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -251,6 +259,10 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         CameraRuntime.update { it.copy(retryAttempt = attempt) }
     }
 
+    override fun onSourceSwitch(cameraId: String) {
+        selectCamera(cameraId)
+    }
+
     override fun onDestroy() {
         signaling?.disconnect(sessions.keys)
         signaling = null
@@ -337,7 +349,8 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
             it.copy(
                 activeViewers = 0,
                 selectedCameraId = next.id,
-                diagnostic = "Camera source changed; reconnecting",
+                sourceLifecycle = CameraSourceLifecycle.Switching,
+                diagnostic = "Switching camera source",
             )
         }
         startSignaling()

@@ -1,11 +1,32 @@
 package com.beaconsecureview.camera
 
 enum class DeviceLifecycle {
+    Pairing,
+    Registering,
     Offline,
     Online,
     Streaming,
     Idle,
+    Disabled,
+    Revoked,
+    Deleted,
+    AuthenticationRequired,
+    Reconnecting,
     Updating,
+    Error,
+}
+
+enum class CameraSourceLifecycle {
+    Registered,
+    Available,
+    Unavailable,
+    Enabled,
+    Disabled,
+    Idle,
+    Streaming,
+    Switching,
+    PermissionRequired,
+    Removed,
     Error,
 }
 
@@ -44,6 +65,8 @@ data class CameraRuntimeState(
     val diagnostic: String = "Camera service stopped",
     val cameras: List<RegisteredCameraSource> = emptyList(),
     val selectedCameraId: String? = null,
+    val sourceLifecycle: CameraSourceLifecycle = CameraSourceLifecycle.Registered,
+    val batteryOptimizationRestricted: Boolean = false,
 )
 
 data class RegisteredCameraSource(
@@ -59,7 +82,7 @@ fun deviceStateFor(
     enabled: Boolean,
 ): DeviceLifecycle =
     when {
-        !enabled -> DeviceLifecycle.Offline
+        !enabled -> DeviceLifecycle.Disabled
         !signalingOnline -> DeviceLifecycle.Offline
         activeViewers > 0 -> DeviceLifecycle.Streaming
         else -> DeviceLifecycle.Idle

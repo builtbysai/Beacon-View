@@ -196,4 +196,55 @@ describe('SignalingHub', () => {
     expect(serialized).not.toContain('expiring-user');
     hub.close();
   });
+
+  it('disconnects one managed camera without affecting a sibling', () => {
+    const hub = new SignalingHub(
+      () => [],
+      () => [],
+    );
+    const firstDevice = socket();
+    const firstViewer = socket();
+    const siblingDevice = socket();
+    const siblingViewer = socket();
+    hub.connectDevice('first', 'public-first', firstDevice.ws);
+    hub.connectDevice('sibling', 'public-sibling', siblingDevice.ws);
+    hub.connectViewer('first', 'public-first', firstViewer.ws);
+    hub.connectViewer('sibling', 'public-sibling', siblingViewer.ws);
+
+    hub.disconnectCamera('public-first', 'camera_disabled');
+
+    expect(firstDevice.mock.readyState).toBe(3);
+    expect(firstViewer.mock.sent.at(-1)).toMatchObject({
+      code: 'camera_disabled',
+      type: 'peer-left',
+    });
+    expect(hub.cameraStatus('public-first')).toMatchObject({
+      producerConnected: false,
+      viewerCount: 0,
+    });
+    expect(hub.cameraStatus('public-sibling')).toMatchObject({
+      producerConnected: true,
+      viewerCount: 1,
+    });
+    hub.close();
+  });
+
+  it('requests an in-device source switch over the existing producer socket', () => {
+    const hub = new SignalingHub(
+      () => [],
+      () => [],
+    );
+    const device = socket();
+    hub.connectDevice('internal-rear', 'public-rear', device.ws);
+
+    expect(
+      hub.requestSourceSwitch(['public-rear', 'public-front'], 'public-front'),
+    ).toBe(true);
+    expect(device.mock.sent.at(-1)).toEqual({
+      cameraId: 'public-front',
+      type: 'switch-source',
+    });
+    expect(hub.requestSourceSwitch(['offline'], 'public-front')).toBe(false);
+    hub.close();
+  });
 });

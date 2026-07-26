@@ -92,8 +92,8 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
     }
   }
 
-  async function registerAndStart() {
-    const selected = inputs.find((input) => input.deviceId === selectedKey);
+  async function registerAndStart(requestedKey = selectedKey) {
+    const selected = inputs.find((input) => input.deviceId === requestedKey);
     if (!selected) return;
     setError('');
     try {
@@ -132,6 +132,13 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
           setState(next);
           setViewerCount(viewers);
           setRetryCount(retries);
+        },
+        (cameraId) => {
+          const source = result.cameras.find((item) => item.id === cameraId);
+          const nextKey = source?.sourceKey.replace(/^browser:/, '');
+          if (!nextKey || nextKey === selected.deviceId) return;
+          setSelectedKey(nextKey);
+          void registerAndStart(nextKey);
         },
       );
       producerRef.current.start();

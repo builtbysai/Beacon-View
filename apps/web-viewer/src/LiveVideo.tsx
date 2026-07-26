@@ -38,7 +38,12 @@ type ServerMessage =
   | { code: string; type: 'error' | 'peer-left' };
 
 type ConnectionStatus =
-  'connected' | 'connecting' | 'reconnecting' | ConnectionFailure;
+  | 'connected'
+  | 'connecting'
+  | 'reconnecting'
+  | 'stream unavailable'
+  | 'switching source'
+  | ConnectionFailure;
 
 function signalingUrl(cameraId: string): string {
   const url = new URL('/api/signaling', window.location.href);
@@ -56,7 +61,7 @@ export function LiveVideo({
 }: {
   camera: Camera;
   onBack: () => void;
-  onSelectCamera?: (cameraId: string) => void;
+  onSelectCamera?: (cameraId: string) => Promise<void> | void;
   siblingCameras?: Camera[];
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -269,7 +274,12 @@ export function LiveVideo({
                 className={sibling.id === camera.id ? '' : 'secondary'}
                 disabled={sibling.id === camera.id}
                 key={sibling.id}
-                onClick={() => onSelectCamera?.(sibling.id)}
+                onClick={() => {
+                  setStatus('switching source');
+                  void Promise.resolve(onSelectCamera?.(sibling.id)).catch(() =>
+                    setStatus('stream unavailable'),
+                  );
+                }}
                 type="button"
               >
                 {sibling.name}

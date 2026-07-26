@@ -41,4 +41,18 @@ class StreamingStateTest {
             deviceStateFor(signalingOnline = true, activeViewers = 0, enabled = true),
         )
     }
+
+    @Test
+    fun disabledDeviceHasAnExplicitLifecycle() {
+        assertEquals(
+            DeviceLifecycle.Disabled,
+            deviceStateFor(signalingOnline = true, activeViewers = 2, enabled = false),
+        )
+    }
+
+    @Test
+    fun sourceSwitchingIsDistinctFromFailure() {
+        val runtime = CameraRuntimeState(sourceLifecycle = CameraSourceLifecycle.Switching)
+        assertEquals(CameraSourceLifecycle.Switching, runtime.sourceLifecycle)
+    }
 }

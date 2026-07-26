@@ -160,60 +160,60 @@ describe('App', () => {
 
   it('opens a device detail with its child camera sources', async () => {
     vi.stubGlobal('WebSocket', TestSocket);
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce({
-          json: () =>
-            Promise.resolve({
-              user: { email: 'owner@example.com', id: 'owner' },
-            }),
-          ok: true,
-          status: 200,
-        })
-        .mockResolvedValueOnce({
-          json: () =>
-            Promise.resolve({
-              cameras: [
-                {
-                  credentialRevoked: false,
-                  deviceId: 'device-1',
-                  deviceName: 'Pixel',
-                  enabled: true,
-                  facing: 'rear',
-                  id: 'rear-camera',
-                  lastSeenAt: new Date().toISOString(),
-                  name: 'Rear camera',
-                  online: true,
-                  platform: 'android',
-                  streaming: false,
-                  viewerCount: 2,
-                },
-              ],
-            }),
-          ok: true,
-          status: 200,
-        })
-        .mockResolvedValueOnce({
-          json: () =>
-            Promise.resolve({
-              devices: [
-                {
-                  deviceType: 'phone',
-                  id: 'device-1',
-                  lastSeenAt: new Date().toISOString(),
-                  name: 'Pixel',
-                  online: true,
-                  platform: 'android',
-                  revoked: false,
-                },
-              ],
-            }),
-          ok: true,
-          status: 200,
-        }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: () =>
+          Promise.resolve({
+            user: { email: 'owner@example.com', id: 'owner' },
+          }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: () =>
+          Promise.resolve({
+            cameras: [
+              {
+                credentialRevoked: false,
+                deviceId: 'device-1',
+                deviceName: 'Pixel',
+                enabled: true,
+                facing: 'rear',
+                id: 'rear-camera',
+                lastSeenAt: new Date().toISOString(),
+                name: 'Rear camera',
+                online: true,
+                platform: 'android',
+                streaming: false,
+                viewerCount: 2,
+              },
+            ],
+          }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: () =>
+          Promise.resolve({
+            devices: [
+              {
+                deviceType: 'phone',
+                enabled: true,
+                id: 'device-1',
+                lastSeenAt: new Date().toISOString(),
+                name: 'Pixel',
+                online: true,
+                platform: 'android',
+                revoked: false,
+                softwareVersion: '0.0.0',
+              },
+            ],
+          }),
+        ok: true,
+        status: 200,
+      });
+    vi.stubGlobal('fetch', fetchMock);
     render(<App />);
 
     await screen.findByText('Rear camera');
@@ -224,5 +224,11 @@ describe('App', () => {
     expect(screen.getByText(/Total viewers: 2/)).toBeVisible();
     expect(screen.getByText('Rear camera')).toBeVisible();
     expect(window.location.pathname).toBe('/devices/device-1');
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete device' }));
+    expect(confirm).toHaveBeenCalledWith(
+      expect.stringContaining('Permanently delete Pixel?'),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });

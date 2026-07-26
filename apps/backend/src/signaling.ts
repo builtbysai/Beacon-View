@@ -211,6 +211,42 @@ export class SignalingHub {
     };
   }
 
+  disconnectCamera(
+    publicCameraId: string,
+    reasonCode:
+      | 'camera_disabled'
+      | 'camera_removed'
+      | 'device_disabled'
+      | 'device_deleted'
+      | 'device_restart'
+      | 'device_revoked'
+      | 'source_restart',
+  ): void {
+    const deviceEntries = [...this.#devices.entries()].filter(
+      ([, device]) => device.publicCameraId === publicCameraId,
+    );
+    for (const [cameraId, device] of deviceEntries) {
+      this.#cleanupCamera(cameraId, reasonCode);
+      this.#devices.delete(cameraId);
+      device.socket.close(4002, reasonCode);
+    }
+  }
+
+  requestSourceSwitch(
+    siblingCameraIds: string[],
+    targetPublicCameraId: string,
+  ): boolean {
+    const sibling = [...this.#devices.values()].find((device) =>
+      siblingCameraIds.includes(device.publicCameraId),
+    );
+    if (!sibling) return false;
+    this.#send(sibling.socket, {
+      cameraId: targetPublicCameraId,
+      type: 'switch-source',
+    });
+    return true;
+  }
+
   #listen(socket: WebSocket, role: PeerRole): void {
     socket.on('message', (data) => {
       if (typeof data !== 'string' && !Buffer.isBuffer(data)) return;

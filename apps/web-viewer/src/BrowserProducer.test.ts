@@ -131,4 +131,24 @@ describe('BrowserProducer', () => {
     vi.runAllTimers();
     expect(FakeSocket.instances).toHaveLength(1);
   });
+
+  it('forwards a managed source switch without creating a reconnect loop', () => {
+    vi.stubGlobal('WebSocket', FakeSocket);
+    const switchSource = vi.fn();
+    const producer = new BrowserProducer(
+      'rear-camera',
+      stream,
+      () => undefined,
+      switchSource,
+    );
+    producer.start();
+    FakeSocket.instances[0]!.emit({
+      cameraId: 'front-camera',
+      type: 'switch-source',
+    });
+
+    expect(switchSource).toHaveBeenCalledWith('front-camera');
+    expect(FakeSocket.instances).toHaveLength(1);
+    producer.stop();
+  });
 });

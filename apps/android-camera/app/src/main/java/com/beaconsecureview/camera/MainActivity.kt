@@ -305,6 +305,12 @@ private fun CameraHome(
         }
         Text("Network: ${runtime.diagnostic}")
         Text("Reconnect attempts: ${runtime.retryAttempt}")
+        if (runtime.batteryOptimizationRestricted) {
+            Text(
+                "Battery optimization may stop reliable background camera operation. " +
+                    "Allow unrestricted battery use in Android settings for this device.",
+            )
+        }
         if (runtime.cameras.size > 1) {
             Text("Camera source", style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

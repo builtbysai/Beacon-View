@@ -38,6 +38,8 @@ interface CameraSignalingListener {
     fun onSignalingState(state: StreamingState)
 
     fun onRetryAttempt(attempt: Int)
+
+    fun onSourceSwitch(cameraId: String)
 }
 
 class CameraSignalingClient(
@@ -347,6 +349,10 @@ class CameraSignalingClient(
             "peer-left" ->
                 handler.post {
                     listener.onPeerLeft(message.getString("connectionId"))
+                }
+            "switch-source" ->
+                handler.post {
+                    listener.onSourceSwitch(message.getString("cameraId"))
                 }
         }
     }

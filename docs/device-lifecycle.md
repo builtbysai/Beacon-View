@@ -115,3 +115,38 @@ Video is one selected source at 640×480 and 15 fps, with no audio or recording.
 Front and rear sources are registered when available. Running
 several independent peer encoders on an older phone can be resource-intensive;
 production fan-out limits and thermal policy still need device profiling.
+
+## Management states and actions
+
+Device lifecycle is explicit:
+
+`pairing -> registering -> online -> idle -> streaming`
+
+Transient connectivity moves an enabled device through `offline` and
+`reconnecting` without changing credentials. Management states are separate:
+
+- **Disabled** preserves registration and credentials but refuses producer and
+  viewer signaling.
+- **Revoked** invalidates the device credential, terminates every child-source
+  session, and requires pairing again.
+- **Deleted** terminates sessions and removes the device, credential, and child
+  records from the household.
+- **Authentication required** is terminal until the user pairs again.
+
+Restarting a device session closes its producer sockets and viewer negotiations;
+the enabled, authorized producer reconnects with bounded backoff.
+
+## Background operation
+
+Android owns CameraX and WebRTC in a visible camera foreground service with
+`stopWithTask=false`. Activity recreation, leaving the activity, and screen-off
+do not intentionally stop the service. Android and device manufacturers may
+still restrict camera access, networking, or process lifetime under battery
+optimization, thermal pressure, permission changes, or vendor-specific power
+management. The app reports when it is not exempt from battery optimization and
+instructs the user to allow unrestricted battery use. It does not request a
+silent exemption or claim that every manufacturer permits uninterrupted
+screen-off capture.
+
+Browsers remain attended producers. Background tabs may be throttled or
+suspended and are not presented as equivalent to Android foreground service.

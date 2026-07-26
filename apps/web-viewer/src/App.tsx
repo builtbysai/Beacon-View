@@ -24,6 +24,9 @@ interface Camera {
   viewerCount: number;
   lastSeenAt: string | null;
   credentialRevoked: boolean;
+  capabilities?: Record<string, boolean | number | string>;
+  availability?: string;
+  sourceKey?: string;
 }
 
 interface Device {
@@ -34,6 +37,9 @@ interface Device {
   online: boolean;
   lastSeenAt: string | null;
   revoked: boolean;
+  enabled: boolean;
+  softwareVersion?: string | null;
+  capabilities?: Record<string, boolean | number | string>;
 }
 
 type Page =
@@ -170,7 +176,8 @@ export function App() {
         if (
           message.type === 'camera-paired' ||
           message.type === 'camera-presence-changed' ||
-          message.type === 'device-credential-revoked'
+          message.type === 'device-credential-revoked' ||
+          message.type === 'device-management-changed'
         ) {
           void loadCameras().then(() => {
             if (message.type === 'camera-paired' && message.cameraId) {
@@ -277,8 +284,65 @@ export function App() {
     await loadCameras();
   }
 
+  async function updateDevice(
+    deviceId: string,
+    changes: { enabled?: boolean; name?: string },
+  ) {
+    await request(`/api/devices/${deviceId}`, {
+      body: JSON.stringify(changes),
+      method: 'PATCH',
+    });
+    await loadCameras();
+  }
+
   async function revokeDevice(deviceId: string) {
-    await request(`/api/devices/${deviceId}`, { method: 'DELETE' });
+    if (
+      !window.confirm(
+        'Revoke this device? Streaming will stop immediately and pairing will be required again.',
+      )
+    )
+      return;
+    await request(`/api/devices/${deviceId}/revoke`, { method: 'POST' });
+    await loadCameras();
+  }
+
+  async function deleteDevice(device: Device) {
+    const viewerCount = cameras
+      .filter((camera) => camera.deviceId === device.id)
+      .reduce((total, camera) => total + camera.viewerCount, 0);
+    const warning =
+      viewerCount > 0
+        ? ` ${viewerCount} active viewer session(s) will be terminated.`
+        : '';
+    if (
+      !window.confirm(
+        `Permanently delete ${device.name}? All camera sources and registration data will be removed.${warning} The device must be paired again.`,
+      )
+    )
+      return;
+    await request(`/api/devices/${device.id}`, { method: 'DELETE' });
+    setSelectedDeviceId(null);
+    window.history.pushState({}, '', '/devices');
+    await loadCameras();
+  }
+
+  async function deleteCamera(camera: Camera) {
+    const warning =
+      camera.viewerCount > 0
+        ? ` ${camera.viewerCount} active viewer session(s) will be terminated.`
+        : '';
+    if (
+      !window.confirm(
+        `Delete ${camera.name}?${warning} Its parent device and sibling sources will remain.`,
+      )
+    )
+      return;
+    await request(`/api/cameras/${camera.id}`, { method: 'DELETE' });
+    await loadCameras();
+  }
+
+  async function restart(path: string) {
+    await request(path, { body: '{}', method: 'POST' });
     await loadCameras();
   }
 
@@ -359,9 +423,14 @@ export function App() {
           setSelectedCamera(null);
           openDevice(selectedCamera.deviceId);
         }}
-        onSelectCamera={(cameraId) => {
+        onSelectCamera={async (cameraId) => {
           const sibling = siblings.find((camera) => camera.id === cameraId);
-          if (sibling) openCamera(sibling);
+          if (!sibling) return;
+          await request(`/api/cameras/${cameraId}/activate`, {
+            body: '{}',
+            method: 'POST',
+          });
+          openCamera(sibling);
         }}
         siblingCameras={siblings}
       />
@@ -487,7 +556,19 @@ export function App() {
                 onLive={openCamera}
                 onRename={(device) => void renameDevice(device)}
                 onRevoke={(deviceId) => void revokeDevice(deviceId)}
+                onDelete={(device) => void deleteDevice(device)}
+                onRestart={(deviceId) =>
+                  void restart(`/api/devices/${deviceId}/restart`)
+                }
+                onToggle={(device) =>
+                  void updateDevice(device.id, { enabled: !device.enabled })
+                }
                 onUpdate={(id, changes) => void updateCamera(id, changes)}
+                onDeleteCamera={(camera) => void deleteCamera(camera)}
+                onRestartCamera={(cameraId) =>
+                  void restart(`/api/cameras/${cameraId}/restart`)
+                }
+                onDiagnostics={() => navigate('diagnostics')}
               />
             ) : (
               <>
@@ -587,16 +668,28 @@ function DeviceDetail({
   device,
   onBack,
   onLive,
+  onDelete,
+  onDeleteCamera,
+  onDiagnostics,
   onRename,
+  onRestart,
+  onRestartCamera,
   onRevoke,
+  onToggle,
   onUpdate,
 }: {
   cameras: Camera[];
   device: Device | undefined;
   onBack: () => void;
   onLive: (camera: Camera) => void;
+  onDelete: (device: Device) => void;
+  onDeleteCamera: (camera: Camera) => void;
+  onDiagnostics: () => void;
   onRename: (device: Device) => void;
+  onRestart: (deviceId: string) => void;
+  onRestartCamera: (cameraId: string) => void;
   onRevoke: (deviceId: string) => void;
+  onToggle: (device: Device) => void;
   onUpdate: (
     cameraId: string,
     changes: { enabled?: boolean; name?: string },
@@ -638,6 +731,17 @@ function DeviceDetail({
         {' · '}Last seen: {device.lastSeenAt ?? 'never'}
         {' · '}Total viewers: {viewers}
       </p>
+      <p>
+        Capabilities:{' '}
+        {device.capabilities && Object.keys(device.capabilities).length > 0
+          ? JSON.stringify(device.capabilities)
+          : 'single active source'}
+      </p>
+      <p>
+        Version: {device.softwareVersion ?? 'not reported'}
+        {' · '}Registration: {device.enabled ? 'enabled' : 'disabled'}
+        {' · '}Authentication: {device.revoked ? 'revoked' : 'valid'}
+      </p>
       <p className="notice">
         This device currently supports one active camera source at a time.
         Switching sources preserves the device registration.
@@ -646,12 +750,24 @@ function DeviceDetail({
         <button className="secondary" onClick={() => onRename(device)}>
           Rename device
         </button>
+        <button className="secondary" onClick={() => onToggle(device)}>
+          {device.enabled ? 'Disable device' : 'Enable device'}
+        </button>
+        <button className="secondary" onClick={() => onRestart(device.id)}>
+          Restart device session
+        </button>
+        <button className="secondary" onClick={onDiagnostics}>
+          View diagnostics
+        </button>
         <button
           className="secondary"
           disabled={device.revoked}
           onClick={() => onRevoke(device.id)}
         >
           {device.revoked ? 'Device revoked' : 'Revoke device'}
+        </button>
+        <button className="secondary" onClick={() => onDelete(device)}>
+          Delete device
         </button>
       </div>
       <h4>Camera sources</h4>
@@ -660,6 +776,9 @@ function DeviceDetail({
         highlightedCameraId={null}
         onLive={onLive}
         onUpdate={onUpdate}
+        onDelete={onDeleteCamera}
+        onDiagnostics={onDiagnostics}
+        onRestart={onRestartCamera}
       />
     </>
   );
@@ -733,6 +852,9 @@ function CameraList({
   highlightedCameraId,
   onLive,
   onUpdate,
+  onDelete,
+  onDiagnostics,
+  onRestart,
 }: {
   cameras: Camera[];
   highlightedCameraId: string | null;
@@ -741,6 +863,9 @@ function CameraList({
     cameraId: string,
     changes: { enabled?: boolean; name?: string },
   ) => void;
+  onDelete?: (camera: Camera) => void;
+  onDiagnostics?: () => void;
+  onRestart?: (cameraId: string) => void;
 }) {
   if (cameras.length === 0) {
     return <p className="empty">No cameras are paired with this household.</p>;
@@ -763,8 +888,23 @@ function CameraList({
               </span>
               <span className={state}>{state.toUpperCase()}</span>
               <span>
+                Source:{' '}
+                {!camera.enabled
+                  ? 'disabled'
+                  : camera.streaming
+                    ? 'streaming'
+                    : (camera.availability ?? 'idle')}
+              </span>
+              <span>
                 {camera.viewerCount}{' '}
                 {camera.viewerCount === 1 ? 'viewer' : 'viewers'}
+              </span>
+              <span>
+                Capabilities:{' '}
+                {camera.capabilities &&
+                Object.keys(camera.capabilities).length > 0
+                  ? JSON.stringify(camera.capabilities)
+                  : 'standard video'}
               </span>
             </div>
             <button
@@ -791,6 +931,24 @@ function CameraList({
             >
               View live
             </button>
+            {onRestart && (
+              <button
+                className="secondary"
+                onClick={() => onRestart(camera.id)}
+              >
+                Restart camera
+              </button>
+            )}
+            {onDiagnostics && (
+              <button className="secondary" onClick={onDiagnostics}>
+                Diagnostics
+              </button>
+            )}
+            {onDelete && (
+              <button className="secondary" onClick={() => onDelete(camera)}>
+                Delete source
+              </button>
+            )}
           </li>
         );
       })}

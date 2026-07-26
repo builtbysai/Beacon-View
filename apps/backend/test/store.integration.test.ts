@@ -141,6 +141,15 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
     await expect(
       store!.heartbeat(hashSecret(credential), new Date()),
     ).resolves.toBe(camera.id);
+    await store!.updateDevice(owner.householdId, camera.publicDeviceId, {
+      enabled: false,
+    });
+    await expect(
+      store!.heartbeat(hashSecret(credential), new Date()),
+    ).resolves.toBe(camera.id);
+    await store!.updateDevice(owner.householdId, camera.publicDeviceId, {
+      enabled: true,
+    });
     await expect(
       store!.revokeDevice(owner.householdId, camera.publicDeviceId),
     ).resolves.toBe(camera.id);
@@ -208,9 +217,10 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
     );
     await expect(store!.listCameras(other.householdId)).resolves.toEqual([]);
 
+    const installationId = randomUUID();
     const browser = await store!.registerBrowserDevice({
       householdId: owner.householdId,
-      installationId: randomUUID(),
+      installationId,
       name: 'Office laptop',
       now: new Date(),
       sources: [
@@ -251,5 +261,79 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
     await expect(
       store!.findOwnedCamera(owner.householdId, browserCamera.publicCameraId),
     ).resolves.toBeNull();
+  });
+
+  it('keeps disable, revoke, source removal, and device deletion distinct', async () => {
+    const owner = await store!.createAccount(
+      'management-owner@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    const installationId = randomUUID();
+    const browser = await store!.registerBrowserDevice({
+      householdId: owner.householdId,
+      installationId,
+      name: 'Managed browser',
+      now: new Date(),
+      sources: [
+        { facing: 'front', name: 'Front', sourceKey: 'browser:front' },
+        { facing: 'external', name: 'USB', sourceKey: 'browser:usb' },
+      ],
+    });
+    const [front, usb] = browser.cameras;
+    expect(front).toBeDefined();
+    expect(usb).toBeDefined();
+
+    await expect(
+      store!.updateDevice(owner.householdId, browser.device.publicDeviceId, {
+        enabled: false,
+        name: 'Disabled browser',
+      }),
+    ).resolves.toBe(true);
+    expect(await store!.listDevices(owner.householdId)).toMatchObject([
+      { enabled: false, name: 'Disabled browser', revokedAt: null },
+    ]);
+    await expect(
+      store!.findOwnedCamera(owner.householdId, front!.publicCameraId),
+    ).resolves.toBeNull();
+    await expect(
+      store!.findManagedCamera(owner.householdId, front!.publicCameraId),
+    ).resolves.not.toBeNull();
+
+    await store!.updateDevice(
+      owner.householdId,
+      browser.device.publicDeviceId,
+      { enabled: true },
+    );
+    await expect(
+      store!.deleteCamera(owner.householdId, front!.publicCameraId),
+    ).resolves.toBe(true);
+    expect(
+      (await store!.listCameras(owner.householdId)).map(
+        (camera) => camera.publicCameraId,
+      ),
+    ).toEqual([usb!.publicCameraId]);
+
+    await store!.registerBrowserDevice({
+      householdId: owner.householdId,
+      installationId,
+      name: 'Managed browser',
+      now: new Date(),
+      sources: [
+        { facing: 'front', name: 'Front', sourceKey: 'browser:front' },
+        { facing: 'external', name: 'USB', sourceKey: 'browser:usb' },
+      ],
+    });
+    expect(
+      (await store!.listCameras(owner.householdId)).map(
+        (camera) => camera.publicCameraId,
+      ),
+    ).toEqual([usb!.publicCameraId]);
+
+    await expect(
+      store!.deleteDevice(owner.householdId, browser.device.publicDeviceId),
+    ).resolves.toBe(browser.device.id);
+    await expect(store!.listDevices(owner.householdId)).resolves.toEqual([]);
+    await expect(store!.listCameras(owner.householdId)).resolves.toEqual([]);
   });
 });
