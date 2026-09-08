@@ -10,21 +10,8 @@ button > .icon {
 button > .icon:last-child:not(:first-child) {
   margin: 0 0 0 0.4rem;
 }
-.brand-lockup > span {
-  color: inherit;
-}
-.brand-lockup > .brand-mark {
-  color: var(--text-on-action);
-}
 .sidebar {
   overflow-y: auto;
-}
-.brand-period {
-  color: var(--action-primary);
-}
-.brand-mark .icon {
-  width: 1.35rem;
-  height: 1.35rem;
 }
 .alpha-badge {
   width: fit-content;

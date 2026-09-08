@@ -1,18 +1,6 @@
 import type { ReactNode } from 'react';
 
 const shapes = {
-  sidebarCollapse: (
-    <>
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <path d="M9 3v18m7-12-3 3 3 3" />
-    </>
-  ),
-  sidebarExpand: (
-    <>
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <path d="M9 3v18m4-12 3 3-3 3" />
-    </>
-  ),
   chevronLeft: <path d="m15 18-6-6 6-6" />,
   chevronRight: <path d="m9 18 6-6-6-6" />,
   eyeOff: (
@@ -84,7 +72,6 @@ const shapes = {
       <path d="M12 9v5m0 3h.01" />
     </>
   ),
-  check: <path d="m5 12 4 4L19 6" />,
   logout: (
     <>
       <path d="M9 3H4v18h5m5-14 5 5-5 5M8 12h12" />
