@@ -60,8 +60,9 @@ the camera picker. Nothing hides page overflow globally. Pairing dialogs scroll
 within the viewport; lists, history, filters, forms and legal text remain scrollable.
 
 The baseline suite passed 63 tests. Auth and sidebar coverage raised it to 66;
-state-specific device guidance raises it to 70. The final harness produced 129 screenshots with no horizontal
-overflow, clipped controls, page errors or unexpected API calls.
+state-specific device guidance raises it to 70. The final harness produced 129
+screenshots with no horizontal overflow, clipped controls, page errors or unexpected
+API calls.
 
 ## September 7 release result
 
@@ -71,16 +72,20 @@ The public HTTPS response returned 200, `/ready` returned
 `{"service":"backend","status":"ok"}`, and the backend, PostgreSQL and TURN
 container IDs were unchanged. Publicly fetched assets matched the tested local build:
 
-- `assets/index-BKkh7ZNg.js`:
-  `f813d64729d4cc28dd03ab0352b5170f5bc8ee5b9fab5450a7565b19b7b4c2f8`
-- `assets/index-BTKehMcG.css`:
-  `100dd3e632f75e19ea834dce2197ca283f41e097c509f156e608e1391f333c21`
+- `index.html`:
+  `b8bbc74cb600c939af5b0f531b286d902981988b90131f3f759c9a2318edd17e`
+- `assets/index-DOKtLkC3.js`:
+  `1b92af672379e6d4128d93c77e9f06d7b4ea64d6f11ee655e7edbec816f3dce0`
+- `assets/index-D5TKISeX.css`:
+  `f92827f9ba01154fb42f4732a2b16b7996070b5bbae3135b2b1009cc9308bf14`
 
 The repository-wide `Test-Beacon.ps1` gate also passed: formatting, ESLint,
-TypeScript checks, 66 web tests, 95 database-backed backend tests, production
+TypeScript checks, 70 web tests, 95 database-backed backend tests, production
 builds, Android unit tests, Android lint, a debug APK and an unsigned release APK.
-The deployment preserved a remote source archive and the prior web image tag for
-rollback.
+The deployment preserved the successful rollback set under
+`/opt/beacon/releases/web-a3-20260907-r2` and tagged the prior web image. An
+earlier preflight-only directory is labeled `web-a3-20260907-incomplete` and is not
+a valid rollback set.
 
 ## Web-only deployment procedure
 
