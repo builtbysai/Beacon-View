@@ -92,22 +92,23 @@ export function Sidebar({
       onPointerOver={(event) => showTip(event.target)}
       onPointerLeave={deferHideTip}
     >
-      <div className="sidebar-brand" aria-label="Beacon">
-        <Brand />
-        <span className="alpha-badge">Private alpha</span>
+      <div className="sidebar-header">
+        <div className="sidebar-brand" aria-label="Beacon">
+          <Brand />
+          <span className="alpha-badge">Private alpha</span>
+        </div>
+        <button
+          className="sidebar-toggle"
+          type="button"
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
+          aria-controls="beacon-sidebar"
+          data-tooltip={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={toggle}
+        >
+          <Icon name={collapsed ? 'sidebarExpand' : 'sidebarCollapse'} />
+        </button>
       </div>
-      <button
-        className="secondary sidebar-toggle"
-        type="button"
-        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        aria-expanded={!collapsed}
-        aria-controls="beacon-sidebar"
-        data-tooltip={collapsed ? 'Expand sidebar' : undefined}
-        onClick={toggle}
-      >
-        <Icon name={collapsed ? 'sidebarExpand' : 'sidebarCollapse'} />
-        <span>{collapsed ? 'Expand sidebar' : 'Collapse sidebar'}</span>
-      </button>
       <div className="household-label">
         <Icon name="home" />
         <div>

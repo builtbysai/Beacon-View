@@ -24,6 +24,7 @@ class WebRtcCameraSession(
     private var acquired = false
     private var remoteTalkTrack: AudioTrack? = null
     private var talkEnabled = false
+    private var closed = false
     private val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 70)
 
     init {
@@ -133,10 +134,14 @@ class WebRtcCameraSession(
         )
     }
 
+    @Synchronized
     fun close() {
+        if (closed) return
+        closed = true
         setTalkEnabled(false)
         remoteTalkTrack = null
         peer.close()
+        peer.dispose()
         if (acquired) {
             acquired = false
             media.release()

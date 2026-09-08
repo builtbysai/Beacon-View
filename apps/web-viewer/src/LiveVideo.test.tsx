@@ -273,7 +273,9 @@ describe('LiveVideo', () => {
     FakePeer.instances = [];
     vi.stubGlobal('WebSocket', FakeWebSocket);
     vi.stubGlobal('RTCPeerConnection', FakePeer);
-    render(<LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} />);
+    const { container } = render(
+      <LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} />,
+    );
     await act(async () => {
       FakeWebSocket.instances[0]!.message({
         type: 'ready',
@@ -315,6 +317,9 @@ describe('LiveVideo', () => {
       await Promise.resolve();
     });
     expect(screen.getByText('Connection details · TURN relay')).toBeVisible();
+    expect(screen.getByText('Starting secure video')).toBeVisible();
+    fireEvent.loadedData(container.querySelector('video')!);
+    expect(screen.queryByText('Starting secure video')).not.toBeInTheDocument();
     getStats.mockRejectedValueOnce(new Error('Peer closed'));
     await act(async () => {
       peer.onconnectionstatechange?.();

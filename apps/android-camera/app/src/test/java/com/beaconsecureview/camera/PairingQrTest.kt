@@ -2,7 +2,9 @@ package com.beaconsecureview.camera
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class PairingQrTest {
     @Test
@@ -29,6 +31,14 @@ class PairingQrTest {
         )
         assertNull(parsePairingQr("beacon://pair?code=too-short"))
         assertNull(parsePairingQr(null))
+    }
+
+    @Test
+    fun validatesAndNormalizesManualCodesBeforePairing() {
+        assertEquals("ABCD234567", normalizePairingCodeInput(" abcd-234567 "))
+        assertTrue(isValidPairingCode("ABCD234567"))
+        assertFalse(isValidPairingCode("INVALID"))
+        assertFalse(isValidPairingCode("ABCD23456O"))
     }
 
     @Test

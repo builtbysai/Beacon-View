@@ -24,6 +24,7 @@ import org.webrtc.SessionDescription
 import org.webrtc.SurfaceViewRenderer
 import org.webrtc.VideoTrack
 import org.webrtc.AudioTrack
+import kotlin.concurrent.thread
 
 class AndroidViewerSession(
     context: Context,
@@ -45,6 +46,7 @@ class AndroidViewerSession(
     private var remoteAudioTrack: AudioTrack? = null
     private var listening = false
     private val pendingIce = mutableListOf<IceCandidate>()
+    @Volatile
     private var closed = false
 
     init {
@@ -73,25 +75,37 @@ class AndroidViewerSession(
         remoteAudioTrack?.setEnabled(enabled)
     }
 
-    @Synchronized
     fun close() {
-        if (closed) return
-        closed = true
-        val id = connectionId
-        if (id != null) socket?.send(JSONObject().put("connectionId", id).put("type", "disconnect").toString())
-        remoteTrack?.removeSink(renderer)
-        remoteTrack = null
-        remoteAudioTrack?.setEnabled(false)
-        remoteAudioTrack = null
-        peer?.close()
-        peer?.dispose()
-        peer = null
-        socket?.close(1000, "Viewer closed")
-        socket = null
-        client.dispatcher.executorService.shutdown()
-        factory.dispose()
-        renderer.release()
-        egl.release()
+        synchronized(this) {
+            if (closed) return
+            closed = true
+        }
+        thread(name = "BeaconViewerCleanup") {
+            synchronized(this) {
+                val id = connectionId
+                if (id != null) {
+                    socket?.send(
+                        JSONObject()
+                            .put("connectionId", id)
+                            .put("type", "disconnect")
+                            .toString(),
+                    )
+                }
+                remoteTrack?.removeSink(renderer)
+                remoteTrack = null
+                remoteAudioTrack?.setEnabled(false)
+                remoteAudioTrack = null
+                peer?.close()
+                peer?.dispose()
+                peer = null
+                socket?.close(1000, "Viewer closed")
+                socket = null
+                client.dispatcher.executorService.shutdown()
+                factory.dispose()
+                renderer.release()
+                egl.release()
+            }
+        }
     }
 
     private fun createPeer(message: JSONObject) {

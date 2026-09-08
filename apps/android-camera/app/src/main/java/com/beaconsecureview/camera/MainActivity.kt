@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -51,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
@@ -109,6 +111,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        val monitorMode =
+            getSharedPreferences("beacon_navigation", MODE_PRIVATE)
+                .getBoolean("monitor_destination", false)
         val cameraAllowed =
             ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
                 PackageManager.PERMISSION_GRANTED
@@ -116,8 +121,17 @@ class MainActivity : ComponentActivity() {
             Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
                 ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
                     PackageManager.PERMISSION_GRANTED
-        if (cameraAllowed && notificationsAllowed && CredentialStore(this).read() != null) {
+        if (
+            shouldRunCameraCapture(
+                monitorMode = monitorMode,
+                paired = CredentialStore(this).read() != null,
+                cameraAllowed = cameraAllowed,
+                notificationsAllowed = notificationsAllowed,
+            )
+        ) {
             CameraForegroundService.start(this)
+        } else if (monitorMode) {
+            CameraForegroundService.stop(this)
         }
     }
 }
@@ -211,8 +225,16 @@ private fun BeaconCameraApp(
         cameraPermission,
         notificationPermission,
         microphonePermissionResolved,
+        monitorMode,
     ) {
-        if (credential != null && cameraPermission && notificationPermission && microphonePermissionResolved) {
+        if (monitorMode) {
+            CameraForegroundService.stop(context)
+        } else if (
+            credential != null &&
+                cameraPermission &&
+                notificationPermission &&
+                microphonePermissionResolved
+        ) {
             CameraForegroundService.start(context)
         } else if (credential != null && !cameraPermission) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -257,7 +279,10 @@ private fun BeaconCameraApp(
                         pairingCode = pairingCode,
                         message = message,
                         busy = busy,
-                        onCodeChange = { pairingCode = it.uppercase() },
+                        onCodeChange = {
+                            pairingCode = normalizePairingCodeInput(it)
+                            message = ""
+                        },
                         onScan = {
                             val options =
                                 GmsBarcodeScannerOptions.Builder()
@@ -279,7 +304,11 @@ private fun BeaconCameraApp(
                                     message = "Unable to scan. Enter the pairing code manually."
                                 }
                         },
-                        onPair = {
+                        onPair = pair@{
+                            if (!isValidPairingCode(pairingCode)) {
+                                message = "Enter the 10-character pairing code shown in Beacon."
+                                return@pair
+                            }
                             busy = true
                             pairingState = PairingLifecycle.Waiting
                             message = "Securely pairing…"
@@ -388,6 +417,13 @@ private fun BeaconCameraApp(
         }
     }
 }
+
+internal fun shouldRunCameraCapture(
+    monitorMode: Boolean,
+    paired: Boolean,
+    cameraAllowed: Boolean,
+    notificationsAllowed: Boolean,
+): Boolean = !monitorMode && paired && cameraAllowed && notificationsAllowed
 
 @Composable
 private fun MonitorHome(
@@ -892,8 +928,12 @@ private fun AndroidLiveView(
         return
     }
 
+    val compactViewer = LocalConfiguration.current.screenHeightDp < 600
     Column(
-        modifier = Modifier.fillMaxSize().padding(20.dp),
+        modifier =
+            Modifier.fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
@@ -918,7 +958,7 @@ private fun AndroidLiveView(
             },
             modifier =
                 Modifier.fillMaxWidth()
-                    .height(360.dp)
+                    .height(if (compactViewer) 220.dp else 360.dp)
                     .background(Color.Black, RoundedCornerShape(16.dp))
                     .semantics { contentDescription = "Live video from ${camera.name}" },
         )
@@ -1056,8 +1096,11 @@ private fun PairingScreen(
     onMonitor: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
+        modifier =
+            Modifier.fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+        verticalArrangement = Arrangement.Top,
     ) {
         Text("Beacon SecureView", style = MaterialTheme.typography.headlineLarge)
         Text(
@@ -1080,11 +1123,18 @@ private fun PairingScreen(
             value = pairingCode,
             onValueChange = onCodeChange,
             label = { Text("Pairing code") },
+            supportingText =
+                if (pairingCode.isNotBlank() && !isValidPairingCode(pairingCode)) {
+                    { Text("Enter the 10-character code shown in Beacon.") }
+                } else {
+                    null
+                },
+            isError = pairingCode.isNotBlank() && !isValidPairingCode(pairingCode),
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
         OutlinedButton(
-            enabled = pairingCode.isNotBlank() && !busy,
+            enabled = isValidPairingCode(pairingCode) && !busy,
             onClick = onPair,
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         ) {
@@ -1100,10 +1150,17 @@ private fun PairingScreen(
     }
 }
 
+private val pairingCodePattern = Regex("[A-HJ-NP-Z2-9]{10}")
+
+internal fun normalizePairingCodeInput(value: String): String =
+    value.trim().uppercase().filter(Char::isLetterOrDigit).take(10)
+
+internal fun isValidPairingCode(value: String): Boolean = pairingCodePattern.matches(value)
+
 internal fun parsePairingQr(rawValue: String?, trustedApiUrl: String? = null): String? {
     if (rawValue == null) return null
     val normalized = rawValue.trim().uppercase()
-    if (normalized.matches(Regex("[A-HJ-NP-Z2-9]{10}"))) return normalized
+    if (isValidPairingCode(normalized)) return normalized
     Regex("^BEACON://PAIR\\?CODE=([A-HJ-NP-Z2-9]{10})$")
         .matchEntire(normalized)
         ?.groupValues
@@ -1125,9 +1182,7 @@ internal fun parsePairingQr(rawValue: String?, trustedApiUrl: String? = null): S
             ?.split('&')
             ?.firstOrNull { it.substringBefore('=').equals("code", ignoreCase = true) }
             ?.substringAfter('=', missingDelimiterValue = "")
-    return code?.trim()?.uppercase()?.takeIf {
-        it.matches(Regex("[A-HJ-NP-Z2-9]{10}"))
-    }
+    return code?.trim()?.uppercase()?.takeIf(::isValidPairingCode)
 }
 
 internal fun parseMobileGoogleAuthLink(rawValue: String?, trustedApiUrl: String?): String? {
@@ -1207,10 +1262,12 @@ private fun CameraHome(
             Column {
                 Text("Android Camera", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    when (runtime.device) {
-                        DeviceLifecycle.Streaming -> "VIEWED LIVE"
-                        DeviceLifecycle.Idle, DeviceLifecycle.Online -> "ONLINE"
-                        DeviceLifecycle.Reconnecting -> "RECONNECTING"
+                    when {
+                        runtime.privacyMode -> "PRIVACY ON"
+                        runtime.device == DeviceLifecycle.Streaming -> "VIEWED LIVE"
+                        runtime.device == DeviceLifecycle.Idle ||
+                            runtime.device == DeviceLifecycle.Online -> "ONLINE"
+                        runtime.device == DeviceLifecycle.Reconnecting -> "RECONNECTING"
                         else -> runtime.device.name.uppercase()
                     },
                     color = MaterialTheme.colorScheme.primary,
@@ -1218,7 +1275,9 @@ private fun CameraHome(
             }
             Text("$battery% battery")
         }
-        if (runtime.activeViewers > 0) {
+        if (runtime.privacyMode) {
+            Text("● PRIVACY · Camera and microphone off", color = MaterialTheme.colorScheme.primary)
+        } else if (runtime.activeViewers > 0) {
             Text(
                 "● LIVE · ${runtime.activeViewers} viewer${if (runtime.activeViewers == 1) "" else "s"}",
                 color = MaterialTheme.colorScheme.primary,
@@ -1228,19 +1287,29 @@ private fun CameraHome(
             Text("● LIVE · Ready for viewers", color = MaterialTheme.colorScheme.primary)
         }
         if (shouldShowLocalPreview(runtime.privacyMode, CameraRuntime.previewView != null)) {
-            AndroidView(
-                factory = {
-                    (CameraRuntime.previewView ?: PreviewView(it)).also { preview ->
-                        // The foreground service outlives Activity recreation. Detach its preview
-                        // from a stale Compose host before attaching it to the new screen.
-                        (preview.parent as? ViewGroup)?.removeView(preview)
-                    }
-                },
+            Box(
                 modifier =
                     Modifier.fillMaxWidth()
                         .height(260.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .semantics { contentDescription = "Live camera preview" },
-            )
+            ) {
+                AndroidView(
+                    factory = {
+                        (CameraRuntime.previewView
+                                ?: PreviewView(it).apply {
+                                    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                                })
+                            .also { preview ->
+                                preview.implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                                // The foreground service outlives Activity recreation. Detach its preview
+                                // from a stale Compose host before attaching it to the new screen.
+                                (preview.parent as? ViewGroup)?.removeView(preview)
+                            }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         } else {
             Column(
                 modifier =
@@ -1250,7 +1319,17 @@ private fun CameraHome(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text("Starting live preview…", color = Color.White)
+                Text(
+                    if (runtime.privacyMode) "Privacy is on" else "Starting live preview…",
+                    color = Color.White,
+                )
+                if (runtime.privacyMode) {
+                    Text(
+                        "Camera and microphone are off on this phone.",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
         if (runtime.batteryOptimizationRestricted) {

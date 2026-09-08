@@ -1,5 +1,5 @@
 // Run against a local Vite server. All API/media interactions are isolated fixtures.
-/* global window, document, innerWidth, innerHeight, getComputedStyle */
+/* global window, document, innerWidth, innerHeight, getComputedStyle, HTMLElement */
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { mkdirSync, writeFileSync } = require('node:fs');
@@ -207,6 +207,48 @@ const report = [];
       );
     console.log('PASS', name, `${layout.scrollWidth}×${layout.scrollHeight}`);
   }
+  async function assertMobileNavigationClear(name) {
+    await page.evaluate(() =>
+      window.scrollTo(0, document.documentElement.scrollHeight),
+    );
+    await page.waitForTimeout(80);
+    const positions = await page.evaluate(() => {
+      const navigation = document.querySelector('.sidebar');
+      const workspace = document.querySelector('.workspace');
+      const lastContent = workspace?.lastElementChild;
+      if (
+        !(navigation instanceof HTMLElement) ||
+        !(lastContent instanceof HTMLElement)
+      )
+        throw new Error('Mobile navigation or page content was not found');
+      return {
+        contentBottom: lastContent.getBoundingClientRect().bottom,
+        navigationTop: navigation.getBoundingClientRect().top,
+      };
+    });
+    assert(
+      positions.contentBottom <= positions.navigationTop + 1,
+      `${name}: final content is obscured by mobile navigation ${JSON.stringify(positions)}`,
+    );
+    console.log('PASS', name, 'final content clears mobile navigation');
+  }
+  async function assertCompactMobileHeaderAction(name) {
+    const size = await page
+      .locator('.page-heading .add-camera-button')
+      .evaluate((button) => ({
+        width: button.getBoundingClientRect().width,
+        height: button.getBoundingClientRect().height,
+      }));
+    assert(
+      size.width <= 48 && size.height <= 48,
+      `${name}: mobile Add camera action is not compact ${JSON.stringify(size)}`,
+    );
+    console.log(
+      'PASS',
+      name,
+      `${Math.round(size.width)}×${Math.round(size.height)}`,
+    );
+  }
   async function visit(route, selector) {
     await page.goto(base + route);
     await page.locator(selector).first().waitFor();
@@ -243,10 +285,20 @@ const report = [];
       ['/pair?code=ABCD234567', '.pair-link-code'],
     ]) {
       await visit(route, selector);
-      await capture(
-        `${route.split('?')[0].replaceAll('/', '-') || 'home'}-${width}`,
-        route === '/' && width >= 1280,
-      );
+      const routeName = route.split('?')[0].replaceAll('/', '-') || 'home';
+      await capture(`${routeName}-${width}`, route === '/' && width >= 1280);
+      if (
+        (route === '/devices/phone-2' || route === '/devices/phone-3') &&
+        (width === 320 || width === 1280)
+      ) {
+        await page.locator('.device-guidance > summary').click();
+        await capture(`${routeName}-guidance-expanded-${width}`);
+      }
+    }
+    if (width <= 760) {
+      await visit('/devices/phone-3', '.device-guidance.attention');
+      await assertMobileNavigationClear(`mobile-nav-clear-${width}`);
+      await assertCompactMobileHeaderAction(`mobile-header-action-${width}`);
     }
     cameras.forEach((c) => {
       c.privacyMode = true;

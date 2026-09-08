@@ -3,8 +3,30 @@ package com.beaconsecureview.camera
 import android.content.pm.ServiceInfo
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class StreamingStateTest {
+    @Test
+    fun monitorDestinationNeverRunsCameraCapture() {
+        assertFalse(
+            shouldRunCameraCapture(
+                monitorMode = true,
+                paired = true,
+                cameraAllowed = true,
+                notificationsAllowed = true,
+            ),
+        )
+        assertTrue(
+            shouldRunCameraCapture(
+                monitorMode = false,
+                paired = true,
+                cameraAllowed = true,
+                notificationsAllowed = true,
+            ),
+        )
+    }
+
     @Test
     fun connectedPeerIsStreaming() {
         assertEquals(StreamingState.Connected, stateAfterPeerConnection(connected = true))

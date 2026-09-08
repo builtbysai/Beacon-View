@@ -642,7 +642,7 @@ export function App() {
                 onClick={() => navigate('camera mode')}
               >
                 <Icon name="plus" />
-                Add camera
+                <span>Add camera</span>
               </button>
             )}
           </header>
@@ -1264,15 +1264,20 @@ function DeviceDetail({
   });
   return (
     <>
-      <div className="heading">
+      <div className="heading device-heading">
         <div>
           <p className="eyebrow">
             {device.platform} · {device.deviceType}
           </p>
           <h3>{device.name}</h3>
         </div>
-        <button className="secondary" onClick={onBack}>
-          Back to cameras
+        <button
+          className="secondary device-back-button"
+          aria-label="Back to cameras"
+          onClick={onBack}
+        >
+          <Icon name="chevronLeft" />
+          <span>Cameras</span>
         </button>
       </div>
       <section className="device-health" aria-label="Device health">
@@ -1311,9 +1316,13 @@ function DeviceDetail({
       )}
       <details
         className={`device-guidance${guidance.attention ? ' attention' : ''}`}
-        open={guidance.attention}
       >
-        <summary>{guidance.title}</summary>
+        <summary>
+          <span>{guidance.title}</span>
+          <span className="device-guidance-disclosure">
+            {guidance.attention ? 'Troubleshoot' : 'Readiness tips'}
+          </span>
+        </summary>
         <div className="device-guidance-content">
           <p>{guidance.summary}</p>
           <ol>
@@ -1327,20 +1336,30 @@ function DeviceDetail({
           </p>
         </div>
       </details>
-      <p className="notice">
-        This device currently supports one active camera source at a time.
-        Switching sources preserves the device registration.
-      </p>
-      <div className="heading-actions">
-        {device.platform === 'android' && (
+      {device.platform === 'android' && (
+        <section
+          className="device-controls"
+          aria-labelledby="device-privacy-title"
+        >
+          <div>
+            <h4 id="device-privacy-title">Device privacy</h4>
+            <p>
+              Applies to every camera source on this phone. Local privacy is the
+              fastest way to stop capture.
+            </p>
+          </div>
           <button
             className={device.privacyMode ? '' : 'secondary'}
             onClick={() => onPrivacy(device)}
           >
             {device.privacyMode ? 'Turn privacy off' : 'Turn privacy on'}
           </button>
-        )}
-      </div>
+        </section>
+      )}
+      <p className="notice device-source-note">
+        This device currently supports one active camera source at a time.
+        Switching sources preserves the device registration.
+      </p>
       <h4>Camera sources</h4>
       <CameraList
         cameras={cameras}
@@ -1554,12 +1573,9 @@ function CameraList({
                   <path d="m44 20 12-7v22l-12-7" />
                   {camera.privacyMode && <path d="M6 4 58 44" />}
                 </svg>
-                <span>{state.available ? 'Open live view' : state.label}</span>
-                {!state.available && (
-                  <small className="preview-caption">
-                    Live view unavailable
-                  </small>
-                )}
+                <span>
+                  {state.available ? 'Open live view' : 'Live view unavailable'}
+                </span>
               </span>
               <span className="camera-identity">
                 <strong>{camera.name}</strong>
@@ -1570,14 +1586,7 @@ function CameraList({
             </button>
             {showStatusDetail && (
               <div className="camera-card-status">
-                {!state.available && (
-                  <>
-                    <span className={`status-badge status-${state.tone}`}>
-                      {state.label}
-                    </span>
-                    <p>{state.explanation}</p>
-                  </>
-                )}
+                {!state.available && <p>{state.explanation}</p>}
                 {viewerCount > 0 && (
                   <span>
                     {viewerCount} {viewerCount === 1 ? 'viewer' : 'viewers'}

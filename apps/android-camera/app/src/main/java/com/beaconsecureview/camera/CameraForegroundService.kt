@@ -66,7 +66,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         }
         createNotificationChannel()
         showForegroundStatus(captureActive = !privacyGate.privacyEnabled)
-        CameraRuntime.previewView = PreviewView(applicationContext)
+        CameraRuntime.previewView = createPreviewView()
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         CameraRuntime.update {
             it.copy(
@@ -122,10 +122,6 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        if (intent?.action == ACTION_STOP) {
-            stopCamera()
-            return START_NOT_STICKY
-        }
         if (intent?.action == ACTION_SELECT_CAMERA) {
             selectCamera(intent.getStringExtra(EXTRA_CAMERA_ID))
             return START_STICKY
@@ -414,11 +410,6 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         }
     }
 
-    private fun stopCamera() {
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
-    }
-
     private fun requirePairing() {
         CredentialStore(this).clear()
         CameraRuntime.update {
@@ -430,6 +421,11 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
             )
         }
         stopCamera()
+    }
+
+    private fun stopCamera() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     private fun enumerateCameraSources(): List<BeaconApi.CameraSource> {
@@ -466,7 +462,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         if (privacyGate.privacyEnabled) return null
         media?.let { return it }
         val activeCamera = selectedCamera ?: return null
-        val preview = CameraRuntime.previewView ?: PreviewView(applicationContext).also {
+        val preview = CameraRuntime.previewView ?: createPreviewView().also {
             CameraRuntime.previewView = it
         }
         CameraRuntime.update { state ->
@@ -496,6 +492,14 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         }
         return created
     }
+
+    private fun createPreviewView(): PreviewView =
+        PreviewView(applicationContext).apply {
+            // Camera Mode is scrollable on compact displays. TextureView-backed preview rendering
+            // respects Compose clipping and translation; the default SurfaceView can paint over
+            // status and privacy controls when the column moves.
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+        }
 
     private fun reportMotion(generation: Int, cameraId: String, confidence: Float) {
         if (generation != captureGeneration || CameraRuntime.state.value.privacyMode) return
@@ -632,7 +636,6 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     companion object {
         private const val CHANNEL_ID = "beacon_camera_status"
         private const val NOTIFICATION_ID = 1001
-        private const val ACTION_STOP = "com.beaconsecureview.camera.STOP"
         private const val ACTION_SELECT_CAMERA = "com.beaconsecureview.camera.SELECT_CAMERA"
         private const val ACTION_SET_PRIVACY = "com.beaconsecureview.camera.SET_PRIVACY"
         private const val EXTRA_CAMERA_ID = "camera_id"
@@ -650,9 +653,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         }
 
         fun stop(context: Context) {
-            context.startService(
-                Intent(context, CameraForegroundService::class.java).setAction(ACTION_STOP),
-            )
+            context.stopService(Intent(context, CameraForegroundService::class.java))
         }
 
         fun selectCamera(context: Context, cameraId: String) {

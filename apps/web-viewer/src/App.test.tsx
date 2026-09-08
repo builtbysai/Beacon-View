@@ -405,6 +405,16 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { name: 'Pixel' })).toBeInTheDocument();
     expect(screen.getByText('Keep this camera ready')).toBeVisible();
+    expect(
+      screen.getByText('Keep this camera ready').closest('details'),
+    ).not.toHaveAttribute('open');
+    expect(screen.getByText('Readiness tips')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Back to cameras' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Device privacy' }),
+    ).toBeVisible();
     const health = screen.getByLabelText('Device health');
     expect(within(health).getByText('Watching now')).toBeVisible();
     expect(within(health).getByText('2 viewers')).toBeVisible();

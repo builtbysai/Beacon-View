@@ -1,6 +1,6 @@
 # Web responsive audit and release evidence
 
-September 7, 2026. Current scope: [roadmap U1–U4](roadmap.md).
+September 8, 2026. Current scope: [roadmap U1–U4](roadmap.md).
 
 ## Repeatable local check
 
@@ -60,9 +60,50 @@ the camera picker. Nothing hides page overflow globally. Pairing dialogs scroll
 within the viewport; lists, history, filters, forms and legal text remain scrollable.
 
 The baseline suite passed 63 tests. Auth and sidebar coverage raised it to 66;
-state-specific device guidance raises it to 70. The final harness produced 129
+state-specific device guidance raises it to 70. The final harness produced 133
 screenshots with no horizontal overflow, clipped controls, page errors or unexpected
 API calls.
+
+## September 8 visual review
+
+Gemini's screenshot observations were checked against rendered pages and measured
+layouts rather than accepted from the stitched images alone.
+
+| Observation                            | Result and change                                                                                                                                                                                                                                                                   |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mobile navigation overlap              | The apparent overlap was largely a full-page screenshot artifact: the fixed navigation is repeated during stitching. The harness now measures the final content edge against the navigation at 320px and 390px, and defensive bottom space was increased. Both sizes clear the bar. |
+| Oversized Back to cameras              | Confirmed on narrow device details. It is now a compact back-arrow action in the page header.                                                                                                                                                                                       |
+| Add camera below the title             | Confirmed. Mobile uses a 44×44 top-right add action; its measured size is enforced by the harness.                                                                                                                                                                                  |
+| Keep this camera ready looked disabled | Confirmed. Guidance is now an outlined disclosure with a chevron and clear expanded state.                                                                                                                                                                                          |
+| Privacy action looked orphaned         | The action controls the whole Android device, not one camera source, so moving it into a source card would misstate its scope. It now sits in a labeled Device privacy group directly above Camera sources.                                                                         |
+| Dense recovery copy                    | Confirmed. Each state leads with one short sentence and keeps steps in a Troubleshoot or Readiness tips disclosure.                                                                                                                                                                 |
+| Repeated names and statuses            | Confirmed for status text and reduced to one card badge plus one short explanation. Device and source names remain where both identities are needed.                                                                                                                                |
+| Sidebar clutter                        | The bordered collapse row was replaced with an icon action in the brand header. Private alpha remains because it communicates the environment and support expectations.                                                                                                             |
+| Empty video dead space                 | Confirmed. Unavailable previews are shorter and use a larger proportional camera icon.                                                                                                                                                                                              |
+
+The local real-account path was also exercised in Microsoft Edge against the Pixel:
+sign-in, Home, device details, privacy state and WebRTC playback all completed. The
+browser decoded a 240×320 stream (`readyState=4`), and the live surface now keeps its
+starting overlay until the first media frame instead of treating peer connection as
+visible video.
+
+## September 8 physical Android evidence
+
+A Pixel 7a running Android was clean-installed and exercised in portrait and
+landscape through manual pairing, QR scanner launch/cancel, Camera permission,
+notification permission, optional microphone permission, rear/front selection,
+privacy on/off, browser viewing, native Monitor sign-in and native live viewing.
+
+The review fixed pairing content that could be unreachable on short screens, rejected
+malformed manual pairing codes before the network request, clipped the CameraX preview
+to its Compose card, made privacy labels internally consistent, and made native live
+controls scrollable with a compact landscape video height. Repeated native viewer
+teardown exposed a WebRTC peer that was closed without disposal; disposal is now
+idempotent. Viewer resource cleanup runs outside the UI thread after a reproduced ANR.
+Camera and Monitor are exclusive destinations: entering Monitor immediately stops the
+foreground camera service, and relaunching into Monitor cannot silently restart
+capture. Four repeated Camera/Monitor switches retained the same app process with no
+new crash, allocator, or ANR signature.
 
 ## September 7 release result
 

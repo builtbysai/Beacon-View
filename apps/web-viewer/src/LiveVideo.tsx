@@ -145,6 +145,7 @@ export function LiveVideo({
   const [switching, setSwitching] = useState(false);
   const switchInProgress = useRef(false);
   const [privacyBusy, setPrivacyBusy] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
   const playbackGeneration = useRef(0);
 
   useEffect(() => {
@@ -170,6 +171,7 @@ export function LiveVideo({
 
   useEffect(() => {
     setQuality(null);
+    setVideoReady(false);
     if (!enabled || privacyMode) {
       setStatus(privacyMode ? 'privacy on' : 'stream unavailable');
       return;
@@ -486,34 +488,45 @@ export function LiveVideo({
         </div>
       )}
       <div className="video-frame">
-        <video ref={videoRef} autoPlay playsInline muted={!listening} />
-        {(status !== 'connected' || switching) && (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={!listening}
+          onLoadedData={() => setVideoReady(true)}
+          onPlaying={() => setVideoReady(true)}
+        />
+        {(status !== 'connected' || !videoReady || switching) && (
           <div className="video-overlay">
             <strong>
               {switching
                 ? 'Switching camera'
-                : status === 'privacy on'
-                  ? 'Privacy is on'
-                  : status === 'connecting'
-                    ? 'Connecting to camera'
-                    : status === 'reconnecting'
-                      ? 'Connection interrupted'
-                      : status === 'switching source'
-                        ? 'Switching camera'
-                        : status}
+                : status === 'connected' && !videoReady
+                  ? 'Starting secure video'
+                  : status === 'privacy on'
+                    ? 'Privacy is on'
+                    : status === 'connecting'
+                      ? 'Connecting to camera'
+                      : status === 'reconnecting'
+                        ? 'Connection interrupted'
+                        : status === 'switching source'
+                          ? 'Switching camera'
+                          : status}
             </strong>
             <span>
               {switching
                 ? 'The device is changing camera sources.'
-                : status === 'privacy on'
-                  ? 'Live viewing is blocked. Turn privacy off when you are ready to resume.'
-                  : status === 'connecting'
-                    ? 'Waiting for the secure live stream.'
-                    : status === 'reconnecting'
-                      ? `Beacon is retrying${retryDisplay ? ` · attempt ${retryDisplay}` : ''}.`
-                      : status === 'switching source'
-                        ? 'The device is releasing the previous camera source.'
-                        : 'This stream needs your attention.'}
+                : status === 'connected' && !videoReady
+                  ? 'The secure connection is ready. Waiting for the first frame.'
+                  : status === 'privacy on'
+                    ? 'Live viewing is blocked. Turn privacy off when you are ready to resume.'
+                    : status === 'connecting'
+                      ? 'Waiting for the secure live stream.'
+                      : status === 'reconnecting'
+                        ? `Beacon is retrying${retryDisplay ? ` · attempt ${retryDisplay}` : ''}.`
+                        : status === 'switching source'
+                          ? 'The device is releasing the previous camera source.'
+                          : 'This stream needs your attention.'}
             </span>
           </div>
         )}
@@ -527,8 +540,16 @@ export function LiveVideo({
             className="heading-actions live-controls"
             aria-label="Live view controls"
           >
-            <span className={status === 'connected' ? 'streaming' : 'offline'}>
-              {status === 'connected' ? 'LIVE' : status.toUpperCase()}
+            <span
+              className={
+                status === 'connected' && videoReady ? 'streaming' : 'offline'
+              }
+            >
+              {status === 'connected'
+                ? videoReady
+                  ? 'LIVE'
+                  : 'STARTING VIDEO'
+                : status.toUpperCase()}
             </span>
             <button
               className="secondary"
@@ -735,8 +756,16 @@ export function LiveVideo({
       )}
       {compact && (
         <div className="tile-controls">
-          <span className={status === 'connected' ? 'streaming' : 'offline'}>
-            {status === 'connected' ? 'LIVE' : status.toUpperCase()}
+          <span
+            className={
+              status === 'connected' && videoReady ? 'streaming' : 'offline'
+            }
+          >
+            {status === 'connected'
+              ? videoReady
+                ? 'LIVE'
+                : 'STARTING VIDEO'
+              : status.toUpperCase()}
           </span>
           {onDevice && (
             <button className="link" onClick={onDevice} type="button">

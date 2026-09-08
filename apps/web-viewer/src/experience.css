@@ -1188,3 +1188,180 @@ textarea {
     min-height: 6.5rem;
   }
 }
+/* Verified navigation and device-detail refinements. */
+.sidebar-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: start;
+}
+.sidebar-header .sidebar-brand {
+  min-width: 0;
+}
+.sidebar .sidebar-toggle {
+  display: inline-flex;
+  width: 2.75rem;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-color: transparent;
+  color: var(--text-muted);
+  background: transparent;
+}
+.sidebar .sidebar-toggle:hover {
+  border-color: var(--border-default);
+  color: var(--action-primary);
+  background: var(--surface-secondary);
+}
+.sidebar .sidebar-toggle > .icon {
+  margin: 0;
+}
+.device-back-button {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 2.75rem;
+  align-items: center;
+  align-self: start;
+}
+.device-guidance summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.75rem;
+}
+.device-guidance summary::-webkit-details-marker {
+  display: none;
+}
+.device-guidance summary::after {
+  color: var(--text-muted);
+  content: '›';
+  font-size: 1.35rem;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform 160ms ease;
+}
+.device-guidance[open] summary::after {
+  transform: rotate(-90deg);
+}
+.device-guidance-disclosure {
+  align-self: center;
+  color: var(--action-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.device-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+}
+.device-controls h4 {
+  margin: 0 0 0.2rem;
+}
+.device-controls p {
+  margin: 0;
+  max-width: 42rem;
+  font-size: 0.86rem;
+}
+.device-controls button {
+  flex: 0 0 auto;
+}
+.device-source-note {
+  margin-block: 0 1rem;
+}
+.camera-preview {
+  height: clamp(7.5rem, 16dvh, 9rem);
+}
+.camera-preview > svg {
+  width: 3rem;
+  height: 3rem;
+  margin-top: 1rem;
+}
+@media (min-width: 761px) {
+  .sidebar[data-collapsed='true'] .sidebar-header {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+  .sidebar[data-collapsed='true'] .sidebar-toggle {
+    width: 2.75rem;
+  }
+}
+@media (max-width: 760px) {
+  .app-shell {
+    padding-bottom: calc(6.25rem + env(safe-area-inset-bottom));
+  }
+  html {
+    scroll-padding-bottom: calc(6.25rem + env(safe-area-inset-bottom));
+  }
+  .page-heading,
+  .heading.device-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 2.75rem;
+    gap: 0.75rem;
+    align-items: start;
+  }
+  .page-heading .add-camera-button {
+    display: inline-flex;
+    width: 2.75rem;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .page-heading .add-camera-button > .icon {
+    margin: 0;
+  }
+  .page-heading .add-camera-button > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .device-back-button {
+    width: 2.75rem;
+    padding: 0;
+    justify-content: center;
+  }
+  .device-back-button > .icon {
+    margin: 0;
+  }
+  .device-back-button > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .device-guidance summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .device-guidance summary::after {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .device-guidance-disclosure {
+    grid-column: 1 / -1;
+  }
+  .device-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .device-controls button {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .device-guidance summary::after {
+    transition: none;
+  }
+}
