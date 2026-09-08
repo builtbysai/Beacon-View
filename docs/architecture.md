@@ -27,8 +27,18 @@ endpoints, while Android uses a separate bearer credential.
 
 Android enumerates Camera2 sources and binds the selected CameraX source to the
 foreground service.
+Its authenticated heartbeat may include the current bounded battery percentage and
+charging state. These advisory fields are household-scoped device health, never media
+or capture authorization.
 YUV frames feed a WebRTC I420 video source at a target 640×480 and 15 fps. The
-peer connection has one send-only video transceiver and no audio source or track.
+peer connection has send-only video and audio transceivers backed by one shared
+CameraX/WebRTC media source. Viewer audio is muted until the user explicitly chooses
+Listen.
+
+Web live viewers may additionally request a single-owner talk channel. The signaling
+server arbitrates one talker per camera connection set, while Android keeps its incoming
+audio track disabled until that exact connection is granted. Viewer microphone capture
+is explicit and is released on stop, navigation, disconnection, or privacy shutdown.
 
 ## Ownership and credentials
 

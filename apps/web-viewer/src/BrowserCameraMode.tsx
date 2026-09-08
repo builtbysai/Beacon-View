@@ -121,8 +121,14 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { deviceId: { exact: selected.deviceId } },
+        video: {
+          deviceId: { exact: selected.deviceId },
+          frameRate: { ideal: 24, max: 30 },
+          height: { ideal: 720, max: 1080 },
+          width: { ideal: 1280, max: 1920 },
+        },
       });
+      for (const track of stream.getVideoTracks()) track.contentHint = 'motion';
       streamRef.current = stream;
       if (previewRef.current) previewRef.current.srcObject = stream;
       producerRef.current = new BrowserProducer(
@@ -265,7 +271,7 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
             )}
           </div>
         )}
-        <div className="video-frame">
+        <div className="video-frame" hidden={inputs.length === 0}>
           <video ref={previewRef} autoPlay playsInline muted />
         </div>
         <p role="status">

@@ -9,6 +9,7 @@ export default tseslint.config(
       '**/coverage/**',
       '**/build/**',
       '**/node_modules/**',
+      '**/.beacon-dev/**',
     ],
   },
   eslint.configs.recommended,

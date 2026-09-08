@@ -2,8 +2,10 @@ import {
   boolean,
   check,
   index,
+  integer,
   jsonb,
   pgTable,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -25,10 +27,14 @@ export const users = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     email: text('email').notNull(),
-    passwordHash: text('password_hash').notNull(),
+    passwordHash: text('password_hash'),
+    googleSubject: text('google_subject'),
     ...timestamps,
   },
-  (table) => [uniqueIndex('users_email_unique').on(table.email)],
+  (table) => [
+    uniqueIndex('users_email_unique').on(table.email),
+    uniqueIndex('users_google_subject_unique').on(table.googleSubject),
+  ],
 );
 
 export const households = pgTable(
@@ -39,9 +45,16 @@ export const households = pgTable(
     ownerId: uuid('owner_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    motionRetentionDays: integer('motion_retention_days').notNull().default(30),
     ...timestamps,
   },
-  (table) => [uniqueIndex('households_owner_unique').on(table.ownerId)],
+  (table) => [
+    uniqueIndex('households_owner_unique').on(table.ownerId),
+    check(
+      'households_motion_retention_valid',
+      sql`${table.motionRetentionDays} in (1, 7, 30, 90)`,
+    ),
+  ],
 );
 
 export const browserSessions = pgTable(
@@ -59,6 +72,11 @@ export const browserSessions = pgTable(
     absoluteExpiresAt: timestamp('absolute_expires_at', {
       withTimezone: true,
     }).notNull(),
+    reauthenticatedAt: timestamp('reauthenticated_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
       .notNull()
@@ -88,6 +106,10 @@ export const cameras = pgTable(
     capabilities: jsonb('capabilities').notNull().default({}),
     softwareVersion: text('software_version'),
     enabled: boolean('enabled').notNull().default(true),
+    privacyMode: boolean('privacy_mode').notNull().default(false),
+    batteryPercent: integer('battery_percent'),
+    batteryCharging: boolean('battery_charging'),
+    healthReportedAt: timestamp('health_reported_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     ...timestamps,
@@ -99,6 +121,10 @@ export const cameras = pgTable(
     check(
       'cameras_platform_supported',
       sql`${table.platform} in ('android', 'browser')`,
+    ),
+    check(
+      'cameras_battery_percent_valid',
+      sql`${table.batteryPercent} between 0 and 100`,
     ),
   ],
 );
@@ -117,6 +143,14 @@ export const cameraSources = pgTable(
     publicCameraId: uuid('public_camera_id').notNull().defaultRandom(),
     displayName: text('display_name').notNull(),
     sourceKey: text('source_key').notNull(),
+    motionEnabled: boolean('motion_enabled').notNull().default(true),
+    motionSensitivity: text('motion_sensitivity').notNull().default('medium'),
+    motionCooldownSeconds: integer('motion_cooldown_seconds')
+      .notNull()
+      .default(30),
+    motionQuietHoursStartMinute: integer('motion_quiet_hours_start_minute'),
+    motionQuietHoursEndMinute: integer('motion_quiet_hours_end_minute'),
+    motionQuietHoursTimeZone: text('motion_quiet_hours_time_zone'),
     facing: text('facing').notNull().default('unknown'),
     capabilities: jsonb('capabilities').notNull().default({}),
     enabled: boolean('enabled').notNull().default(true),
@@ -131,6 +165,22 @@ export const cameraSources = pgTable(
       table.sourceKey,
     ),
     index('camera_sources_device_idx').on(table.deviceId),
+    check(
+      'camera_motion_sensitivity_valid',
+      sql`${table.motionSensitivity} in ('low', 'medium', 'high')`,
+    ),
+    check(
+      'camera_motion_cooldown_valid',
+      sql`${table.motionCooldownSeconds} in (30, 60, 120, 300)`,
+    ),
+    check(
+      'camera_motion_quiet_hours_complete',
+      sql`(${table.motionQuietHoursStartMinute} is null) = (${table.motionQuietHoursEndMinute} is null) and (${table.motionQuietHoursStartMinute} is null) = (${table.motionQuietHoursTimeZone} is null)`,
+    ),
+    check(
+      'camera_motion_quiet_hours_minutes_valid',
+      sql`(${table.motionQuietHoursStartMinute} is null or ${table.motionQuietHoursStartMinute} between 0 and 1439) and (${table.motionQuietHoursEndMinute} is null or ${table.motionQuietHoursEndMinute} between 0 and 1439) and (${table.motionQuietHoursStartMinute} is null or ${table.motionQuietHoursStartMinute} <> ${table.motionQuietHoursEndMinute})`,
+    ),
     check(
       'camera_sources_facing_supported',
       sql`${table.facing} in ('front', 'rear', 'external', 'unknown')`,
@@ -207,4 +257,26 @@ export const auditEvents = pgTable(
       .defaultNow(),
   },
   (table) => [index('audit_events_occurred_idx').on(table.occurredAt)],
+);
+
+export const motionEvents = pgTable(
+  'motion_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    cameraSourceId: uuid('camera_source_id')
+      .notNull()
+      .references(() => cameraSources.id, { onDelete: 'cascade' }),
+    eventType: text('event_type').notNull().default('motion'),
+    confidence: real('confidence').notNull(),
+    metadata: jsonb('metadata').notNull().default({}),
+    occurredAt: timestamp('occurred_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('motion_events_camera_occurred_idx').on(
+      table.cameraSourceId,
+      table.occurredAt,
+    ),
+  ],
 );

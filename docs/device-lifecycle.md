@@ -50,6 +50,12 @@ the camera is ready. A viewer disconnect closes only that connection ID. The
 foreground service and device socket remain active. Capture is visibly
 indicated by the app and persistent notification.
 
+Privacy mode is stored on the Android device record. Enabling it makes viewer
+authorization fail immediately, closes every active viewer, and sends a command
+over the still-authenticated device control socket. Android then closes its peer
+sessions and releases CameraX/WebRTC media while retaining its credential so
+privacy can be disabled without pairing the device again.
+
 ## Viewer
 
 ```mermaid
@@ -101,17 +107,33 @@ relay.
 
 - The service is started only after pairing and visible camera permission.
 - A persistent notification identifies Camera Mode.
+- Camera Mode opens the selected source immediately and maintains a visible local
+  preview even when no remote viewer is connected. Authorized viewers attach to
+  that ready capture pipeline instead of cold-starting CameraX.
 - Rotation and activity recreation observe the same service state.
 - Leaving the activity, turning off the screen, or removing the activity from
   recents does not stop signaling or heartbeat.
-- `Stop camera`, credential revocation, or pairing a new account closes every
+- `Stop camera`, credential revocation, or moving to a new account closes every
   peer connection and releases CameraX resources.
+- Source switching completes the CameraX stop callback before disposing the old
+  WebRTC source, preventing callbacks into released native memory.
 - Android default-network callbacks and capped exponential backoff reconnect the
   existing credential; network loss never causes re-pairing.
 
 ## Current limits
 
-Video is one selected source at 640×480 and 15 fps, with no audio or recording.
+Video is one selected source at 640×480 and up to 24 fps. One-way microphone audio is
+sent with the live session but viewer playback is muted until Listen is explicitly
+chosen. Recording remains disabled.
+If microphone permission is denied, Camera Mode remains available as video-only and
+the notification describes camera capture only. A later grant restarts the media
+service so Android applies the microphone foreground-service type before audio capture.
+When privacy mode is enabled, the persistent notification changes to **Beacon privacy
+is on — Camera and microphone are off**. CameraX and microphone resources close
+immediately. The service retains Android's camera foreground-service classification
+because Android 14 and newer reject an already-running foreground service with type
+`none`; actual camera and microphone operations and privacy indicators remain inactive
+while the authenticated control connection stays available.
 Front and rear sources are registered when available. Running
 several independent peer encoders on an older phone can be resource-intensive;
 production fan-out limits and thermal policy still need device profiling.
@@ -147,6 +169,11 @@ management. The app reports when it is not exempt from battery optimization and
 instructs the user to allow unrestricted battery use. It does not request a
 silent exemption or claim that every manufacturer permits uninterrupted
 screen-off capture.
+
+Camera readiness is published only after CameraX confirms that capture bound
+successfully. When Android rejects a background privacy resume under while-in-use
+permission rules, signaling stays available, the UI asks the user to open Beacon,
+and the foreground Activity start retries capture without re-pairing.
 
 Browsers remain attended producers. Background tabs may be throttled or
 suspended and are not presented as equivalent to Android foreground service.

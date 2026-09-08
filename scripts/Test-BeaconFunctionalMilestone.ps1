@@ -12,8 +12,13 @@ $failures = [Collections.Generic.List[string]]::new()
 function Invoke-Check([string]$Name, [scriptblock]$Action) {
     Write-Host "`n[$Name]"
     try {
+        # Pure PowerShell checks do not set LASTEXITCODE. Reset it so they cannot
+        # inherit a null or stale value from a command that ran before this check.
+        $global:LASTEXITCODE = 0
         & $Action
-        if ($LASTEXITCODE -ne 0) { throw "Exited with code $LASTEXITCODE." }
+        if ($global:LASTEXITCODE -ne 0) {
+            throw "Exited with code $global:LASTEXITCODE."
+        }
         Write-Host "PASS: $Name"
     } catch {
         $failures.Add("${Name}: $($_.Exception.Message)")

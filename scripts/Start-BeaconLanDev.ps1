@@ -179,13 +179,17 @@ foreach ($port in @(3000, 5173)) {
             $reusePorts[$port] = $listener
             if ($legacyTracked) { $reuseOwnerPids[$port] = $legacyOwnerPid }
         }
-        'S' { Stop-BeaconTrackedProcess $listener.Pid $repositoryRoot }
+        'S' {
+            Stop-BeaconTrackedProcess -ProcessId $listener.Pid -RepositoryRoot $repositoryRoot
+        }
         default { throw "Startup cancelled because port $port is occupied." }
     }
 }
 
 try {
-    & docker compose -f infrastructure/docker/compose.yaml --profile secure up -d --force-recreate
+    # Compose already recreates services whose configuration changed. Forcing every
+    # container to restart disconnects a reused backend from PostgreSQL.
+    & docker compose -f infrastructure/docker/compose.yaml --profile secure up -d
     if ($LASTEXITCODE -ne 0) {
         throw 'Docker Compose startup failed.'
     }
@@ -215,6 +219,22 @@ try {
     }
     if ($viewer -and $viewer.HasExited) {
         throw "Vite exited during startup. Port 5173 is strict; inspect .beacon-dev/viewer.err.log."
+    }
+
+    $healthDeadline = [DateTime]::UtcNow.AddSeconds(30)
+    $backendHealthy = $false
+    do {
+        try {
+            $healthResponse = Invoke-WebRequest -UseBasicParsing `
+                -Uri 'http://127.0.0.1:3000/health' -TimeoutSec 3
+            $backendHealthy = $healthResponse.StatusCode -eq 200
+        } catch {
+            $backendHealthy = $false
+        }
+        if (-not $backendHealthy) { Start-Sleep -Seconds 1 }
+    } while (-not $backendHealthy -and [DateTime]::UtcNow -lt $healthDeadline)
+    if (-not $backendHealthy) {
+        throw 'Backend health check failed during startup. Inspect .beacon-dev/backend.err.log.'
     }
 
     $trackedProcesses = @(
@@ -255,6 +275,7 @@ try {
             apiHealth = "$httpsOrigin/health"
             browserCamera = "$httpsOrigin/camera-mode"
             dashboard = $httpsOrigin
+            monitor = "$httpsOrigin/monitor"
             signaling = "wss://${LanHost}:8443/api/signaling"
         }
     } | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 $statePath
@@ -265,9 +286,10 @@ try {
     throw
 }
 
-Write-Host "Beacon LAN development is starting."
+Write-Host "Beacon LAN development is ready."
 Write-Host "Browser and phone URL: $httpsOrigin"
 Write-Host "Dashboard: $httpsOrigin"
+Write-Host "Monitor: $httpsOrigin/monitor"
 Write-Host "Cameras: $httpsOrigin/cameras"
 Write-Host "Devices: $httpsOrigin/devices"
 Write-Host "Browser Camera: $httpsOrigin/camera-mode"

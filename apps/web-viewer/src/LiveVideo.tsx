@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { TalkSession, type TalkState } from './talk';
 
 import {
   type ConnectionFailure,
@@ -35,6 +36,12 @@ type ServerMessage =
   | ReadyMessage
   | OfferMessage
   | IceMessage
+  | {
+      active: boolean;
+      connectionId: string;
+      reason?: 'busy';
+      type: 'talk-state';
+    }
   | { code: string; type: 'error' | 'peer-left' };
 
 type ConnectionStatus =
@@ -42,8 +49,42 @@ type ConnectionStatus =
   | 'connecting'
   | 'reconnecting'
   | 'stream unavailable'
+  | 'privacy on'
   | 'switching source'
   | ConnectionFailure;
+
+interface StreamQuality {
+  bitrateKbps: number;
+  fps: number;
+  jitterMs: number;
+  lostPackets: number;
+  path: string;
+  rttMs: number;
+}
+
+interface InboundVideoStats extends RTCStats {
+  bytesReceived: number;
+  framesPerSecond?: number;
+  jitter?: number;
+  kind?: string;
+  mediaType?: string;
+  packetsLost?: number;
+}
+
+interface CandidatePairStats extends RTCStats {
+  currentRoundTripTime?: number;
+  localCandidateId?: string;
+  nominated?: boolean;
+  remoteCandidateId?: string;
+  selected?: boolean;
+  state?: string;
+}
+
+interface StreamStatsRecord extends CandidatePairStats {
+  candidateType?: string;
+  kind?: string;
+  mediaType?: string;
+}
 
 function signalingUrl(cameraId: string): string {
   const url = new URL('/api/signaling', window.location.href);
@@ -62,6 +103,8 @@ export function LiveVideo({
   viewerCount = 0,
   onBack,
   onSelectCamera,
+  onPrivacy,
+  privacyMode = false,
   siblingCameras = [],
 }: {
   enabled?: boolean;
@@ -72,6 +115,8 @@ export function LiveVideo({
   viewerCount?: number;
   onBack?: () => void;
   onSelectCamera?: (cameraId: string) => Promise<void> | void;
+  onPrivacy?: (() => Promise<void>) | undefined;
+  privacyMode?: boolean | undefined;
   siblingCameras?: Camera[];
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -85,7 +130,34 @@ export function LiveVideo({
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const [attempt, setAttempt] = useState(0);
   const [retryDisplay, setRetryDisplay] = useState(0);
-  const stageRef = useRef<HTMLDivElement>(null);
+  const [quality, setQuality] = useState<StreamQuality | null>(null);
+  const [listening, setListening] = useState(false);
+  const [talkState, setTalkState] = useState<TalkState>('idle');
+  const talkSession = useRef<TalkSession | null>(null);
+  const qualityTimer = useRef<number | null>(null);
+  const previousBytes = useRef<{ bytes: number; timestamp: number } | null>(
+    null,
+  );
+  const stageRef = useRef<HTMLElement>(null);
+  const fullscreenButton = useRef<HTMLButtonElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [controlError, setControlError] = useState('');
+  const [switching, setSwitching] = useState(false);
+  const switchInProgress = useRef(false);
+  const [privacyBusy, setPrivacyBusy] = useState(false);
+  const playbackGeneration = useRef(0);
+
+  useEffect(() => {
+    let wasFullscreen = false;
+    const changed = () => {
+      const expanded = document.fullscreenElement === stageRef.current;
+      setFullscreen(expanded);
+      if (wasFullscreen && !expanded) fullscreenButton.current?.focus();
+      wasFullscreen = expanded;
+    };
+    document.addEventListener('fullscreenchange', changed);
+    return () => document.removeEventListener('fullscreenchange', changed);
+  }, []);
 
   const reconnect = useCallback(() => {
     retryCount.current = 0;
@@ -97,10 +169,14 @@ export function LiveVideo({
   }, []);
 
   useEffect(() => {
-    if (!enabled) {
-      setStatus('stream unavailable');
+    setQuality(null);
+    if (!enabled || privacyMode) {
+      setStatus(privacyMode ? 'privacy on' : 'stream unavailable');
       return;
     }
+    setStatus((current) =>
+      current === 'reconnecting' ? current : 'connecting',
+    );
     const currentGeneration = generation.current.next();
     let active = true;
     let completed = false;
@@ -113,7 +189,16 @@ export function LiveVideo({
 
     function cleanup() {
       active = false;
+      playbackGeneration.current += 1;
+      if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+      talkSession.current?.dispose();
+      talkSession.current = null;
       window.clearTimeout(timeout);
+      if (qualityTimer.current !== null)
+        window.clearInterval(qualityTimer.current);
+      qualityTimer.current = null;
+      previousBytes.current = null;
       const connectionId = connectionIdRef.current;
       if (connectionId && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ connectionId, type: 'disconnect' }));
@@ -154,6 +239,10 @@ export function LiveVideo({
       if (!active || !generation.current.isCurrent(currentGeneration)) return;
       if (typeof event.data !== 'string') throw new Error('Invalid message');
       const message = JSON.parse(event.data) as ServerMessage;
+      if (message.type === 'talk-state') {
+        talkSession.current?.receive(message);
+        return;
+      }
       if (message.type === 'error' || message.type === 'peer-left') {
         fail(
           message.code === 'camera_unavailable' ||
@@ -172,7 +261,25 @@ export function LiveVideo({
           iceTransportPolicy: message.iceTransportPolicy,
         });
         peerRef.current = peer;
+        talkSession.current = new TalkSession(
+          message.connectionId,
+          peer,
+          (outgoing) => {
+            if (socket.readyState !== WebSocket.OPEN)
+              throw new Error('Disconnected');
+            socket.send(JSON.stringify(outgoing));
+          },
+          setTalkState,
+        );
         peer.ontrack = (trackEvent) => {
+          const lowLatencyReceiver = trackEvent.receiver as RTCRtpReceiver & {
+            jitterBufferTarget?: number;
+            playoutDelayHint?: number;
+          };
+          if ('playoutDelayHint' in lowLatencyReceiver)
+            lowLatencyReceiver.playoutDelayHint = 0;
+          if ('jitterBufferTarget' in lowLatencyReceiver)
+            lowLatencyReceiver.jitterBufferTarget = 0;
           if (videoRef.current) {
             videoRef.current.srcObject = trackEvent.streams[0] ?? null;
           }
@@ -189,11 +296,25 @@ export function LiveVideo({
           );
         };
         peer.onconnectionstatechange = () => {
+          if (!active || !generation.current.isCurrent(currentGeneration))
+            return;
           if (peer.connectionState === 'connected') {
             window.clearTimeout(timeout);
             retryCount.current = 0;
             setRetryDisplay(0);
             setStatus('connected');
+            if (!compact) {
+              if (qualityTimer.current !== null)
+                window.clearInterval(qualityTimer.current);
+              qualityTimer.current = window.setInterval(() => {
+                void updateStreamQuality(peer).catch(() => {
+                  if (active) setQuality(null);
+                });
+              }, 2_000);
+              void updateStreamQuality(peer).catch(() => {
+                if (active) setQuality(null);
+              });
+            }
             socket.send(
               JSON.stringify({
                 connectionId: connectionIdRef.current,
@@ -221,11 +342,19 @@ export function LiveVideo({
           sdp: message.sdp,
           type: 'offer',
         });
+        if (!active || !generation.current.isCurrent(currentGeneration)) return;
+        // Negotiate the offered return-audio channel without opening a microphone.
+        // The producer's offer limits the final direction of each audio section.
+        for (const transceiver of peer.getTransceivers()) {
+          if (transceiver.receiver.track.kind === 'audio')
+            transceiver.direction = 'sendrecv';
+        }
         for (const candidate of pendingIce.current.splice(0)) {
           await peer.addIceCandidate(candidate);
         }
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
+        if (!active || !generation.current.isCurrent(currentGeneration)) return;
         socket.send(
           JSON.stringify({
             connectionId: message.connectionId,
@@ -242,6 +371,66 @@ export function LiveVideo({
       }
     }
 
+    async function updateStreamQuality(peer: RTCPeerConnection) {
+      const report = await peer.getStats();
+      if (!active || !generation.current.isCurrent(currentGeneration)) return;
+      let inbound: InboundVideoStats | undefined;
+      let selectedPair: CandidatePairStats | undefined;
+      report.forEach((rawStat) => {
+        const stat = rawStat as unknown as StreamStatsRecord;
+        if (
+          stat.type === 'inbound-rtp' &&
+          (stat.kind === 'video' || stat.mediaType === 'video')
+        ) {
+          inbound = stat as InboundVideoStats;
+        }
+        if (
+          stat.type === 'candidate-pair' &&
+          stat.state === 'succeeded' &&
+          (stat.nominated || stat.selected)
+        ) {
+          selectedPair = stat;
+        }
+      });
+      if (!inbound) return;
+      const prior = previousBytes.current;
+      const bitrateKbps =
+        prior && inbound.timestamp > prior.timestamp
+          ? Math.max(
+              0,
+              Math.round(
+                ((inbound.bytesReceived - prior.bytes) * 8) /
+                  (inbound.timestamp - prior.timestamp),
+              ),
+            )
+          : 0;
+      previousBytes.current = {
+        bytes: inbound.bytesReceived,
+        timestamp: inbound.timestamp,
+      };
+      const remote = selectedPair?.remoteCandidateId
+        ? (report.get(selectedPair.remoteCandidateId) as unknown as
+            StreamStatsRecord | undefined)
+        : undefined;
+      const local = selectedPair?.localCandidateId
+        ? (report.get(selectedPair.localCandidateId) as unknown as
+            StreamStatsRecord | undefined)
+        : undefined;
+      setQuality({
+        bitrateKbps,
+        fps: Math.round(inbound.framesPerSecond ?? 0),
+        jitterMs: Math.round((inbound.jitter ?? 0) * 1_000),
+        lostPackets: inbound.packetsLost ?? 0,
+        path:
+          remote?.candidateType === 'relay' || local?.candidateType === 'relay'
+            ? 'TURN relay'
+            : remote && local
+              ? 'Direct'
+              : 'Checking connection',
+        rttMs: Math.round((selectedPair?.currentRoundTripTime ?? 0) * 1_000),
+      });
+    }
+
     socket.onmessage = (event) => {
       void handleMessage(event).catch(() => fail('signaling unavailable'));
     };
@@ -255,7 +444,7 @@ export function LiveVideo({
       completed = true;
       cleanup();
     };
-  }, [enabled, attempt, camera.id]);
+  }, [enabled, privacyMode, attempt, camera.id, compact]);
 
   useEffect(
     () => () => {
@@ -264,6 +453,19 @@ export function LiveVideo({
     },
     [],
   );
+
+  useEffect(() => {
+    const stopWhenHidden = () => {
+      if (document.hidden) talkSession.current?.stop('recovering');
+    };
+    const stopOnPageExit = () => talkSession.current?.stop('recovering');
+    document.addEventListener('visibilitychange', stopWhenHidden);
+    window.addEventListener('pagehide', stopOnPageExit);
+    return () => {
+      document.removeEventListener('visibilitychange', stopWhenHidden);
+      window.removeEventListener('pagehide', stopOnPageExit);
+    };
+  }, []);
 
   const content = (
     <>
@@ -283,27 +485,35 @@ export function LiveVideo({
           </button>
         </div>
       )}
-      <div className="video-frame" ref={stageRef}>
-        <video ref={videoRef} autoPlay playsInline muted />
-        {status !== 'connected' && (
+      <div className="video-frame">
+        <video ref={videoRef} autoPlay playsInline muted={!listening} />
+        {(status !== 'connected' || switching) && (
           <div className="video-overlay">
             <strong>
-              {status === 'connecting'
-                ? 'Connecting to camera'
-                : status === 'reconnecting'
-                  ? 'Connection interrupted'
-                  : status === 'switching source'
-                    ? 'Switching camera'
-                    : status}
+              {switching
+                ? 'Switching camera'
+                : status === 'privacy on'
+                  ? 'Privacy is on'
+                  : status === 'connecting'
+                    ? 'Connecting to camera'
+                    : status === 'reconnecting'
+                      ? 'Connection interrupted'
+                      : status === 'switching source'
+                        ? 'Switching camera'
+                        : status}
             </strong>
             <span>
-              {status === 'connecting'
-                ? 'Waiting for the secure live stream.'
-                : status === 'reconnecting'
-                  ? `Beacon is retrying${retryDisplay ? ` · attempt ${retryDisplay}` : ''}.`
-                  : status === 'switching source'
-                    ? 'The device is releasing the previous camera source.'
-                    : 'This stream needs your attention.'}
+              {switching
+                ? 'The device is changing camera sources.'
+                : status === 'privacy on'
+                  ? 'Live viewing is blocked. Turn privacy off when you are ready to resume.'
+                  : status === 'connecting'
+                    ? 'Waiting for the secure live stream.'
+                    : status === 'reconnecting'
+                      ? `Beacon is retrying${retryDisplay ? ` · attempt ${retryDisplay}` : ''}.`
+                      : status === 'switching source'
+                        ? 'The device is releasing the previous camera source.'
+                        : 'This stream needs your attention.'}
             </span>
           </div>
         )}
@@ -313,18 +523,161 @@ export function LiveVideo({
       </p>
       {!compact && (
         <>
-          <div className="heading-actions">
+          <div
+            className="heading-actions live-controls"
+            aria-label="Live view controls"
+          >
             <span className={status === 'connected' ? 'streaming' : 'offline'}>
               {status === 'connected' ? 'LIVE' : status.toUpperCase()}
             </span>
             <button
               className="secondary"
-              onClick={() => void stageRef.current?.requestFullscreen()}
+              ref={fullscreenButton}
+              onClick={() => {
+                setControlError('');
+                if (
+                  !stageRef.current?.requestFullscreen ||
+                  !document.exitFullscreen
+                ) {
+                  setControlError(
+                    'Full screen is unavailable in this browser. You can keep watching here.',
+                  );
+                  return;
+                }
+                void (
+                  fullscreen
+                    ? document.exitFullscreen()
+                    : stageRef.current.requestFullscreen()
+                ).catch(() =>
+                  setControlError(
+                    'Full screen could not open. You can keep watching here.',
+                  ),
+                );
+              }}
               type="button"
             >
-              Full screen
+              {fullscreen ? 'Exit full screen' : 'Full screen'}
             </button>
+            <button
+              aria-pressed={listening}
+              className="secondary"
+              onClick={() => {
+                const next = !listening;
+                const current = ++playbackGeneration.current;
+                setControlError('');
+                setListening(next);
+                if (videoRef.current) {
+                  const video = videoRef.current;
+                  video.muted = !next;
+                  if (next)
+                    void Promise.resolve(video.play()).catch(() => {
+                      if (current !== playbackGeneration.current) return;
+                      video.muted = true;
+                      setListening(false);
+                      setControlError(
+                        'Sound could not start. Choose Listen to try again, and check your browser sound settings.',
+                      );
+                    });
+                }
+              }}
+              type="button"
+            >
+              {listening ? 'Mute' : 'Listen'}
+            </button>
+            <button
+              aria-pressed={talkState === 'speaking'}
+              className={talkState === 'speaking' ? '' : 'secondary'}
+              disabled={
+                switching ||
+                privacyBusy ||
+                privacyMode ||
+                (status !== 'connected' &&
+                  !['permission', 'connecting', 'speaking'].includes(talkState))
+              }
+              onClick={() => {
+                if (
+                  ['permission', 'connecting', 'speaking'].includes(talkState)
+                )
+                  talkSession.current?.stop();
+                else void talkSession.current?.start();
+              }}
+              type="button"
+            >
+              {talkState === 'speaking'
+                ? 'Stop talking'
+                : talkState === 'permission' || talkState === 'connecting'
+                  ? 'Cancel talk'
+                  : 'Talk'}
+            </button>
+            {onPrivacy && (
+              <button
+                className="secondary"
+                disabled={privacyBusy}
+                onClick={() => {
+                  talkSession.current?.stop();
+                  setPrivacyBusy(true);
+                  setControlError('');
+                  void onPrivacy()
+                    .catch(() =>
+                      setControlError(
+                        'Privacy could not be changed. Check your connection and try again.',
+                      ),
+                    )
+                    .finally(() => setPrivacyBusy(false));
+                }}
+                type="button"
+              >
+                {privacyBusy
+                  ? 'Updating privacy…'
+                  : privacyMode
+                    ? 'Turn privacy off'
+                    : 'Turn privacy on'}
+              </button>
+            )}
           </div>
+          {controlError && <p role="alert">{controlError}</p>}
+          <p role="status" aria-label="Talk status">
+            {talkState === 'permission'
+              ? 'Allow microphone access in your browser to talk. You can cancel at any time.'
+              : talkState === 'connecting'
+                ? 'Connecting talk. Your microphone audio is not being sent yet.'
+                : talkState === 'speaking'
+                  ? 'Speaking · your microphone is on. The camera plays your voice.'
+                  : talkState === 'busy'
+                    ? 'Another viewer is talking. Try Talk again when they finish.'
+                    : talkState === 'unavailable'
+                      ? 'Talk is unavailable. Check microphone permission and that this camera supports talk, then try again.'
+                      : talkState === 'recovering'
+                        ? 'Your microphone is off. When the camera reconnects, choose Talk to speak again.'
+                        : 'Your microphone is off.'}
+          </p>
+          {quality && (
+            <details className="connection-details">
+              <summary>Connection details · {quality.path}</summary>
+              <dl className="stream-quality" aria-label="Live stream quality">
+                <div>
+                  <dt>Path</dt>
+                  <dd>{quality.path}</dd>
+                </div>
+                <div>
+                  <dt>Video</dt>
+                  <dd>
+                    {quality.fps} fps · {quality.bitrateKbps} kbps
+                  </dd>
+                </div>
+                <div>
+                  <dt>Latency</dt>
+                  <dd>
+                    {quality.rttMs} ms RTT · {quality.jitterMs} ms jitter
+                  </dd>
+                </div>
+                <div>
+                  <dt>Loss</dt>
+                  <dd>{quality.lostPackets} packets</dd>
+                </div>
+              </dl>
+            </details>
+          )}
           {siblingCameras.length > 1 && (
             <div
               className="heading-actions"
@@ -333,13 +686,30 @@ export function LiveVideo({
               {siblingCameras.map((sibling) => (
                 <button
                   className={sibling.id === camera.id ? '' : 'secondary'}
-                  disabled={sibling.id === camera.id}
+                  disabled={
+                    sibling.id === camera.id ||
+                    switching ||
+                    privacyMode ||
+                    privacyBusy
+                  }
                   key={sibling.id}
                   onClick={() => {
-                    setStatus('switching source');
-                    void Promise.resolve(onSelectCamera?.(sibling.id)).catch(
-                      () => setStatus('stream unavailable'),
-                    );
+                    if (switchInProgress.current) return;
+                    switchInProgress.current = true;
+                    talkSession.current?.stop();
+                    setSwitching(true);
+                    setControlError('');
+                    void Promise.resolve()
+                      .then(() => onSelectCamera?.(sibling.id))
+                      .catch(() =>
+                        setControlError(
+                          'The camera could not switch. Your current view remains selected. Try again.',
+                        ),
+                      )
+                      .finally(() => {
+                        switchInProgress.current = false;
+                        setSwitching(false);
+                      });
                   }}
                   type="button"
                 >
@@ -348,15 +718,18 @@ export function LiveVideo({
               ))}
             </div>
           )}
-          {status !== 'connected' &&
+          {enabled &&
+            !privacyMode &&
+            status !== 'connected' &&
             status !== 'connecting' &&
             status !== 'reconnecting' && (
               <button onClick={reconnect}>Reconnect</button>
             )}
           <p className="notice">
             Closing this view ends only your viewer session. The camera remains
-            online and ready for the next authorized viewer. Audio and recording
-            are disabled.
+            online and ready for the next authorized viewer. Listening starts
+            only after you choose Listen. Talk requests microphone access only
+            when selected and plays a tone at the camera. Recording is disabled.
           </p>
         </>
       )}
@@ -386,7 +759,11 @@ export function LiveVideo({
     content
   ) : (
     <main className="shell">
-      <section className="card wide" aria-labelledby="live-title">
+      <section
+        className="card wide live-surface"
+        ref={stageRef}
+        aria-labelledby="live-title"
+      >
         {content}
       </section>
     </main>

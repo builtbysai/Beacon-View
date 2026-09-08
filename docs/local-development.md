@@ -8,6 +8,16 @@
 
 ## Startup
 
+For the recommended one-command Windows workflow, run `.\Start-Beacon.ps1` from
+the repository root. It installs dependencies, creates the local environment
+when missing, starts Docker services, migrates PostgreSQL, starts secure LAN
+development, and opens the dashboard. See
+[`quick-start.md`](quick-start.md). The lower-level workflow is:
+
+Pairing codes are displayed both as text and as a QR code. In the Android app,
+choose **Scan pairing QR code** to fill the same expiring, one-time code without
+typing it. The QR code does not contain a session or device credential.
+
 ```sh
 pnpm install --frozen-lockfile
 cp apps/backend/.env.example apps/backend/.env
@@ -61,13 +71,24 @@ emulator host; other cleartext destinations remain blocked. Browser ICE uses
 ```sh
 apps\android-camera\gradlew.bat -p apps/android-camera :app:assembleDebug
 apps\android-camera\gradlew.bat -p apps/android-camera :app:testDebugUnitTest
+apps\android-camera\gradlew.bat -p apps/android-camera :app:lintDebug :app:assembleRelease
 ```
 
-The app requests `CAMERA` only for visible live streaming and binds capture to
-the activity lifecycle. It also declares the normal `INTERNET` and
-`ACCESS_NETWORK_STATE` permissions required for signaling, ICE, and
-network-change handling. It has no microphone, audio, foreground-service,
-recording, or background capture.
+The full Windows validator includes Android lint and unsigned release compilation.
+This does not provide a deployable release: production signing, versioning, a real
+HTTPS API origin, and store acceptance remain separate requirements. CI uses the
+same Android tasks and an isolated PostgreSQL test service. It applies migrations
+explicitly before integration tests and never migrates at application startup.
+
+The app requests camera, microphone, notification, and foreground-service permissions.
+A visible foreground service keeps the registered device online and capture-ready when
+the activity is closed. Denying microphone access leaves video-only Camera Mode usable.
+The persistent notification distinguishes camera-only from camera-and-microphone
+capture. Android privacy mode is modeled and backend-enforced and releases both media
+sources immediately. Viewers start muted and require an explicit **Listen** action.
+There is no recording or hidden capture. Household
+settings now show the latest 50 successful or rejected live-view access events;
+the response intentionally excludes network addresses and signaling details.
 
 ## Manual live-video check
 
@@ -75,8 +96,11 @@ recording, or background capture.
 2. Pair the Android emulator, grant camera permission, and leave it visible.
 3. Sign in as the owner, select the online camera, and choose **View live**.
 4. Confirm Android preview/capture indicator, connected browser status, and video.
-5. Close the viewer and confirm Android returns to waiting and capture stops.
-6. Repeat with direct ICE and relay-only ICE when validating TURN.
+5. Confirm the viewer is silent until **Listen**, then verify **Mute** immediately stops
+   playback.
+6. Close the viewer and confirm only that viewer session ends while Camera Mode remains
+   visibly ready.
+7. Repeat with direct ICE and relay-only ICE when validating TURN.
 
 ## HTTPS/WSS and a physical phone
 
@@ -150,3 +174,11 @@ Record physical-device evidence before claiming completion.
 Local PostgreSQL, Coturn, and their deliberately weak example credentials are
 loopback-only. Never reuse those credentials outside an isolated developer
 machine.
+
+## Web viewport regression audit
+
+Run the local, fixture-only browser audit documented in [responsive-audit.md](responsive-audit.md)
+after shell, form, navigation or layout changes. Screenshots and measurements are stored
+under ignored `.beacon-dev/responsive-audit/`. It requires Playwright with an installed
+browser; the Codex bundled runtime can be supplied through `BEACON_PLAYWRIGHT_MODULE`.
+It creates no real accounts, streams, emails or production data.

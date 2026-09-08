@@ -40,6 +40,12 @@ interface CameraSignalingListener {
     fun onRetryAttempt(attempt: Int)
 
     fun onSourceSwitch(cameraId: String)
+
+    fun onPrivacyMode(enabled: Boolean)
+
+    fun onTalkState(connectionId: String, active: Boolean)
+
+    fun onAuthorizationLost()
 }
 
 class CameraSignalingClient(
@@ -239,7 +245,7 @@ class CameraSignalingClient(
             if (authorizationLost) {
                 stopped = true
                 cancelRetry()
-                listener.onSignalingState(StreamingState.Failed)
+                listener.onAuthorizationLost()
             } else {
                 scheduleReconnect()
             }
@@ -353,6 +359,17 @@ class CameraSignalingClient(
             "switch-source" ->
                 handler.post {
                     listener.onSourceSwitch(message.getString("cameraId"))
+                }
+            "privacy-mode" ->
+                handler.post {
+                    listener.onPrivacyMode(message.getBoolean("enabled"))
+                }
+            "talk-state" ->
+                handler.post {
+                    listener.onTalkState(
+                        message.getString("connectionId"),
+                        message.getBoolean("active"),
+                    )
                 }
         }
     }

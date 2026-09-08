@@ -1,0 +1,13 @@
+.git
+.github
+.beacon-dev
+.env
+.env.*
+!.env.example
+**/node_modules
+**/dist
+**/build
+**/.gradle
+artifacts
+coverage
+*.log

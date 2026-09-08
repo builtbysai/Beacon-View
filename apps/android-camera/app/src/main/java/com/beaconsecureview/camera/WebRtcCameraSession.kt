@@ -1,10 +1,14 @@
 package com.beaconsecureview.camera
 
 import android.util.Log
+import android.media.AudioManager
+import android.media.ToneGenerator
+import org.webrtc.AudioTrack
 import org.webrtc.IceCandidate
 import org.webrtc.MediaConstraints
 import org.webrtc.PeerConnection
 import org.webrtc.RtpTransceiver
+import org.webrtc.MediaStreamTrack
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 
@@ -18,6 +22,9 @@ class WebRtcCameraSession(
 ) {
     private val peer: PeerConnection
     private var acquired = false
+    private var remoteTalkTrack: AudioTrack? = null
+    private var talkEnabled = false
+    private val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 70)
 
     init {
         val iceServers =
@@ -49,6 +56,22 @@ class WebRtcCameraSession(
             RtpTransceiver.RtpTransceiverInit(
                 RtpTransceiver.RtpTransceiverDirection.SEND_ONLY,
                 listOf("beacon-stream"),
+            ),
+        )
+        media.audioTrack?.let { audioTrack ->
+            peer.addTransceiver(
+                audioTrack,
+                RtpTransceiver.RtpTransceiverInit(
+                    RtpTransceiver.RtpTransceiverDirection.SEND_ONLY,
+                    listOf("beacon-stream"),
+                ),
+            )
+        }
+        peer.addTransceiver(
+            MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO,
+            RtpTransceiver.RtpTransceiverInit(
+                RtpTransceiver.RtpTransceiverDirection.RECV_ONLY,
+                listOf("beacon-talk"),
             ),
         )
     }
@@ -100,12 +123,25 @@ class WebRtcCameraSession(
         peer.addIceCandidate(candidate)
     }
 
+    fun setTalkEnabled(enabled: Boolean) {
+        if (talkEnabled == enabled) return
+        talkEnabled = enabled
+        remoteTalkTrack?.setEnabled(enabled)
+        tone.startTone(
+            if (enabled) ToneGenerator.TONE_PROP_BEEP else ToneGenerator.TONE_PROP_BEEP2,
+            140,
+        )
+    }
+
     fun close() {
+        setTalkEnabled(false)
+        remoteTalkTrack = null
         peer.close()
         if (acquired) {
             acquired = false
             media.release()
         }
+        tone.release()
     }
 
     private inner class Observer : PeerConnection.Observer {
@@ -139,7 +175,12 @@ class WebRtcCameraSession(
         override fun onAddTrack(
             receiver: org.webrtc.RtpReceiver,
             mediaStreams: Array<out org.webrtc.MediaStream>,
-        ) = Unit
+        ) {
+            (receiver.track() as? AudioTrack)?.let { track ->
+                remoteTalkTrack = track
+                track.setEnabled(talkEnabled)
+            }
+        }
     }
 
     private companion object {

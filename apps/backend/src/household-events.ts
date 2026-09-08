@@ -21,6 +21,13 @@ export type HouseholdEvent =
     }
   | {
       type: 'device-management-changed';
+    }
+  | {
+      cameraId: string;
+      type: 'motion-event-created';
+    }
+  | {
+      type: 'motion-history-cleared';
     };
 
 export class HouseholdEventHub {

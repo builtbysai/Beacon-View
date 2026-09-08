@@ -11,7 +11,8 @@ if (Test-Path $statePath) {
     $state = Get-Content -Raw $statePath | ConvertFrom-Json
     foreach ($tracked in @($state.processes)) {
         if ($tracked.owned -and $tracked.pid) {
-            Stop-BeaconTrackedProcess $tracked.pid $repositoryRoot -TrustedState
+            Stop-BeaconTrackedProcess -ProcessId $tracked.pid `
+                -RepositoryRoot $repositoryRoot -TrustedState
         }
     }
     Remove-Item -LiteralPath $statePath -Force

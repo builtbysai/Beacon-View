@@ -14,13 +14,14 @@ describe('viewer reconnect policy', () => {
     expect(retryDelay(20, 1)).toBe(20_000);
   });
 
-  it('exhausts retries and never retries authorization or offline failures', () => {
+  it('retries transient offline states but never retries lost authorization', () => {
     expect(mayRetry('signaling unavailable', 0)).toBe(true);
     expect(mayRetry('signaling unavailable', MAX_AUTOMATIC_RETRIES)).toBe(
       false,
     );
     expect(mayRetry('authorization lost', 0)).toBe(false);
-    expect(mayRetry('camera offline', 0)).toBe(false);
+    expect(mayRetry('camera offline', 0)).toBe(true);
+    expect(mayRetry('camera offline', MAX_AUTOMATIC_RETRIES)).toBe(false);
   });
 
   it('invalidates stale sockets and scheduled retries', () => {

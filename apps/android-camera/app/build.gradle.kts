@@ -4,6 +4,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+providers.gradleProperty("beaconBuildDir").orNull?.let {
+    layout.buildDirectory.set(file(it))
+}
+
 android {
     namespace = "com.beaconsecureview.camera"
     compileSdk = 35
@@ -66,8 +70,10 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.lifecycle:lifecycle-service:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     implementation("io.github.webrtc-sdk:android:144.7559.08")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

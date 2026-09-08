@@ -1,19 +1,24 @@
 package com.beaconsecureview.camera
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.os.BatteryManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.os.Build
+import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import androidx.camera.view.PreviewView
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -46,10 +51,32 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     private var initializing = false
     private var cameras: List<RegisteredCameraSource> = emptyList()
     private var selectedCamera: RegisteredCameraSource? = null
+    private var captureGeneration = 0
+    private lateinit var privacyGate: PrivacyGate
+    @Volatile
+    private var motionSettings = emptyMap<String, MotionSettings>()
 
     override fun onCreate() {
         super.onCreate()
+        privacyGate = PrivacyGate(
+            getSharedPreferences(PREFERENCES, MODE_PRIVATE).getBoolean(PENDING_PRIVACY_PAUSE, false),
+        )
+        CameraRuntime.update {
+            it.copy(privacyMode = privacyGate.privacyEnabled, privacySyncPending = privacyGate.pendingPause)
+        }
         createNotificationChannel()
+        showForegroundStatus(captureActive = !privacyGate.privacyEnabled)
+        CameraRuntime.previewView = PreviewView(applicationContext)
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        CameraRuntime.update {
+            it.copy(
+                batteryOptimizationRestricted =
+                    !powerManager.isIgnoringBatteryOptimizations(packageName),
+            )
+        }
+    }
+
+    private fun showForegroundStatus(captureActive: Boolean) {
         val pendingIntent =
             PendingIntent.getActivity(
                 this,
@@ -57,11 +84,26 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 Intent(this, MainActivity::class.java),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
+        val microphoneEnabled = captureActive && hasMicrophonePermission()
         val notification =
             NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.presence_video_online)
-                .setContentTitle("Beacon camera is active")
-                .setContentText("Online and ready for authorized viewers")
+                .setContentTitle(
+                    if (!captureActive) {
+                        "Beacon privacy is on"
+                    } else if (microphoneEnabled) {
+                        "Beacon camera and microphone are active"
+                    } else {
+                        "Beacon camera is active"
+                    },
+                )
+                .setContentText(
+                    if (captureActive) {
+                        "Visible and ready for authorized live viewers"
+                    } else {
+                        "Camera and microphone are off"
+                    },
+                )
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setSilent(true)
@@ -71,19 +113,11 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
             NOTIFICATION_ID,
             notification,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+                foregroundServiceType(captureActive, microphoneEnabled)
             } else {
                 0
             },
         )
-        CameraRuntime.previewView = PreviewView(applicationContext)
-        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        CameraRuntime.update {
-            it.copy(
-                batteryOptimizationRestricted =
-                    !powerManager.isIgnoringBatteryOptimizations(packageName),
-            )
-        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -96,40 +130,42 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
             selectCamera(intent.getStringExtra(EXTRA_CAMERA_ID))
             return START_STICKY
         }
+        if (intent?.action == ACTION_SET_PRIVACY) {
+            setLocalPrivacy(intent.getBooleanExtra(EXTRA_PRIVACY_ENABLED, true))
+            return START_STICKY
+        }
         val storedCredential = CredentialStore(this).read()
         if (storedCredential == null) {
             stopSelf()
             return START_NOT_STICKY
         }
-        if ((::credential.isInitialized && signaling != null) || initializing) {
+        if (::credential.isInitialized && signaling != null) {
+            if (!CameraRuntime.state.value.privacyMode && media == null) startLocalPreview()
+            return START_STICKY
+        }
+        if (initializing) {
             return START_STICKY
         }
         credential = storedCredential
         api = BeaconApi(BuildConfig.BEACON_API_URL)
         CameraRuntime.update {
             it.copy(
-                cameraEnabled = true,
+                cameraEnabled = !privacyGate.privacyEnabled,
                 device = DeviceLifecycle.Online,
                 diagnostic = "Connecting to Beacon",
+                pairingRequired = false,
             )
         }
         initializing = true
         lifecycleScope.launch {
+            val privacyVersion = privacyGate.version
             val synchronization =
                 withContext(Dispatchers.IO) {
                     runCatching { api.syncCameras(credential, enumerateCameraSources()) }
                 }
             if (synchronization.exceptionOrNull() is AuthorizationLostException) {
                 initializing = false
-                CredentialStore(this@CameraForegroundService).clear()
-                CameraRuntime.update {
-                    it.copy(
-                        cameraEnabled = false,
-                        device = DeviceLifecycle.Error,
-                        diagnostic = "Credential revoked",
-                    )
-                }
-                stopCamera()
+                requirePairing()
                 return@launch
             }
             val synchronized = synchronization.getOrNull()
@@ -148,7 +184,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 return@launch
             }
             cameras =
-                synchronized.map {
+                synchronized.cameras.map {
                     RegisteredCameraSource(it.id, it.sourceKey, it.name, it.facing)
                 }
             val preferred =
@@ -158,31 +194,44 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 cameras.find { it.id == preferred }
                     ?: cameras.find { it.facing == "rear" }
                     ?: cameras.first()
+            privacyGate.receiveSnapshot(synchronized.privacyMode, privacyVersion)
             CameraRuntime.update {
                 it.copy(
                     cameras = cameras,
                     selectedCameraId = selectedCamera?.id,
+                    sourceLifecycle =
+                        if (privacyGate.privacyEnabled) {
+                            CameraSourceLifecycle.Disabled
+                        } else {
+                            CameraSourceLifecycle.Available
+                        },
+                    privacyMode = privacyGate.privacyEnabled,
+                    privacySyncPending = privacyGate.pendingPause,
                 )
             }
+            applyPrivacyState()
             startSignaling()
             initializing = false
             while (true) {
+                if (privacyGate.pendingPause && !privacyGate.requestInFlight) setLocalPrivacy(true)
                 val accepted =
                     withContext(Dispatchers.IO) {
-                        runCatching { api.heartbeat(credential) }.getOrNull()
+                        runCatching { api.heartbeat(credential, batteryPercent(), batteryCharging()) }.getOrNull()
                     }
                 when (accepted) {
-                    true -> Unit
-                    false -> {
-                        CredentialStore(this@CameraForegroundService).clear()
-                        CameraRuntime.update {
-                            it.copy(
-                                cameraEnabled = false,
-                                device = DeviceLifecycle.Error,
-                                diagnostic = "Credential revoked",
-                            )
+                    true -> {
+                        val settings = withContext(Dispatchers.IO) {
+                            runCatching { api.motionSettings(credential) }
                         }
-                        stopCamera()
+                        if (settings.exceptionOrNull() is AuthorizationLostException) {
+                            requirePairing()
+                            break
+                        }
+                        settings.onSuccess { motionSettings = it }
+                            .onFailure { Log.w(LOG_TAG, "event=motion_settings_sync_failed") }
+                    }
+                    false -> {
+                        requirePairing()
                         break
                     }
                     null -> {
@@ -201,6 +250,20 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         return START_STICKY
     }
 
+    private fun batteryPercent(): Int? =
+        (getSystemService(Context.BATTERY_SERVICE) as BatteryManager)
+            .getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            .takeIf { it in 0..100 }
+
+    private fun batteryCharging(): Boolean? {
+        val intent = registerReceiver(
+            null,
+            android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+        ) ?: return null
+        return intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1) in
+            listOf(BatteryManager.BATTERY_STATUS_CHARGING, BatteryManager.BATTERY_STATUS_FULL)
+    }
+
     override fun onViewerReady(
         connectionId: String,
         iceServers: List<SignalingIceServer>,
@@ -208,13 +271,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     ) {
         val firstViewer = sessions.isEmpty()
         sessions.remove(connectionId)?.close()
-        val preview = CameraRuntime.previewView ?: PreviewView(applicationContext)
-        val activeCamera = selectedCamera ?: return
-        val sharedMedia =
-            media
-                ?: CameraMediaSource(this, this, preview, activeCamera.facing).also {
-                    media = it
-                }
+        val sharedMedia = media ?: startLocalPreview() ?: return
         sessions[connectionId] =
             WebRtcCameraSession(
                 sharedMedia,
@@ -263,15 +320,77 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         selectCamera(cameraId)
     }
 
+    override fun onPrivacyMode(enabled: Boolean) {
+        privacyGate.receiveRemote(enabled)
+        applyPrivacyState()
+    }
+
+    @android.annotation.SuppressLint("ApplySharedPref")
+    private fun applyPrivacyState() {
+        val enabled = privacyGate.privacyEnabled
+        val changed = enabled != CameraRuntime.state.value.privacyMode
+        if (enabled || changed) {
+            sessions.keys.toList().forEach(::closeViewer)
+            captureGeneration += 1
+            media?.close()
+            media = null
+        }
+        // Persist after capture stops, before returning from the local action.
+        val preferences = getSharedPreferences(PREFERENCES, MODE_PRIVATE)
+        if (
+            preferences.getBoolean(PENDING_PRIVACY_PAUSE, false) != privacyGate.pendingPause &&
+                !preferences.edit().putBoolean(PENDING_PRIVACY_PAUSE, privacyGate.pendingPause).commit()
+        ) {
+            Log.w(LOG_TAG, "event=privacy_intent_persistence_failed")
+        }
+        CameraRuntime.update {
+            it.copy(
+                activeViewers = sessions.size,
+                cameraEnabled = !enabled && media != null,
+                device = if (enabled) DeviceLifecycle.Disabled else DeviceLifecycle.Idle,
+                diagnostic =
+                    when {
+                        privacyGate.pendingPause -> "Camera and microphone are off; waiting to sync privacy"
+                        enabled -> "Privacy mode is on"
+                        else -> "Ready for viewers"
+                    },
+                privacyMode = enabled,
+                privacyChangePending = privacyGate.requestInFlight,
+                privacySyncPending = privacyGate.pendingPause,
+            )
+        }
+        if (!enabled) startLocalPreview()
+        showForegroundStatus(captureActive = !enabled)
+    }
+
+    override fun onTalkState(connectionId: String, active: Boolean) {
+        sessions[connectionId]?.setTalkEnabled(active)
+    }
+
+    override fun onAuthorizationLost() {
+        requirePairing()
+    }
+
     override fun onDestroy() {
         signaling?.disconnect(sessions.keys)
         signaling = null
         sessions.values.forEach(WebRtcCameraSession::close)
         sessions.clear()
+        captureGeneration += 1
         media?.close()
         media = null
         CameraRuntime.previewView = null
-        CameraRuntime.update { CameraRuntimeState() }
+        CameraRuntime.update { previous ->
+            if (previous.pairingRequired) {
+                CameraRuntimeState(
+                    device = DeviceLifecycle.AuthenticationRequired,
+                    diagnostic = "Pair this device to continue",
+                    pairingRequired = true,
+                )
+            } else {
+                CameraRuntimeState()
+            }
+        }
         super.onDestroy()
     }
 
@@ -289,8 +408,8 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         CameraRuntime.update {
             it.copy(
                 activeViewers = sessions.size,
-                device = deviceStateFor(signalingOnline, sessions.size, enabled = true),
-                diagnostic = reason,
+                device = deviceStateFor(signalingOnline, sessions.size, enabled = !privacyGate.privacyEnabled),
+                diagnostic = if (privacyGate.privacyEnabled) it.diagnostic else reason,
             )
         }
     }
@@ -298,6 +417,19 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     private fun stopCamera() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun requirePairing() {
+        CredentialStore(this).clear()
+        CameraRuntime.update {
+            it.copy(
+                cameraEnabled = false,
+                device = DeviceLifecycle.AuthenticationRequired,
+                diagnostic = "Pair this device to continue",
+                pairingRequired = true,
+            )
+        }
+        stopCamera()
     }
 
     private fun enumerateCameraSources(): List<BeaconApi.CameraSource> {
@@ -330,13 +462,93 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
             ).also { it.connect() }
     }
 
+    private fun startLocalPreview(): CameraMediaSource? {
+        if (privacyGate.privacyEnabled) return null
+        media?.let { return it }
+        val activeCamera = selectedCamera ?: return null
+        val preview = CameraRuntime.previewView ?: PreviewView(applicationContext).also {
+            CameraRuntime.previewView = it
+        }
+        CameraRuntime.update { state ->
+            state.copy(
+                cameraEnabled = false,
+                sourceLifecycle = CameraSourceLifecycle.Switching,
+                diagnostic = "Starting camera",
+            )
+        }
+        val generation = ++captureGeneration
+        val created = CameraMediaSource(
+            this,
+            this,
+            preview,
+            activeCamera.facing,
+            shouldCaptureAudio(hasMicrophonePermission()),
+            { started -> handleCaptureStart(generation, started) },
+            { confidence -> reportMotion(generation, activeCamera.id, confidence) },
+            { motionSettings[activeCamera.id] ?: MotionSettings(enabled = false) },
+        )
+        media = created
+        lifecycleScope.launch {
+            delay(5_000)
+            if (generation == captureGeneration && !CameraRuntime.state.value.cameraEnabled) {
+                handleCaptureStart(generation, false)
+            }
+        }
+        return created
+    }
+
+    private fun reportMotion(generation: Int, cameraId: String, confidence: Float) {
+        if (generation != captureGeneration || CameraRuntime.state.value.privacyMode) return
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { api.reportMotion(credential, cameraId, confidence) }
+                .onFailure { error ->
+                    if (error is AuthorizationLostException) {
+                        withContext(Dispatchers.Main) { requirePairing() }
+                    } else {
+                        Log.w(LOG_TAG, "event=motion_report_failed")
+                    }
+                }
+        }
+    }
+
+    private fun handleCaptureStart(generation: Int, started: Boolean) {
+        if (generation != captureGeneration) return
+        if (started) {
+            CameraRuntime.update { state ->
+                state.copy(
+                    cameraEnabled = true,
+                    sourceLifecycle = CameraSourceLifecycle.Available,
+                    diagnostic =
+                        if (signalingOnline) "Live and ready" else "Camera ready; connecting",
+                )
+            }
+            return
+        }
+        captureGeneration += 1
+        val failedMedia = media
+        media = null
+        failedMedia?.close()
+        CameraRuntime.update { state ->
+            state.copy(
+                cameraEnabled = false,
+                sourceLifecycle = CameraSourceLifecycle.Disabled,
+                diagnostic = "Open Beacon to resume camera",
+            )
+        }
+    }
+
     private fun selectCamera(cameraId: String?) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            ContextCompat.getMainExecutor(this).execute { selectCamera(cameraId) }
+            return
+        }
         val next = cameras.find { it.id == cameraId } ?: return
         if (next.id == selectedCamera?.id) return
         signaling?.disconnect(sessions.keys)
         signaling = null
         sessions.values.forEach(WebRtcCameraSession::close)
         sessions.clear()
+        captureGeneration += 1
         media?.close()
         media = null
         selectedCamera = next
@@ -353,6 +565,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 diagnostic = "Switching camera source",
             )
         }
+        if (!CameraRuntime.state.value.privacyMode) startLocalPreview()
         startSignaling()
     }
 
@@ -361,6 +574,46 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
             onStartCommand(Intent(this, CameraForegroundService::class.java), 0, 0)
         }
     }
+
+    private fun setLocalPrivacy(enabled: Boolean) {
+        val change = privacyGate.begin(enabled) ?: return
+        applyPrivacyState()
+        if (!::credential.isInitialized || !::api.isInitialized) {
+            privacyGate.fail(change)
+            applyPrivacyState()
+            return
+        }
+        lifecycleScope.launch {
+            val result =
+                withContext(Dispatchers.IO) {
+                    runCatching { api.setPrivacyMode(credential, enabled) }
+                }
+            result.onSuccess {
+                if (privacyGate.complete(change, it)) applyPrivacyState()
+            }.onFailure { error ->
+                if (!privacyGate.fail(change)) return@onFailure
+                applyPrivacyState()
+                if (error is AuthorizationLostException) {
+                    requirePairing()
+                } else {
+                    CameraRuntime.update {
+                        it.copy(
+                            diagnostic =
+                                if (privacyGate.privacyEnabled) {
+                                    "Camera and microphone remain off. Check the connection to sync privacy or try Resume again."
+                                } else {
+                                    "Privacy could not be synchronized. Check the connection and try again."
+                                },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun hasMicrophonePermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -381,9 +634,12 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         private const val NOTIFICATION_ID = 1001
         private const val ACTION_STOP = "com.beaconsecureview.camera.STOP"
         private const val ACTION_SELECT_CAMERA = "com.beaconsecureview.camera.SELECT_CAMERA"
+        private const val ACTION_SET_PRIVACY = "com.beaconsecureview.camera.SET_PRIVACY"
         private const val EXTRA_CAMERA_ID = "camera_id"
+        private const val EXTRA_PRIVACY_ENABLED = "privacy_enabled"
         private const val PREFERENCES = "beacon_camera_runtime"
         private const val SELECTED_CAMERA_ID = "selected_camera_id"
+        private const val PENDING_PRIVACY_PAUSE = "pending_privacy_pause"
         private const val LOG_TAG = "BeaconLifecycle"
 
         fun start(context: Context) {
@@ -406,5 +662,27 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                     .putExtra(EXTRA_CAMERA_ID, cameraId),
             )
         }
+
+        fun setPrivacyMode(context: Context, enabled: Boolean) {
+            context.startService(
+                Intent(context, CameraForegroundService::class.java)
+                    .setAction(ACTION_SET_PRIVACY)
+                    .putExtra(EXTRA_PRIVACY_ENABLED, enabled),
+            )
+        }
+
+
+        fun restart(context: Context) {
+            context.stopService(Intent(context, CameraForegroundService::class.java))
+            start(context)
+        }
     }
 }
+
+internal fun foregroundServiceType(captureActive: Boolean, microphoneEnabled: Boolean): Int =
+    ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
+        if (captureActive && microphoneEnabled) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        } else {
+            0
+        }

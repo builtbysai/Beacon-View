@@ -11,6 +11,7 @@ export interface MonitorCamera {
   name: string;
   online: boolean;
   platform: 'android' | 'browser';
+  privacyMode?: boolean;
   streaming: boolean;
   viewerCount: number;
 }
@@ -108,7 +109,10 @@ const MonitorTile = memo(function MonitorTile({
 }) {
   const { active, ref } = useTileVisibility(continuous);
   const unavailable =
-    !camera.online || !camera.enabled || camera.credentialRevoked;
+    !camera.online ||
+    !camera.enabled ||
+    camera.credentialRevoked ||
+    camera.privacyMode;
 
   return (
     <article
@@ -140,14 +144,18 @@ const MonitorTile = memo(function MonitorTile({
           <strong>
             {camera.credentialRevoked
               ? 'Access revoked'
-              : !camera.enabled
-                ? 'Camera disabled'
-                : 'Camera offline'}
+              : camera.privacyMode
+                ? 'Privacy is on'
+                : !camera.enabled
+                  ? 'Camera disabled'
+                  : 'Camera offline'}
           </strong>
           <span>
-            {camera.online
-              ? 'Open the device to restore access.'
-              : 'Beacon will show video when the camera reconnects.'}
+            {camera.privacyMode
+              ? 'Turn privacy off from the device settings when you are ready.'
+              : camera.online
+                ? 'Open the device to restore access.'
+                : 'Beacon will show video when the camera reconnects.'}
           </span>
         </div>
       ) : (
@@ -332,43 +340,23 @@ export function Monitoring({
     online: cameras.filter((camera) => camera.online).length,
     viewers: cameras.reduce((sum, camera) => sum + camera.viewerCount, 0),
   };
+  const activeFilterCount = [deviceFilter, statusFilter, platformFilter].filter(
+    (value) => value !== 'all',
+  ).length;
 
   return (
     <section aria-labelledby="monitoring-title" className="monitoring">
       <div className="monitor-toolbar">
         <div>
-          <p className="eyebrow">Monitoring workspace</p>
           <h3 id="monitoring-title">{workspace.name}</h3>
+          <div className="health-strip" aria-label="Camera health overview">
+            <span>{cameras.length} Cameras</span>
+            <span>{metrics.online} Online</span>
+            {metrics.offline > 0 && <span>{metrics.offline} Offline</span>}
+            {metrics.live > 0 && <span>{metrics.live} Live</span>}
+            <span>{metrics.viewers} Viewers</span>
+          </div>
         </div>
-        <label>
-          Workspace
-          <select
-            aria-label="Workspace"
-            value={selectedId}
-            onChange={(event) => setSelectedId(event.target.value)}
-          >
-            {workspaces.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button className="secondary" onClick={createWorkspace} type="button">
-          New workspace
-        </button>
-      </div>
-
-      <div className="health-strip" aria-label="Camera health overview">
-        <span>{cameras.length} Cameras</span>
-        <span>{metrics.online} Online</span>
-        <span>{metrics.offline} Offline</span>
-        <span>{metrics.live} Live</span>
-        <span>{metrics.viewers} Viewers</span>
-      </div>
-      {switchError && <p role="alert">{switchError}</p>}
-
-      <div className="monitor-filters">
         <label>
           Layout
           <select
@@ -388,61 +376,89 @@ export function Monitoring({
           </select>
         </label>
         <label>
-          Device
+          Workspace
           <select
-            aria-label="Filter by device"
-            value={deviceFilter}
-            onChange={(event) => setDeviceFilter(event.target.value)}
+            aria-label="Workspace"
+            value={selectedId}
+            onChange={(event) => setSelectedId(event.target.value)}
           >
-            <option value="all">All devices</option>
-            {devices.map((device) => (
-              <option key={device.id} value={device.id}>
-                {device.name}
+            {workspaces.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
               </option>
             ))}
           </select>
         </label>
-        <label>
-          Status
-          <select
-            aria-label="Filter by status"
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-          >
-            <option value="all">All states</option>
-            <option value="online">Online</option>
-            <option value="offline">Offline</option>
-            <option value="live">Live</option>
-            <option value="disabled">Disabled</option>
-          </select>
-        </label>
-        <label>
-          Platform
-          <select
-            aria-label="Filter by platform"
-            value={platformFilter}
-            onChange={(event) => setPlatformFilter(event.target.value)}
-          >
-            <option value="all">All platforms</option>
-            <option value="android">Android</option>
-            <option value="browser">Browser Camera</option>
-          </select>
-        </label>
-        <label className="checkbox-label">
-          <input
-            checked={workspace.refreshPreference === 'continuous'}
-            type="checkbox"
-            onChange={(event) =>
-              updateWorkspace({
-                refreshPreference: event.target.checked
-                  ? 'continuous'
-                  : 'visible',
-              })
-            }
-          />
-          Keep offscreen tiles connected
-        </label>
+        <button className="secondary" onClick={createWorkspace} type="button">
+          New workspace
+        </button>
       </div>
+
+      {switchError && <p role="alert">{switchError}</p>}
+
+      <details className="monitor-options">
+        <summary>
+          Filters &amp; playback
+          {activeFilterCount > 0 ? ` · ${activeFilterCount} active` : ''}
+        </summary>
+        <div className="monitor-filters">
+          <label>
+            Device
+            <select
+              aria-label="Filter by device"
+              value={deviceFilter}
+              onChange={(event) => setDeviceFilter(event.target.value)}
+            >
+              <option value="all">All devices</option>
+              {devices.map((device) => (
+                <option key={device.id} value={device.id}>
+                  {device.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Status
+            <select
+              aria-label="Filter by status"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+            >
+              <option value="all">All states</option>
+              <option value="online">Online</option>
+              <option value="offline">Offline</option>
+              <option value="live">Live</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </label>
+          <label>
+            Platform
+            <select
+              aria-label="Filter by platform"
+              value={platformFilter}
+              onChange={(event) => setPlatformFilter(event.target.value)}
+            >
+              <option value="all">All platforms</option>
+              <option value="android">Android</option>
+              <option value="browser">Browser Camera</option>
+            </select>
+          </label>
+          <label className="checkbox-label">
+            <input
+              checked={workspace.refreshPreference === 'continuous'}
+              type="checkbox"
+              onChange={(event) =>
+                updateWorkspace({
+                  refreshPreference: event.target.checked
+                    ? 'continuous'
+                    : 'visible',
+                })
+              }
+            />
+            Keep offscreen tiles connected
+          </label>
+        </div>
+      </details>
       <details className="camera-picker">
         <summary>
           Choose cameras ({workspace.cameraIds.length} selected)
@@ -465,6 +481,10 @@ export function Monitoring({
             </label>
           ))}
         </div>
+        <p className="notice">
+          Reorder tiles by dragging or with the arrow controls. Devices that
+          support one active source may interrupt a sibling tile when switched.
+        </p>
       </details>
 
       {selectedCameras.length === 0 ? (
@@ -530,10 +550,6 @@ export function Monitoring({
           ))}
         </div>
       )}
-      <p className="notice">
-        Reorder tiles by dragging or with the arrow controls. Devices that
-        support one active source may interrupt a sibling tile when switched.
-      </p>
     </section>
   );
 }

@@ -32,6 +32,14 @@ const messageSchema = z.discriminatedUnion('type', [
   }),
   z.object({ connectionId: z.string().uuid(), type: z.literal('connected') }),
   z.object({ connectionId: z.string().uuid(), type: z.literal('disconnect') }),
+  z.object({
+    connectionId: z.string().uuid(),
+    type: z.literal('talk-request'),
+  }),
+  z.object({
+    connectionId: z.string().uuid(),
+    type: z.literal('talk-release'),
+  }),
 ]);
 
 type SignalingMessage = z.infer<typeof messageSchema>;
@@ -76,6 +84,7 @@ export class SignalingHub {
   readonly #devices = new Map<string, DevicePeer>();
   readonly #sessions = new Map<string, ActiveSession>();
   readonly #cameraSessions = new Map<string, Set<string>>();
+  readonly #talkOwners = new Map<string, string>();
 
   constructor(
     private readonly createViewerIceServers: () => IceServer[],
@@ -232,6 +241,19 @@ export class SignalingHub {
     }
   }
 
+  setPrivacyMode(publicCameraId: string, enabled: boolean): void {
+    const device = [...this.#devices.values()].find(
+      (candidate) => candidate.publicCameraId === publicCameraId,
+    );
+    if (!device) return;
+    const camera = [...this.#devices.entries()].find(
+      ([, candidate]) => candidate === device,
+    );
+    if (!camera) return;
+    if (enabled) this.#cleanupCamera(camera[0], 'privacy_enabled');
+    this.#send(device.socket, { enabled, type: 'privacy-mode' });
+  }
+
   requestSourceSwitch(
     siblingCameraIds: string[],
     targetPublicCameraId: string,
@@ -281,6 +303,29 @@ export class SignalingHub {
       this.#send(socket, { code: 'invalid_connection', type: 'error' });
       return;
     }
+    if (message.type === 'talk-request' || message.type === 'talk-release') {
+      if (role !== 'viewer') {
+        this.#send(socket, { code: 'invalid_message', type: 'error' });
+        return;
+      }
+      if (message.type === 'talk-request') {
+        const owner = this.#talkOwners.get(session.cameraId);
+        const granted = !owner || owner === session.connectionId;
+        if (granted)
+          this.#talkOwners.set(session.cameraId, session.connectionId);
+        const state = {
+          active: granted,
+          connectionId: session.connectionId,
+          reason: granted ? undefined : 'busy',
+          type: 'talk-state',
+        };
+        this.#send(session.viewer, state);
+        this.#send(session.device, state);
+      } else {
+        this.#releaseTalk(session);
+      }
+      return;
+    }
     const allowed =
       role === 'device'
         ? ['offer', 'ice', 'connected', 'disconnect']
@@ -324,6 +369,7 @@ export class SignalingHub {
     if (source && source !== session.viewer && source !== session.device)
       return;
     this.#sessions.delete(connectionId);
+    this.#releaseTalk(session);
     const cameraSessions = this.#cameraSessions.get(session.cameraId);
     cameraSessions?.delete(connectionId);
     if (cameraSessions?.size === 0)
@@ -343,6 +389,18 @@ export class SignalingHub {
     if (code === 'negotiation_timeout' || code === 'server_shutdown') {
       session.viewer.close(4000, 'Signaling session ended');
     }
+  }
+
+  #releaseTalk(session: ActiveSession): void {
+    if (this.#talkOwners.get(session.cameraId) !== session.connectionId) return;
+    this.#talkOwners.delete(session.cameraId);
+    const state = {
+      active: false,
+      connectionId: session.connectionId,
+      type: 'talk-state',
+    };
+    this.#send(session.viewer, state);
+    this.#send(session.device, state);
   }
 
   #reject(socket: WebSocket, code: string): void {

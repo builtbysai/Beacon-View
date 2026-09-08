@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { parseConfig } from '../src/config.js';
 import type { AppConfig } from '../src/config.js';
+import type { MilestoneStore } from '../src/store.js';
 
 const config: AppConfig = {
   DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/test',
@@ -43,6 +44,78 @@ describe('GET /health', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ service: 'backend', status: 'ok' });
     expect(response.json()).toHaveProperty('timestamp');
+  });
+});
+
+describe('GET /ready', () => {
+  it('reports ready only after the store accepts a database probe', async () => {
+    const app = buildApp(config, {
+      close: () => Promise.resolve(),
+      isReady: () => Promise.resolve(true),
+    } as unknown as MilestoneStore);
+    apps.add(app);
+
+    const response = await app.inject({ method: 'GET', url: '/ready' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ service: 'backend', status: 'ok' });
+  });
+
+  it('does not expose database errors when the readiness probe fails', async () => {
+    const app = buildApp(config, {
+      close: () => Promise.resolve(),
+      isReady: () =>
+        Promise.reject(
+          new Error('database connection details must stay private'),
+        ),
+    } as unknown as MilestoneStore);
+    apps.add(app);
+
+    const response = await app.inject({ method: 'GET', url: '/ready' });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      service: 'backend',
+      status: 'unavailable',
+    });
+    expect(response.body).not.toContain('database connection details');
+  });
+});
+
+describe('POST /api/contact', () => {
+  it('validates input and does not attempt delivery when the honeypot is filled', async () => {
+    const app = buildApp(config);
+    apps.add(app);
+
+    const invalid = await app.inject({
+      method: 'POST',
+      payload: { email: 'not-an-email' },
+      url: '/api/contact',
+    });
+    expect(invalid.statusCode).toBe(400);
+
+    const honeypot = await app.inject({
+      method: 'POST',
+      payload: {
+        email: 'person@example.com',
+        message: 'Hello',
+        subject: 'Support',
+        website: 'bot-filled-this',
+      },
+      url: '/api/contact',
+    });
+    expect(honeypot.statusCode).toBe(204);
+
+    const unavailable = await app.inject({
+      method: 'POST',
+      payload: {
+        email: 'person@example.com',
+        message: 'Hello',
+        subject: 'Support',
+      },
+      url: '/api/contact',
+    });
+    expect(unavailable.statusCode).toBe(503);
   });
 });
 
@@ -92,5 +165,15 @@ describe('environment configuration', () => {
       WEB_ORIGIN: 'https://192.0.2.10:8443',
       DEVICE_STUN_URL: 'stun:192.0.2.10:3478',
     });
+  });
+
+  it('requires a complete contact-delivery configuration', () => {
+    expect(() =>
+      parseConfig({
+        CONTACT_EMAIL_TO: 'owner@example.com',
+        DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/test',
+        TURN_SHARED_SECRET: 'test-shared-secret-with-at-least-32-bytes',
+      }),
+    ).toThrow('CONTACT_EMAIL_TO');
   });
 });

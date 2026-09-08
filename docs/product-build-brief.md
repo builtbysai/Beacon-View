@@ -1,5 +1,9 @@
 You are acting as the founding software architect and senior engineer for a new product tentatively named **Beacon SecureView**.
 
+> **Status note:** This document preserves the original product brief and its
+> Milestone 0 assignment for historical context. The repository has progressed
+> beyond that assignment; `docs/roadmap.md` is the authority for current scope.
+
 ## Product vision
 
 We are building software that turns an unused device with a camera and internet connection into a remotely accessible smart security camera.

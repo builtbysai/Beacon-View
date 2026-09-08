@@ -224,6 +224,57 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
     device.close();
   });
 
+  it('accepts a native bearer viewer without a browser origin', async () => {
+    const owner = await store!.createAccount(
+      'native-viewer@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    const deviceCredential = 'native-viewer-device-secret';
+    const code = 'NATIVEVIEW2';
+    await store!.createPairingCode(
+      owner.householdId,
+      hashSecret(code),
+      new Date(Date.now() + 60_000),
+    );
+    const camera = await store!.redeemPairingCode({
+      codeHash: hashSecret(code),
+      credentialHash: hashSecret(deviceCredential),
+      installationId: randomUUID(),
+      ipAddress: '127.0.0.1',
+      name: 'Native Camera',
+      now: new Date(),
+    });
+    if (!camera || camera === DEVICE_REGISTRATION_RATE_LIMITED) {
+      throw new Error('Camera setup failed');
+    }
+    const sessionToken = 'native-viewer-session';
+    await store!.createSession({
+      absoluteExpiresAt: new Date(Date.now() + 60_000),
+      csrfHash: hashSecret('csrf'),
+      idleExpiresAt: new Date(Date.now() + 60_000),
+      tokenHash: hashSecret(sessionToken),
+      userId: owner.id,
+    });
+
+    const device = connect(`role=device&cameraId=${camera.publicCameraId}`, {
+      Authorization: `Bearer ${deviceCredential}`,
+    });
+    await nextMessage(device, 'native device ready');
+    const viewer = connect(`role=viewer&cameraId=${camera.publicCameraId}`, {
+      Authorization: `Bearer ${sessionToken}`,
+    });
+    const [viewerReady, deviceReady] = await Promise.all([
+      nextMessage(viewer, 'native viewer ready'),
+      nextMessage(device, 'native viewer admission'),
+    ]);
+    expect(viewerReady).toMatchObject({ type: 'ready' });
+    expect(deviceReady).toMatchObject({ type: 'viewer-ready' });
+
+    viewer.close();
+    device.close();
+  });
+
   it('rejects expired viewer sessions and revoked device credentials', async () => {
     const expired = connect(`role=viewer&cameraId=${randomUUID()}`, {
       Cookie: 'beacon_session=expired',

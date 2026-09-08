@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$LanHost,
+    [Alias('DeviceSerial')]
+    [string]$AdbSerial,
     [switch]$SkipAdbCheck
 )
 
@@ -55,15 +57,40 @@ if (-not $SkipAdbCheck) {
     if (-not (Test-Path $adb)) {
         throw 'adb is unavailable in PATH and the default Android SDK location.'
     }
-    & $adb get-state
-    if ($LASTEXITCODE -ne 0) { throw 'No authorized adb device is connected.' }
-    & $adb shell toybox nc -z -w 5 $LanHost 8443
+    $deviceLines = @(& $adb devices) | Select-Object -Skip 1 | Where-Object { $_ -match '\S' }
+    $devices = @($deviceLines | ForEach-Object {
+        $parts = $_ -split '\s+', 2
+        [pscustomobject]@{ Serial = $parts[0]; State = $parts[1] }
+    })
+    if ($AdbSerial) {
+        $selected = $devices | Where-Object { $_.Serial -eq $AdbSerial } | Select-Object -First 1
+        if (-not $selected) { throw "ADB device '$AdbSerial' is not connected." }
+    } else {
+        $usable = @($devices | Where-Object { $_.State -eq 'device' })
+        $physical = @($usable | Where-Object { $_.Serial -notmatch '^emulator-' })
+        if ($physical.Count -eq 1) { $selected = $physical[0] }
+        elseif ($usable.Count -eq 1) { $selected = $usable[0] }
+        elseif ($usable.Count -gt 1) {
+            throw 'Multiple Android devices are connected and no single physical phone could be selected. Pass -AdbSerial.'
+        } else {
+            $details = ($devices | ForEach-Object { "$($_.Serial)=$($_.State)" }) -join ', '
+            throw "No authorized adb device is connected. Unlock the phone and approve USB debugging. Detected: $details"
+        }
+    }
+    if ($selected.State -ne 'device') {
+        throw "ADB device '$($selected.Serial)' is $($selected.State). Unlock it and approve USB debugging if prompted."
+    }
+    $adbArguments = @('-s', $selected.Serial)
+    Write-Host "Testing Android device $($selected.Serial)."
+    & $adb @adbArguments get-state
+    if ($LASTEXITCODE -ne 0) { throw "ADB device '$($selected.Serial)' is unavailable." }
+    & $adb @adbArguments shell toybox nc -z -w 5 $LanHost 8443
     if ($LASTEXITCODE -ne 0) {
         Write-Warning 'adb could not prove TCP 8443 reachability; check phone toybox support, firewall, and Wi-Fi isolation.'
     } else {
         Write-Host 'The connected phone reached laptop TCP port 8443.'
     }
-    & $adb shell toybox nc -z -w 5 $LanHost 3478
+    & $adb @adbArguments shell toybox nc -z -w 5 $LanHost 3478
     if ($LASTEXITCODE -ne 0) {
         Write-Warning 'The phone could not prove TURN TCP 3478 reachability; check firewall rules.'
     } else {

@@ -68,6 +68,7 @@ Assert-TargetHost $LanHost
 
 $adb = Resolve-Adb
 $env:JAVA_HOME = Resolve-JavaHome
+$androidBuildRoot = Join-Path $env:LOCALAPPDATA 'BeaconSecureView\android-build'
 $backendOrigin = if ($Emulator) { "http://${LanHost}:3000" } else { "https://${LanHost}:8443" }
 $signalingUrl = $backendOrigin -replace '^http', 'ws'
 $stunUrl = "stun:${LanHost}:3478"
@@ -93,19 +94,24 @@ if ($AdbSerial) {
         throw 'No Android device is connected. Connect a device with USB debugging enabled.'
     }
     if ($usable.Count -gt 1) {
-        if ($NonInteractive) {
-            throw 'Multiple Android devices are connected. Pass -AdbSerial in noninteractive mode.'
+        $physical = @($usable | Where-Object { $_.Serial -notmatch '^emulator-' })
+        if ($physical.Count -eq 1) {
+            $selected = $physical[0]
+            Write-Host "Automatically selected physical Android device $($selected.Serial); use -AdbSerial to choose another device."
+        } elseif ($NonInteractive) {
+            throw 'Multiple Android devices are connected and no single physical phone could be selected. Pass -AdbSerial in noninteractive mode.'
+        } else {
+            Write-Host 'Connected Android devices:'
+            for ($index = 0; $index -lt $usable.Count; $index += 1) {
+                Write-Host "[$($index + 1)] $($usable[$index].Serial)"
+            }
+            $choice = 0
+            if (-not [int]::TryParse((Read-Host 'Select a device number'), [ref]$choice) -or
+                $choice -lt 1 -or $choice -gt $usable.Count) {
+                throw 'Invalid Android device selection.'
+            }
+            $selected = $usable[$choice - 1]
         }
-        Write-Host 'Connected Android devices:'
-        for ($index = 0; $index -lt $usable.Count; $index += 1) {
-            Write-Host "[$($index + 1)] $($usable[$index].Serial)"
-        }
-        $choice = 0
-        if (-not [int]::TryParse((Read-Host 'Select a device number'), [ref]$choice) -or
-            $choice -lt 1 -or $choice -gt $usable.Count) {
-            throw 'Invalid Android device selection.'
-        }
-        $selected = $usable[$choice - 1]
     } else {
         $selected = $usable[0]
     }
@@ -122,11 +128,17 @@ Write-Host "STUN: $stunUrl"
 Write-Host "TURN: $turnUrl"
 Write-Host "JDK: $env:JAVA_HOME"
 
-& apps\android-camera\gradlew.bat -p apps/android-camera :app:assembleDebug
+& apps\android-camera\gradlew.bat -p apps/android-camera `
+    "-PbeaconBuildDir=$androidBuildRoot" :app:assembleDebug
 if ($LASTEXITCODE -ne 0) { throw 'Android debug build failed. Review the Gradle output above.' }
 
-$apk = Join-Path $repositoryRoot 'apps\android-camera\app\build\outputs\apk\debug\app-debug.apk'
+$apk = Join-Path $androidBuildRoot 'outputs\apk\debug\app-debug.apk'
 if (-not (Test-Path -LiteralPath $apk)) { throw "Expected debug APK was not produced at '$apk'." }
+
+# Stop capture cleanly before package replacement. Replacing an APK while CameraX is delivering a
+# frame can terminate WebRTC inside a native callback and produce a misleading device crash record.
+& $adb @adbArguments shell am force-stop 'com.beaconsecureview.camera'
+if ($LASTEXITCODE -ne 0) { throw 'The running Beacon app could not be stopped before installation.' }
 
 if ($CleanInstall) {
     & $adb @adbArguments uninstall 'com.beaconsecureview.camera' | Out-Host

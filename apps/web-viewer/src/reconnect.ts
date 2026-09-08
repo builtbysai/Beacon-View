@@ -23,11 +23,7 @@ export function retryDelay(
 }
 
 export function mayRetry(failure: ConnectionFailure, attempt: number): boolean {
-  return (
-    attempt < MAX_AUTOMATIC_RETRIES &&
-    failure !== 'authorization lost' &&
-    failure !== 'camera offline'
-  );
+  return attempt < MAX_AUTOMATIC_RETRIES && failure !== 'authorization lost';
 }
 
 export class RetryGeneration {

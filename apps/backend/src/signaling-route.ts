@@ -80,17 +80,26 @@ export function registerSignaling(
           return;
         }
 
-        if (request.headers.origin !== config.WEB_ORIGIN) {
+        const bearerToken = bearerSessionToken(request);
+        if (!bearerToken && request.headers.origin !== config.WEB_ORIGIN) {
           socket.close(4003, 'Connection rejected');
           return;
         }
         const publicCameraId = query.data.cameraId;
-        const session = await authenticateViewer(request, config, store);
+        const sessionToken =
+          bearerToken || request.cookies[config.SESSION_COOKIE_NAME] || '';
+        const session = sessionToken
+          ? await store.findSession(hashSecret(sessionToken), new Date())
+          : null;
         if (!session) {
           socket.close(4003, 'Connection rejected');
           return;
         }
         if (query.data.role === 'producer') {
+          if (bearerToken || request.headers.origin !== config.WEB_ORIGIN) {
+            socket.close(4003, 'Connection rejected');
+            return;
+          }
           const managedCamera = await store.findManagedCamera(
             session.householdId,
             publicCameraId,
@@ -105,9 +114,9 @@ export function registerSignaling(
             socket,
             managedCamera.householdId,
           );
-          const sessionToken =
+          const producerSessionToken =
             request.cookies[config.SESSION_COOKIE_NAME] ?? '';
-          const sessionHash = hashSecret(sessionToken);
+          const sessionHash = hashSecret(producerSessionToken);
           monitorAuthorization(socket, async () => {
             const current = await store.findSession(sessionHash, new Date());
             return Boolean(
@@ -140,13 +149,13 @@ export function registerSignaling(
           camera.publicCameraId,
           socket,
         );
-        const sessionToken = request.cookies[config.SESSION_COOKIE_NAME];
-        const sessionHash = sessionToken ? hashSecret(sessionToken) : '';
+        const sessionHash = hashSecret(sessionToken);
         if (admitted) {
           monitorAuthorization(socket, async () => {
-            const currentSession = sessionHash
-              ? await store.findSession(sessionHash, new Date())
-              : null;
+            const currentSession = await store.findSession(
+              sessionHash,
+              new Date(),
+            );
             if (!currentSession) return false;
             return Boolean(
               await store.findOwnedCamera(
@@ -216,13 +225,9 @@ export function monitorAuthorization(
   socket.once('close', () => clearInterval(timer));
 }
 
-async function authenticateViewer(
-  request: FastifyRequest,
-  config: AppConfig,
-  store: MilestoneStore,
-) {
-  const token = request.cookies[config.SESSION_COOKIE_NAME];
-  return token
-    ? store.findSession(hashSecret(token), new Date())
-    : Promise.resolve(null);
+function bearerSessionToken(request: FastifyRequest): string {
+  const authorization = request.headers.authorization;
+  return authorization?.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length)
+    : '';
 }

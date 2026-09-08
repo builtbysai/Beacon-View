@@ -118,6 +118,49 @@ describe('SignalingHub', () => {
     hub.close();
   });
 
+  it('grants only one talk channel and releases it on disconnect', () => {
+    const hub = new SignalingHub(
+      () => [],
+      () => [],
+    );
+    const device = socket();
+    const first = socket();
+    const second = socket();
+    hub.connectDevice('camera', 'public-camera', device.ws);
+    hub.connectViewer('camera', 'public-camera', first.ws);
+    const firstReady = first.mock.sent.at(-1) as { connectionId: string };
+    hub.connectViewer('camera', 'public-camera', second.ws);
+    const secondReady = second.mock.sent.at(-1) as { connectionId: string };
+
+    first.mock.message({
+      connectionId: firstReady.connectionId,
+      type: 'talk-request',
+    });
+    expect(first.mock.sent.at(-1)).toMatchObject({
+      active: true,
+      type: 'talk-state',
+    });
+    second.mock.message({
+      connectionId: secondReady.connectionId,
+      type: 'talk-request',
+    });
+    expect(second.mock.sent.at(-1)).toMatchObject({
+      active: false,
+      reason: 'busy',
+      type: 'talk-state',
+    });
+    first.mock.close();
+    second.mock.message({
+      connectionId: secondReady.connectionId,
+      type: 'talk-request',
+    });
+    expect(second.mock.sent.at(-1)).toMatchObject({
+      active: true,
+      type: 'talk-state',
+    });
+    hub.close();
+  });
+
   it('replaces a stale producer and preserves deterministic presence events', () => {
     const states: Array<[string, string, boolean]> = [];
     const hub = new SignalingHub(
@@ -245,6 +288,36 @@ describe('SignalingHub', () => {
       type: 'switch-source',
     });
     expect(hub.requestSourceSwitch(['offline'], 'public-front')).toBe(false);
+    hub.close();
+  });
+
+  it('ends viewers immediately in privacy mode but keeps device control', () => {
+    const hub = new SignalingHub(
+      () => [],
+      () => [],
+    );
+    const device = socket();
+    const viewer = socket();
+    hub.connectDevice('internal-camera', 'public-camera', device.ws);
+    hub.connectViewer('internal-camera', 'public-camera', viewer.ws);
+
+    hub.setPrivacyMode('public-camera', true);
+
+    expect(hub.activeSessionCount).toBe(0);
+    expect(viewer.mock.sent.at(-1)).toMatchObject({
+      code: 'privacy_enabled',
+      type: 'peer-left',
+    });
+    expect(device.mock.readyState).toBe(1);
+    expect(device.mock.sent.at(-1)).toEqual({
+      enabled: true,
+      type: 'privacy-mode',
+    });
+    hub.setPrivacyMode('public-camera', false);
+    expect(device.mock.sent.at(-1)).toEqual({
+      enabled: false,
+      type: 'privacy-mode',
+    });
     hub.close();
   });
 });

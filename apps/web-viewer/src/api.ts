@@ -11,11 +11,12 @@ export async function request<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
+  const hasBody = options?.body !== undefined && options.body !== null;
   const response = await fetch(path, {
     credentials: 'same-origin',
     ...options,
     headers: {
-      'content-type': 'application/json',
+      ...(hasBody ? { 'content-type': 'application/json' } : {}),
       ...(options?.method && options.method !== 'GET'
         ? { 'x-csrf-token': csrfToken() }
         : {}),
