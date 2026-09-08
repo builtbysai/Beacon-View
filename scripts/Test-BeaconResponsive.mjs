@@ -75,6 +75,8 @@ const routes = {
   },
   '/api/motion-retention': { days: 30 },
   '/api/devices/phone-0/motion-settings': { cameras: [] },
+  '/api/devices/phone-2/motion-settings': { cameras: [] },
+  '/api/devices/phone-3/motion-settings': { cameras: [] },
   '/api/motion-events': {
     events: [
       {
@@ -234,6 +236,8 @@ const report = [];
       ['/settings', '.settings-layout'],
       ['/camera-mode', '.setup-options'],
       ['/devices/phone-0', '.device-health'],
+      ['/devices/phone-2', '.device-guidance.attention'],
+      ['/devices/phone-3', '.device-guidance.attention'],
       ['/contact', '.contact-layout'],
       ['/trust', '.trust-page'],
       ['/pair?code=ABCD234567', '.pair-link-code'],

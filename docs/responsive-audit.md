@@ -46,7 +46,7 @@ Additional checks use 320×568 with enlarged type, and a 1280×500 desktop sideb
 | Area                    | Acceptance coverage                                                                                                                                                                                                                                    |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Auth                    | Google URL and local mark, visible password fallback, show/hide, register guidance, OAuth account collision, Paper/Evening, 200% root text sizing and short-screen scrolling.                                                                          |
-| Household               | Home/empty Home, Cameras, Activity/error, Settings, device health and expanded settings, long camera/device names, Add camera.                                                                                                                         |
+| Household               | Home/empty Home, Cameras, Activity/error, Settings, device health and expanded settings, state-specific offline/privacy recovery, long camera/device names, Add camera.                                                                                |
 | Pairing and permissions | Public one-time pairing link, generated QR dialog, short-screen internal dialog scrolling, denied browser camera permission.                                                                                                                           |
 | Monitor and Live        | Existing independent workspace tiles, all-private fixture, filters/camera picker expansion, compact surfaces and viewport-sized Live View. No media transport claim is made.                                                                           |
 | Sidebar                 | Enter collapse/expand, accessible names/current page, focus tooltip, Escape dismissal, reload persistence, mobile labels with stored collapse, keyboard reachability of sign-out on short desktop windows. Unit coverage includes unavailable storage. |
@@ -59,8 +59,8 @@ shares its toolbar, health is a compact summary, and reorder guidance lives with
 the camera picker. Nothing hides page overflow globally. Pairing dialogs scroll
 within the viewport; lists, history, filters, forms and legal text remain scrollable.
 
-The baseline suite passed 63 tests. The auth and sidebar regressions bring the
-suite to 66 tests. The final harness produced 119 screenshots with no horizontal
+The baseline suite passed 63 tests. Auth and sidebar coverage raised it to 66;
+state-specific device guidance raises it to 70. The final harness produced 129 screenshots with no horizontal
 overflow, clipped controls, page errors or unexpected API calls.
 
 ## September 7 release result

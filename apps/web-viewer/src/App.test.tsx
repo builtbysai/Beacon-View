@@ -404,6 +404,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open device' }));
 
     expect(screen.getByRole('heading', { name: 'Pixel' })).toBeInTheDocument();
+    expect(screen.getByText('Keep this camera ready')).toBeVisible();
     const health = screen.getByLabelText('Device health');
     expect(within(health).getByText('Watching now')).toBeVisible();
     expect(within(health).getByText('2 viewers')).toBeVisible();

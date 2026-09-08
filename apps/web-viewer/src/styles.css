@@ -786,6 +786,58 @@ select {
   color: var(--text-primary);
   background: color-mix(in srgb, var(--status-warning), transparent 89%);
 }
+.device-guidance {
+  margin: 0 0 var(--space-5);
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+}
+
+.device-guidance.attention {
+  border-color: color-mix(in srgb, var(--status-warning), transparent 56%);
+  background: color-mix(in srgb, var(--status-warning), transparent 91%);
+}
+
+.device-guidance summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  color: var(--text-primary);
+  font-weight: 750;
+}
+
+.device-guidance summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.device-guidance-content {
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.device-guidance-content > p:first-child {
+  margin-top: 0;
+}
+
+.device-guidance-content ol {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+  padding-left: 1.4rem;
+}
+
+.device-guidance-content li {
+  padding-left: var(--space-1);
+}
+
+.device-guidance-boundary {
+  margin-bottom: 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
 
 .camera-list .camera-card {
   overflow: hidden;

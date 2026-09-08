@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { request } from './api';
 import { nextPairingState } from './lifecycle';
 import { cameraStatus } from './camera-status';
+import { deviceGuidance } from './device-guidance';
 import type { PairingLifecycle } from './lifecycle';
 import { LiveVideo } from './LiveVideo';
 import { BrowserCameraMode } from './BrowserCameraMode';
@@ -1233,25 +1234,34 @@ function DeviceDetail({
     ? 'Privacy mode on'
     : device.revoked
       ? 'Access revoked'
-      : device.online
-        ? 'Online'
-        : 'Offline';
+      : !device.enabled
+        ? 'Registration disabled'
+        : device.online
+          ? 'Online'
+          : 'Offline';
   const batteryLabel =
     device.batteryPercent === null || device.batteryPercent === undefined
       ? 'Not reported yet'
       : `${device.batteryPercent}%${device.batteryCharging ? ' · charging' : ''}`;
-  const warning = device.privacyMode
-    ? 'Live viewing is blocked. Capture stops when this device receives privacy mode.'
-    : device.revoked
-      ? 'This device cannot reconnect. Pair it again to restore access.'
-      : !device.online
-        ? 'This device cannot be reached. Check its power and Wi-Fi connection.'
-        : device.batteryPercent !== null &&
-            device.batteryPercent !== undefined &&
-            device.batteryPercent <= 15 &&
-            !device.batteryCharging
-          ? 'Battery is low. Connect this camera to power to keep it available.'
-          : null;
+  const warning =
+    device.online &&
+    device.enabled &&
+    !device.revoked &&
+    !device.privacyMode &&
+    device.batteryPercent !== null &&
+    device.batteryPercent !== undefined &&
+    device.batteryPercent <= 15 &&
+    !device.batteryCharging
+      ? 'Battery is low. Connect this camera to power to keep it available.'
+      : null;
+  const guidance = deviceGuidance({
+    cameraCount: cameras.length,
+    enabled: device.enabled,
+    online: device.online,
+    platform: device.platform,
+    privacyMode: device.privacyMode,
+    revoked: device.revoked,
+  });
   return (
     <>
       <div className="heading">
@@ -1270,7 +1280,10 @@ function DeviceDetail({
           <span>Connection</span>
           <strong
             className={
-              device.online && !device.privacyMode && !device.revoked
+              device.online &&
+              device.enabled &&
+              !device.privacyMode &&
+              !device.revoked
                 ? 'online'
                 : 'offline'
             }
@@ -1296,6 +1309,24 @@ function DeviceDetail({
           {warning}
         </p>
       )}
+      <details
+        className={`device-guidance${guidance.attention ? ' attention' : ''}`}
+        open={guidance.attention}
+      >
+        <summary>{guidance.title}</summary>
+        <div className="device-guidance-content">
+          <p>{guidance.summary}</p>
+          <ol>
+            {guidance.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          <p className="device-guidance-boundary">
+            The dashboard does not receive this device’s permission settings or
+            inspect whether a local camera or microphone indicator is visible.
+          </p>
+        </div>
+      </details>
       <p className="notice">
         This device currently supports one active camera source at a time.
         Switching sources preserves the device registration.
