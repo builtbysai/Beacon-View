@@ -32,7 +32,23 @@ it('preserves OAuth collision guidance, password visibility, and registration gu
   expect(
     screen.getByText(/Password-reset emails are not available yet/),
   ).toBeVisible();
-  expect(
-    screen.queryByRole('link', { name: /reset|forgot/i }),
-  ).not.toBeInTheDocument();
+});
+it('offers an honest password recovery path without claiming reset delivery', () => {
+  render(
+    <AuthScreen
+      busy={false}
+      error=""
+      mode="login"
+      onMode={vi.fn()}
+      onSubmit={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Reset email is not available',
+  );
+  expect(screen.getByRole('link', { name: 'contact support' })).toHaveAttribute(
+    'href',
+    '/contact',
+  );
 });

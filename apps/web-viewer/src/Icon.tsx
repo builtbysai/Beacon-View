@@ -14,6 +14,7 @@ const shapes = {
     </>
   ),
   chevronLeft: <path d="m15 18-6-6 6-6" />,
+  chevronRight: <path d="m9 18 6-6-6-6" />,
   eyeOff: (
     <>
       <path d="m3 3 18 18M10 5a12 12 0 0 1 2 0c6 0 10 7 10 7a19 19 0 0 1-3 4M6 6a21 21 0 0 0-4 6s4 7 10 7a12 12 0 0 0 5-1M10 10a3 3 0 0 0 4 4" />
@@ -119,15 +120,48 @@ export function Icon({
   );
 }
 
-export function Brand() {
+export function Brand({ compact = false }: { compact?: boolean } = {}) {
+  if (compact) {
+    return (
+      <svg
+        className="brand-lockup brand-lockup-compact"
+        viewBox="0 0 40 40"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        role="img"
+        aria-label="Beacon"
+      >
+        <path d="M20 36 L14 15 L26 15 L20 36 Z" fill="#a0a0a0" />
+        <rect x="12" y="9" width="16" height="6" rx="1" fill="#254d3a" />
+        <circle cx="20" cy="12" r="2" fill="#fff" />
+        <path d="M11 36 H29" stroke="#254d3a" strokeWidth="2" />
+      </svg>
+    );
+  }
   return (
-    <span className="brand-lockup">
-      <span className="brand-mark">
-        <Icon name="camera" />
-      </span>
-      <span>
-        beacon<span className="brand-period">.</span>
-      </span>
-    </span>
+    <svg
+      className="brand-lockup"
+      viewBox="0 0 150 40"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="Beacon"
+    >
+      <path d="M30 15 L120 5 L120 25 Z" fill="#b0cabc" opacity="0.7" />
+      <path d="M20 35 L15 15 L25 15 L20 35 Z" fill="#a0a0a0" />
+      <rect x="13" y="10" width="14" height="5" fill="#333" />
+      <circle cx="20" cy="12.5" r="1.5" fill="#fff" />
+      <path d="M12 35 L28 35" stroke="#333" strokeWidth="2" />
+      <text
+        x="35"
+        y="28"
+        fill="#254d3a"
+        fontSize="22"
+        fontWeight="800"
+        fontFamily="Inter, sans-serif"
+      >
+        beacon
+      </text>
+    </svg>
   );
 }

@@ -32,6 +32,8 @@ fixtures and disables real WebSocket/media capture. It does not create accounts,
 pair devices, send emails or touch production data. It fails on horizontal page
 overflow, offscreen controls, page errors or unmocked API calls. It also asserts
 vertical fit for ordinary auth, desktop Home/empty Home and desktop Live View.
+Ordinary auth cards must have no internal scrollbar. Pairing must use a native
+modal dialog, contain keyboard focus and leave the page behind it inert.
 
 Screenshots and a machine-readable report (including the browser version,
 viewport dimensions, document dimensions and clipped controls) are in ignored
@@ -43,14 +45,14 @@ assertions; a scroll-width assertion does not prove legibility or accessibility.
 Primary viewports: 320×740, 390×844, 768×1024, 1280×800 and 2560×1080.
 Additional checks use 320×568 with enlarged type, and a 1280×500 desktop sidebar.
 
-| Area                    | Acceptance coverage                                                                                                                                                                                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Auth                    | Google URL and local mark, visible password fallback, show/hide, register guidance, OAuth account collision, Paper/Evening, 200% root text sizing and short-screen scrolling.                                                                          |
-| Household               | Home/empty Home, Cameras, Activity/error, Settings, device health and expanded settings, state-specific offline/privacy recovery, long camera/device names, Add camera.                                                                                |
-| Pairing and permissions | Public one-time pairing link, generated QR dialog, short-screen internal dialog scrolling, denied browser camera permission.                                                                                                                           |
-| Monitor and Live        | Existing independent workspace tiles, all-private fixture, filters/camera picker expansion, compact surfaces and viewport-sized Live View. No media transport claim is made.                                                                           |
-| Sidebar                 | Enter collapse/expand, accessible names/current page, focus tooltip, Escape dismissal, reload persistence, mobile labels with stored collapse, keyboard reachability of sign-out on short desktop windows. Unit coverage includes unavailable storage. |
-| Trust and support       | Existing public Trust and contact layouts retain content/form scrolling. Legal drafts remain unpublished.                                                                                                                                              |
+| Area                    | Acceptance coverage                                                                                                                                                                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth                    | Split desktop landing and compact mobile card, supplied Beacon mark, Google URL, visible password fallback, show/hide, honest reset availability, register guidance, OAuth account collision, Paper/Evening, 200% root text sizing and short-screen scrolling. |
+| Household               | Home/empty Home, Cameras, Activity/error, Settings, device health and expanded settings, state-specific offline/privacy recovery, long camera/device names, Add camera.                                                                                        |
+| Pairing and permissions | Public one-time pairing link, generated QR dialog, short-screen internal dialog scrolling, denied browser camera permission.                                                                                                                                   |
+| Monitor and Live        | Existing independent workspace tiles, all-private fixture, filters/camera picker expansion, compact surfaces and viewport-sized Live View. No media transport claim is made.                                                                                   |
+| Sidebar                 | Enter collapse/expand, accessible names/current page, focus tooltip, Escape dismissal, reload persistence, mobile labels with stored collapse, keyboard reachability of sign-out on short desktop windows. Unit coverage includes unavailable storage.         |
+| Trust and support       | Existing public Trust and contact layouts retain content/form scrolling. Legal drafts remain unpublished.                                                                                                                                                      |
 
 Measured fixes: the former 1280×800 Home document was 1282px high and Live View
 1143px high. Their ordinary fixture now fits the laptop viewport. Wide placeholders
@@ -59,8 +61,8 @@ shares its toolbar, health is a compact summary, and reorder guidance lives with
 the camera picker. Nothing hides page overflow globally. Pairing dialogs scroll
 within the viewport; lists, history, filters, forms and legal text remain scrollable.
 
-The baseline suite passed 63 tests. Auth and sidebar coverage raised it to 66;
-state-specific device guidance raises it to 70. The final harness produced 133
+The baseline suite passed 63 tests. Auth, sidebar, modal and state-specific device
+coverage raise it to 72. The final harness produced 133
 screenshots with no horizontal overflow, clipped controls, page errors or unexpected
 API calls.
 
@@ -78,7 +80,7 @@ layouts rather than accepted from the stitched images alone.
 | Privacy action looked orphaned         | The action controls the whole Android device, not one camera source, so moving it into a source card would misstate its scope. It now sits in a labeled Device privacy group directly above Camera sources.                                                                         |
 | Dense recovery copy                    | Confirmed. Each state leads with one short sentence and keeps steps in a Troubleshoot or Readiness tips disclosure.                                                                                                                                                                 |
 | Repeated names and statuses            | Confirmed for status text and reduced to one card badge plus one short explanation. Device and source names remain where both identities are needed.                                                                                                                                |
-| Sidebar clutter                        | The bordered collapse row was replaced with an icon action in the brand header. Private alpha remains because it communicates the environment and support expectations.                                                                                                             |
+| Sidebar clutter                        | Confirmed. Private alpha, household helper copy and promotional copy were removed. The rail now uses a small edge chevron, compact lighthouse mark, concise navigation and a quiet account footer.                                                                                  |
 | Empty video dead space                 | Confirmed. Unavailable previews are shorter and use a larger proportional camera icon.                                                                                                                                                                                              |
 
 The local real-account path was also exercised in Microsoft Edge against the Pixel:
@@ -104,6 +106,15 @@ Camera and Monitor are exclusive destinations: entering Monitor immediately stop
 foreground camera service, and relaunching into Monitor cannot silently restart
 capture. Four repeated Camera/Monitor switches retained the same app process with no
 new crash, allocator, or ANR signature.
+
+The updated APK now opens unpaired installations on a Welcome screen before setup.
+The user chooses Set up Camera or Sign in to Monitor; setup explains where the web QR
+comes from and has a direct Back action. Invalid scans identify the expected Beacon
+setup link rather than reporting only a generic QR failure. On the Pixel 7a, Welcome,
+Welcome → setup, setup → Back and Welcome → Monitor were exercised. Portrait and
+landscape controls remained reachable; the 2400×1080 Welcome screen measured all
+content through its final disclosure inside the viewport with no active scroll range.
+The final debug APK was installed as a data-preserving update.
 
 ## September 7 release result
 

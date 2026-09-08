@@ -249,6 +249,17 @@ const report = [];
       `${Math.round(size.width)}×${Math.round(size.height)}`,
     );
   }
+  async function assertAuthCardFits(name) {
+    const dimensions = await page.locator('.sign-in-card').evaluate((card) => ({
+      clientHeight: card.clientHeight,
+      scrollHeight: card.scrollHeight,
+    }));
+    assert(
+      dimensions.scrollHeight <= dimensions.clientHeight + 1,
+      `${name}: auth card has unnecessary internal scrolling ${JSON.stringify(dimensions)}`,
+    );
+    console.log('PASS', name, 'auth card fits without internal scrolling');
+  }
   async function visit(route, selector) {
     await page.goto(base + route);
     await page.locator(selector).first().waitFor();
@@ -258,6 +269,18 @@ const report = [];
     signedIn = false;
     await visit('/', '.sign-in-card');
     await capture(`auth-${width}`, true);
+    await assertAuthCardFits(`auth-card-fit-${width}`);
+    await page.getByRole('button', { name: 'Forgot password?' }).click();
+    await page.getByRole('status').waitFor();
+    const recoveryDocumentHeight = await page.evaluate(
+      () => document.documentElement.scrollHeight,
+    );
+    assert(
+      recoveryDocumentHeight <= height + 1,
+      `auth-recovery-${width}: recovery guidance causes unnecessary page scrolling (${recoveryDocumentHeight})`,
+    );
+    await assertAuthCardFits(`auth-recovery-card-fit-${width}`);
+    await page.getByRole('button', { name: 'Forgot password?' }).click();
     await page.getByLabel('Password', { exact: true }).fill('local-test-only');
     await page.getByRole('button', { name: 'Show password' }).click();
     assert.equal(
@@ -366,6 +389,15 @@ const report = [];
     await page.getByLabel('Beacon pairing QR code').waitFor();
     await capture(`pair-modal-${width}`);
     const modal = page.getByRole('dialog');
+    const modalState = await modal.evaluate((dialog) => ({
+      modal: dialog.matches(':modal'),
+      focusContained: dialog.contains(document.activeElement),
+    }));
+    assert.deepEqual(
+      modalState,
+      { modal: true, focusContained: true },
+      'Pairing dialog must take focus and make the page behind it inert',
+    );
     const box = await modal.boundingBox();
     assert(
       box.y >= 0 && box.y + box.height <= height + 1,

@@ -7,6 +7,7 @@ import { cameraStatus } from './camera-status';
 import { deviceGuidance } from './device-guidance';
 import type { PairingLifecycle } from './lifecycle';
 import { LiveVideo } from './LiveVideo';
+import { ModalDialog } from './ModalDialog';
 import { BrowserCameraMode } from './BrowserCameraMode';
 import { Monitoring } from './Monitoring';
 import { MotionEventList } from './MotionEventList';
@@ -984,13 +985,8 @@ export function App() {
         )}
       </main>
       {pairingOpen && (
-        <div className="modal-backdrop" role="presentation">
-          <section
-            aria-labelledby="pair-title"
-            aria-modal="true"
-            className="pair-modal"
-            role="dialog"
-          >
+        <ModalDialog labelledBy="pair-title" onDismiss={cancelPairing}>
+          <section aria-labelledby="pair-title" className="pair-modal">
             {pairingState === 'completed' ? (
               <div className="pair-success" role="status">
                 <span aria-hidden="true">✓</span>
@@ -1049,7 +1045,7 @@ export function App() {
               </>
             )}
           </section>
-        </div>
+        </ModalDialog>
       )}
     </div>
   );

@@ -93,29 +93,21 @@ export function Sidebar({
       onPointerLeave={deferHideTip}
     >
       <div className="sidebar-header">
-        <div className="sidebar-brand" aria-label="Beacon">
-          <Brand />
-          <span className="alpha-badge">Private alpha</span>
-        </div>
-        <button
-          className="sidebar-toggle"
-          type="button"
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-expanded={!collapsed}
-          aria-controls="beacon-sidebar"
-          data-tooltip={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          onClick={toggle}
-        >
-          <Icon name={collapsed ? 'sidebarExpand' : 'sidebarCollapse'} />
-        </button>
+        <a className="sidebar-brand" href="/" aria-label="Beacon home">
+          <Brand compact={collapsed} />
+        </a>
       </div>
-      <div className="household-label">
-        <Icon name="home" />
-        <div>
-          <strong>My household</strong>
-          <span>Your personal space</span>
-        </div>
-      </div>
+      <button
+        className="sidebar-toggle"
+        type="button"
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-expanded={!collapsed}
+        aria-controls="beacon-sidebar"
+        data-tooltip={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        onClick={toggle}
+      >
+        <Icon name={collapsed ? 'chevronRight' : 'chevronLeft'} />
+      </button>
       <nav aria-label="Primary navigation">
         {items.map((item) => (
           <button
@@ -135,29 +127,27 @@ export function Sidebar({
           </button>
         ))}
       </nav>
-      <div className="sidebar-support">
-        <p>Made for your peace of mind.</p>
+      <div className="sidebar-footer">
         <a
           href="/trust"
           aria-label="Trust and privacy"
           data-tooltip="Trust and privacy"
         >
           <Icon name="shield" />
-          <span>Trust and privacy</span>
+          <span>Trust &amp; privacy</span>
         </a>
-      </div>
-      <div className="sidebar-account">
-        <span>Signed in</span>
-        <strong title={email}>{email}</strong>
-        <button
-          className="secondary"
-          aria-label="Sign out"
-          data-tooltip="Sign out"
-          onClick={onLogout}
-        >
-          <Icon name="logout" />
-          <span>Sign out</span>
-        </button>
+        <div className="sidebar-account">
+          <strong title={email}>{email}</strong>
+          <button
+            className="secondary"
+            aria-label="Sign out"
+            data-tooltip="Sign out"
+            onClick={onLogout}
+          >
+            <Icon name="logout" />
+            <span>Sign out</span>
+          </button>
+        </div>
       </div>
       {tip &&
         createPortal(

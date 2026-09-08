@@ -151,6 +151,13 @@ private fun BeaconCameraApp(
     val navigationPreferences =
         remember { context.getSharedPreferences("beacon_navigation", Context.MODE_PRIVATE) }
     var credential by remember { mutableStateOf(credentialStore.read()) }
+    var cameraSetupStarted by rememberSaveable {
+        mutableStateOf(
+            credential != null ||
+                inboundPairingCode != null ||
+                navigationPreferences.getBoolean("camera_setup_started", false),
+        )
+    }
     var pairingCode by remember { mutableStateOf("") }
     var pairingState by remember {
         mutableStateOf(
@@ -214,6 +221,8 @@ private fun BeaconCameraApp(
 
     LaunchedEffect(inboundPairingCode, credential) {
         if (credential == null && inboundPairingCode != null) {
+            cameraSetupStarted = true
+            navigationPreferences.edit().putBoolean("camera_setup_started", true).apply()
             pairingCode = inboundPairingCode
             message = "Pairing link opened. Confirm the code to connect this camera."
             onInboundPairingCodeHandled()
@@ -254,7 +263,7 @@ private fun BeaconCameraApp(
         }
     }
 
-    BeaconTheme(darkCameraSurface = !monitorMode) {
+    BeaconTheme(darkCameraSurface = !monitorMode && credential != null) {
         Surface(modifier = Modifier.fillMaxSize()) {
             if (monitorMode) {
                 MonitorHome(
@@ -274,6 +283,20 @@ private fun BeaconCameraApp(
                 )
             } else when {
                 pairingState == PairingLifecycle.Accepted -> PairingSuccess()
+                shouldShowWelcome(
+                    paired = credential != null,
+                    monitorMode = monitorMode,
+                    cameraSetupStarted = cameraSetupStarted,
+                ) ->
+                    WelcomeScreen(
+                        onCameraSetup = {
+                            cameraSetupStarted = true
+                            navigationPreferences.edit()
+                                .putBoolean("camera_setup_started", true)
+                                .apply()
+                        },
+                        onMonitor = { selectMonitor(true) },
+                    )
                 credential == null ->
                     PairingScreen(
                         pairingCode = pairingCode,
@@ -294,7 +317,8 @@ private fun BeaconCameraApp(
                                 .addOnSuccessListener { barcode ->
                                     val scanned = parsePairingQr(barcode.rawValue, BuildConfig.BEACON_API_URL)
                                     if (scanned == null) {
-                                        message = "That QR code is not a Beacon pairing code."
+                                        message =
+                                            "That is not a Beacon setup link. In Beacon web, choose Add camera and scan its QR code."
                                     } else {
                                         pairingCode = scanned
                                         message = "Pairing code scanned."
@@ -346,7 +370,14 @@ private fun BeaconCameraApp(
                                 }
                             }
                         },
-                        onMonitor = { selectMonitor(true) },
+                        onBack = {
+                            pairingCode = ""
+                            message = ""
+                            cameraSetupStarted = false
+                            navigationPreferences.edit()
+                                .putBoolean("camera_setup_started", false)
+                                .apply()
+                        },
                     )
                 else ->
                     CameraHome(
@@ -424,6 +455,12 @@ internal fun shouldRunCameraCapture(
     cameraAllowed: Boolean,
     notificationsAllowed: Boolean,
 ): Boolean = !monitorMode && paired && cameraAllowed && notificationsAllowed
+
+internal fun shouldShowWelcome(
+    paired: Boolean,
+    monitorMode: Boolean,
+    cameraSetupStarted: Boolean,
+): Boolean = !paired && !monitorMode && !cameraSetupStarted
 
 @Composable
 private fun MonitorHome(
@@ -1093,7 +1130,7 @@ private fun PairingScreen(
     onCodeChange: (String) -> Unit,
     onScan: () -> Unit,
     onPair: () -> Unit,
-    onMonitor: () -> Unit,
+    onBack: () -> Unit,
 ) {
     Column(
         modifier =
@@ -1102,9 +1139,14 @@ private fun PairingScreen(
                 .padding(24.dp),
         verticalArrangement = Arrangement.Top,
     ) {
-        Text("Beacon SecureView", style = MaterialTheme.typography.headlineLarge)
+        OutlinedButton(onClick = onBack) { Text("Back") }
         Text(
-            "Set up this phone as a camera.",
+            "Set up Camera",
+            style = MaterialTheme.typography.headlineLarge,
+            modifier = Modifier.padding(top = 20.dp),
+        )
+        Text(
+            "On another device, open Beacon and choose Add camera.",
             modifier = Modifier.padding(vertical = 12.dp),
         )
         Button(
@@ -1140,13 +1182,63 @@ private fun PairingScreen(
         ) {
             Text(if (busy) "Pairing…" else "Pair device")
         }
-        BeaconDestinationSwitcher(
-            monitorSelected = false,
-            onCamera = {},
-            onMonitor = onMonitor,
-            modifier = Modifier.padding(top = 12.dp),
-        )
         if (message.isNotBlank()) Text(message, modifier = Modifier.padding(top = 12.dp))
+    }
+}
+
+@Composable
+private fun WelcomeScreen(
+    onCameraSetup: () -> Unit,
+    onMonitor: () -> Unit,
+) {
+    val compact = LocalConfiguration.current.screenHeightDp < 600
+    Column(
+        modifier =
+            Modifier.fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = if (compact) 12.dp else 32.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 16.dp),
+    ) {
+        Text("Beacon", color = MaterialTheme.colorScheme.primary)
+        Text(
+            "Welcome to Beacon",
+            style =
+                if (compact) MaterialTheme.typography.headlineMedium
+                else MaterialTheme.typography.headlineLarge,
+        )
+        Text(
+            "Use this phone as a camera, or sign in to watch cameras you already own.",
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(if (compact) 12.dp else 20.dp),
+                verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp),
+            ) {
+                Text(
+                    "Turn this phone into a camera",
+                    style =
+                        if (compact) MaterialTheme.typography.titleMedium
+                        else MaterialTheme.typography.titleLarge,
+                )
+                Text("Pair it in a few steps. Camera and microphone use always stay visible.")
+                Button(onClick = onCameraSetup, modifier = Modifier.fillMaxWidth()) {
+                    Text("Set up Camera")
+                }
+            }
+        }
+        OutlinedButton(onClick = onMonitor, modifier = Modifier.fillMaxWidth()) {
+            Text("Sign in to Monitor")
+        }
+        Text(
+            "No recording or hidden capture.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+        )
     }
 }
 

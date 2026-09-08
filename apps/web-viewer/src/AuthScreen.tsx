@@ -15,20 +15,67 @@ export function AuthScreen({
   onMode: () => void;
 }) {
   const [showPassword, setShowPassword] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
   const googleResult = new URLSearchParams(window.location.search).get(
     'googleSignIn',
   );
   return (
-    <main className="sign-in-layout">
+    <main className="auth-landing">
+      <section className="auth-hero" aria-labelledby="landing-title">
+        <a className="auth-hero-brand" href="/" aria-label="Beacon home">
+          <Brand />
+        </a>
+        <div className="auth-hero-copy">
+          <p className="eyebrow">Your space, within reach</p>
+          <h1 id="landing-title">
+            Your cameras,
+            <br />
+            <em>always within reach.</em>
+          </h1>
+          <p>
+            Turn an Android phone into a private camera and check it securely
+            from any modern browser.
+          </p>
+          <div className="auth-hero-preview" aria-hidden="true">
+            <span className="hero-phone">
+              <Icon name="phone" />
+              Camera
+            </span>
+            <span className="hero-connection">
+              <Icon name="lock" />
+            </span>
+            <span className="hero-browser">
+              <Icon name="browser" />
+              Live view
+            </span>
+          </div>
+        </div>
+        <div className="auth-hero-footer">
+          <span>
+            <Icon name="shield" /> Visible capture
+          </span>
+          <span>
+            <Icon name="lock" /> Private access
+          </span>
+          <a href="/trust">Trust &amp; privacy</a>
+        </div>
+      </section>
+
       <section className="card sign-in-card" aria-labelledby="sign-in-title">
         <header className="sign-in-brand">
+          <span className="auth-home-mark" aria-hidden="true">
+            <Icon name="home" />
+          </span>
           <Brand />
-          <span className="alpha-badge">Private alpha</span>
         </header>
         <p className="eyebrow">Your space, within reach</p>
-        <h1 id="sign-in-title">Welcome to Beacon</h1>
+        <h2 id="sign-in-title">
+          {mode === 'login' ? 'Welcome to Beacon' : 'Create your account'}
+        </h2>
         <p className="sign-in-intro">
-          One account for your cameras and live views.
+          {mode === 'login'
+            ? 'Sign in to access your cameras and live views.'
+            : 'One account keeps every camera in reach.'}
         </p>
         <a className="google-sign-in" href="/api/auth/google">
           <svg
@@ -60,27 +107,32 @@ export function AuthScreen({
         </a>
         {googleResult === 'linkRequired' && (
           <p role="alert">
-            This email already has a Beacon password account. Use your existing
-            password below. Google account linking is not yet available.
+            This email already has a Beacon password account. Google account
+            linking is not yet available; sign in below.
           </p>
         )}
         {googleResult === 'failed' && (
           <p role="alert">Google sign-in could not be completed. Try again.</p>
         )}
-        <div className="sign-in-divider">or use a Beacon password</div>
+        <div className="sign-in-divider">or</div>
         <form
           onSubmit={onSubmit}
           aria-label={
             mode === 'login' ? 'Password sign in' : 'Create password account'
           }
         >
+          <p className="password-form-label">
+            {mode === 'login'
+              ? 'Sign in with your Beacon account'
+              : 'Create a password account'}
+          </p>
           <label htmlFor="beacon-email">Email</label>
           <input
             id="beacon-email"
             name="email"
             type="email"
             autoComplete="email"
-            placeholder="you@example.com"
+            placeholder="Enter your email"
             required
             disabled={busy}
           />
@@ -93,6 +145,7 @@ export function AuthScreen({
               autoComplete={
                 mode === 'login' ? 'current-password' : 'new-password'
               }
+              placeholder="Enter your password"
               minLength={12}
               required
               disabled={busy}
@@ -114,15 +167,11 @@ export function AuthScreen({
           {mode === 'register' && (
             <p className="notice" id="password-guidance">
               Use at least 12 characters. Password-reset emails are not
-              available yet; Google is recommended for new accounts.
+              available yet; Google is recommended.
             </p>
           )}
           {error && <p role="alert">{error}</p>}
-          <button
-            className="secondary password-submit"
-            type="submit"
-            disabled={busy}
-          >
+          <button className="password-submit" type="submit" disabled={busy}>
             {busy
               ? mode === 'login'
                 ? 'Signing in…'
@@ -132,12 +181,23 @@ export function AuthScreen({
                 : 'Create account'}
           </button>
           <div className="sign-in-links">
+            {mode === 'login' && (
+              <button
+                className="link"
+                type="button"
+                aria-expanded={showRecovery}
+                onClick={() => setShowRecovery(!showRecovery)}
+              >
+                Forgot password?
+              </button>
+            )}
             <button
-              className="link"
+              className="link create-account-link"
               type="button"
               disabled={busy}
               onClick={() => {
                 setShowPassword(false);
+                setShowRecovery(false);
                 onMode();
               }}
             >
@@ -145,8 +205,13 @@ export function AuthScreen({
                 ? 'Create a password account'
                 : 'Use an existing account'}
             </button>
-            <a href="/trust">Trust and privacy</a>
           </div>
+          {showRecovery && (
+            <p className="recovery-note" role="status">
+              Reset email is not available in the private alpha. Try Google or{' '}
+              <a href="/contact">contact support</a>.
+            </p>
+          )}
         </form>
         <p className="sign-in-disclosure">
           <Icon name="shield" />

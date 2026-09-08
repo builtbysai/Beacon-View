@@ -8,6 +8,31 @@ import kotlin.test.assertTrue
 
 class StreamingStateTest {
     @Test
+    fun firstRunShowsWelcomeBeforeCameraPairing() {
+        assertTrue(
+            shouldShowWelcome(
+                paired = false,
+                monitorMode = false,
+                cameraSetupStarted = false,
+            ),
+        )
+        assertFalse(
+            shouldShowWelcome(
+                paired = false,
+                monitorMode = false,
+                cameraSetupStarted = true,
+            ),
+        )
+        assertFalse(
+            shouldShowWelcome(
+                paired = false,
+                monitorMode = true,
+                cameraSetupStarted = false,
+            ),
+        )
+    }
+
+    @Test
     fun monitorDestinationNeverRunsCameraCapture() {
         assertFalse(
             shouldRunCameraCapture(
