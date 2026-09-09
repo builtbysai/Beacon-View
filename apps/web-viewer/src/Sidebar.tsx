@@ -136,7 +136,10 @@ export function Sidebar({
           <Icon name="shield" />
           <span>Trust &amp; privacy</span>
         </a>
-        <div className="sidebar-account">
+        <div
+          className="sidebar-account"
+          data-initial={email.charAt(0).toUpperCase()}
+        >
           <strong title={email}>{email}</strong>
           <button
             className="secondary"

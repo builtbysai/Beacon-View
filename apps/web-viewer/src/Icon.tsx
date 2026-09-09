@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 const shapes = {
   chevronLeft: <path d="m15 18-6-6 6-6" />,
@@ -15,12 +15,15 @@ const shapes = {
       <path d="m16 10 5-3v10l-5-3" />
     </>
   ),
-  monitor: (
+  grid: (
     <>
-      <rect x="3" y="3" width="18" height="14" rx="2" />
-      <path d="M8 21h8m-4-4v4M9 3v14m6-14v14M3 10h18" />
+      <rect x="3" y="3" width="8" height="8" rx="1.6" />
+      <rect x="13" y="3" width="8" height="8" rx="1.6" />
+      <rect x="3" y="13" width="8" height="8" rx="1.6" />
+      <rect x="13" y="13" width="8" height="8" rx="1.6" />
     </>
   ),
+  list: <path d="M9 6h12M9 12h12M9 18h12M3 6h.01M3 12h.01M3 18h.01" />,
   activity: <path d="M3 12h4l3-8 4 16 3-8h4" />,
   settings: (
     <>
@@ -107,47 +110,145 @@ export function Icon({
   );
 }
 
-export function Brand({ compact = false }: { compact?: boolean } = {}) {
+/**
+ * The Beacon "smart lighthouse" camera mark. `useId` namespaces every
+ * gradient/filter def so two <Brand> instances can render on one page
+ * (the sign-in screen mounts a hero mark and a card mark at once)
+ * without one instance's <defs> shadowing the other's.
+ */
+export function Brand({
+  compact = false,
+  className = '',
+}: { compact?: boolean; className?: string } = {}) {
+  const uid = useId().replace(/[:]/g, '');
+  const beam = `beacon-beam-${uid}`;
+  const hardware = `beacon-hardware-${uid}`;
+  const lens = `beacon-lens-${uid}`;
+  const glow = `beacon-glow-${uid}`;
+  const shadow = `beacon-shadow-${uid}`;
+
+  const mark = (
+    <>
+      <defs>
+        <linearGradient id={hardware} x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#7c8ba1" />
+          <stop offset="100%" stopColor="#293548" />
+        </linearGradient>
+        <radialGradient id={lens} cx="35%" cy="30%" r="75%">
+          <stop offset="0%" stopColor="#7dd3fc" />
+          <stop offset="55%" stopColor="#0284c7" />
+          <stop offset="100%" stopColor="#031525" />
+        </radialGradient>
+        <filter id={glow} x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="1.1" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <filter id={shadow} x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow
+            dx="0"
+            dy="1.5"
+            stdDeviation="1.5"
+            floodOpacity="0.28"
+          />
+        </filter>
+      </defs>
+      <path
+        d="M10 38h20"
+        stroke="currentColor"
+        strokeOpacity="0.35"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M 27 7 A 6 6 0 0 1 27 17"
+        stroke="#38bdf8"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        fill="none"
+        opacity="0.55"
+      />
+      <path
+        d="M 32 3 A 11 11 0 0 1 32 21"
+        stroke="#38bdf8"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        fill="none"
+        opacity="0.3"
+      />
+      <g filter={`url(#${shadow})`}>
+        <path d="M14 37 L26 37 L23 20 L17 20 Z" fill={`url(#${hardware})`} />
+        <rect x="18" y="17" width="4" height="3" fill="#1e293b" />
+        <rect
+          x="13"
+          y="5"
+          width="14"
+          height="13"
+          rx="4.5"
+          fill={`url(#${hardware})`}
+        />
+      </g>
+      <circle cx="20" cy="11.5" r="4.5" fill="#0f172a" />
+      <circle cx="20" cy="11.5" r="3.5" fill={`url(#${lens})`} />
+      <circle cx="20" cy="11.5" r="1" fill="#bae6fd" filter={`url(#${glow})`} />
+      <circle
+        cx="24"
+        cy="7.5"
+        r="0.8"
+        fill="#f87171"
+        filter={`url(#${glow})`}
+      />
+    </>
+  );
+
   if (compact) {
     return (
       <svg
-        className="brand-lockup brand-lockup-compact"
-        viewBox="0 0 40 40"
+        className={`brand-mark ${className}`}
+        viewBox="6 0 30 42"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         role="img"
-        aria-label="Beacon"
+        aria-label="Beacon SecureView"
       >
-        <path d="M20 36 L14 15 L26 15 L20 36 Z" fill="#a0a0a0" />
-        <rect x="12" y="9" width="16" height="6" rx="1" fill="#254d3a" />
-        <circle cx="20" cy="12" r="2" fill="#fff" />
-        <path d="M11 36 H29" stroke="#254d3a" strokeWidth="2" />
+        {mark}
       </svg>
     );
   }
+
   return (
     <svg
-      className="brand-lockup"
-      viewBox="0 0 150 40"
+      className={`brand-lockup ${className}`}
+      viewBox="0 0 232 45"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label="Beacon"
+      aria-label="Beacon SecureView"
     >
-      <path d="M30 15 L120 5 L120 25 Z" fill="#b0cabc" opacity="0.7" />
-      <path d="M20 35 L15 15 L25 15 L20 35 Z" fill="#a0a0a0" />
-      <rect x="13" y="10" width="14" height="5" fill="#333" />
-      <circle cx="20" cy="12.5" r="1.5" fill="#fff" />
-      <path d="M12 35 L28 35" stroke="#333" strokeWidth="2" />
+      <defs>
+        <linearGradient id={beam} x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.22" />
+          <stop offset="12%" stopColor="#0ea5e9" stopOpacity="0.12" />
+          <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d="M20 12 L232 -12 L232 40 Z" fill={`url(#${beam})`} />
+      {mark}
       <text
-        x="35"
-        y="28"
-        fill="#254d3a"
-        fontSize="22"
-        fontWeight="800"
-        fontFamily="Inter, sans-serif"
+        x="42"
+        y="30"
+        fontFamily="Inter, -apple-system, system-ui, sans-serif"
+        fontSize="21"
+        letterSpacing="-0.4"
       >
-        beacon
+        <tspan className="brand-word" fontWeight="800">
+          beacon{' '}
+        </tspan>
+        <tspan className="brand-word-accent" fontWeight="500">
+          SecureView
+        </tspan>
       </text>
     </svg>
   );

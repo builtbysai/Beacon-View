@@ -54,11 +54,14 @@ viewer to the Oracle private alpha automatically.
 ## Product surfaces
 
 - Dashboard: `/`
-- Monitor: `/monitor`
-- Cameras: `/cameras`
+- Cameras (list view, or a grid view for watching several at once): `/cameras`
 - Devices: `/devices`
 - Browser Camera Mode: `/camera-mode`
 - Development diagnostics: `/diagnostics`
+
+The web viewer is also an installable PWA (manifest, generated icons, and an
+app-shell-only service worker at `apps/web-viewer/public/sw.js`); it never
+caches `/api/*` or the events WebSocket.
 
 Browser Camera Mode requires explicit permission and trusted HTTPS. It is for
 attended use because browsers may throttle background tabs. See

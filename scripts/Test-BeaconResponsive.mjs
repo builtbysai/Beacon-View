@@ -326,21 +326,18 @@ const report = [];
     cameras.forEach((c) => {
       c.privacyMode = true;
     });
-    for (const [route, selector] of [
-      ['/monitor', '.monitor-grid'],
-      ['/cameras/camera-0', '.live-surface'],
-    ]) {
-      await visit(route, selector);
-      await capture(
-        `${route.replaceAll('/', '-')}-${width}`,
-        route.startsWith('/cameras/') && width >= 1280,
-      );
-      if (route === '/monitor') {
-        await page.getByText('Filters & playback', { exact: true }).click();
-        await page.locator('.camera-picker summary').click();
-        await capture(`monitor-options-${width}`);
-      }
-    }
+    await visit('/cameras', '.camera-list');
+    await page.getByRole('radio', { name: 'Grid' }).click();
+    await page.locator('.monitor-grid').first().waitFor();
+    await capture(`cameras-grid-${width}`);
+    await page.getByText('Filters & playback', { exact: true }).click();
+    await page.locator('.camera-picker summary').click();
+    await capture(`monitor-options-${width}`);
+    await page.getByRole('radio', { name: 'List' }).click();
+    await page.locator('.camera-list').first().waitFor();
+
+    await visit('/cameras/camera-0', '.live-surface');
+    await capture(`cameras-camera-0-${width}`, width >= 1280);
     cameras.forEach((c, i) => {
       c.privacyMode = i === 2;
     });
