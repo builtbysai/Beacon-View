@@ -259,10 +259,11 @@ describe('App', () => {
       screen.getByRole('heading', { name: 'Your cameras are paused' }),
     ).toBeVisible();
     fireEvent.click(
-      screen.getByRole('button', { name: 'Rear camera details' }),
+      screen.getByRole('button', { name: 'Rear camera options' }),
     );
-    expect(screen.getByText(/Live viewing is blocked/)).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: /close/i }));
+    expect(
+      screen.getByRole('menuitem', { name: 'Open live view' }),
+    ).toBeDisabled();
     fireEvent.click(open);
     expect(window.location.pathname).toBe('/');
     expect(screen.queryByText('Connecting to camera')).not.toBeInTheDocument();
@@ -401,13 +402,12 @@ describe('App', () => {
 
     await screen.findByText('Rear camera');
     expect(
-      screen.getByRole('button', { name: 'Rear camera settings' }),
+      screen.getByRole('button', { name: 'Rear camera options' }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'View live: Rear camera, Pixel' }),
     ).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Manage devices' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Devices' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open device' }));
 
     expect(screen.getByRole('heading', { name: 'Pixel' })).toBeInTheDocument();
@@ -444,7 +444,7 @@ describe('App', () => {
     expect(confirm).toHaveBeenCalledWith(
       expect.stringContaining('Permanently delete Pixel?'),
     );
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(
       screen.getByRole('button', { name: 'Turn privacy on' }),
     ).toBeVisible();
@@ -518,16 +518,19 @@ describe('App', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Cameras' }));
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Rear camera details' }),
+      await screen.findByRole('button', { name: 'Rear camera options' }),
     );
 
     const prompt = vi.spyOn(window, 'prompt').mockReturnValue('Front camera');
-    fireEvent.click(screen.getByRole('button', { name: 'Rename camera' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename camera' }));
     expect(prompt).toHaveBeenCalledWith('Camera name', 'Rear camera');
-    await screen.findByRole('heading', { name: 'Front camera' });
+    await screen.findByText('Front camera');
 
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Front camera options' }),
+    );
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete camera' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete camera' }));
     expect(confirm).toHaveBeenCalledWith(
       expect.stringContaining('Permanently delete Front camera?'),
     );

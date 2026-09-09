@@ -142,18 +142,18 @@ export function Sidebar({
         <a className="sidebar-brand" href="/" aria-label="Beacon home">
           <Brand compact={collapsed} />
         </a>
+        <button
+          className="sidebar-toggle"
+          type="button"
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
+          aria-controls="beacon-sidebar"
+          data-tooltip={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={toggle}
+        >
+          <Icon name={collapsed ? 'chevronRight' : 'chevronLeft'} />
+        </button>
       </div>
-      <button
-        className="sidebar-toggle"
-        type="button"
-        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        aria-expanded={!collapsed}
-        aria-controls="beacon-sidebar"
-        data-tooltip={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        onClick={toggle}
-      >
-        <Icon name={collapsed ? 'chevronRight' : 'chevronLeft'} />
-      </button>
       <nav aria-label="Primary navigation">
         {items.map((item) => (
           <button
