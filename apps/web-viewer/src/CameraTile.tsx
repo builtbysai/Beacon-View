@@ -49,19 +49,24 @@ export function CameraTile({
   camera,
   highlighted,
   onOpen,
-  onInfo,
   onDevice,
+  onRename,
+  onDelete,
 }: {
   camera: TileCamera;
   highlighted?: boolean;
   onOpen: (camera: TileCamera) => void;
-  onInfo?: (camera: TileCamera) => void;
   onDevice?: (deviceId: string) => void;
+  onRename?: (camera: TileCamera) => void;
+  onDelete?: (camera: TileCamera) => void;
 }) {
   const state = cameraStatus(camera);
   const [previewing, setPreviewing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const hoverTimer = useRef<number | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const canPreview = state.available && hoverCapable();
+  const hasMenu = Boolean(onDevice || onRename || onDelete);
 
   useEffect(
     () => () => {
@@ -69,6 +74,26 @@ export function CameraTile({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const dismissOutside = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !menuRef.current?.contains(event.target)
+      )
+        setMenuOpen(false);
+    };
+    const dismissEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', dismissOutside);
+    window.addEventListener('keydown', dismissEscape);
+    return () => {
+      window.removeEventListener('pointerdown', dismissOutside);
+      window.removeEventListener('keydown', dismissEscape);
+    };
+  }, [menuOpen]);
 
   function startHover() {
     if (!canPreview) return;
@@ -126,28 +151,76 @@ export function CameraTile({
           <span>{camera.deviceName}</span>
         </span>
       </button>
-      <span className="camera-tile-actions">
-        {onInfo && (
+      {hasMenu && (
+        <div className="camera-tile-menu-anchor" ref={menuRef}>
           <button
             type="button"
-            className="camera-tile-action"
-            aria-label={`${camera.name} details`}
-            onClick={() => onInfo(camera)}
+            className="camera-tile-action camera-tile-more"
+            aria-label={`${camera.name} options`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
           >
-            <Icon name="info" />
+            <Icon name="more" />
           </button>
-        )}
-        {onDevice && (
-          <button
-            type="button"
-            className="camera-tile-action"
-            aria-label={`${camera.name} settings`}
-            onClick={() => onDevice(camera.deviceId)}
-          >
-            <Icon name="settings" />
-          </button>
-        )}
-      </span>
+          {menuOpen && (
+            <div className="camera-tile-menu" role="menu">
+              <button
+                role="menuitem"
+                type="button"
+                disabled={!state.available}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpen(camera);
+                }}
+              >
+                <Icon name="eye" />
+                Open live view
+              </button>
+              {onDevice && (
+                <button
+                  role="menuitem"
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDevice(camera.deviceId);
+                  }}
+                >
+                  <Icon name="settings" />
+                  Device settings
+                </button>
+              )}
+              {onRename && (
+                <button
+                  role="menuitem"
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onRename(camera);
+                  }}
+                >
+                  <Icon name="edit" />
+                  Rename camera
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  role="menuitem"
+                  type="button"
+                  className="camera-tile-menu-danger"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDelete(camera);
+                  }}
+                >
+                  <Icon name="trash" />
+                  Delete camera
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </article>
   );
 }

@@ -247,7 +247,7 @@ export function MotionEventList({
         <p className="activity-status" role="status" ref={status} tabIndex={-1}>
           {busy
             ? 'Loading motion events…'
-            : `${events?.length ?? 0} events shown`}
+            : `${events?.length ?? 0} ${events?.length === 1 ? 'event' : 'events'} shown`}
         </p>
       )}
       {loadFailed && !clearing && (

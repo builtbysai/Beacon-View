@@ -114,7 +114,7 @@ const pageDescriptions: Record<Page, string> = {
   events: 'Review motion activity from your devices.',
   devices: 'Manage camera access, power, and preferences.',
   'camera mode': 'Give a spare device a new purpose.',
-  settings: 'Your account, devices, and privacy preferences.',
+  settings: 'Your account, security, and privacy preferences.',
   diagnostics: 'Details to help troubleshoot a connection.',
   trust: 'How Beacon handles capture and account data.',
   contact: 'Get help with your Beacon account or privacy request.',
@@ -124,6 +124,7 @@ const navigationIcons: Record<string, IconName> = {
   dashboard: 'home',
   cameras: 'camera',
   events: 'activity',
+  devices: 'phone',
   settings: 'settings',
 };
 
@@ -199,7 +200,6 @@ export function App() {
   const [highlightedCameraId, setHighlightedCameraId] = useState<string | null>(
     null,
   );
-  const [infoCameraId, setInfoCameraId] = useState<string | null>(null);
   const [motionEventRevision, setMotionEventRevision] = useState(0);
   const [motionClearRevision, setMotionClearRevision] = useState(0);
   const returnPage = useRef<Page>('cameras');
@@ -452,7 +452,6 @@ export function App() {
     try {
       setError('');
       await request(`/api/cameras/${camera.id}`, { method: 'DELETE' });
-      setInfoCameraId(null);
       await loadCameras();
     } catch (caught) {
       setError(
@@ -629,8 +628,6 @@ export function App() {
     return <BrowserCameraMode onBack={() => setBrowserCameraActive(false)} />;
   }
 
-  const infoCamera =
-    cameras.find((camera) => camera.id === infoCameraId) ?? null;
   const onlineCount = cameras.filter(
     (camera) => cameraStatus(camera).available,
   ).length;
@@ -658,15 +655,14 @@ export function App() {
         email={user.email}
         avatarUrl={user.avatarUrl}
         onLogout={() => void logout()}
-        items={(['dashboard', 'cameras', 'events', 'settings'] as const).map(
-          (item) => ({
-            label: pageLabels[item],
-            icon: navigationIcons[item]!,
-            current:
-              page === item || (page === 'devices' && item === 'settings'),
-            onSelect: () => navigate(item),
-          }),
-        )}
+        items={(
+          ['dashboard', 'cameras', 'events', 'devices', 'settings'] as const
+        ).map((item) => ({
+          label: pageLabels[item],
+          icon: navigationIcons[item]!,
+          current: page === item,
+          onSelect: () => navigate(item),
+        }))}
       />
       <main className="workspace" id="main-content" tabIndex={-1}>
         {page !== 'dashboard' && (
@@ -796,8 +792,9 @@ export function App() {
                       camera={camera}
                       highlighted={highlightedCameraId === camera.id}
                       onOpen={openCamera}
-                      onInfo={(item) => setInfoCameraId(item.id)}
                       onDevice={openDevice}
+                      onRename={(item) => void renameCamera(item)}
+                      onDelete={(item) => void deleteCamera(item)}
                     />
                   ))}
                 </div>
@@ -870,8 +867,9 @@ export function App() {
                         camera={camera}
                         highlighted={highlightedCameraId === camera.id}
                         onOpen={openCamera}
-                        onInfo={(item) => setInfoCameraId(item.id)}
                         onDevice={openDevice}
+                        onRename={(item) => void renameCamera(item)}
+                        onDelete={(item) => void deleteCamera(item)}
                       />
                     ))}
                   </div>
@@ -910,6 +908,8 @@ export function App() {
                 onLive={openCamera}
                 onRename={(device) => void renameDevice(device)}
                 onDelete={(device) => void deleteDevice(device)}
+                onCameraRename={(camera) => void renameCamera(camera)}
+                onCameraDelete={(camera) => void deleteCamera(camera)}
                 onPrivacy={(device) => void setPrivacy(device)}
               />
             ) : (
@@ -974,18 +974,6 @@ export function App() {
                   <strong>Email</strong>
                   <p>{user.email}</p>
                 </div>
-              </div>
-              <div className="settings-row">
-                <div>
-                  <strong>Devices</strong>
-                  <p>Manage paired cameras, power, and preferences.</p>
-                </div>
-                <button
-                  className="secondary"
-                  onClick={() => navigate('devices')}
-                >
-                  Manage devices
-                </button>
               </div>
               <div className="settings-row">
                 <div>
@@ -1176,118 +1164,7 @@ export function App() {
           </section>
         </ModalDialog>
       )}
-      {infoCamera && (
-        <ModalDialog
-          labelledBy="camera-info-title"
-          onDismiss={() => setInfoCameraId(null)}
-        >
-          <CameraInfoPanel
-            camera={infoCamera}
-            onClose={() => setInfoCameraId(null)}
-            onOpen={() => {
-              openCamera(infoCamera);
-              setInfoCameraId(null);
-            }}
-            onDevice={() => {
-              openDevice(infoCamera.deviceId);
-              setInfoCameraId(null);
-            }}
-            onRename={() => void renameCamera(infoCamera)}
-            onDelete={() => void deleteCamera(infoCamera)}
-          />
-        </ModalDialog>
-      )}
     </div>
-  );
-}
-
-function CameraInfoPanel({
-  camera,
-  onOpen,
-  onDevice,
-  onClose,
-  onRename,
-  onDelete,
-}: {
-  camera: Camera;
-  onOpen: () => void;
-  onDevice: () => void;
-  onClose: () => void;
-  onRename: () => void;
-  onDelete: () => void;
-}) {
-  const state = cameraStatus(camera);
-  return (
-    <section aria-labelledby="camera-info-title" className="camera-info-panel">
-      <button
-        type="button"
-        className="camera-info-close"
-        aria-label="Close camera details"
-        onClick={onClose}
-      >
-        <Icon name="close" />
-      </button>
-      <p className="eyebrow">Camera details</p>
-      <h2 id="camera-info-title">{camera.name}</h2>
-      <span className={`status-badge status-${state.tone}`}>{state.label}</span>
-      {!state.available && <p className="notice">{state.explanation}</p>}
-      <dl className="camera-info-list">
-        <div>
-          <dt>Device</dt>
-          <dd>{camera.deviceName}</dd>
-        </div>
-        <div>
-          <dt>Facing</dt>
-          <dd>{camera.facing}</dd>
-        </div>
-        <div>
-          <dt>Source</dt>
-          <dd>
-            {!camera.enabled
-              ? 'Disabled'
-              : camera.streaming
-                ? 'Streaming'
-                : (camera.availability ?? 'Idle')}
-          </dd>
-        </div>
-        <div>
-          <dt>Capabilities</dt>
-          <dd>{capabilitySummary(camera.capabilities)}</dd>
-        </div>
-        <div>
-          <dt>Last seen</dt>
-          <dd>{relativeLastSeen(camera.lastSeenAt)}</dd>
-        </div>
-        <div>
-          <dt>Watching now</dt>
-          <dd>
-            {camera.viewerCount === 1
-              ? '1 viewer'
-              : `${camera.viewerCount} viewers`}
-          </dd>
-        </div>
-      </dl>
-      <div className="heading-actions">
-        <button disabled={!state.available} onClick={onOpen}>
-          <Icon name="eye" />
-          Open live view
-        </button>
-        <button className="secondary" onClick={onDevice}>
-          <Icon name="settings" />
-          Device settings
-        </button>
-      </div>
-      <div className="camera-info-manage">
-        <button className="secondary" onClick={onRename}>
-          <Icon name="edit" />
-          Rename camera
-        </button>
-        <button className="danger" onClick={onDelete}>
-          <Icon name="trash" />
-          Delete camera
-        </button>
-      </div>
-    </section>
   );
 }
 
@@ -1473,6 +1350,8 @@ function DeviceDetail({
   onDelete,
   onPrivacy,
   onRename,
+  onCameraRename,
+  onCameraDelete,
 }: {
   cameras: Camera[];
   device: Device | undefined;
@@ -1481,6 +1360,8 @@ function DeviceDetail({
   onDelete: (device: Device) => void;
   onPrivacy: (device: Device) => void;
   onRename: (device: Device) => void;
+  onCameraRename: (camera: Camera) => void;
+  onCameraDelete: (camera: Camera) => void;
 }) {
   if (!device) {
     return (
@@ -1626,11 +1507,21 @@ function DeviceDetail({
         Switching sources preserves the device registration.
       </p>
       <h4>Camera sources</h4>
-      <CameraList
-        cameras={cameras}
-        highlightedCameraId={null}
-        onLive={onLive}
-      />
+      {cameras.length === 0 ? (
+        <p className="empty">No camera sources on this device.</p>
+      ) : (
+        <div className="camera-tile-grid">
+          {cameras.map((camera) => (
+            <CameraTile
+              key={camera.id}
+              camera={camera}
+              onOpen={onLive}
+              onRename={onCameraRename}
+              onDelete={onCameraDelete}
+            />
+          ))}
+        </div>
+      )}
       <details className="device-settings">
         <summary>Device settings</summary>
         <div className="device-settings-content">
@@ -1771,145 +1662,5 @@ function Diagnostics() {
         raw ICE candidates, or household IDs.
       </p>
     </section>
-  );
-}
-
-function CameraList({
-  cameras,
-  highlightedCameraId,
-  onDevice,
-  onLive,
-  onDelete,
-  onDiagnostics,
-  onRestart,
-}: {
-  cameras: Camera[];
-  highlightedCameraId: string | null;
-  onDevice?: (deviceId: string) => void;
-  onLive: (camera: Camera) => void;
-  onDelete?: (camera: Camera) => void;
-  onDiagnostics?: () => void;
-  onRestart?: (cameraId: string) => void;
-}) {
-  if (cameras.length === 0) {
-    return <p className="empty">No cameras are paired with this household.</p>;
-  }
-  return (
-    <ul className="camera-list">
-      {cameras.map((camera) => {
-        const state = cameraStatus(camera);
-        const viewerCount = camera.viewerCount ?? 0;
-        const showStatusDetail = !state.available || viewerCount > 0;
-        return (
-          <li
-            className={
-              highlightedCameraId === camera.id
-                ? 'camera-card camera-highlight'
-                : 'camera-card'
-            }
-            key={camera.id}
-          >
-            <button
-              className="camera-open"
-              aria-label={`View live: ${camera.name}, ${camera.deviceName}`}
-              aria-disabled={!state.available}
-              onClick={() => {
-                if (state.available) onLive(camera);
-              }}
-            >
-              <span
-                className={`camera-preview ${state.available ? 'preview-ready' : 'preview-paused'}`}
-                aria-hidden="true"
-              >
-                <span
-                  className={`camera-status status-badge status-${state.tone}`}
-                >
-                  {state.label}
-                </span>
-                <svg
-                  viewBox="0 0 64 48"
-                  width="64"
-                  height="48"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <rect x="8" y="10" width="36" height="28" rx="6" />
-                  <path d="m44 20 12-7v22l-12-7" />
-                  {camera.privacyMode && <path d="M6 4 58 44" />}
-                </svg>
-                <span>
-                  {state.available ? 'Open live view' : 'Live view unavailable'}
-                </span>
-              </span>
-              <span className="camera-identity">
-                <strong>{camera.name}</strong>
-                <span>
-                  {camera.deviceName} · {camera.facing}
-                </span>
-              </span>
-            </button>
-            {showStatusDetail && (
-              <div className="camera-card-status">
-                {!state.available && <p>{state.explanation}</p>}
-                {viewerCount > 0 && (
-                  <span>
-                    {viewerCount} {viewerCount === 1 ? 'viewer' : 'viewers'}
-                  </span>
-                )}
-                {!camera.online && (
-                  <span>Last seen {relativeLastSeen(camera.lastSeenAt)}</span>
-                )}
-              </div>
-            )}
-            {(onDevice || onRestart || onDiagnostics || onDelete) && (
-              <details className="camera-settings">
-                <summary>Camera details</summary>
-                <div>
-                  <span>
-                    Source:{' '}
-                    {!camera.enabled
-                      ? 'disabled'
-                      : camera.streaming
-                        ? 'streaming'
-                        : (camera.availability ?? 'idle')}
-                  </span>
-                  <span>{capabilitySummary(camera.capabilities)}</span>
-                  {onDevice && (
-                    <button
-                      className="secondary"
-                      onClick={() => onDevice(camera.deviceId)}
-                    >
-                      Device settings
-                    </button>
-                  )}
-                  {onRestart && (
-                    <button
-                      className="secondary"
-                      onClick={() => onRestart(camera.id)}
-                    >
-                      Restart camera
-                    </button>
-                  )}
-                  {onDiagnostics && (
-                    <button className="secondary" onClick={onDiagnostics}>
-                      Diagnostics
-                    </button>
-                  )}
-                  {onDelete && (
-                    <button
-                      className="secondary"
-                      onClick={() => onDelete(camera)}
-                    >
-                      Delete source
-                    </button>
-                  )}
-                </div>
-              </details>
-            )}
-          </li>
-        );
-      })}
-    </ul>
   );
 }
