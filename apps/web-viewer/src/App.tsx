@@ -7,9 +7,9 @@ import { cameraStatus } from './camera-status';
 import { deviceGuidance } from './device-guidance';
 import type { PairingLifecycle } from './lifecycle';
 import { LiveVideo } from './LiveVideo';
+import { CameraTile } from './CameraTile';
 import { ModalDialog } from './ModalDialog';
 import { BrowserCameraMode } from './BrowserCameraMode';
-import { Monitoring } from './Monitoring';
 import { MotionEventList } from './MotionEventList';
 import { MotionSettingsPanel } from './MotionSettingsPanel';
 import { MotionRetentionSettings } from './MotionRetentionSettings';
@@ -23,6 +23,7 @@ import { Sidebar } from './Sidebar';
 interface User {
   id: string;
   email: string;
+  avatarUrl?: string | null;
 }
 
 interface Camera {
@@ -198,15 +199,7 @@ export function App() {
   const [highlightedCameraId, setHighlightedCameraId] = useState<string | null>(
     null,
   );
-  const [cameraView, setCameraView] = useState<'list' | 'grid'>(() => {
-    try {
-      return localStorage.getItem('beacon.cameras.view.v1') === 'grid'
-        ? 'grid'
-        : 'list';
-    } catch {
-      return 'list';
-    }
-  });
+  const [infoCameraId, setInfoCameraId] = useState<string | null>(null);
   const [motionEventRevision, setMotionEventRevision] = useState(0);
   const [motionClearRevision, setMotionClearRevision] = useState(0);
   const returnPage = useRef<Page>('cameras');
@@ -430,6 +423,46 @@ export function App() {
     }
   }
 
+  async function renameCamera(camera: Camera) {
+    const name = window.prompt('Camera name', camera.name)?.trim();
+    if (!name || name === camera.name) return;
+    try {
+      setError('');
+      await request(`/api/cameras/${camera.id}`, {
+        body: JSON.stringify({ name }),
+        method: 'PATCH',
+      });
+      await loadCameras();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Rename failed');
+    }
+  }
+
+  async function deleteCamera(camera: Camera) {
+    const warning =
+      camera.viewerCount > 0
+        ? ` ${camera.viewerCount} active viewer session(s) will be terminated.`
+        : '';
+    if (
+      !window.confirm(
+        `Permanently delete ${camera.name}? This camera source will be removed.${warning} The device must add it again.`,
+      )
+    )
+      return;
+    try {
+      setError('');
+      await request(`/api/cameras/${camera.id}`, { method: 'DELETE' });
+      setInfoCameraId(null);
+      await loadCameras();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'The camera could not be removed.',
+      );
+    }
+  }
+
   async function deleteDevice(device: Device) {
     const viewerCount = cameras
       .filter((camera) => camera.deviceId === device.id)
@@ -596,6 +629,8 @@ export function App() {
     return <BrowserCameraMode onBack={() => setBrowserCameraActive(false)} />;
   }
 
+  const infoCamera =
+    cameras.find((camera) => camera.id === infoCameraId) ?? null;
   const onlineCount = cameras.filter(
     (camera) => cameraStatus(camera).available,
   ).length;
@@ -621,6 +656,7 @@ export function App() {
       </a>
       <Sidebar
         email={user.email}
+        avatarUrl={user.avatarUrl}
         onLogout={() => void logout()}
         items={(['dashboard', 'cameras', 'events', 'settings'] as const).map(
           (item) => ({
@@ -752,12 +788,20 @@ export function App() {
                   attended setup.
                 </p>
               )}
-              <CameraList
-                cameras={cameras.slice(0, 3)}
-                highlightedCameraId={highlightedCameraId}
-                onDevice={openDevice}
-                onLive={openCamera}
-              />
+              {cameras.length > 0 && (
+                <div className="camera-tile-grid">
+                  {cameras.slice(0, 6).map((camera) => (
+                    <CameraTile
+                      key={camera.id}
+                      camera={camera}
+                      highlighted={highlightedCameraId === camera.id}
+                      onOpen={openCamera}
+                      onInfo={(item) => setInfoCameraId(item.id)}
+                      onDevice={openDevice}
+                    />
+                  ))}
+                </div>
+              )}
             </article>
             {cameras.length === 0 && (
               <article
@@ -812,73 +856,28 @@ export function App() {
         )}
         {page === 'cameras' && (
           <section className="camera-catalog wide" aria-label="Your cameras">
-            {cameras.length > 0 && (
-              <div
-                className="view-toggle"
-                role="radiogroup"
-                aria-label="Camera view"
-              >
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={cameraView === 'list'}
-                  className={cameraView === 'list' ? 'view-toggle-active' : ''}
-                  onClick={() => {
-                    setCameraView('list');
-                    try {
-                      localStorage.setItem('beacon.cameras.view.v1', 'list');
-                    } catch {
-                      /* View preference just won't persist. */
-                    }
-                  }}
-                >
-                  <Icon name="list" />
-                  List
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={cameraView === 'grid'}
-                  className={cameraView === 'grid' ? 'view-toggle-active' : ''}
-                  onClick={() => {
-                    setCameraView('grid');
-                    try {
-                      localStorage.setItem('beacon.cameras.view.v1', 'grid');
-                    } catch {
-                      /* View preference just won't persist. */
-                    }
-                  }}
-                >
-                  <Icon name="grid" />
-                  Grid
-                </button>
-              </div>
-            )}
-            {cameraView === 'grid' && cameras.length > 0 ? (
-              <Monitoring
-                cameras={cameras}
-                devices={devices}
-                onDevice={openDevice}
-                onSwitchSource={async (cameraId) => {
-                  await request(`/api/cameras/${cameraId}/activate`, {
-                    body: '{}',
-                    method: 'POST',
-                  });
-                }}
-                storageKey={`beacon_workspaces_${user.id}`}
-              />
-            ) : (
-              <CameraBrowser cameras={cameras} key={user.id}>
-                {(items) => (
-                  <CameraList
-                    cameras={items}
-                    highlightedCameraId={highlightedCameraId}
-                    onDevice={openDevice}
-                    onLive={openCamera}
-                  />
-                )}
-              </CameraBrowser>
-            )}
+            <CameraBrowser cameras={cameras} key={user.id}>
+              {(items) =>
+                items.length === 0 ? (
+                  <p className="empty">
+                    No cameras are paired with this household.
+                  </p>
+                ) : (
+                  <div className="camera-tile-grid">
+                    {items.map((camera) => (
+                      <CameraTile
+                        key={camera.id}
+                        camera={camera}
+                        highlighted={highlightedCameraId === camera.id}
+                        onOpen={openCamera}
+                        onInfo={(item) => setInfoCameraId(item.id)}
+                        onDevice={openDevice}
+                      />
+                    ))}
+                  </div>
+                )
+              }
+            </CameraBrowser>
           </section>
         )}
         {page === 'events' && (
@@ -966,61 +965,93 @@ export function App() {
         {page === 'settings' && (
           <div className="settings-layout wide">
             <section
-              className="card account-card"
-              aria-labelledby="account-title"
+              className="settings-section"
+              aria-labelledby="account-section-title"
             >
-              <span className="section-icon">
-                <Icon name="home" />
-              </span>
-              <div>
-                <p className="eyebrow">Your account</p>
-                <h3 id="account-title">Household settings</h3>
-                <p className="account-email">{user.email}</p>
+              <h3 id="account-section-title">Account</h3>
+              <div className="settings-row">
+                <div>
+                  <strong>Email</strong>
+                  <p>{user.email}</p>
+                </div>
               </div>
-              <div className="heading-actions">
+              <div className="settings-row">
+                <div>
+                  <strong>Devices</strong>
+                  <p>Manage paired cameras, power, and preferences.</p>
+                </div>
                 <button
                   className="secondary"
                   onClick={() => navigate('devices')}
                 >
                   Manage devices
                 </button>
+              </div>
+              <div className="settings-row">
+                <div>
+                  <strong>This browser</strong>
+                  <p>Sign out of Beacon on this device.</p>
+                </div>
                 <button className="secondary" onClick={() => void logout()}>
                   Sign out
                 </button>
               </div>
             </section>
-            <div className="card settings-panel">
-              <Icon name="activity" />
-              <MotionRetentionSettings />
-            </div>
-            <div className="card settings-panel">
-              <Icon name="lock" />
+
+            <section
+              className="settings-section"
+              aria-labelledby="security-section-title"
+            >
+              <h3 id="security-section-title">Security</h3>
               <BrowserSessions onCurrentRevoked={clearLocalSession} />
-            </div>
-            <div className="card settings-history">
               <AccessHistory />
-            </div>
-            <section className="card settings-panel danger-zone">
-              <Icon name="shield" />
-              <div>
-                <p className="eyebrow">Account deletion</p>
-                <h4>Delete this account</h4>
-                <p>
-                  Permanently removes your household, devices, settings, and
-                  motion metadata. Reauthenticate within 10 minutes; backup
-                  copies expire on their normal schedule.
-                </p>
+            </section>
+
+            <section
+              className="settings-section"
+              aria-labelledby="camera-section-title"
+            >
+              <h3 id="camera-section-title">Camera &amp; motion</h3>
+              <MotionRetentionSettings />
+            </section>
+
+            <section
+              className="settings-section"
+              aria-labelledby="privacy-section-title"
+            >
+              <h3 id="privacy-section-title">Privacy</h3>
+              <div className="settings-row">
+                <div>
+                  <strong>Trust &amp; privacy</strong>
+                  <p>
+                    Viewing, listening, and talking are separate choices. See
+                    how Beacon handles capture and account data.
+                  </p>
+                </div>
+                <a className="secondary button-link" href="/trust">
+                  Read more
+                </a>
+              </div>
+            </section>
+
+            <section
+              className="settings-section settings-danger"
+              aria-labelledby="danger-section-title"
+            >
+              <h3 id="danger-section-title">Danger zone</h3>
+              <div className="settings-row">
+                <div>
+                  <strong>Delete this account</strong>
+                  <p>
+                    Permanently removes your household, devices, settings, and
+                    motion metadata. Reauthenticate within 10 minutes; backup
+                    copies expire on their normal schedule.
+                  </p>
+                </div>
                 <button className="danger" onClick={() => void deleteAccount()}>
                   Delete account
                 </button>
               </div>
-            </section>
-            <section className="privacy-note">
-              <Icon name="shield" />
-              <p>
-                Viewing, listening, and talking are separate choices.{' '}
-                <a href="/trust">Read about privacy at Beacon</a>.
-              </p>
             </section>
           </div>
         )}
@@ -1145,7 +1176,118 @@ export function App() {
           </section>
         </ModalDialog>
       )}
+      {infoCamera && (
+        <ModalDialog
+          labelledBy="camera-info-title"
+          onDismiss={() => setInfoCameraId(null)}
+        >
+          <CameraInfoPanel
+            camera={infoCamera}
+            onClose={() => setInfoCameraId(null)}
+            onOpen={() => {
+              openCamera(infoCamera);
+              setInfoCameraId(null);
+            }}
+            onDevice={() => {
+              openDevice(infoCamera.deviceId);
+              setInfoCameraId(null);
+            }}
+            onRename={() => void renameCamera(infoCamera)}
+            onDelete={() => void deleteCamera(infoCamera)}
+          />
+        </ModalDialog>
+      )}
     </div>
+  );
+}
+
+function CameraInfoPanel({
+  camera,
+  onOpen,
+  onDevice,
+  onClose,
+  onRename,
+  onDelete,
+}: {
+  camera: Camera;
+  onOpen: () => void;
+  onDevice: () => void;
+  onClose: () => void;
+  onRename: () => void;
+  onDelete: () => void;
+}) {
+  const state = cameraStatus(camera);
+  return (
+    <section aria-labelledby="camera-info-title" className="camera-info-panel">
+      <button
+        type="button"
+        className="camera-info-close"
+        aria-label="Close camera details"
+        onClick={onClose}
+      >
+        <Icon name="close" />
+      </button>
+      <p className="eyebrow">Camera details</p>
+      <h2 id="camera-info-title">{camera.name}</h2>
+      <span className={`status-badge status-${state.tone}`}>{state.label}</span>
+      {!state.available && <p className="notice">{state.explanation}</p>}
+      <dl className="camera-info-list">
+        <div>
+          <dt>Device</dt>
+          <dd>{camera.deviceName}</dd>
+        </div>
+        <div>
+          <dt>Facing</dt>
+          <dd>{camera.facing}</dd>
+        </div>
+        <div>
+          <dt>Source</dt>
+          <dd>
+            {!camera.enabled
+              ? 'Disabled'
+              : camera.streaming
+                ? 'Streaming'
+                : (camera.availability ?? 'Idle')}
+          </dd>
+        </div>
+        <div>
+          <dt>Capabilities</dt>
+          <dd>{capabilitySummary(camera.capabilities)}</dd>
+        </div>
+        <div>
+          <dt>Last seen</dt>
+          <dd>{relativeLastSeen(camera.lastSeenAt)}</dd>
+        </div>
+        <div>
+          <dt>Watching now</dt>
+          <dd>
+            {camera.viewerCount === 1
+              ? '1 viewer'
+              : `${camera.viewerCount} viewers`}
+          </dd>
+        </div>
+      </dl>
+      <div className="heading-actions">
+        <button disabled={!state.available} onClick={onOpen}>
+          <Icon name="eye" />
+          Open live view
+        </button>
+        <button className="secondary" onClick={onDevice}>
+          <Icon name="settings" />
+          Device settings
+        </button>
+      </div>
+      <div className="camera-info-manage">
+        <button className="secondary" onClick={onRename}>
+          <Icon name="edit" />
+          Rename camera
+        </button>
+        <button className="danger" onClick={onDelete}>
+          <Icon name="trash" />
+          Delete camera
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -1233,62 +1375,91 @@ function PublicTrustPage() {
           <Brand />
         </a>
         <p className="eyebrow">Trust and privacy</p>
-        <h1 id="trust-title">Your camera should stay under your control.</h1>
+        <h1 id="trust-title">Your camera stays under your control.</h1>
         <p className="trust-lead">
-          Beacon is a private-alpha camera system. It is designed around
-          explicit live viewing, visible camera capture, and minimal event
-          metadata.
+          Beacon is built around one rule: nothing happens without your say.
+          Capture stays visible, viewing is always explicit, and nothing is ever
+          recorded.
         </p>
-        <div className="trust-principles">
-          <article>
-            <span aria-hidden="true">◌</span>
-            <h2>Privacy you control</h2>
-            <p>
-              Turning privacy on from the Android device stops camera and
-              microphone capture immediately. Remote privacy blocks live viewing
-              and stops capture when the device receives the update.
-            </p>
-          </article>
-          <article>
-            <span aria-hidden="true">↗</span>
-            <h2>Live means intentional</h2>
-            <p>
-              Opening a live view or a camera grid connects the selected
-              cameras. Listening and talking each require their own action.
-              Android Camera Mode remains visible while capture is active.
-            </p>
-          </article>
-          <article>
-            <span aria-hidden="true">◇</span>
-            <h2>No cloud recordings</h2>
-            <p>
-              Beacon saves account information, device settings, access history,
-              and motion-event metadata. It does not save recorded video, audio,
-              thumbnails, or facial identities.
-            </p>
-          </article>
-          <article>
-            <span aria-hidden="true">✓</span>
-            <h2>Account controls</h2>
-            <p>
-              Household owners can review browser sessions, revoke them
-              individually, and choose motion-metadata retention.
-            </p>
-          </article>
+
+        <div className="trust-flow" aria-hidden="true">
+          <span className="trust-flow-step">
+            <Icon name="phone" />
+            <span>Your device</span>
+          </span>
+          <span className="trust-flow-link" />
+          <span className="trust-flow-step">
+            <Icon name="lock" />
+            <span>Encrypted link</span>
+          </span>
+          <span className="trust-flow-link" />
+          <span className="trust-flow-step">
+            <Icon name="browser" />
+            <span>Your viewer</span>
+          </span>
         </div>
-        <section className="trust-alpha" aria-label="Private alpha notice">
-          <h2>Private alpha notice</h2>
-          <p>
-            Beacon is still being evaluated. Formal terms, a privacy policy, and
-            broader legal notices will be published before broader availability.
-            For support, privacy, or deletion questions, use the{' '}
-            <a href="/contact">Beacon contact form</a>. Do not rely on Beacon
-            for emergency response or life-safety monitoring.
-          </p>
-        </section>
+
+        <div className="trust-principles">
+          <div className="trust-principle">
+            <span className="trust-principle-icon">
+              <Icon name="lock" />
+            </span>
+            <div>
+              <h2>Privacy you control</h2>
+              <p>
+                Turning privacy on stops camera and microphone capture
+                immediately, from the device itself or remotely.
+              </p>
+            </div>
+          </div>
+          <div className="trust-principle">
+            <span className="trust-principle-icon">
+              <Icon name="eye" />
+            </span>
+            <div>
+              <h2>Live means intentional</h2>
+              <p>
+                Opening a live view connects a camera on purpose. Listening and
+                talking each need their own separate action.
+              </p>
+            </div>
+          </div>
+          <div className="trust-principle">
+            <span className="trust-principle-icon">
+              <Icon name="shield" />
+            </span>
+            <div>
+              <h2>Nothing is recorded</h2>
+              <p>
+                No video, audio, thumbnails, or facial identities are ever saved
+                — only account settings and motion-event metadata.
+              </p>
+            </div>
+          </div>
+          <div className="trust-principle">
+            <span className="trust-principle-icon">
+              <Icon name="settings" />
+            </span>
+            <div>
+              <h2>Account controls</h2>
+              <p>
+                Review browser sessions, revoke access individually, and choose
+                how long motion metadata is kept.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <a className="secondary button-link trust-return" href="/">
           Return to Beacon
         </a>
+
+        <p className="trust-alpha-note">
+          Beacon is a private alpha — formal terms and a privacy policy are
+          still coming. For support, privacy, or deletion questions, use the{' '}
+          <a href="/contact">Beacon contact form</a>. Do not rely on Beacon for
+          emergency response or life-safety monitoring.
+        </p>
       </section>
     </main>
   );

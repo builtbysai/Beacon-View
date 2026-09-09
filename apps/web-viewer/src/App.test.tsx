@@ -67,10 +67,10 @@ describe('App', () => {
 
     expect(
       await screen.findByRole('heading', {
-        name: 'Your camera should stay under your control.',
+        name: 'Your camera stays under your control.',
       }),
     ).toBeVisible();
-    expect(screen.getByText('No cloud recordings')).toBeVisible();
+    expect(screen.getByText('Nothing is recorded')).toBeVisible();
     expect(
       screen.getByRole('link', { name: 'Return to Beacon' }),
     ).toHaveAttribute('href', '/');
@@ -121,8 +121,9 @@ describe('App', () => {
     render(<App />);
 
     expect(
-      await screen.findByText('No cameras are paired with this household.'),
+      await screen.findByText('Start with a spare Android device'),
     ).toBeVisible();
+    expect(screen.getByText('Three steps to your first view')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute(
       'aria-current',
       'page',
@@ -166,7 +167,7 @@ describe('App', () => {
     });
     expect(
       screen.getByRole('heading', {
-        name: 'Your camera should stay under your control.',
+        name: 'Your camera stays under your control.',
       }),
     ).toBeVisible();
     expect(screen.queryByText('Welcome to Beacon')).not.toBeInTheDocument();
@@ -257,7 +258,11 @@ describe('App', () => {
     expect(
       screen.getByRole('heading', { name: 'Your cameras are paused' }),
     ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Rear camera details' }),
+    );
     expect(screen.getByText(/Live viewing is blocked/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /close/i }));
     fireEvent.click(open);
     expect(window.location.pathname).toBe('/');
     expect(screen.queryByText('Connecting to camera')).not.toBeInTheDocument();
@@ -312,7 +317,7 @@ describe('App', () => {
     vi.stubGlobal('fetch', fetch);
     render(<App />);
 
-    await screen.findByText('No cameras are paired with this household.');
+    await screen.findByText('Start with a spare Android device');
     fireEvent.click(screen.getAllByRole('button', { name: 'Add camera' })[0]!);
     fireEvent.click(
       screen.getByRole('button', { name: 'Pair Android device' }),
@@ -395,7 +400,9 @@ describe('App', () => {
     render(<App />);
 
     await screen.findByText('Rear camera');
-    expect(screen.getByText('Camera details')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Rear camera settings' }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'View live: Rear camera, Pixel' }),
     ).toBeVisible();
@@ -440,6 +447,92 @@ describe('App', () => {
     expect(fetchMock).toHaveBeenCalledTimes(6);
     expect(
       screen.getByRole('button', { name: 'Turn privacy on' }),
+    ).toBeVisible();
+  });
+
+  it('renames and deletes a camera from the Cameras page info panel', async () => {
+    vi.stubGlobal('WebSocket', TestSocket);
+    let cameras = [
+      {
+        credentialRevoked: false,
+        deviceId: 'device-1',
+        deviceName: 'Pixel',
+        enabled: true,
+        facing: 'rear',
+        id: 'rear-camera',
+        lastSeenAt: new Date().toISOString(),
+        name: 'Rear camera',
+        online: true,
+        platform: 'android',
+        streaming: false,
+        viewerCount: 0,
+      },
+    ];
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        if (url === '/api/auth/me') {
+          return Promise.resolve({
+            json: () =>
+              Promise.resolve({
+                user: { email: 'owner@example.com', id: 'owner' },
+              }),
+            ok: true,
+            status: 200,
+          });
+        }
+        if (url === '/api/devices') {
+          return Promise.resolve({
+            json: () => Promise.resolve({ devices: [] }),
+            ok: true,
+            status: 200,
+          });
+        }
+        if (url === '/api/cameras/rear-camera' && init?.method === 'PATCH') {
+          cameras = [{ ...cameras[0]!, name: 'Front camera' }];
+          return Promise.resolve({
+            json: () => Promise.resolve(undefined),
+            ok: true,
+            status: 204,
+          });
+        }
+        if (url === '/api/cameras/rear-camera' && init?.method === 'DELETE') {
+          cameras = [];
+          return Promise.resolve({
+            json: () => Promise.resolve(undefined),
+            ok: true,
+            status: 204,
+          });
+        }
+        if (url === '/api/cameras') {
+          return Promise.resolve({
+            json: () => Promise.resolve({ cameras }),
+            ok: true,
+            status: 200,
+          });
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cameras' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Rear camera details' }),
+    );
+
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('Front camera');
+    fireEvent.click(screen.getByRole('button', { name: 'Rename camera' }));
+    expect(prompt).toHaveBeenCalledWith('Camera name', 'Rear camera');
+    await screen.findByRole('heading', { name: 'Front camera' });
+
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete camera' }));
+    expect(confirm).toHaveBeenCalledWith(
+      expect.stringContaining('Permanently delete Front camera?'),
+    );
+    expect(
+      await screen.findByText('No cameras are paired with this household.'),
     ).toBeVisible();
   });
 
@@ -506,7 +599,7 @@ describe('App', () => {
         }),
     );
     render(<App />);
-    await screen.findByText('No cameras are paired with this household.');
+    await screen.findByText('Start with a spare Android device');
     fireEvent.click(screen.getByRole('button', { name: 'Activity' }));
     expect(await screen.findByText('Motion detected')).toBeVisible();
     expect(screen.getByText('Hallway phone')).toBeVisible();

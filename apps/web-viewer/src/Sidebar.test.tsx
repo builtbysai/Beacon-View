@@ -24,7 +24,10 @@ describe('desktop sidebar preference', () => {
       'aria-current',
       'page',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /owner@example\.test/ }),
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: /Sign out/ }));
     expect(onLogout).toHaveBeenCalledOnce();
     view.unmount();
     render(
@@ -52,5 +55,50 @@ describe('desktop sidebar preference', () => {
     ).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Home' }));
     expect(items[0]!.onSelect).toHaveBeenCalledOnce();
+  });
+});
+
+describe('account menu', () => {
+  it('renders a Google avatar photo and falls back to an initial if it fails to load', () => {
+    const { container } = render(
+      <Sidebar
+        email="owner@example.test"
+        avatarUrl="https://lh3.googleusercontent.com/a/photo"
+        items={items}
+        onLogout={vi.fn()}
+      />,
+    );
+    const image = container.querySelector('img.sidebar-avatar');
+    expect(image).toHaveAttribute(
+      'src',
+      'https://lh3.googleusercontent.com/a/photo',
+    );
+    fireEvent.error(image!);
+    expect(
+      container.querySelector('img.sidebar-avatar'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('O')).toBeInTheDocument();
+  });
+
+  it('closes on Escape and on an outside click', () => {
+    render(
+      <div>
+        <button type="button">Outside</button>
+        <Sidebar email="owner@example.test" items={items} onLogout={vi.fn()} />
+      </div>,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /owner@example\.test/ }),
+    );
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /owner@example\.test/ }),
+    );
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Outside' }));
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 });

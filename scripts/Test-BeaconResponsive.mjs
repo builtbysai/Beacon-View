@@ -296,7 +296,7 @@ const report = [];
     signedIn = true;
     for (const [route, selector] of [
       ['/', '.home-dashboard'],
-      ['/cameras', '.camera-list'],
+      ['/cameras', '.camera-tile-grid'],
       ['/events', '#motion-events-title'],
       ['/settings', '.settings-layout'],
       ['/camera-mode', '.setup-options'],
@@ -326,15 +326,8 @@ const report = [];
     cameras.forEach((c) => {
       c.privacyMode = true;
     });
-    await visit('/cameras', '.camera-list');
-    await page.getByRole('radio', { name: 'Grid' }).click();
-    await page.locator('.monitor-grid').first().waitFor();
-    await capture(`cameras-grid-${width}`);
-    await page.getByText('Filters & playback', { exact: true }).click();
-    await page.locator('.camera-picker summary').click();
-    await capture(`monitor-options-${width}`);
-    await page.getByRole('radio', { name: 'List' }).click();
-    await page.locator('.camera-list').first().waitFor();
+    await visit('/cameras', '.camera-tile-grid');
+    await capture(`cameras-privacy-${width}`);
 
     await visit('/cameras/camera-0', '.live-surface');
     await capture(`cameras-camera-0-${width}`, width >= 1280);
@@ -412,7 +405,7 @@ const report = [];
     cameras[0].name = 'LongCameraName'.repeat(7);
     cameras[0].deviceName = 'LongDeviceName'.repeat(7);
     devices[0].name = cameras[0].deviceName;
-    await visit('/cameras', '.camera-list');
+    await visit('/cameras', '.camera-tile-grid');
     await capture(`long-camera-names-${width}`);
     await visit('/devices/phone-0', '.device-health');
     await page.getByText('Device settings', { exact: true }).click();
@@ -435,10 +428,13 @@ const report = [];
   }
   await page.setViewportSize({ width: 1280, height: 500 });
   await visit('/', '.home-dashboard');
-  await page.getByRole('button', { name: 'Sign out', exact: true }).focus();
+  await page
+    .getByRole('button', { name: 'household@example.test', exact: true })
+    .click();
+  await page.getByRole('menuitem', { name: 'Sign out', exact: true }).focus();
   await capture('sidebar-short-height');
   const signoutBox = await page
-    .getByRole('button', { name: 'Sign out', exact: true })
+    .getByRole('menuitem', { name: 'Sign out', exact: true })
     .boundingBox();
   assert(
     signoutBox.y >= 0 && signoutBox.y + signoutBox.height <= 501,

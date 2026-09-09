@@ -58,7 +58,8 @@ describe('Activity timeline', () => {
     vi.stubGlobal('fetch', fetch);
     render(<MotionEventList {...props} />);
     await screen.findByText('newest');
-    expect(screen.getAllByRole('option')).toHaveLength(6);
+    expect(screen.getAllByRole('option')).toHaveLength(3);
+    expect(screen.getAllByRole('radio')).toHaveLength(3);
     fireEvent.click(
       screen.getByRole('button', { name: 'Load older activity' }),
     );

@@ -4,12 +4,40 @@ import { Brand, Icon, type IconName } from './Icon';
 
 const preferenceKey = 'beacon.sidebar.collapsed.v1';
 
+function Avatar({
+  email,
+  avatarUrl,
+}: {
+  email: string;
+  avatarUrl?: string | null | undefined;
+}) {
+  const [broken, setBroken] = useState(false);
+  if (avatarUrl && !broken) {
+    return (
+      <img
+        className="sidebar-avatar"
+        src={avatarUrl}
+        alt=""
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  return (
+    <span className="sidebar-avatar sidebar-avatar-initial" aria-hidden="true">
+      {email.charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
 export function Sidebar({
   email,
+  avatarUrl,
   items,
   onLogout,
 }: {
   email: string;
+  avatarUrl?: string | null | undefined;
   items: {
     label: string;
     icon: IconName;
@@ -30,7 +58,9 @@ export function Sidebar({
     top: number;
     left: number;
   } | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const accountRef = useRef<HTMLButtonElement>(null);
   function hideTip() {
     clearTimeout(timer.current);
     setTip(null);
@@ -60,7 +90,10 @@ export function Sidebar({
       setTip(null);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') dismiss();
+      if (event.key === 'Escape') {
+        dismiss();
+        setMenuOpen(false);
+      }
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', dismiss);
@@ -72,6 +105,19 @@ export function Sidebar({
       window.removeEventListener('scroll', dismiss, true);
     };
   }, []);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const dismissOutside = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return;
+      if (
+        accountRef.current &&
+        !accountRef.current.parentElement?.contains(event.target)
+      )
+        setMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', dismissOutside);
+    return () => window.removeEventListener('pointerdown', dismissOutside);
+  }, [menuOpen]);
   function toggle() {
     const next = !collapsed;
     setCollapsed(next);
@@ -128,29 +174,41 @@ export function Sidebar({
         ))}
       </nav>
       <div className="sidebar-footer">
-        <a
-          href="/trust"
-          aria-label="Trust and privacy"
-          data-tooltip="Trust and privacy"
-        >
-          <Icon name="shield" />
-          <span>Trust &amp; privacy</span>
-        </a>
-        <div
+        <button
+          ref={accountRef}
+          type="button"
           className="sidebar-account"
-          data-initial={email.charAt(0).toUpperCase()}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          data-tooltip={email}
+          onClick={() => setMenuOpen((open) => !open)}
         >
+          <Avatar email={email} avatarUrl={avatarUrl} />
           <strong title={email}>{email}</strong>
-          <button
-            className="secondary"
-            aria-label="Sign out"
-            data-tooltip="Sign out"
-            onClick={onLogout}
-          >
-            <Icon name="logout" />
-            <span>Sign out</span>
-          </button>
-        </div>
+          <Icon name="chevronRight" className="sidebar-account-chevron" />
+        </button>
+        {menuOpen && (
+          <div className="sidebar-account-menu" role="menu">
+            <span className="sidebar-account-menu-email" title={email}>
+              {email}
+            </span>
+            <a role="menuitem" href="/trust" onClick={() => setMenuOpen(false)}>
+              <Icon name="shield" />
+              Trust &amp; privacy
+            </a>
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                onLogout();
+              }}
+            >
+              <Icon name="logout" />
+              Sign out
+            </button>
+          </div>
+        )}
       </div>
       {tip &&
         createPortal(

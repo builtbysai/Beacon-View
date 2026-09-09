@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { request } from './api';
+import { Icon } from './Icon';
+
+const timeFilters = [
+  { label: '24 hours', value: 'day' },
+  { label: '7 days', value: 'week' },
+  { label: 'All time', value: 'all' },
+] as const;
 
 interface MotionEvent {
   id: string;
@@ -201,29 +208,37 @@ export function MotionEventList({
             ))}
           </select>
         </label>
-        <label>
-          Time
-          <select
-            aria-label="Filter motion events by time"
-            value={timeFilter}
-            disabled={clearing}
-            onChange={(event) => setTimeFilter(event.target.value)}
-          >
-            <option value="day">Last 24 hours</option>
-            <option value="week">Last 7 days</option>
-            <option value="all">All available</option>
-          </select>
-        </label>
+        <div
+          className="filter-pills"
+          role="radiogroup"
+          aria-label="Filter motion events by time"
+        >
+          {timeFilters.map(({ label, value }) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={timeFilter === value}
+              aria-pressed={timeFilter === value}
+              disabled={clearing}
+              onClick={() => setTimeFilter(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
       {refreshRevision !== seenRevision && (
         <button
           type="button"
+          className="activity-toast"
           disabled={clearing}
           onClick={() => {
             heading.current?.focus();
             setReload((value) => value + 1);
           }}
         >
+          <Icon name="activity" />
           New activity available · Refresh
         </button>
       )}
@@ -258,14 +273,19 @@ export function MotionEventList({
           <ol className="activity-timeline">
             {entries.map((event) => (
               <li key={event.id}>
-                <time dateTime={event.occurredAt}>
-                  {new Date(event.occurredAt).toLocaleTimeString(undefined, {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </time>
-                <div>
-                  <strong>Motion detected</strong>
+                <span className="activity-icon" aria-hidden="true">
+                  <Icon name="activity" />
+                </span>
+                <div className="activity-row-main">
+                  <div className="activity-row-heading">
+                    <strong>Motion detected</strong>
+                    <time dateTime={event.occurredAt}>
+                      {new Date(event.occurredAt).toLocaleTimeString(
+                        undefined,
+                        { hour: 'numeric', minute: '2-digit' },
+                      )}
+                    </time>
+                  </div>
                   <span>{event.deviceName}</span>
                   <span>{event.cameraName}</span>
                   <details>
@@ -279,6 +299,7 @@ export function MotionEventList({
                 </div>
                 {cameras.some((camera) => camera.id === event.cameraId) && (
                   <button
+                    className="secondary"
                     type="button"
                     onClick={() => onCamera(event.cameraId)}
                     aria-label={`Open camera: ${event.deviceName}, ${event.cameraName}`}
