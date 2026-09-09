@@ -12,6 +12,11 @@ from `.devcontainer/devcontainer.json`.
    environment, start PostgreSQL and Coturn, and apply migrations.
 4. Run `pnpm dev` and open forwarded port 5173.
 
+The dev container also recommends the official OpenAI Codex VS Code extension
+(`openai.chatgpt`). Sign in with your ChatGPT account inside VS Code when you
+want the Codex panel or cloud delegation; Codespaces itself does not receive
+Oracle production secrets.
+
 Codespaces uses the safe values from `apps/backend/.env.example`. It does not
 need or receive Oracle production secrets. Never add production secrets as
 Codespaces secrets.
