@@ -17,6 +17,15 @@ interface VideoInput {
 
 const INSTALLATION_KEY = 'beacon_browser_device_id';
 
+/** Browser-reported camera labels often carry a raw USB vendor:product id,
+ * e.g. "HD Pro Webcam C920 (046d:08e5)" — strip that for what's shown/
+ * pre-filled in the UI. The user-editable name field still lets someone
+ * override it, and nothing here is fabricated: it's the same label the
+ * browser already gave us, just without the debugging suffix. */
+function friendlyDeviceLabel(label: string): string {
+  return label.replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)\s*$/i, '').trim();
+}
+
 function installationId(): string {
   const existing = localStorage.getItem(INSTALLATION_KEY);
   if (existing) return existing;
@@ -85,7 +94,9 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
         .filter((device) => device.kind === 'videoinput')
         .map((device, index) => ({
           deviceId: device.deviceId,
-          label: device.label || `Camera ${index + 1}`,
+          label: device.label
+            ? friendlyDeviceLabel(device.label)
+            : `Camera ${index + 1}`,
         }));
       setInputs(devices);
       setSourceNames(
@@ -203,7 +214,7 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
         />
       </label>
       <label>
-        Camera source
+        Camera
         <select
           value={selectedKey}
           onChange={(event) => setSelectedKey(event.target.value)}
@@ -247,8 +258,8 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
       </label>
       {registered.length > 1 && (
         <p className="notice">
-          {registered.length} webcam sources are registered under this browser
-          device. Only the selected source is active.
+          {registered.length} cameras are set up on this browser. Only the
+          selected one is active.
         </p>
       )}
     </>
@@ -265,17 +276,18 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
           muted
         />
         <div className="broadcast-top">
-          <span className="broadcast-live" role="status">
+          <span
+            className={`broadcast-live${viewerCount > 0 ? ' is-watched' : ''}`}
+            role="status"
+          >
             <span aria-hidden="true" className="broadcast-live-dot" />
-            You&rsquo;re on camera
+            {viewerCount > 0
+              ? viewerCount === 1
+                ? '1 viewer watching now'
+                : `${viewerCount} viewers watching now`
+              : 'Camera Mode active · ready for viewing'}
           </span>
           <div className="broadcast-top-actions">
-            {viewerCount > 0 && (
-              <span className="broadcast-viewers">
-                <Icon name="eye" />
-                {viewerCount}
-              </span>
-            )}
             <button
               aria-expanded={settingsOpen}
               aria-label="Camera settings"
@@ -318,7 +330,7 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
           </div>
         )}
         <button className="broadcast-stop" onClick={stop} type="button">
-          Stop being a camera
+          Stop Camera Mode
         </button>
       </main>
     );

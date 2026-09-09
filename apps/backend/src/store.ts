@@ -35,6 +35,7 @@ export interface BrowserSessionRecord {
   createdAt: Date;
   lastSeenAt: Date;
   absoluteExpiresAt: Date;
+  userAgent: string | null;
 }
 
 export interface CameraRecord {
@@ -180,6 +181,7 @@ export interface MilestoneStore {
     idleExpiresAt: Date;
     absoluteExpiresAt: Date;
     reauthenticatedAt?: Date;
+    userAgent?: string | null | undefined;
   }): Promise<void>;
   findSession(tokenHash: string, now: Date): Promise<SessionRecord | null>;
   revokeSession(id: string): Promise<void>;
@@ -429,12 +431,13 @@ export class PostgresStore implements MilestoneStore {
     idleExpiresAt: Date;
     absoluteExpiresAt: Date;
     reauthenticatedAt?: Date;
+    userAgent?: string | null | undefined;
   }): Promise<void> {
     await this.pool.query(
       `INSERT INTO browser_sessions
        (user_id, token_hash, csrf_hash, idle_expires_at, absolute_expires_at,
-        reauthenticated_at)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+        reauthenticated_at, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         input.userId,
         input.tokenHash,
@@ -442,6 +445,7 @@ export class PostgresStore implements MilestoneStore {
         input.idleExpiresAt,
         input.absoluteExpiresAt,
         input.reauthenticatedAt ?? new Date(),
+        input.userAgent ?? null,
       ],
     );
   }
@@ -478,7 +482,8 @@ export class PostgresStore implements MilestoneStore {
   async listBrowserSessions(userId: string): Promise<BrowserSessionRecord[]> {
     const result = await this.pool.query<BrowserSessionRecord>(
       `SELECT id, created_at AS "createdAt", last_seen_at AS "lastSeenAt",
-              absolute_expires_at AS "absoluteExpiresAt"
+              absolute_expires_at AS "absoluteExpiresAt",
+              user_agent AS "userAgent"
        FROM browser_sessions
        WHERE user_id = $1 AND revoked_at IS NULL AND absolute_expires_at > now()
        ORDER BY last_seen_at DESC, id DESC`,

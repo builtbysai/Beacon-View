@@ -134,7 +134,7 @@ export function MotionSettingsPanel({
               }}
             >
               <label>
-                Camera source
+                Camera
                 <select
                   aria-label="Motion settings camera"
                   disabled={busy}

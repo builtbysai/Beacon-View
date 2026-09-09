@@ -234,6 +234,7 @@ export function buildApp(
     reply: FastifyReply,
     userId: string,
     setCookies = true,
+    userAgent?: string,
   ): Promise<string> {
     const token = generateToken();
     const csrfToken = generateToken();
@@ -245,6 +246,9 @@ export function buildApp(
       reauthenticatedAt: new Date(now),
       tokenHash: hashSecret(token),
       userId,
+      // Coarse browser/OS identification only, for "Chrome on Windows"-style
+      // session labels — never an IP address or a device fingerprint.
+      userAgent: userAgent?.slice(0, 300),
     });
     if (!setCookies) return token;
     const cookieOptions = {
@@ -310,7 +314,7 @@ export function buildApp(
     try {
       const passwordHash = await hashPassword(parsed.data.password);
       const user = await store.createAccount(email, passwordHash, request.ip);
-      await issueSession(reply, user.id);
+      await issueSession(reply, user.id, true, request.headers['user-agent']);
       return reply.code(201).send({ user: { email: user.email, id: user.id } });
     } catch (error) {
       if (
@@ -360,7 +364,7 @@ export function buildApp(
     if (!valid || !user) {
       return reply.code(401).send({ error: 'Invalid email or password' });
     }
-    await issueSession(reply, user.id);
+    await issueSession(reply, user.id, true, request.headers['user-agent']);
     return reply.send({ user: { email: user.email, id: user.id } });
   });
 
@@ -479,7 +483,7 @@ export function buildApp(
             `/auth/mobile#code=${encodeURIComponent(handoffCode)}`,
           );
         }
-        await issueSession(reply, user.id);
+        await issueSession(reply, user.id, true, request.headers['user-agent']);
         return reply.redirect('/');
       } catch {
         return reply.redirect(
@@ -513,7 +517,12 @@ export function buildApp(
       success: true,
       userId: handoff.userId,
     });
-    const token = await issueSession(reply, handoff.userId, false);
+    const token = await issueSession(
+      reply,
+      handoff.userId,
+      false,
+      request.headers['user-agent'],
+    );
     return reply.send({
       sessionToken: token,
       user: { email: handoff.email, id: handoff.userId },
@@ -551,7 +560,12 @@ export function buildApp(
       success: true,
       userId: user.id,
     });
-    const token = await issueSession(reply, user.id, false);
+    const token = await issueSession(
+      reply,
+      user.id,
+      false,
+      request.headers['user-agent'],
+    );
     return reply.send({
       sessionToken: token,
       user: { email: user.email, id: user.id },
@@ -597,6 +611,7 @@ export function buildApp(
         expiresAt: session.absoluteExpiresAt.toISOString(),
         id: session.id,
         lastSeenAt: session.lastSeenAt.toISOString(),
+        userAgent: session.userAgent,
       })),
     };
   });

@@ -1,5 +1,5 @@
 {
-  "name": "Beacon SecureView",
+  "name": "Beacon",
   "short_name": "Beacon",
   "description": "Turn any device into a secure camera and watch it live from anywhere.",
   "start_url": "/?source=pwa",
@@ -8,8 +8,8 @@
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone"],
   "orientation": "any",
-  "background_color": "#0b1220",
-  "theme_color": "#0b1220",
+  "background_color": "#090d16",
+  "theme_color": "#090d16",
   "icons": [
     {
       "src": "/icons/icon-192.png",

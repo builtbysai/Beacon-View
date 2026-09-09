@@ -21,13 +21,14 @@ describe('MotionRetentionSettings', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(<MotionRetentionSettings />);
 
-    expect(
-      await screen.findByLabelText('Keep motion metadata for'),
-    ).toHaveValue('30');
-    fireEvent.change(screen.getByLabelText('Keep motion metadata for'), {
+    expect(await screen.findByLabelText('Keep motion history for')).toHaveValue(
+      '30',
+    );
+    expect(screen.queryByText('✓ Saved')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Keep motion history for'), {
       target: { value: '7' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save retention' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith(
@@ -35,6 +36,6 @@ describe('MotionRetentionSettings', () => {
         expect.objectContaining({ method: 'PUT' }),
       ),
     );
-    expect(await screen.findByText('Retention saved.')).toBeVisible();
+    expect(await screen.findByText('✓ Saved')).toBeVisible();
   });
 });

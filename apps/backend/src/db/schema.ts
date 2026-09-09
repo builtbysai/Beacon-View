@@ -67,6 +67,7 @@ export const browserSessions = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     tokenHash: text('token_hash').notNull(),
     csrfHash: text('csrf_hash').notNull(),
+    userAgent: text('user_agent'),
     idleExpiresAt: timestamp('idle_expires_at', {
       withTimezone: true,
     }).notNull(),

@@ -491,16 +491,6 @@ button > .icon:first-child {
   fill: currentColor;
 }
 
-.brand-word-accent {
-  fill: #0ea5e9;
-}
-
-@media (prefers-color-scheme: dark) {
-  .brand-word-accent {
-    fill: #38bdf8;
-  }
-}
-
 .alpha-badge {
   width: fit-content;
   padding: 0.25rem 0.65rem;
@@ -530,12 +520,26 @@ button > .icon:first-child {
 }
 
 .workspace > * {
-  max-width: 78rem;
+  max-width: 46rem;
   margin-inline: auto;
 }
 
 .wide {
   width: 100%;
+}
+
+/* Content-width intent per page type, independent of `.wide`'s width:100%
+   (which just fills whatever box it's given). A settings form and a camera
+   grid don't want the same reading width — a single global cap either
+   crams the grid or over-stretches the form, so each route opts into the
+   composition its content actually needs instead of "everything full width
+   because the screen is bigger." */
+.workspace-medium {
+  max-width: 72rem;
+}
+
+.workspace-wide {
+  max-width: min(94vw, 104rem);
 }
 
 .card {
@@ -673,7 +677,14 @@ button > .icon:first-child {
 }
 
 .nav-button .icon,
-.nav-active .icon {
+.nav-active .icon,
+.nav-button span,
+.nav-active span {
+  /* The global `span { color }` reset (for ordinary body text) otherwise
+     wins over the button's own active/inactive color, so the label text
+     silently stayed the same muted shade in both states — the selected
+     item was only distinguishable by its icon and background pill, not
+     its text. */
   color: inherit;
 }
 
@@ -881,6 +892,13 @@ button > .icon:first-child {
 
 .add-camera-button {
   box-shadow: var(--shadow-sm);
+}
+
+.add-camera-button span {
+  /* Same global span-color override as the nav labels above — without
+     this the button's label rendered in muted text-secondary instead of
+     the button's own white action-text, on top of the solid blue fill. */
+  color: inherit;
 }
 
 .heading,
@@ -1193,7 +1211,10 @@ button > .icon:first-child {
 }
 
 .camera-results {
-  margin-left: auto;
+  /* No longer pushed to the far right with `margin-left: auto` — on a wide
+     desktop composition that put a huge disconnected gap between it and
+     the controls it actually describes. It now sits in normal flow right
+     after them. */
   color: var(--text-muted);
   font-size: 0.82rem;
 }
@@ -1359,7 +1380,8 @@ button > .icon:first-child {
 
 .device-settings summary,
 .device-guidance summary,
-.activity-timeline summary {
+.activity-timeline summary,
+.live-info summary {
   display: flex;
   min-height: 44px;
   align-items: center;
@@ -1369,21 +1391,27 @@ button > .icon:first-child {
   font-weight: 650;
 }
 
-.device-settings summary {
+.device-settings summary,
+.live-info summary {
   width: fit-content;
   padding-block: var(--space-3);
 }
 
 .device-settings summary::marker,
 .device-guidance summary::marker,
-.activity-timeline summary::marker {
+.activity-timeline summary::marker,
+.live-info summary::marker {
   color: var(--text-muted);
 }
 
 /* ---------- Camera tiles (dashboard + cameras grid) ---------- */
 .camera-tile-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  /* auto-fit (not auto-fill) collapses unused tracks so a handful of
+     cameras fill the row evenly instead of hugging the left edge of a wide
+     desktop viewport with empty grid tracks after them; the upper bound on
+     each track keeps a single camera from stretching edge-to-edge. */
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 22rem));
   gap: var(--space-3);
 }
 
@@ -1749,6 +1777,10 @@ button > .icon:first-child {
   background: linear-gradient(180deg, rgb(3 7 14 / 70%), transparent);
 }
 
+/* Default: Camera Mode is armed but nobody is watching — a calm, neutral
+   badge. It only turns red and pulses once a viewer actually connects
+   (.is-watched), so "available to view" and "being watched right now"
+   never read as the same state. */
 .broadcast-live {
   display: inline-flex;
   align-items: center;
@@ -1758,6 +1790,11 @@ button > .icon:first-child {
   color: #fff;
   font-size: 0.82rem;
   font-weight: 700;
+  background: rgb(15 23 42 / 72%);
+  backdrop-filter: blur(6px);
+}
+
+.broadcast-live.is-watched {
   background: rgb(220 38 38 / 90%);
 }
 
@@ -1766,6 +1803,9 @@ button > .icon:first-child {
   height: 0.5rem;
   border-radius: 50%;
   background: #fff;
+}
+
+.broadcast-live.is-watched .broadcast-live-dot {
   animation: broadcast-pulse 1.6s ease-in-out infinite;
 }
 
@@ -1790,24 +1830,6 @@ button > .icon:first-child {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-}
-
-.broadcast-viewers {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.7rem;
-  border-radius: 999px;
-  color: #e7f0fb;
-  font-size: 0.78rem;
-  font-weight: 650;
-  background: rgb(6 14 26 / 62%);
-  backdrop-filter: blur(6px);
-}
-
-.broadcast-viewers .icon {
-  width: 0.85rem;
-  height: 0.85rem;
 }
 
 .broadcast-icon-button {
@@ -2069,6 +2091,31 @@ button > .icon:first-child {
   border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: var(--shadow-lg);
+}
+
+.confirm-modal {
+  display: grid;
+  gap: var(--space-4);
+  width: min(100%, 28rem);
+  padding: clamp(1.5rem, 4vw, 2.25rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.confirm-modal h2 {
+  margin: 0;
+}
+
+.confirm-modal-body {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+}
+
+.confirm-modal-actions {
+  justify-content: flex-end;
 }
 
 .pairing {
@@ -2387,7 +2434,17 @@ button > .icon:first-child {
   --text-muted: #7c89a3;
   --accent: #38bdf8;
   overflow: hidden;
-  max-width: 60rem;
+  /* Theater sizing: the live view is the core product, not a dashboard
+     card, so it should claim most of a large desktop viewport instead of
+     sitting at a fixed width with empty space on either side. Width is
+     capped by three terms: a comfortable minimum, a share of the viewport
+     width, and — since the 16:9 video-frame's height tracks its width — a
+     share of the viewport *height* converted through that same ratio, so a
+     wide-but-short monitor never gets a page taller than its own viewport.
+     15rem approximates the fixed vertical chrome around the video (shell
+     padding plus the footer's status/controls row). */
+  max-width: min(92vw, 100rem, calc((100dvh - 15rem) * 16 / 9));
+  min-width: min(92vw, 60rem);
   padding: 0;
   color: var(--text);
   background: var(--bg);
@@ -2526,13 +2583,23 @@ button > .icon:first-child {
   font-size: 0.8rem;
 }
 
+/* A flat, divided row list instead of a grid of individually bordered
+   cards — used for the Devices page and reused (via ancestor selector)
+   for the shorter device/session lists embedded in Settings. A page-level
+   list of devices doesn't need each row to *also* look like its own card
+   nested inside the page. */
+.device-list--rows,
 .settings-section .device-list {
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
+}
+
+.settings-section .device-list {
   max-height: 30rem;
   overflow: auto;
 }
 
+.device-list--rows li,
 .settings-section .device-list li {
   flex-direction: row;
   align-items: center;
@@ -2544,12 +2611,16 @@ button > .icon:first-child {
   box-shadow: none;
 }
 
+.device-list--rows li:last-child,
 .settings-section .device-list li:last-child {
   border-bottom: 0;
 }
 
+.device-list--rows li button,
 .settings-section .device-list li button {
   width: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .access-list {

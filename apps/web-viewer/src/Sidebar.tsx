@@ -48,10 +48,20 @@ export function Sidebar({
 }) {
   const [collapsed, setCollapsed] = useState(() => {
     try {
-      return localStorage.getItem(preferenceKey) === 'true';
+      const stored = localStorage.getItem(preferenceKey);
+      if (stored !== null) return stored === 'true';
     } catch {
-      return false;
+      /* No storage available — fall through to the width-based default. */
     }
+    // No explicit preference yet: default to the compact icon rail at
+    // tablet-portrait widths, where a full labeled sidebar costs too much
+    // content width, and to the full sidebar everywhere wider. The user's
+    // own choice (above) always overrides this default once they make one.
+    return (
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(min-width: 761px) and (max-width: 1024px)').matches
+    );
   });
   const [tip, setTip] = useState<{
     label: string;

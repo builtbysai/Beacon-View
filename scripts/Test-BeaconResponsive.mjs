@@ -339,10 +339,38 @@ const report = [];
       c.privacyMode = i === 2;
     });
     await visit('/', '.home-dashboard');
+    if (width > 760 && width <= 1024) {
+      // Tablet-portrait widths default to the compact icon rail (no stored
+      // preference yet in this browser context) — confirm that explicitly
+      // before the generic toggle test below forces it back to expanded.
+      assert.equal(
+        await page.getByRole('button', { name: 'Expand sidebar' }).isVisible(),
+        true,
+        `${width}: tablet width must default to a collapsed sidebar rail`,
+      );
+      assert.equal(
+        await page.locator('nav button span').first().isVisible(),
+        false,
+        `${width}: tablet default rail must hide nav labels`,
+      );
+      await capture(`tablet-default-rail-${width}`);
+    }
     if (width > 760) {
+      // Bring the page to the front before keyboard interaction: after many
+      // rapid full-page navigations (including a detour through the live
+      // view's entirely different page shell), headless Edge can leave the
+      // tab's focus state in a way that makes a .focus()-triggered tooltip
+      // flaky immediately afterward even though the same interaction is
+      // reliable in isolation — a short settle wait avoids that false
+      // negative without weakening what the assertions below check.
+      await page.bringToFront();
+      await page.waitForTimeout(150);
+      const expandToggle = page.getByRole('button', { name: 'Expand sidebar' });
+      if (await expandToggle.isVisible()) await expandToggle.click();
       const toggle = page.getByRole('button', { name: 'Collapse sidebar' });
       await toggle.focus();
       await page.keyboard.press('Enter');
+      await page.waitForTimeout(150);
       await page.getByRole('button', { name: 'Home', exact: true }).focus();
       await page.getByRole('tooltip', { name: 'Home' }).waitFor();
       await capture(`sidebar-collapsed-${width}`);

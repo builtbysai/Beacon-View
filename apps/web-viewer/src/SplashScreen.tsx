@@ -12,9 +12,9 @@ export function SplashScreen({ onContinue }: { onContinue: () => void }) {
           <em>watch it live from anywhere.</em>
         </h1>
         <p className="splash-lead">
-          Beacon connects a spare Android phone to any modern browser over a
-          private, encrypted link. Capture stays visible on the device. Nothing
-          is ever recorded.
+          Beacon connects a spare phone, tablet, or computer to any modern
+          browser over a private, encrypted link. Capture stays visible on the
+          device. Video is never recorded or stored.
         </p>
 
         <div className="trust-flow splash-flow" aria-hidden="true">

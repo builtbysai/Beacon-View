@@ -276,7 +276,7 @@ export function Brand({
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         role="img"
-        aria-label="Beacon SecureView"
+        aria-label="Beacon"
       >
         {mark}
       </svg>
@@ -290,7 +290,7 @@ export function Brand({
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label="Beacon SecureView"
+      aria-label="Beacon"
     >
       <defs>
         <linearGradient id={beam} x1="0%" y1="0%" x2="100%" y2="0%">
@@ -309,10 +309,7 @@ export function Brand({
         letterSpacing="-0.4"
       >
         <tspan className="brand-word" fontWeight="800">
-          beacon{' '}
-        </tspan>
-        <tspan className="brand-word-accent" fontWeight="500">
-          SecureView
+          Beacon
         </tspan>
       </text>
     </svg>

@@ -9,6 +9,7 @@ import type { PairingLifecycle } from './lifecycle';
 import { LiveVideo } from './LiveVideo';
 import { CameraTile } from './CameraTile';
 import { ModalDialog } from './ModalDialog';
+import { ConfirmDialog } from './ConfirmDialog';
 import { BrowserCameraMode } from './BrowserCameraMode';
 import { MotionEventList } from './MotionEventList';
 import { MotionSettingsPanel } from './MotionSettingsPanel';
@@ -131,6 +132,26 @@ const navigationIcons: Record<string, IconName> = {
   settings: 'settings',
 };
 
+// Only routes where adding a camera is a genuinely relevant action get the
+// header shortcut — a page shell action is opt-in per route, not a blanket
+// default that every screen has to individually hide.
+const pagesWithAddCamera: ReadonlySet<Page> = new Set(['cameras', 'devices']);
+
+// Desktop composition per page type: a camera/device grid earns extra
+// width, a settings/reading page doesn't, and the header above each page
+// must match its content's width or the two visibly disagree.
+const pageContentWidth: Partial<Record<Page, 'medium' | 'wide'>> = {
+  cameras: 'wide',
+  devices: 'medium',
+  'camera mode': 'medium',
+  events: 'medium',
+};
+
+function contentWidthClass(page: Page): string {
+  const width = pageContentWidth[page];
+  return width ? `workspace-${width}` : '';
+}
+
 function pageFromPath(): Page {
   if (window.location.pathname.startsWith('/devices/')) return 'devices';
   if (window.location.pathname.startsWith('/cameras/')) return 'cameras';
@@ -164,6 +185,20 @@ function relativeLastSeen(value: string | null): string {
   );
 }
 
+/** A device's platform and device-type fields are legitimately distinct
+ * concepts, but a browser camera has the same value in both ('browser'),
+ * which would otherwise render as a literal "browser · browser" — collapse
+ * that duplicate instead of leaking raw field values into the UI. */
+function deviceKindLabel(device: {
+  platform: string;
+  deviceType: string;
+}): string {
+  const capitalize = (value: string) =>
+    value.length === 0 ? value : value[0]!.toUpperCase() + value.slice(1);
+  if (device.platform === device.deviceType) return capitalize(device.platform);
+  return `${capitalize(device.platform)} ${device.deviceType}`;
+}
+
 function capabilitySummary(
   capabilities: Record<string, boolean | number | string> | undefined,
 ): string {
@@ -194,6 +229,12 @@ export function App() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [authBusy, setAuthBusy] = useState(false);
   const [error, setError] = useState('');
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    description: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
   const [page, setPage] = useState<Page>(pageFromPath);
   const [pairingOpen, setPairingOpen] = useState(false);
   const [pairingCode, setPairingCode] = useState('');
@@ -217,7 +258,7 @@ export function App() {
   const priorPage = useRef(page);
 
   useEffect(() => {
-    document.title = `${pageLabels[page]} · Beacon SecureView`;
+    document.title = `${pageLabels[page]} · Beacon`;
     if (priorPage.current !== page) pageHeading.current?.focus();
     priorPage.current = page;
   }, [page]);
@@ -448,17 +489,23 @@ export function App() {
     }
   }
 
-  async function deleteCamera(camera: Camera) {
+  function requestDeleteCamera(camera: Camera) {
     const warning =
       camera.viewerCount > 0
         ? ` ${camera.viewerCount} active viewer session(s) will be terminated.`
         : '';
-    if (
-      !window.confirm(
-        `Permanently delete ${camera.name}? This camera source will be removed.${warning} The device must add it again.`,
-      )
-    )
-      return;
+    setPendingConfirm({
+      title: `Permanently delete ${camera.name}?`,
+      description: `This camera will be removed.${warning} The device must add it again.`,
+      confirmLabel: 'Delete camera',
+      onConfirm: () => {
+        setPendingConfirm(null);
+        void deleteCamera(camera);
+      },
+    });
+  }
+
+  async function deleteCamera(camera: Camera) {
     try {
       setError('');
       await request(`/api/cameras/${camera.id}`, { method: 'DELETE' });
@@ -472,7 +519,7 @@ export function App() {
     }
   }
 
-  async function deleteDevice(device: Device) {
+  function requestDeleteDevice(device: Device) {
     const viewerCount = cameras
       .filter((camera) => camera.deviceId === device.id)
       .reduce((total, camera) => total + camera.viewerCount, 0);
@@ -480,12 +527,18 @@ export function App() {
       viewerCount > 0
         ? ` ${viewerCount} active viewer session(s) will be terminated.`
         : '';
-    if (
-      !window.confirm(
-        `Permanently delete ${device.name}? All camera sources and registration data will be removed.${warning} The device must be paired again.`,
-      )
-    )
-      return;
+    setPendingConfirm({
+      title: `Permanently delete ${device.name}?`,
+      description: `Every camera paired to it will be removed.${warning} The device must be paired again.`,
+      confirmLabel: 'Delete device',
+      onConfirm: () => {
+        setPendingConfirm(null);
+        void deleteDevice(device);
+      },
+    });
+  }
+
+  async function deleteDevice(device: Device) {
     try {
       setError('');
       await request(`/api/devices/${device.id}`, { method: 'DELETE' });
@@ -502,13 +555,20 @@ export function App() {
     }
   }
 
+  function requestDeleteAccount() {
+    setPendingConfirm({
+      title: 'Delete your Beacon account?',
+      description:
+        "This ends live sessions and removes your household, paired devices, camera settings, and motion history from Beacon. You'll need to reauthenticate within 10 minutes to confirm. Encrypted backup copies expire on their normal schedule.",
+      confirmLabel: 'Delete account',
+      onConfirm: () => {
+        setPendingConfirm(null);
+        void deleteAccount();
+      },
+    });
+  }
+
   async function deleteAccount() {
-    if (
-      !window.confirm(
-        'Permanently delete your Beacon account? This ends live sessions and removes your household, paired devices, camera settings, and motion metadata from Beacon. Encrypted backup copies expire on their normal schedule.',
-      )
-    )
-      return;
     try {
       setError('');
       await request('/api/account', {
@@ -690,7 +750,7 @@ export function App() {
       />
       <main className="workspace" id="main-content" tabIndex={-1}>
         {page !== 'dashboard' && (
-          <header className="page-heading">
+          <header className={`page-heading ${contentWidthClass(page)}`}>
             <div>
               <p className="eyebrow">Beacon / Your household</p>
               <h2 ref={pageHeading} tabIndex={-1}>
@@ -698,7 +758,7 @@ export function App() {
               </h2>
               <p className="page-description">{pageDescriptions[page]}</p>
             </div>
-            {page !== 'camera mode' && (
+            {pagesWithAddCamera.has(page) && (
               <button
                 className="add-camera-button"
                 aria-label="Add camera"
@@ -712,7 +772,7 @@ export function App() {
         )}
         {error && <p role="alert">{error}</p>}
         {page === 'dashboard' && (
-          <section className="home-dashboard">
+          <section className="home-dashboard workspace-wide">
             <div className="home-hero">
               <div>
                 <h1 className="home-title" ref={pageHeading} tabIndex={-1}>
@@ -731,7 +791,7 @@ export function App() {
                 </h2>
                 <p>
                   {cameras.length === 0
-                    ? 'Pair a spare Android phone or tablet to begin.'
+                    ? 'Pair a spare phone, tablet, or computer to begin.'
                     : attentionCount > 0
                       ? 'Review what needs attention.'
                       : privacyCount === cameras.length
@@ -763,20 +823,24 @@ export function App() {
                   <strong>{onlineCount}</strong>
                   <span>Ready to view</span>
                 </article>
-                <article>
-                  <span className="metric-icon privacy" aria-hidden="true">
-                    <Icon name="lock" />
-                  </span>
-                  <strong>{privacyCount}</strong>
-                  <span>Privacy on</span>
-                </article>
-                <article>
-                  <span className="metric-icon attention" aria-hidden="true">
-                    <Icon name="alert" />
-                  </span>
-                  <strong>{attentionCount}</strong>
-                  <span>Need attention</span>
-                </article>
+                {privacyCount > 0 && (
+                  <article>
+                    <span className="metric-icon privacy" aria-hidden="true">
+                      <Icon name="lock" />
+                    </span>
+                    <strong>{privacyCount}</strong>
+                    <span>Privacy on</span>
+                  </article>
+                )}
+                {attentionCount > 0 && (
+                  <article>
+                    <span className="metric-icon attention" aria-hidden="true">
+                      <Icon name="alert" />
+                    </span>
+                    <strong>{attentionCount}</strong>
+                    <span>Need attention</span>
+                  </article>
+                )}
                 <article>
                   <span className="metric-icon live" aria-hidden="true">
                     <Icon name="eye" />
@@ -786,29 +850,22 @@ export function App() {
                 </article>
               </div>
             )}
-            <article className="card camera-summary">
-              <div className="section-heading">
-                <div>
-                  <p className="eyebrow">Your cameras</p>
-                  <h3>
-                    {cameras.length === 0
-                      ? 'Start with a spare Android device'
-                      : 'Around your home'}
-                  </h3>
+            {cameras.length > 0 && (
+              <article className="card camera-summary">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Your cameras</p>
+                    <h3>Around your home</h3>
+                  </div>
+                  {cameras.length > 6 && (
+                    <button
+                      className="link"
+                      onClick={() => navigate('cameras')}
+                    >
+                      See all cameras
+                    </button>
+                  )}
                 </div>
-                {cameras.length > 0 && (
-                  <button className="link" onClick={() => navigate('cameras')}>
-                    See all cameras
-                  </button>
-                )}
-              </div>
-              {cameras.length === 0 && (
-                <p>
-                  Android is the everyday camera. This browser is for temporary,
-                  attended setup.
-                </p>
-              )}
-              {cameras.length > 0 && (
                 <div className="camera-tile-grid">
                   {cameras.slice(0, 6).map((camera) => (
                     <CameraTile
@@ -818,12 +875,12 @@ export function App() {
                       onOpen={openCamera}
                       onDevice={openDevice}
                       onRename={(item) => void renameCamera(item)}
-                      onDelete={(item) => void deleteCamera(item)}
+                      onDelete={(item) => requestDeleteCamera(item)}
                     />
                   ))}
                 </div>
-              )}
-            </article>
+              </article>
+            )}
             {cameras.length === 0 && (
               <article
                 className="card onboarding-steps"
@@ -841,7 +898,7 @@ export function App() {
                     <div>
                       <strong>Turn a device into a camera</strong>
                       <p>
-                        Use a spare Android phone or tablet for an everyday
+                        Use a spare phone, tablet, or computer for an everyday
                         camera, or this browser for a temporary one.
                       </p>
                     </div>
@@ -876,7 +933,10 @@ export function App() {
           </section>
         )}
         {page === 'cameras' && (
-          <section className="camera-catalog wide" aria-label="Your cameras">
+          <section
+            className="camera-catalog wide workspace-wide"
+            aria-label="Your cameras"
+          >
             <CameraBrowser cameras={cameras} key={user.id}>
               {(items) =>
                 items.length === 0 ? (
@@ -893,7 +953,7 @@ export function App() {
                         onOpen={openCamera}
                         onDevice={openDevice}
                         onRename={(item) => void renameCamera(item)}
-                        onDelete={(item) => void deleteCamera(item)}
+                        onDelete={(item) => requestDeleteCamera(item)}
                       />
                     ))}
                   </div>
@@ -912,11 +972,12 @@ export function App() {
               const camera = cameras.find((item) => item.id === id);
               if (camera) openCamera(camera);
             }}
+            onAddCamera={() => navigate('camera mode')}
           />
         )}
-        {page === 'devices' && (
-          <section className="card wide">
-            {selectedDeviceId ? (
+        {page === 'devices' &&
+          (selectedDeviceId ? (
+            <section className="card wide workspace-medium">
               <DeviceDetail
                 cameras={cameras.filter(
                   (camera) => camera.deviceId === selectedDeviceId,
@@ -931,60 +992,62 @@ export function App() {
                 }}
                 onLive={openCamera}
                 onRename={(device) => void renameDevice(device)}
-                onDelete={(device) => void deleteDevice(device)}
+                onDelete={(device) => requestDeleteDevice(device)}
                 onCameraRename={(camera) => void renameCamera(camera)}
-                onCameraDelete={(camera) => void deleteCamera(camera)}
+                onCameraDelete={(camera) => requestDeleteCamera(camera)}
                 onPrivacy={(device) => void setPrivacy(device)}
               />
-            ) : (
-              <>
-                <p className="eyebrow">Paired with your household</p>
-                <h3>Devices</h3>
-                {devices.length === 0 && (
-                  <p className="empty">
-                    No devices yet. Pair Android or use this browser as a
-                    camera.
-                  </p>
-                )}
-                <ul className="device-list">
-                  {devices.map((device) => (
+            </section>
+          ) : (
+            <section className="workspace-medium" aria-label="Devices">
+              {devices.length === 0 && (
+                <p className="empty">
+                  No devices yet. Pair a camera device or use this browser as a
+                  camera.
+                </p>
+              )}
+              <ul className="device-list device-list--rows">
+                {devices.map((device) => {
+                  const cameraCount = cameras.filter(
+                    (camera) => camera.deviceId === device.id,
+                  ).length;
+                  return (
                     <li key={device.id}>
                       <div>
                         <strong>{device.name}</strong>
-                        <span>
-                          {device.platform} · {device.deviceType}
+                        <span>{deviceKindLabel(device)}</span>
+                        <span className={device.online ? 'online' : 'offline'}>
+                          {device.online ? 'Online' : 'Offline'}
                         </span>
+                        <span>
+                          {cameraCount === 0
+                            ? 'No camera yet'
+                            : cameraCount === 1
+                              ? '1 camera'
+                              : `${cameraCount} cameras`}
+                          {' · '}Last seen {relativeLastSeen(device.lastSeenAt)}
+                        </span>
+                        {device.platform === 'android' && (
+                          <span>
+                            {device.batteryPercent === null ||
+                            device.batteryPercent === undefined
+                              ? 'Battery not yet reported'
+                              : `${device.batteryPercent}% battery${device.batteryCharging ? ' · charging' : ''}`}
+                          </span>
+                        )}
                       </div>
-                      <span className={device.online ? 'online' : 'offline'}>
-                        {device.online ? 'ONLINE' : 'OFFLINE'}
-                      </span>
-                      <span>
-                        {
-                          cameras.filter(
-                            (camera) => camera.deviceId === device.id,
-                          ).length
-                        }{' '}
-                        camera sources
-                      </span>
-                      <span>
-                        Last seen {relativeLastSeen(device.lastSeenAt)}
-                      </span>
-                      <span>
-                        {device.batteryPercent === null ||
-                        device.batteryPercent === undefined
-                          ? 'Battery not yet reported'
-                          : `${device.batteryPercent}% battery${device.batteryCharging ? ' · charging' : ''}`}
-                      </span>
-                      <button onClick={() => openDevice(device.id)}>
+                      <button
+                        className="secondary"
+                        onClick={() => openDevice(device.id)}
+                      >
                         Open device
                       </button>
                     </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </section>
-        )}
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
         {page === 'diagnostics' && <Diagnostics />}
         {page === 'settings' && (
           <div className="settings-layout wide">
@@ -1016,7 +1079,7 @@ export function App() {
             >
               <h3 id="security-section-title">Security</h3>
               <BrowserSessions onCurrentRevoked={clearLocalSession} />
-              <AccessHistory />
+              <AccessHistory currentEmail={user.email} />
             </section>
 
             <section
@@ -1055,12 +1118,15 @@ export function App() {
                 <div>
                   <strong>Delete this account</strong>
                   <p>
-                    Permanently removes your household, devices, settings, and
-                    motion metadata. Reauthenticate within 10 minutes; backup
-                    copies expire on their normal schedule.
+                    Permanently deletes your Beacon household, paired devices,
+                    settings, and motion history. You&rsquo;ll be asked to
+                    confirm before deletion.
                   </p>
                 </div>
-                <button className="danger" onClick={() => void deleteAccount()}>
+                <button
+                  className="danger"
+                  onClick={() => requestDeleteAccount()}
+                >
                   Delete account
                 </button>
               </div>
@@ -1068,7 +1134,7 @@ export function App() {
           </div>
         )}
         {page === 'camera mode' && (
-          <section className="card wide">
+          <section className="card wide workspace-medium">
             <p className="eyebrow">Add a camera</p>
             <h3>Choose how you want to use Beacon</h3>
             <p>
@@ -1188,6 +1254,15 @@ export function App() {
           </section>
         </ModalDialog>
       )}
+      {pendingConfirm && (
+        <ConfirmDialog
+          title={pendingConfirm.title}
+          description={pendingConfirm.description}
+          confirmLabel={pendingConfirm.confirmLabel}
+          onConfirm={pendingConfirm.onConfirm}
+          onCancel={() => setPendingConfirm(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1279,8 +1354,8 @@ function PublicTrustPage() {
         <h1 id="trust-title">Your camera stays under your control.</h1>
         <p className="trust-lead">
           Beacon is built around one rule: nothing happens without your say.
-          Capture stays visible, viewing is always explicit, and nothing is ever
-          recorded.
+          Capture stays visible, viewing is always explicit, and video is never
+          recorded or stored.
         </p>
 
         <div className="trust-flow" aria-hidden="true">
@@ -1405,14 +1480,16 @@ function DeviceDetail({
     : device.revoked
       ? 'Access revoked'
       : !device.enabled
-        ? 'Registration disabled'
+        ? 'Pairing disabled'
         : device.online
           ? 'Online'
           : 'Offline';
   const batteryLabel =
-    device.batteryPercent === null || device.batteryPercent === undefined
-      ? 'Not reported yet'
-      : `${device.batteryPercent}%${device.batteryCharging ? ' · charging' : ''}`;
+    device.platform !== 'android'
+      ? 'Not applicable'
+      : device.batteryPercent === null || device.batteryPercent === undefined
+        ? 'Not reported yet'
+        : `${device.batteryPercent}%${device.batteryCharging ? ' · charging' : ''}`;
   const warning =
     device.online &&
     device.enabled &&
@@ -1436,9 +1513,7 @@ function DeviceDetail({
     <>
       <div className="heading device-heading">
         <div>
-          <p className="eyebrow">
-            {device.platform} · {device.deviceType}
-          </p>
+          <p className="eyebrow">{deviceKindLabel(device)}</p>
           <h3>{device.name}</h3>
         </div>
         <button
@@ -1514,7 +1589,7 @@ function DeviceDetail({
           <div>
             <h4 id="device-privacy-title">Device privacy</h4>
             <p>
-              Applies to every camera source on this phone. Local privacy is the
+              Applies to every camera on this phone. Local privacy is the
               fastest way to stop capture.
             </p>
           </div>
@@ -1526,34 +1601,42 @@ function DeviceDetail({
           </button>
         </section>
       )}
-      <p className="notice device-source-note">
-        This device currently supports one active camera source at a time.
-        Switching sources preserves the device registration.
-      </p>
-      <h4>Camera sources</h4>
+      <h4>Cameras</h4>
       {cameras.length === 0 ? (
-        <p className="empty">No camera sources on this device.</p>
+        <p className="empty">No camera paired to this device yet.</p>
       ) : (
-        <div className="camera-tile-grid">
-          {cameras.map((camera) => (
-            <CameraTile
-              key={camera.id}
-              camera={camera}
-              onOpen={onLive}
-              onRename={onCameraRename}
-              onDelete={onCameraDelete}
-            />
-          ))}
-        </div>
+        <>
+          {cameras.length > 1 && (
+            <p className="notice device-source-note">
+              This device can use one camera at a time. Switching cameras keeps
+              the device paired.
+            </p>
+          )}
+          <div className="camera-tile-grid">
+            {cameras.map((camera) => (
+              <CameraTile
+                key={camera.id}
+                camera={camera}
+                onOpen={onLive}
+                onRename={onCameraRename}
+                onDelete={onCameraDelete}
+              />
+            ))}
+          </div>
+        </>
       )}
       <details className="device-settings">
         <summary>Device settings</summary>
         <div className="device-settings-content">
           <p>Capabilities: {capabilitySummary(device.capabilities)}</p>
           <p>
-            Version: {device.softwareVersion ?? 'not reported'}
-            {' · '}Registration: {device.enabled ? 'enabled' : 'disabled'}
-            {' · '}Authentication: {device.revoked ? 'revoked' : 'valid'}
+            Software version: {device.softwareVersion ?? 'not reported'}
+            {' · '}Device access:{' '}
+            {device.revoked
+              ? 'Revoked'
+              : device.enabled
+                ? 'Active'
+                : 'Disabled'}
           </p>
           <div className="heading-actions">
             <button className="secondary" onClick={() => onRename(device)}>
@@ -1564,8 +1647,8 @@ function DeviceDetail({
             </button>
           </div>
           <p className="notice">
-            Removing this device disconnects every camera source registered to
-            it. You can pair the device again later.
+            Removing this device disconnects every camera paired to it. You can
+            pair the device again later.
           </p>
         </div>
       </details>
@@ -1576,7 +1659,7 @@ function DeviceDetail({
   );
 }
 
-function AccessHistory() {
+function AccessHistory({ currentEmail }: { currentEmail: string }) {
   const [events, setEvents] = useState<AccessEvent[] | null>(null);
   const [error, setError] = useState('');
 
@@ -1599,7 +1682,8 @@ function AccessHistory() {
       <h4 id="access-history-title">Recent camera access</h4>
       <p className="notice">
         The latest 50 successful and rejected live-view attempts for this
-        household. Network addresses and connection details are not shown.
+        household. An entry with no account shown was your account. Network
+        addresses and connection details are not shown.
       </p>
       {error && <p role="alert">{error}</p>}
       {events === null && !error && (
@@ -1616,7 +1700,9 @@ function AccessHistory() {
                 </strong>
                 <span>{event.deviceName ?? 'Unknown camera device'}</span>
               </div>
-              <span>{event.actorEmail ?? 'Unknown account'}</span>
+              {event.actorEmail && event.actorEmail !== currentEmail && (
+                <span>{event.actorEmail}</span>
+              )}
               <span>{new Date(event.occurredAt).toLocaleString()}</span>
             </li>
           ))}

@@ -20,7 +20,7 @@ describe('device setup and recovery guidance', () => {
     });
     expect(deviceGuidance({ ...android, enabled: false })).toMatchObject({
       attention: true,
-      title: 'Registration is disabled',
+      title: 'Pairing is disabled',
     });
   });
 

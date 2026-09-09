@@ -583,4 +583,37 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
       1,
     );
   });
+
+  it('stores a session user-agent when given one and null when omitted, never a fabricated guess', async () => {
+    const owner = await store!.createAccount(
+      'sessions@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    const now = new Date();
+    await store!.createSession({
+      absoluteExpiresAt: new Date(now.getTime() + 60_000),
+      csrfHash: hashSecret('csrf-with-agent'),
+      idleExpiresAt: new Date(now.getTime() + 60_000),
+      tokenHash: hashSecret('token-with-agent'),
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) Safari/605.1',
+      userId: owner.id,
+    });
+    await store!.createSession({
+      absoluteExpiresAt: new Date(now.getTime() + 60_000),
+      csrfHash: hashSecret('csrf-without-agent'),
+      idleExpiresAt: new Date(now.getTime() + 60_000),
+      tokenHash: hashSecret('token-without-agent'),
+      userId: owner.id,
+    });
+
+    const sessions = await store!.listBrowserSessions(owner.id);
+    expect(sessions).toHaveLength(2);
+    const withAgent = sessions.find((session) => session.userAgent !== null);
+    const withoutAgent = sessions.find((session) => session.userAgent === null);
+    expect(withAgent?.userAgent).toBe(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) Safari/605.1',
+    );
+    expect(withoutAgent?.userAgent).toBeNull();
+  });
 });

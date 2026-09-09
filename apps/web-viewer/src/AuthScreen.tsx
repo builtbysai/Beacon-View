@@ -33,8 +33,8 @@ export function AuthScreen({
             <em>always within reach.</em>
           </h1>
           <p>
-            Turn an Android phone into a private camera and check it securely
-            from any modern browser.
+            Turn a spare device into a private camera and check it securely from
+            any modern browser.
           </p>
           <div className="auth-hero-preview" aria-hidden="true">
             <span className="hero-phone">
@@ -222,7 +222,7 @@ export function AuthScreen({
         </form>
         <p className="sign-in-disclosure">
           <Icon name="shield" />
-          Camera and microphone capture stay visible on your Android device.
+          Camera and microphone capture stays visible on the camera device.
         </p>
       </section>
     </main>

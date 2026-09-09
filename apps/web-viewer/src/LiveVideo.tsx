@@ -553,7 +553,7 @@ export function LiveVideo({
             </strong>
             <span>
               {switching
-                ? 'The device is changing camera sources.'
+                ? 'The device is switching cameras.'
                 : status === 'connected' && !videoReady
                   ? 'The secure connection is ready. Waiting for the first frame.'
                   : status === 'privacy on'
@@ -563,7 +563,7 @@ export function LiveVideo({
                       : status === 'reconnecting'
                         ? `Beacon is retrying${retryDisplay ? ` · attempt ${retryDisplay}` : ''}.`
                         : status === 'switching source'
-                          ? 'The device is releasing the previous camera source.'
+                          ? 'The device is releasing the previous camera.'
                           : 'This stream needs your attention.'}
             </span>
           </div>
@@ -767,7 +767,10 @@ export function LiveVideo({
                         : 'Your microphone is off.'}
           </p>
           {siblingCameras.length > 1 && (
-            <div className="live-siblings" aria-label="Sibling camera sources">
+            <div
+              className="live-siblings"
+              aria-label="Other cameras on this device"
+            >
               {siblingCameras.map((sibling) => (
                 <button
                   className={
@@ -814,12 +817,16 @@ export function LiveVideo({
             status !== 'reconnecting' && (
               <button onClick={reconnect}>Reconnect</button>
             )}
-          <p className="notice">
-            Closing this view ends only your viewer session. The camera remains
-            online and ready for the next authorized viewer. Listening starts
-            only after you choose Listen. Talk requests microphone access only
-            when selected and plays a tone at the camera. Recording is disabled.
-          </p>
+          <details className="live-info">
+            <summary>How this view works</summary>
+            <p className="notice">
+              Closing this view ends only your viewer session. The camera
+              remains online and ready for the next authorized viewer. Listening
+              starts only after you choose Listen. Talk requests microphone
+              access only when selected and plays a tone at the camera.
+              Recording is disabled.
+            </p>
+          </details>
         </div>
       )}
       {compact && (

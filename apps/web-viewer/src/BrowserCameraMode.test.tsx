@@ -138,17 +138,17 @@ describe('BrowserCameraMode', () => {
     await screen.findByText('Built-in webcam');
     fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
 
-    expect(await screen.findByText('You’re on camera')).toBeVisible();
     expect(
-      screen.getByRole('button', { name: 'Stop being a camera' }),
+      await screen.findByText('Camera Mode active · ready for viewing'),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Stop Camera Mode' }),
     ).toBeVisible();
     expect(
       screen.queryByRole('button', { name: 'Start camera' }),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Stop being a camera' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Stop Camera Mode' }));
     expect(
       await screen.findByRole('button', { name: 'Start camera' }),
     ).toBeVisible();

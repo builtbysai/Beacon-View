@@ -178,7 +178,6 @@ describe('Activity timeline', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('blocked');
     });
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     const fetch = vi
       .fn<
         (
@@ -194,18 +193,21 @@ describe('Activity timeline', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Clear motion history' }),
     );
+    expect(
+      await screen.findByText(/including activity outside these filters/),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(fetch).toHaveBeenCalledTimes(1);
-    confirm.mockReturnValue(true);
     fireEvent.click(
       screen.getByRole('button', { name: 'Clear motion history' }),
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Clear history' }),
     );
     await waitFor(() =>
       expect(screen.queryByText('saved')).not.toBeInTheDocument(),
     );
     expect(screen.getByRole('status')).toHaveFocus();
-    expect(confirm).toHaveBeenCalledWith(
-      expect.stringContaining('including activity outside these filters'),
-    );
     expect(fetch.mock.calls[1]![1].method).toBe('DELETE');
   });
 });

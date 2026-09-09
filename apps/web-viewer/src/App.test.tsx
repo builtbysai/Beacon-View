@@ -95,7 +95,7 @@ describe('App', () => {
     ).toHaveAttribute('href', '/api/auth/google');
     expect(
       screen.getByText(
-        'Camera and microphone capture stay visible on your Android device.',
+        'Camera and microphone capture stays visible on the camera device.',
       ),
     ).toBeVisible();
   });
@@ -161,9 +161,8 @@ describe('App', () => {
     render(<App />);
 
     expect(
-      await screen.findByText('Start with a spare Android device'),
+      await screen.findByText('Three steps to your first view'),
     ).toBeVisible();
-    expect(screen.getByText('Three steps to your first view')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute(
       'aria-current',
       'page',
@@ -177,7 +176,7 @@ describe('App', () => {
       'aria-current',
       'page',
     );
-    expect(document.title).toBe('Cameras · Beacon SecureView');
+    expect(document.title).toBe('Cameras · Beacon');
   });
 
   it('keeps trust readable when reached with an active household session', async () => {
@@ -358,7 +357,7 @@ describe('App', () => {
     vi.stubGlobal('fetch', fetch);
     render(<App />);
 
-    await screen.findByText('Start with a spare Android device');
+    await screen.findByText('Three steps to your first view');
     fireEvent.click(screen.getAllByRole('button', { name: 'Add camera' })[0]!);
     fireEvent.click(
       screen.getByRole('button', { name: 'Pair Android device' }),
@@ -468,7 +467,6 @@ describe('App', () => {
     expect(within(health).getByText('82% · charging')).toBeVisible();
     expect(screen.getByText('Rear camera')).toBeVisible();
     expect(window.location.pathname).toBe('/devices/device-1');
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     expect(
       screen.queryByRole('button', { name: 'Disable device' }),
     ).not.toBeInTheDocument();
@@ -481,9 +479,13 @@ describe('App', () => {
     fireEvent.click(screen.getByText('Device settings'));
     expect(screen.getByText(/Capabilities:/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Remove device' }));
-    expect(confirm).toHaveBeenCalledWith(
-      expect.stringContaining('Permanently delete Pixel?'),
-    );
+    expect(
+      await screen.findByRole('heading', { name: 'Permanently delete Pixel?' }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(
+      screen.queryByRole('heading', { name: 'Permanently delete Pixel?' }),
+    ).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(
       screen.getByRole('button', { name: 'Turn privacy on' }),
@@ -569,11 +571,13 @@ describe('App', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Front camera options' }),
     );
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete camera' }));
-    expect(confirm).toHaveBeenCalledWith(
-      expect.stringContaining('Permanently delete Front camera?'),
-    );
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Permanently delete Front camera?',
+      }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete camera' }));
     expect(
       await screen.findByText('No cameras are paired with this household.'),
     ).toBeVisible();
@@ -642,16 +646,19 @@ describe('App', () => {
         }),
     );
     render(<App />);
-    await screen.findByText('Start with a spare Android device');
+    await screen.findByText('Three steps to your first view');
     fireEvent.click(screen.getByRole('button', { name: 'Activity' }));
     expect(await screen.findByText('Motion detected')).toBeVisible();
     expect(screen.getByText('Hallway phone')).toBeVisible();
     fireEvent.click(screen.getByText('Detection details'));
-    expect(screen.getByText('42% scene change')).toBeVisible();
+    expect(screen.getByText('42% motion intensity')).toBeVisible();
     expect(screen.getByText(/never an image or recording/i)).toBeVisible();
+    // The household currently has no paired cameras (these events are
+    // historical), so there is nothing to build a camera picker from.
     expect(
-      screen.getByLabelText('Filter motion events by camera'),
-    ).toBeVisible();
+      screen.queryByLabelText('Filter motion events by camera'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Filter motion events by time')).toBeVisible();
     await act(async () => {
       TestSocket.instance?.emit({
         cameraId: 'camera-2',
@@ -667,12 +674,12 @@ describe('App', () => {
     expect(window.localStorage.getItem('beacon_motion_filters_1:time')).toBe(
       'day',
     );
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.click(
       screen.getByRole('button', { name: 'Clear motion history' }),
     );
-    expect(
-      await screen.findByText('No activity matches these filters.'),
-    ).toBeVisible();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Clear history' }),
+    );
+    expect(await screen.findByText('No activity yet.')).toBeVisible();
   });
 });

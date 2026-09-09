@@ -147,6 +147,37 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     expect(afterLogout.statusCode).toBe(401);
   });
 
+  it('records the session user-agent and returns it from account/sessions', async () => {
+    const chromeAgent =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36';
+    const registration = await app!.inject({
+      headers: { 'user-agent': chromeAgent },
+      method: 'POST',
+      payload: {
+        email: 'owner@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.21',
+      url: '/api/auth/register',
+    });
+    const credentials = sessionCookies(registration.headers);
+
+    const sessions = await app!.inject({
+      headers: { cookie: credentials.cookie },
+      method: 'GET',
+      url: '/api/account/sessions',
+    });
+    expect(sessions.statusCode).toBe(200);
+    const body = sessions.json<{
+      sessions: { current: boolean; userAgent: string | null }[];
+    }>();
+    expect(body.sessions).toHaveLength(1);
+    expect(body.sessions[0]).toMatchObject({
+      current: true,
+      userAgent: chromeAgent,
+    });
+  });
+
   it('issues revocable bearer sessions for the Android monitor', async () => {
     await app!.inject({
       method: 'POST',

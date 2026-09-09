@@ -20,7 +20,7 @@ export function deviceGuidance(device: DeviceGuidanceInput): DeviceGuidance {
       attention: true,
       title: 'Pair this device again',
       summary:
-        'Its device credential was revoked, so it cannot reconnect with the old registration.',
+        'Its access was revoked, so it cannot reconnect with the old pairing.',
       steps: [
         'Create a fresh one-time setup link from Add camera.',
         device.platform === 'android'
@@ -33,9 +33,9 @@ export function deviceGuidance(device: DeviceGuidanceInput): DeviceGuidance {
   if (!device.enabled) {
     return {
       attention: true,
-      title: 'Registration is disabled',
+      title: 'Pairing is disabled',
       summary:
-        'Beacon will not accept camera sessions from this registration until the device is paired again.',
+        "Beacon won't accept camera connections from this device until it's paired again.",
       steps: [
         'Confirm that this is the device you intend to restore.',
         'Create a fresh one-time setup link from Add camera and pair the device again.',
@@ -67,7 +67,7 @@ export function deviceGuidance(device: DeviceGuidanceInput): DeviceGuidance {
   if (!device.online) {
     return {
       attention: true,
-      title: 'Bring this camera back online',
+      title: 'Bring this device back online',
       summary:
         'Beacon has no current connection to this device and cannot inspect its local power, network, or permission state.',
       steps:
@@ -89,12 +89,12 @@ export function deviceGuidance(device: DeviceGuidanceInput): DeviceGuidance {
       attention: true,
       title: 'Finish camera setup',
       summary:
-        'The device is connected, but it has not reported a camera source that can be viewed.',
+        'The device is connected, but it has not reported a camera that can be viewed.',
       steps: [
         device.platform === 'android'
           ? 'Open Camera Mode on the device and allow camera permission when Android asks.'
-          : 'Open Browser Camera Mode, allow camera access, and choose a source.',
-        'Keep the setup screen visible until the camera source appears here.',
+          : 'Open Browser Camera Mode, allow camera access, and choose a camera.',
+        'Keep the setup screen visible until the camera appears here.',
       ],
     };
   }
@@ -103,7 +103,7 @@ export function deviceGuidance(device: DeviceGuidanceInput): DeviceGuidance {
     attention: false,
     title: 'Keep this camera ready',
     summary:
-      'The device is connected and has a registered camera source. Beacon still depends on its local permissions, power, and network.',
+      'The device is connected and has a working camera. Beacon still depends on its local permissions, power, and network.',
     steps:
       device.platform === 'android'
         ? [

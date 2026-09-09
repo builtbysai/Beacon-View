@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { request } from './api';
 import { Icon } from './Icon';
+import { ConfirmDialog } from './ConfirmDialog';
 
 const timeFilters = [
   { label: '24 hours', value: 'day' },
@@ -40,12 +41,14 @@ export function MotionEventList({
   clearRevision = 0,
   cameras,
   onCamera,
+  onAddCamera,
 }: {
   filterStorageKey: string;
   refreshRevision: number;
   clearRevision?: number;
   cameras: CameraOption[];
   onCamera: (id: string) => void;
+  onAddCamera?: () => void;
 }) {
   const [events, setEvents] = useState<MotionEvent[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -53,6 +56,7 @@ export function MotionEventList({
   const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [reload, setReload] = useState(0);
   const [seenRevision, setSeenRevision] = useState(refreshRevision);
   const [cameraFilter, setCameraFilter] = useState(() =>
@@ -139,15 +143,13 @@ export function MotionEventList({
     };
   }, [cameraFilter, timeFilter, reload, clearRevision]);
 
+  function requestClearHistory() {
+    if (pending.current || clearing) return;
+    setConfirmClear(true);
+  }
+
   async function clearHistory() {
-    if (
-      pending.current ||
-      clearing ||
-      !window.confirm(
-        'Clear all motion-event metadata for this household, including activity outside these filters? This cannot be undone.',
-      )
-    )
-      return;
+    setConfirmClear(false);
     setClearing(true);
     setError('');
     setLoadFailed(false);
@@ -179,35 +181,43 @@ export function MotionEventList({
     groups.set(day, [...(groups.get(day) ?? []), event]);
   }
   return (
-    <section className="card wide" aria-labelledby="motion-events-title">
+    <section
+      className="card wide workspace-medium"
+      aria-labelledby="motion-events-title"
+    >
       <p className="eyebrow">On-device detection</p>
       <h3 id="motion-events-title" ref={heading} tabIndex={-1}>
         Motion events
       </h3>
       <p className="notice">
-        Beacon saves camera, time, and strength—never an image or recording.
+        Beacon saves camera, time, and motion intensity—never an image or
+        recording.
       </p>
       <div className="event-filters" aria-label="Motion event filters">
-        <label>
-          Camera
-          <select
-            aria-label="Filter motion events by camera"
-            value={cameraFilter}
-            disabled={clearing}
-            onChange={(event) => setCameraFilter(event.target.value)}
-          >
-            <option value="all">All cameras</option>
-            {cameraFilter !== 'all' &&
-              !cameras.some((camera) => camera.id === cameraFilter) && (
-                <option value={cameraFilter}>Previously selected camera</option>
-              )}
-            {cameras.map((camera) => (
-              <option key={camera.id} value={camera.id}>
-                {camera.deviceName} · {camera.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {cameras.length > 0 && (
+          <label>
+            Camera
+            <select
+              aria-label="Filter motion events by camera"
+              value={cameraFilter}
+              disabled={clearing}
+              onChange={(event) => setCameraFilter(event.target.value)}
+            >
+              <option value="all">All cameras</option>
+              {cameraFilter !== 'all' &&
+                !cameras.some((camera) => camera.id === cameraFilter) && (
+                  <option value={cameraFilter}>
+                    Previously selected camera
+                  </option>
+                )}
+              {cameras.map((camera) => (
+                <option key={camera.id} value={camera.id}>
+                  {camera.deviceName} · {camera.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <div
           className="filter-pills"
           role="radiogroup"
@@ -261,12 +271,24 @@ export function MotionEventList({
           Retry loading activity
         </button>
       )}
-      {events?.length === 0 && (
-        <div className="empty">
-          <p>No activity matches these filters.</p>
-          <p>Try a longer time range or another camera.</p>
-        </div>
-      )}
+      {events?.length === 0 &&
+        (cameras.length === 0 ? (
+          <div className="empty">
+            <p>No activity yet.</p>
+            <p>Motion events will appear here after you connect a camera.</p>
+            {onAddCamera && (
+              <button type="button" onClick={onAddCamera}>
+                <Icon name="plus" />
+                Add camera
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="empty">
+            <p>No activity matches these filters.</p>
+            <p>Try a longer time range or another camera.</p>
+          </div>
+        ))}
       {Array.from(groups, ([day, entries]) => (
         <section className="activity-day" key={day} aria-label={day}>
           <h4>{day}</h4>
@@ -290,7 +312,9 @@ export function MotionEventList({
                   <span>{event.cameraName}</span>
                   <details>
                     <summary>Detection details</summary>
-                    <p>{Math.round(event.confidence * 100)}% scene change</p>
+                    <p>
+                      {Math.round(event.confidence * 100)}% motion intensity
+                    </p>
                     <p>
                       Brightness changes can include lighting or shadows. This
                       is not a person or object identification.
@@ -327,11 +351,20 @@ export function MotionEventList({
             className="danger"
             type="button"
             disabled={busy || clearing}
-            onClick={() => void clearHistory()}
+            onClick={requestClearHistory}
           >
             {clearing ? 'Clearing…' : 'Clear motion history'}
           </button>
         </div>
+      )}
+      {confirmClear && (
+        <ConfirmDialog
+          title="Clear all motion history?"
+          description="This removes all motion-event metadata for this household, including activity outside these filters. This cannot be undone."
+          confirmLabel="Clear history"
+          onConfirm={() => void clearHistory()}
+          onCancel={() => setConfirmClear(false)}
+        />
       )}
     </section>
   );
