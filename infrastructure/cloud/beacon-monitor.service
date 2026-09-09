@@ -1,0 +1,9 @@
+[Unit]
+Description=Beacon public health and service monitor
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/beacon/production.env
+ExecStart=/opt/beacon/app/infrastructure/cloud/beacon-monitor.sh

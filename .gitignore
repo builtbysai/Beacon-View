@@ -26,3 +26,7 @@ local.properties
 # Logs
 *.log
 pnpm-debug.log*
+
+# Generated local development state and public CA exports
+.beacon-dev/
+artifacts/dev-ca/

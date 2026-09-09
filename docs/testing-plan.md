@@ -4,11 +4,34 @@
 and all TypeScript builds. Backend unit tests cover security primitives, rate
 windows, and the exact presence boundary.
 
-PostgreSQL integration suites run when `TEST_DATABASE_URL` is defined:
+On Windows, `.\Test-Beacon.ps1` is the complete local entry point. It runs
+`pnpm check`, creates and migrates the dedicated `beacon_secureview_test`
+database, runs integration tests with the existing destructive-target guards,
+then runs Android unit tests and `assembleDebug`. Use `-SkipAndroid` or
+`-SkipDatabaseIntegration` only when that environment is intentionally
+unavailable.
 
-```sh
-TEST_DATABASE_URL=postgresql://... pnpm --filter @beacon/backend test
+PostgreSQL integration suites run only when both `NODE_ENV=test` and a
+dedicated `TEST_DATABASE_URL` are defined:
+
+```powershell
+docker exec beacon-secureview-local-postgres-1 createdb `
+  -U beacon_local beacon_secureview_test
+$env:NODE_ENV = 'test'
+$env:TEST_DATABASE_URL = `
+  'postgresql://beacon_local:local-development-only@127.0.0.1:5432/beacon_secureview_test'
+$developmentDatabaseUrl = $env:DATABASE_URL
+$env:DATABASE_URL = $env:TEST_DATABASE_URL
+pnpm.cmd --filter @beacon/backend db:migrate
+$env:DATABASE_URL = $developmentDatabaseUrl
+pnpm.cmd --filter @beacon/backend test
 ```
+
+The commands set `DATABASE_URL` to the dedicated test URL only for migration,
+then restore the development URL before tests. The destructive helper rechecks the explicit
+test marker, `_test` suffix, forbidden default/development names, and inequality
+with `DATABASE_URL` immediately before every truncation. It prints only the
+target host and database name.
 
 They cover normalized duplicate accounts, generic login errors, session expiry,
 logout revocation, CSRF, transactional concurrent pairing, expired/invalid/reused
@@ -27,13 +50,99 @@ sanitized failure handling, retry exhaustion, exponential backoff, and stale
 generation cancellation. Browser and Android retry tests inject deterministic
 jitter rather than sleeping.
 
+The device-agnostic milestone adds migration coverage for default sources,
+household-isolated source synchronization, stale producer replacement,
+simultaneous browser-producer peers, stale reconnect cancellation, explicit
+browser permission/registration, and duplicate Android retry prevention. Run
+the manual matrices in
+[`multi-viewer-testing.md`](multi-viewer-testing.md) and
+[`browser-camera-mode.md`](browser-camera-mode.md).
+
+Physical acceptance includes Android Wi-Fi loss for 15-30 seconds and automatic
+recovery without restart or repair; Android and browser producers as distinct
+devices; two webcams beneath one browser device; two independent viewers; a
+background-tab warning; and repeated LAN startup with reuse/restart/quit.
+
 Automated tests do not prove a particular handset, browser, NAT, or relay can
 render video. Run the manual direct and TURN-relayed matrix before release.
+The PowerShell preflight and deterministic physical-device procedure are in
+`docs/physical-android-device-development.md`.
 
 Validate migration state with `db:check`, apply migrations to a clean local
 database with `db:migrate`, and inspect the SQL. Validate Compose health and
 published ports separately. Android validation runs `assembleDebug` and
 `testDebugUnitTest`, followed by a manifest review for prohibited permissions.
 
-Future milestones must add audio and privacy shutdown tests only when approved.
-Audio remains explicitly outside Milestone 3.
+Privacy-mode store and signaling tests verify that new viewers are rejected,
+active viewers are closed, the control socket remains available, and the device
+credential remains valid. Physical Android acceptance must additionally confirm
+that CameraX and its audio source release immediately. One-way audio acceptance
+must verify muted-by-default viewers, explicit Listen/Mute behavior, microphone
+denial falling back to video-only, and direct and TURN-relayed playback.
+
+On Android 14 and newer, physical privacy acceptance must also repeat privacy
+on/off transitions without a Java or native process exit, verify that the foreground
+service retains a valid declared type while actual camera/microphone operations stop,
+and exercise privacy resume while Beacon is backgrounded. Background resume must not
+claim capture before a real frame; returning Beacon to the foreground must retry and
+restore capture without re-pairing. Front/rear switching must keep the process stable
+and restore real frame delivery after each source change.
+
+Motion-event tests must cover the first-frame baseline, small-noise rejection,
+meaningful scene-change detection, device cooldown, server cooldown, credential/source
+authorization, household isolation, and privacy-mode rejection. Physical acceptance
+must profile false positives, CPU, temperature, and battery impact on at least one older
+supported Android device before motion alerts can be considered release-ready.
+Per-camera settings tests must also cover supported-value validation, household-scoped
+owner changes with CSRF, stale device reads, disabled-source suppression, preserved
+settings across source synchronization, each cooldown boundary, failed-save retry, and
+analysis reset when sensitivity changes.
+The connected physical Pixel must also retrieve the current settings over the trusted
+LAN endpoint after an update install; that validates authenticated device sync but does
+not substitute for a household-owner change or false-positive acceptance run.
+
+Two-way talk automation verifies single-owner arbitration, busy rejection, and lock
+release on disconnect. Browser acceptance must verify that opening Live View does not
+request microphone permission and that Stop talking, navigation, connection loss, and
+privacy mode stop the local microphone indicator. Physical acceptance must verify the
+camera-side tones, intelligible speaker output, echo behavior, TURN relay, and recovery
+after network interruption.
+
+Web Live View regression coverage also checks that the fullscreen target contains
+Listen and Talk controls, fullscreen rejection is explained, playback rejection
+restores mute, privacy prevents a new signaling connection, source changes are
+serialized, failed source requests preserve selection, and local TURN candidates are
+reported as relayed. Stats-read failures must not interrupt the video connection.
+Fullscreen interaction across actual supported browsers remains manual acceptance.
+
+Android privacy tests cover a failed local pause without automatic capture restart,
+pending intent restored after service recreation, failed Resume, stale startup and
+HTTP responses, and repeated actions. Motion reports suppressed by privacy return
+409 while retaining valid pairing; revoked credentials still fail authentication.
+Physical acceptance must interrupt connectivity while turning privacy on, verify both
+camera/microphone indicators stop, restart the process, restore connectivity, and
+confirm only an authorized Resume restarts capture. Repeat without microphone and
+notification permission and with a late viewer connection.
+
+Activity regression tests cover server-side camera/time filters, household isolation,
+bounded cursor validation, more than 100 rows, equal timestamps, and PostgreSQL
+microsecond precision. Web tests cover day grouping, source-camera navigation,
+older-page retries, late responses after filter changes, storage denial, explicit
+refresh for incoming activity, and invalidation on household history deletion.
+Manual acceptance must still check large histories, screen readers, and timezone
+changes. Automatic retention remains a separate readiness requirement.
+
+Milestone 8 web coverage includes authentication and empty states, pairing
+completion, device detail, Live View connection state, Browser Camera Mode,
+source handoff, and responsive design contracts. Milestone 9 adds workspace
+creation/switching, grid layouts, reported health, platform filtering, drag and
+keyboard ordering, tile-local source switching, expanded-tile Escape behavior,
+and hidden-tab suspension. Real multi-camera capacity and cross-network media
+still require manual acceptance.
+
+Quiet-hours coverage validates strict `HH:mm` and IANA time-zone input, midnight
+intervals, daylight-saving behavior, owner and device reads, server-side insertion
+suppression, and Android detector reset while quiet. Manual acceptance must change a
+physical phone's settings and verify that metadata pauses while live viewing remains
+available, including an interval boundary and a daylight-saving transition where
+applicable.

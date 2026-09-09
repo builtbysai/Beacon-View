@@ -1,0 +1,13 @@
+FROM postgres:17.6-alpine
+
+# Restic encrypts before uploading. The package is installed during image build so
+# the scheduled job does not need package-manager or root access at runtime.
+USER root
+RUN apk add --no-cache restic
+
+COPY infrastructure/cloud/backup.sh /usr/local/bin/beacon-backup
+COPY infrastructure/cloud/restore-verify.sh /usr/local/bin/beacon-restore-verify
+RUN chmod 0555 /usr/local/bin/beacon-backup /usr/local/bin/beacon-restore-verify
+
+USER postgres
+ENTRYPOINT ["/usr/local/bin/beacon-backup"]

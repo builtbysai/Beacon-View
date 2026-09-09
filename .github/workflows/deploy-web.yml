@@ -1,0 +1,104 @@
+name: Deploy web to Oracle
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: beacon-web-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    environment:
+      name: production
+      url: https://beaconapp.duckdns.org/
+    timeout-minutes: 20
+    steps:
+      - name: Check out the validated commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Create a source archive
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: git archive --format=tar.gz --output="beacon-${RELEASE_SHA}.tar.gz" "$RELEASE_SHA"
+
+      - name: Configure SSH trust
+        shell: bash
+        env:
+          ORACLE_KNOWN_HOSTS: ${{ secrets.ORACLE_KNOWN_HOSTS }}
+          ORACLE_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
+        run: |
+          install -d -m 700 "$RUNNER_TEMP/beacon-ssh"
+          printf '%s\n' "$ORACLE_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/beacon-ssh/id_ed25519"
+          chmod 600 "$RUNNER_TEMP/beacon-ssh/id_ed25519"
+          printf '%s\n' "$ORACLE_KNOWN_HOSTS" > "$RUNNER_TEMP/beacon-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/beacon-ssh/known_hosts"
+
+      - name: Upload the validated source
+        shell: bash
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: >-
+          scp
+          -i "$RUNNER_TEMP/beacon-ssh/id_ed25519"
+          -o IdentitiesOnly=yes
+          -o StrictHostKeyChecking=yes
+          -o UserKnownHostsFile="$RUNNER_TEMP/beacon-ssh/known_hosts"
+          "beacon-${RELEASE_SHA}.tar.gz"
+          "${ORACLE_USER}@${ORACLE_HOST}:/tmp/beacon-${RELEASE_SHA}.tar.gz"
+
+      - name: Deploy only the web service and verify readiness
+        shell: bash
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          ssh \
+            -i "$RUNNER_TEMP/beacon-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/beacon-ssh/known_hosts" \
+            "${ORACLE_USER}@${ORACLE_HOST}" \
+            "RELEASE_SHA='$RELEASE_SHA' bash -s" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+
+          archive="/tmp/beacon-${RELEASE_SHA}.tar.gz"
+          release_dir="/opt/beacon/releases/web-${RELEASE_SHA}"
+          compose_file="${release_dir}/infrastructure/cloud/compose.yaml"
+
+          sudo install -d -m 0755 "$release_dir"
+          sudo tar --extract --gzip --file "$archive" --directory "$release_dir"
+          rm -f "$archive"
+
+          sudo docker compose \
+            --project-name beacon-secureview-cloud \
+            --env-file /etc/beacon/production.env \
+            --file "$compose_file" \
+            build web
+          sudo docker compose \
+            --project-name beacon-secureview-cloud \
+            --env-file /etc/beacon/production.env \
+            --file "$compose_file" \
+            up -d --no-deps web
+
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
+            "https://${BEACON_DOMAIN:-beaconapp.duckdns.org}/health" > /dev/null
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
+            "https://${BEACON_DOMAIN:-beaconapp.duckdns.org}/ready" > /dev/null
+          REMOTE_SCRIPT

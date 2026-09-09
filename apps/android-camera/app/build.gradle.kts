@@ -4,6 +4,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+providers.gradleProperty("beaconBuildDir").orNull?.let {
+    layout.buildDirectory.set(file(it))
+}
+
 android {
     namespace = "com.beaconsecureview.camera"
     compileSdk = 35
@@ -16,12 +20,31 @@ android {
         versionName = "0.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        val beaconApiUrl =
-            providers.gradleProperty("beaconApiUrl")
-                .orElse(providers.environmentVariable("BEACON_API_URL"))
-                .orElse("http://10.0.2.2:3000")
-                .get()
-        buildConfigField("String", "BEACON_API_URL", "\"$beaconApiUrl\"")
+    }
+
+    buildTypes {
+        debug {
+            val beaconApiUrl =
+                providers.gradleProperty("beaconApiUrl")
+                    .orElse(providers.environmentVariable("BEACON_API_URL"))
+                    .orElse("http://10.0.2.2:3000")
+                    .get()
+            require(beaconApiUrl.startsWith("http://") || beaconApiUrl.startsWith("https://")) {
+                "beaconApiUrl must use http:// or https://"
+            }
+            buildConfigField("String", "BEACON_API_URL", "\"$beaconApiUrl\"")
+        }
+        release {
+            val beaconApiUrl =
+                providers.gradleProperty("beaconReleaseApiUrl")
+                    .orElse(providers.environmentVariable("BEACON_RELEASE_API_URL"))
+                    .orElse("https://invalid.beacon.local")
+                    .get()
+            require(beaconApiUrl.startsWith("https://")) {
+                "Release Beacon API URL must use https://"
+            }
+            buildConfigField("String", "BEACON_API_URL", "\"$beaconApiUrl\"")
+        }
     }
 
     buildFeatures {
@@ -46,8 +69,11 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.lifecycle:lifecycle-service:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     implementation("io.github.webrtc-sdk:android:144.7559.08")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

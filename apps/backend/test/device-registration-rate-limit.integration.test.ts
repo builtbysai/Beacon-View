@@ -8,8 +8,9 @@ import {
   DEVICE_REGISTRATION_RATE_LIMITED,
   PostgresStore,
 } from '../src/store.js';
+import { resetTestDatabase, testDatabaseUrl } from './test-database.js';
 
-const databaseUrl = process.env.TEST_DATABASE_URL;
+const databaseUrl = testDatabaseUrl();
 const store = databaseUrl ? new PostgresStore(databaseUrl) : null;
 const config: AppConfig | null = databaseUrl
   ? {
@@ -40,9 +41,7 @@ describe.skipIf(!app || !store)(
   'device-registration database rate limit',
   () => {
     beforeEach(async () => {
-      await store!.pool.query(
-        'TRUNCATE audit_events, pairing_codes, device_credentials, cameras, browser_sessions, households, users CASCADE',
-      );
+      await resetTestDatabase(store!.pool);
     });
 
     afterAll(async () => {

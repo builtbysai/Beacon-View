@@ -1,16 +1,17 @@
-import websocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
 import { hashSecret } from './security.js';
+import type { HouseholdEventHub } from './household-events.js';
 import type { IceServer } from './signaling.js';
 import { SignalingHub } from './signaling.js';
 import type { MilestoneStore } from './store.js';
 import { createTurnCredential } from './turn-credentials.js';
 
 const querySchema = z.discriminatedUnion('role', [
-  z.object({ role: z.literal('device') }),
+  z.object({ cameraId: z.string().uuid(), role: z.literal('device') }),
+  z.object({ cameraId: z.string().uuid(), role: z.literal('producer') }),
   z.object({ cameraId: z.string().uuid(), role: z.literal('viewer') }),
 ]);
 
@@ -18,7 +19,8 @@ export function registerSignaling(
   app: FastifyInstance,
   config: AppConfig,
   store: MilestoneStore,
-): void {
+  householdEvents?: HouseholdEventHub,
+): SignalingHub {
   const hub = new SignalingHub(
     () => createIceServers(config, 'viewer'),
     () => createIceServers(config, 'device'),
@@ -27,11 +29,14 @@ export function registerSignaling(
     (diagnostic) => {
       app.log.info({ signaling: diagnostic }, 'signaling lifecycle');
     },
+    (householdId, cameraId) => {
+      householdEvents?.publish(householdId, {
+        cameraId,
+        type: 'camera-presence-changed',
+      });
+    },
   );
-  void app.register(async (signalingApp) => {
-    await signalingApp.register(websocket, {
-      options: { maxPayload: 1_100_000 },
-    });
+  void app.register((signalingApp) => {
     signalingApp.addHook('onClose', () => hub.close());
     signalingApp.get(
       '/api/signaling',
@@ -48,54 +53,109 @@ export function registerSignaling(
             ? authorization.slice('Bearer '.length)
             : '';
           const camera = token
-            ? await store.findDeviceByCredential(hashSecret(token))
+            ? await store.findCameraForDeviceCredential(
+                hashSecret(token),
+                query.data.cameraId,
+              )
             : null;
           if (!camera) {
             socket.close(4003, 'Connection rejected');
             return;
           }
-          hub.connectDevice(camera.cameraId, camera.publicDeviceId, socket);
+          hub.connectDevice(
+            camera.cameraId,
+            camera.publicCameraId,
+            socket,
+            camera.householdId,
+          );
           const credentialHash = hashSecret(token);
           monitorAuthorization(socket, async () =>
-            Boolean(await store.findDeviceByCredential(credentialHash)),
+            Boolean(
+              await store.findCameraForDeviceCredential(
+                credentialHash,
+                query.data.cameraId,
+              ),
+            ),
           );
           return;
         }
 
-        if (request.headers.origin !== config.WEB_ORIGIN) {
+        const bearerToken = bearerSessionToken(request);
+        if (!bearerToken && request.headers.origin !== config.WEB_ORIGIN) {
           socket.close(4003, 'Connection rejected');
           return;
         }
         const publicCameraId = query.data.cameraId;
-        const session = await authenticateViewer(request, config, store);
-        const camera = session
-          ? await store.findOwnedCamera(session.householdId, publicCameraId)
+        const sessionToken =
+          bearerToken || request.cookies[config.SESSION_COOKIE_NAME] || '';
+        const session = sessionToken
+          ? await store.findSession(hashSecret(sessionToken), new Date())
           : null;
-        if (!session || !camera) {
-          if (session) {
-            await store.audit({
-              eventType: 'live_view_rejected',
-              householdId: session.householdId,
-              ipAddress: request.ip,
-              success: false,
-              userId: session.userId,
-            });
+        if (!session) {
+          socket.close(4003, 'Connection rejected');
+          return;
+        }
+        if (query.data.role === 'producer') {
+          if (bearerToken || request.headers.origin !== config.WEB_ORIGIN) {
+            socket.close(4003, 'Connection rejected');
+            return;
           }
+          const managedCamera = await store.findManagedCamera(
+            session.householdId,
+            publicCameraId,
+          );
+          if (!managedCamera) {
+            socket.close(4003, 'Connection rejected');
+            return;
+          }
+          hub.connectDevice(
+            managedCamera.cameraId,
+            managedCamera.publicCameraId,
+            socket,
+            managedCamera.householdId,
+          );
+          const producerSessionToken =
+            request.cookies[config.SESSION_COOKIE_NAME] ?? '';
+          const sessionHash = hashSecret(producerSessionToken);
+          monitorAuthorization(socket, async () => {
+            const current = await store.findSession(sessionHash, new Date());
+            return Boolean(
+              current &&
+              (await store.findManagedCamera(
+                current.householdId,
+                publicCameraId,
+              )),
+            );
+          });
+          return;
+        }
+        const camera = await store.findOwnedCamera(
+          session.householdId,
+          publicCameraId,
+        );
+        if (!camera) {
+          await store.audit({
+            eventType: 'live_view_rejected',
+            householdId: session.householdId,
+            ipAddress: request.ip,
+            success: false,
+            userId: session.userId,
+          });
           socket.close(4003, 'Connection rejected');
           return;
         }
         const admitted = hub.connectViewer(
           camera.cameraId,
-          camera.publicDeviceId,
+          camera.publicCameraId,
           socket,
         );
-        const sessionToken = request.cookies[config.SESSION_COOKIE_NAME];
-        const sessionHash = sessionToken ? hashSecret(sessionToken) : '';
+        const sessionHash = hashSecret(sessionToken);
         if (admitted) {
           monitorAuthorization(socket, async () => {
-            const currentSession = sessionHash
-              ? await store.findSession(sessionHash, new Date())
-              : null;
+            const currentSession = await store.findSession(
+              sessionHash,
+              new Date(),
+            );
             if (!currentSession) return false;
             return Boolean(
               await store.findOwnedCamera(
@@ -106,7 +166,7 @@ export function registerSignaling(
           });
         }
         await store.audit({
-          cameraId: camera.cameraId,
+          cameraId: camera.deviceId,
           eventType: admitted ? 'live_view_started' : 'live_view_rejected',
           householdId: session.householdId,
           ipAddress: request.ip,
@@ -116,6 +176,7 @@ export function registerSignaling(
       },
     );
   });
+  return hub;
 }
 
 function createIceServers(
@@ -164,13 +225,9 @@ export function monitorAuthorization(
   socket.once('close', () => clearInterval(timer));
 }
 
-async function authenticateViewer(
-  request: FastifyRequest,
-  config: AppConfig,
-  store: MilestoneStore,
-) {
-  const token = request.cookies[config.SESSION_COOKIE_NAME];
-  return token
-    ? store.findSession(hashSecret(token), new Date())
-    : Promise.resolve(null);
+function bearerSessionToken(request: FastifyRequest): string {
+  const authorization = request.headers.authorization;
+  return authorization?.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length)
+    : '';
 }

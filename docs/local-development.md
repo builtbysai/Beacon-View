@@ -8,6 +8,16 @@
 
 ## Startup
 
+For the recommended one-command Windows workflow, run `.\Start-Beacon.ps1` from
+the repository root. It installs dependencies, creates the local environment
+when missing, starts Docker services, migrates PostgreSQL, starts secure LAN
+development, and opens the dashboard. See
+[`quick-start.md`](quick-start.md). The lower-level workflow is:
+
+Pairing codes are displayed both as text and as a QR code. In the Android app,
+choose **Scan pairing QR code** to fill the same expiring, one-time code without
+typing it. The QR code does not contain a session or device credential.
+
 ```sh
 pnpm install --frozen-lockfile
 cp apps/backend/.env.example apps/backend/.env
@@ -61,13 +71,24 @@ emulator host; other cleartext destinations remain blocked. Browser ICE uses
 ```sh
 apps\android-camera\gradlew.bat -p apps/android-camera :app:assembleDebug
 apps\android-camera\gradlew.bat -p apps/android-camera :app:testDebugUnitTest
+apps\android-camera\gradlew.bat -p apps/android-camera :app:lintDebug :app:assembleRelease
 ```
 
-The app requests `CAMERA` only for visible live streaming and binds capture to
-the activity lifecycle. It also declares the normal `INTERNET` and
-`ACCESS_NETWORK_STATE` permissions required for signaling, ICE, and
-network-change handling. It has no microphone, audio, foreground-service,
-recording, or background capture.
+The full Windows validator includes Android lint and unsigned release compilation.
+This does not provide a deployable release: production signing, versioning, a real
+HTTPS API origin, and store acceptance remain separate requirements. CI uses the
+same Android tasks and an isolated PostgreSQL test service. It applies migrations
+explicitly before integration tests and never migrates at application startup.
+
+The app requests camera, microphone, notification, and foreground-service permissions.
+A visible foreground service keeps the registered device online and capture-ready when
+the activity is closed. Denying microphone access leaves video-only Camera Mode usable.
+The persistent notification distinguishes camera-only from camera-and-microphone
+capture. Android privacy mode is modeled and backend-enforced and releases both media
+sources immediately. Viewers start muted and require an explicit **Listen** action.
+There is no recording or hidden capture. Household
+settings now show the latest 50 successful or rejected live-view access events;
+the response intentionally excludes network addresses and signaling details.
 
 ## Manual live-video check
 
@@ -75,42 +96,57 @@ recording, or background capture.
 2. Pair the Android emulator, grant camera permission, and leave it visible.
 3. Sign in as the owner, select the online camera, and choose **View live**.
 4. Confirm Android preview/capture indicator, connected browser status, and video.
-5. Close the viewer and confirm Android returns to waiting and capture stops.
-6. Repeat with direct ICE and relay-only ICE when validating TURN.
+5. Confirm the viewer is silent until **Listen**, then verify **Mute** immediately stops
+   playback.
+6. Close the viewer and confirm only that viewer session ends while Camera Mode remains
+   visibly ready.
+7. Repeat with direct ICE and relay-only ICE when validating TURN.
 
 ## HTTPS/WSS and a physical phone
 
-The optional `secure` Compose profile terminates locally trusted HTTPS and WSS
-with Caddy. Start the web development server on a container-reachable interface
-and bind Caddy to the selected LAN interface:
+Use the repeatable Windows workflow in
+[physical Android device development](physical-android-device-development.md):
 
 ```powershell
-$env:VITE_DEV_HOST = "0.0.0.0"
-$env:BEACON_HTTPS_HOST = "beacon.test"
-$env:BEACON_HTTPS_BIND = "192.0.2.10"
-pnpm dev
-docker compose -f infrastructure/docker/compose.yaml --profile secure up -d
+.\scripts\Start-BeaconLanDev.ps1 -LanHost 192.0.2.10
+.\scripts\Export-BeaconDevCertificate.ps1
+.\scripts\Test-BeaconLanDev.ps1 -LanHost 192.0.2.10
+.\scripts\Build-Install-BeaconAndroidDebug.ps1 -LanHost 192.0.2.10
 ```
 
-Replace the documentation address with the development computer's stable LAN
-address. Add a matching DNS or hosts entry. Export Caddy's local root
-certificate from the `caddy-data` volume and install it explicitly as a trusted
-development CA in the test browser and phone. Android debug builds trust
-user-installed CAs; release builds trust only system CAs. Never disable
-certificate verification and never commit the CA private key.
+Replace the documentation address. The script configures strict Vite port 5173,
+trusted HTTPS/WSS, exact origins, LAN-reachable STUN/TURN, and debug Android
+endpoint injection while retaining localhost/emulator defaults.
 
-Set backend origins and signaling URL to the exact HTTPS/WSS endpoints, leave
-`ALLOW_INSECURE_LOCAL_DEV=false`, and build Android with:
+Repeated startup is explicit and safe:
 
 ```powershell
-$env:BEACON_API_URL = "https://beacon.test:8443"
-apps\android-camera\gradlew.bat -p apps/android-camera :app:assembleDebug
+.\scripts\Start-BeaconLanDev.ps1 -ReuseExisting -NonInteractive
+.\scripts\Start-BeaconLanDev.ps1 -RestartExisting -NonInteractive
+.\scripts\Start-BeaconLanDev.ps1 -Status
+.\scripts\Open-BeaconLanDev.ps1 -Page Dashboard
+.\scripts\Open-BeaconLanDev.ps1 -Page CameraMode
+.\scripts\Stop-BeaconLanDev.ps1
 ```
 
-Allow inbound TCP 8443 and the configured Coturn TCP/UDP 3478 plus UDP
-49160–49200 only from the intended test networks. A TURN server behind NAT also
-needs its advertised external address configured. The default Compose bindings
-remain loopback-only and therefore cannot serve a physical phone.
+Run the automated portion of Milestone 7 acceptance after LAN startup:
+
+```powershell
+.\scripts\Test-BeaconFunctionalMilestone.ps1 -LanHost 192.0.2.10
+```
+
+This intentionally reports physical Android, real webcam, multi-viewer, and
+forced-relay media checks as manual; service reachability alone does not prove
+that media traversed TURN.
+
+When ports 3000 or 5173 are occupied, interactive startup offers reuse,
+restart, or quit only for a process proven to belong to this repository. It
+prints PID, executable, command line, and listener details for unrelated
+processes and never terminates them. `.beacon-dev/lan-dev.json` records owned
+PIDs, ports, URLs, commands, and logs; it is gitignored.
+
+LAN surfaces are `https://LAN_HOST:8443/`, `/camera-mode`, `/health`, and
+`wss://LAN_HOST:8443/api/signaling`.
 
 ## Physical-device validation checklist
 
@@ -124,17 +160,25 @@ Record browser, handset/Android, network, and time with the result:
    candidate when the network permits.
 4. Restart with `ICE_TRANSPORT_POLICY=relay`; confirm a relay candidate and
    advancing video through Coturn.
-5. Disable phone Wi-Fi briefly, restore it, and verify bounded
-   `offline`/`reconnecting` recovery.
+5. Disable phone Wi-Fi for 15-30 seconds, restore it, and verify
+   `offline` -> `reconnecting` -> `online/idle` recovery. Confirm live video
+   resumes without Stop Camera, Start Camera, or re-pairing.
 6. Close the browser and verify viewer teardown; leave the Android streaming
    screen and verify camera release.
 7. Revoke the device credential and verify new signaling and TURN issuance stop.
 8. Inspect backend, browser, Android, and Coturn logs for secrets, SDP, raw ICE
    candidates, crashes, and restart loops.
 
-No handset was connected during the automated repository run for this
-milestone, so this checklist must be executed before release.
+Record physical-device evidence before claiming completion.
 
 Local PostgreSQL, Coturn, and their deliberately weak example credentials are
 loopback-only. Never reuse those credentials outside an isolated developer
 machine.
+
+## Web viewport regression audit
+
+Run the local, fixture-only browser audit documented in [responsive-audit.md](responsive-audit.md)
+after shell, form, navigation or layout changes. Screenshots and measurements are stored
+under ignored `.beacon-dev/responsive-audit/`. It requires Playwright with an installed
+browser; the Codex bundled runtime can be supplied through `BEACON_PLAYWRIGHT_MODULE`.
+It creates no real accounts, streams, emails or production data.

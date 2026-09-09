@@ -36,10 +36,12 @@ Android, backend, PostgreSQL, and TURN are separate trust zones.
 - Rejected upgrades disclose no camera, household, or connection state.
 - Signaling schemas cap SDP/ICE size and restrict messages by peer role.
 - SDP, ICE, TURN credentials, cookies, and device credentials are not logged.
-- One viewer is admitted per camera; an authorized reconnect replaces the prior
-  viewer, while timeout and close cleanup limit stale state.
-- Capture is activity-bound and visibly indicated. Android declares only camera
-  and normal internet/network-state access; no microphone/audio exists.
+- Every viewer has an independently authorized connection ID. A viewer failure
+  cannot terminate sibling viewers; timeout and close cleanup limit stale state.
+- Capture is foreground-service-owned and visibly indicated. Android declares
+  camera, microphone, foreground-service, and normal internet/network-state access.
+  The notification distinguishes camera-only, camera-and-microphone, and privacy
+  states; denied microphone permission leaves video usable.
 - WebRTC media uses DTLS-SRTP. TURN sees endpoints, timing, and volume but relays
   encrypted packets. Beacon does not claim application-level end-to-end
   encryption.
@@ -59,6 +61,26 @@ Android, backend, PostgreSQL, and TURN are separate trust zones.
   stale peer replacement, background capture, and orphaned signaling state.
 - Structured diagnostics exclude credentials, SDP, raw candidates, private
   ownership identifiers, and raw exception details.
+- Motion reports contain no media or pixel samples. The server binds each report to
+  the authenticated device credential and exact camera source, rejects reports while
+  privacy mode or the source is disabled, applies a cooldown, and timestamps accepted
+  events itself.
+- Viewer microphone capture is opt-in and is never requested by opening Live View. The
+  server grants only one talk connection per camera, Android enables incoming audio only
+  for the granted connection, and all cleanup paths release ownership and local tracks.
+
+## Device-agnostic producer controls
+
+- Household authorization is performed against the exact camera source and its
+  non-revoked parent device; public device or camera IDs are not authority.
+- Device credentials can synchronize only sources beneath their own device.
+- Browser producer registration and signaling require the owner session, CSRF
+  protection for registration, exact Origin, trusted HTTPS, and explicit browser
+  permission.
+- Browser installation and source identifiers are not authentication secrets.
+- Producer replacement is deterministic, and stale socket closure cannot remove
+  the replacement.
+- Diagnostics expose only public identifiers and sanitized connection state.
 
 ## Residual risk and deferrals
 

@@ -1,56 +1,33 @@
 package com.beaconsecureview.camera
 
-import android.content.Context
 import android.util.Log
-import androidx.camera.view.PreviewView
-import androidx.lifecycle.LifecycleOwner
-import org.webrtc.DefaultVideoDecoderFactory
-import org.webrtc.DefaultVideoEncoderFactory
-import org.webrtc.EglBase
+import android.media.AudioManager
+import android.media.ToneGenerator
+import org.webrtc.AudioTrack
 import org.webrtc.IceCandidate
 import org.webrtc.MediaConstraints
 import org.webrtc.PeerConnection
-import org.webrtc.PeerConnectionFactory
 import org.webrtc.RtpTransceiver
+import org.webrtc.MediaStreamTrack
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
-import org.webrtc.VideoSource
-import org.webrtc.VideoTrack
 
 class WebRtcCameraSession(
-    context: Context,
-    lifecycleOwner: LifecycleOwner,
-    previewView: PreviewView,
+    private val media: CameraMediaSource,
     servers: List<SignalingIceServer>,
     relayOnly: Boolean,
     private val connectionId: String,
     private val signaling: CameraSignalingClient,
     private val onState: (StreamingState) -> Unit,
 ) {
-    private val eglBase = EglBase.create()
-    private val factory: PeerConnectionFactory
-    private val source: VideoSource
-    private val track: VideoTrack
-    private val capturer: CameraXVideoCapturer
     private val peer: PeerConnection
+    private var acquired = false
+    private var remoteTalkTrack: AudioTrack? = null
+    private var talkEnabled = false
+    private var closed = false
+    private val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 70)
 
     init {
-        PeerConnectionFactory.initialize(
-            PeerConnectionFactory.InitializationOptions.builder(context)
-                .setEnableInternalTracer(false)
-                .createInitializationOptions(),
-        )
-        factory =
-            PeerConnectionFactory.builder()
-                .setVideoEncoderFactory(
-                    DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true),
-                )
-                .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase.eglBaseContext))
-                .createPeerConnectionFactory()
-        source = factory.createVideoSource(false)
-        track = factory.createVideoTrack("beacon-video", source)
-        capturer = CameraXVideoCapturer(context, lifecycleOwner, previewView)
-        capturer.initialize(null, context, source.capturerObserver)
         val iceServers =
             servers.map {
                 PeerConnection.IceServer.builder(it.urls)
@@ -60,7 +37,7 @@ class WebRtcCameraSession(
             }
         peer =
             requireNotNull(
-                factory.createPeerConnection(
+                media.factory.createPeerConnection(
                     PeerConnection.RTCConfiguration(iceServers).apply {
                         iceTransportsType =
                             if (relayOnly) {
@@ -76,17 +53,34 @@ class WebRtcCameraSession(
                 ),
             )
         peer.addTransceiver(
-            track,
+            media.track,
             RtpTransceiver.RtpTransceiverInit(
                 RtpTransceiver.RtpTransceiverDirection.SEND_ONLY,
                 listOf("beacon-stream"),
+            ),
+        )
+        media.audioTrack?.let { audioTrack ->
+            peer.addTransceiver(
+                audioTrack,
+                RtpTransceiver.RtpTransceiverInit(
+                    RtpTransceiver.RtpTransceiverDirection.SEND_ONLY,
+                    listOf("beacon-stream"),
+                ),
+            )
+        }
+        peer.addTransceiver(
+            MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO,
+            RtpTransceiver.RtpTransceiverInit(
+                RtpTransceiver.RtpTransceiverDirection.RECV_ONLY,
+                listOf("beacon-talk"),
             ),
         )
     }
 
     fun start() {
         onState(StreamingState.Connecting)
-        capturer.startCapture(640, 480, 15)
+        media.acquire()
+        acquired = true
         peer.createOffer(
             object : SimpleSdpObserver() {
                 override fun onCreateSuccess(description: SessionDescription) {
@@ -130,13 +124,29 @@ class WebRtcCameraSession(
         peer.addIceCandidate(candidate)
     }
 
+    fun setTalkEnabled(enabled: Boolean) {
+        if (talkEnabled == enabled) return
+        talkEnabled = enabled
+        remoteTalkTrack?.setEnabled(enabled)
+        tone.startTone(
+            if (enabled) ToneGenerator.TONE_PROP_BEEP else ToneGenerator.TONE_PROP_BEEP2,
+            140,
+        )
+    }
+
+    @Synchronized
     fun close() {
-        capturer.dispose()
+        if (closed) return
+        closed = true
+        setTalkEnabled(false)
+        remoteTalkTrack = null
         peer.close()
-        track.dispose()
-        source.dispose()
-        factory.dispose()
-        eglBase.release()
+        peer.dispose()
+        if (acquired) {
+            acquired = false
+            media.release()
+        }
+        tone.release()
     }
 
     private inner class Observer : PeerConnection.Observer {
@@ -170,7 +180,12 @@ class WebRtcCameraSession(
         override fun onAddTrack(
             receiver: org.webrtc.RtpReceiver,
             mediaStreams: Array<out org.webrtc.MediaStream>,
-        ) = Unit
+        ) {
+            (receiver.track() as? AudioTrack)?.let { track ->
+                remoteTalkTrack = track
+                track.setEnabled(talkEnabled)
+            }
+        }
     }
 
     private companion object {

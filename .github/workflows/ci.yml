@@ -14,6 +14,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           version: 11.9.0
@@ -23,8 +25,96 @@ jobs:
           node-version: 22.14.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod --audit-level high
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  database:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_USER: beacon_ci
+          POSTGRES_PASSWORD: ci-only-test-password
+          POSTGRES_DB: beacon_secureview_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U beacon_ci -d beacon_secureview_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      NODE_ENV: test
+      TEST_DATABASE_URL: postgresql://beacon_ci:ci-only-test-password@127.0.0.1:5432/beacon_secureview_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Validate migration metadata
+        run: pnpm --filter @beacon/backend db:check
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+      - name: Migrate the clean disposable database
+        run: pnpm --filter @beacon/backend db:migrate
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+      - name: Verify migration reruns are safe
+        run: pnpm --filter @beacon/backend db:migrate
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+      - name: Run all backend tests including PostgreSQL integration
+        run: pnpm --filter @beacon/backend test
+
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Verify the hosted Android SDK
+        run: test -f "$ANDROID_HOME/platforms/android-35/android.jar"
+      - name: Test, lint, and compile Android without release signing
+        run: >-
+          bash apps/android-camera/gradlew -p apps/android-camera --no-daemon
+          testDebugUnitTest lintDebug assembleDebug assembleRelease
+
+  secrets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate workflow syntax and shell commands
+        run: >-
+          docker run --rm --network none --read-only --tmpfs /tmp
+          --mount "type=bind,source=$GITHUB_WORKSPACE,target=/repo,readonly" --workdir /repo
+          rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+          .github/workflows/ci.yml
+      - name: Scan history with fully redacted output
+        run: >-
+          docker run --rm --network none --read-only
+          -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo
+          --mount "type=bind,source=$GITHUB_WORKSPACE,target=/repo,readonly"
+          ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:b109bc5f8f76a38196a3e413704fc5b9e3c32360bce4e4b603bd6f45b3721dbb
+          git /repo --redact=100 --no-banner

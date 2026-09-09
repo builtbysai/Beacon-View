@@ -20,11 +20,18 @@ services:
 
   coturn:
     image: coturn/coturn:4.6.3-r3
-    command: ['-c', '/etc/coturn/turnserver.conf']
+    command:
+      [
+        '-c',
+        '/etc/coturn/turnserver.conf',
+        '--external-ip=${BEACON_TURN_ADDRESS:-127.0.0.1}',
+        '--min-port=${BEACON_TURN_MIN_PORT:-49160}',
+        '--max-port=${BEACON_TURN_MAX_PORT:-49200}',
+      ]
     ports:
-      - '127.0.0.1:3478:3478/tcp'
-      - '127.0.0.1:3478:3478/udp'
-      - '127.0.0.1:49160-49200:49160-49200/udp'
+      - '${BEACON_TURN_BIND:-127.0.0.1}:3478:3478/tcp'
+      - '${BEACON_TURN_BIND:-127.0.0.1}:3478:3478/udp'
+      - '${BEACON_TURN_BIND:-127.0.0.1}:${BEACON_TURN_MIN_PORT:-49160}-${BEACON_TURN_MAX_PORT:-49200}:${BEACON_TURN_MIN_PORT:-49160}-${BEACON_TURN_MAX_PORT:-49200}/udp'
     volumes:
       - ../coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
     restart: unless-stopped
@@ -32,6 +39,9 @@ services:
   secure-proxy:
     profiles: ['secure']
     image: caddy:2.10.2-alpine
+    environment:
+      BEACON_HTTPS_HOST: ${BEACON_HTTPS_HOST:-localhost}
+      BEACON_WEB_UPSTREAM: ${BEACON_WEB_UPSTREAM:-host.docker.internal:5173}
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     ports:

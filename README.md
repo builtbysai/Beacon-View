@@ -1,10 +1,16 @@
 # Beacon SecureView
 
+Beacon SecureView is a device-agnostic camera platform. Android devices and
+attended HTTPS browsers can produce video; responsive browsers can view it; and
+one device may expose several independently named camera sources.
+
 Beacon SecureView is an Android-first system intended to turn an unused Android
-phone into a remotely accessible smart security camera. Milestone 3 makes the
-single-viewer, video-only WebRTC path resilient to transient connectivity loss
-and adds production-style HTTPS/WSS and ephemeral TURN credentials. Audio,
-recording, analysis, and background streaming are not implemented.
+phone into a remotely accessible smart security camera. The current foundation
+includes secure pairing, foreground-service camera readiness, authorized
+multi-viewer WebRTC, multiple sources per device, responsive device management,
+local multi-camera monitoring workspaces, explicit Listen controls, a single-owner
+web-to-Android talk path, Android privacy mode, and on-device motion metadata.
+Recording, object recognition, and notifications are not implemented.
 
 ## Repository layout
 
@@ -16,21 +22,51 @@ recording, analysis, and background streaming are not implemented.
 - `infrastructure` — loopback-only local PostgreSQL and Coturn
 - `docs` — architecture, security, testing, and development guidance
 
-## Quick start
+## Quick start on Windows
 
 Prerequisites are Node.js 22.13+ within Node 22, pnpm 11.9.0, and Docker
 Compose. JDK 17 and Android SDK 35 are needed for Android.
 
-```sh
-pnpm install --frozen-lockfile
-cp apps/backend/.env.example apps/backend/.env
-docker compose -f infrastructure/docker/compose.yaml up -d
-pnpm --filter @beacon/backend db:migrate
-pnpm dev
+```powershell
+.\Start-Beacon.ps1
 ```
 
-The backend development entry point loads `apps/backend/.env` without
-overriding environment variables already defined by the shell. See
-[local development](docs/local-development.md) for migrations, reset commands,
-Android emulator setup, and validation. This project is not production-ready.
-The same guide includes the HTTPS/WSS and physical-device validation procedure.
+Stop and validate with:
+
+```powershell
+.\Stop-Beacon.ps1
+.\Test-Beacon.ps1
+```
+
+The launcher installs pinned dependencies, creates missing local configuration,
+starts Docker services, applies migrations, starts HTTPS/WSS LAN development,
+and opens Beacon. See the [Windows quick start](docs/quick-start.md) for Android
+installation and useful options, or
+[local development](docs/local-development.md) for lower-level commands. This
+project is not production-ready.
+
+For development without a local checkout, use the
+[cloud development workflow](docs/cloud-development.md) with GitHub
+Codespaces.
+
+## Product surfaces
+
+- Dashboard: `/`
+- Monitor: `/monitor`
+- Cameras: `/cameras`
+- Devices: `/devices`
+- Browser Camera Mode: `/camera-mode`
+- Development diagnostics: `/diagnostics`
+
+Browser Camera Mode requires explicit permission and trusted HTTPS. It is for
+attended use because browsers may throttle background tabs. See
+[Browser Camera Mode](docs/browser-camera-mode.md),
+[multi-camera architecture](docs/multi-camera-architecture.md), and
+[multi-viewer testing](docs/multi-viewer-testing.md).
+
+The current foundation establishes independent multi-camera tiles and local
+workspace layouts in addition to resilient producer reconnect, device/camera
+separation, browser producers, independent multi-viewer sessions, privacy mode,
+and one-way camera audio. Recording, motion/events, notifications, distributed
+presence/signaling, production deployment, SFU fan-out, iOS/desktop agents, and
+IP-camera adapters remain future roadmap work.

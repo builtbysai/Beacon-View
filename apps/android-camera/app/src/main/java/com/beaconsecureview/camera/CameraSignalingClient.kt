@@ -4,9 +4,9 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -33,16 +33,25 @@ interface CameraSignalingListener {
 
     fun onIce(connectionId: String, candidate: IceCandidate)
 
-    fun onPeerLeft()
+    fun onPeerLeft(connectionId: String)
 
     fun onSignalingState(state: StreamingState)
 
     fun onRetryAttempt(attempt: Int)
+
+    fun onSourceSwitch(cameraId: String)
+
+    fun onPrivacyMode(enabled: Boolean)
+
+    fun onTalkState(connectionId: String, active: Boolean)
+
+    fun onAuthorizationLost()
 }
 
 class CameraSignalingClient(
     context: Context,
     baseUrl: String,
+    private val cameraId: String,
     private val credential: String,
     private val listener: CameraSignalingListener,
     private val random: () -> Double = Math::random,
@@ -53,15 +62,17 @@ class CameraSignalingClient(
         applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     private val handler = Handler(Looper.getMainLooper())
     private val generations = RetryGeneration()
+    private val retryGate = RetryGate()
     private val signalingUrl =
         baseUrl
             .replaceFirst("http://", "ws://")
             .replaceFirst("https://", "wss://")
-            .trimEnd('/') + "/api/signaling?role=device"
+            .trimEnd('/') + "/api/signaling?role=device&cameraId=$cameraId"
     private var networkCallbackRegistered = false
     private var online = false
     private var retryAttempt = 0
     private var retryRunnable: Runnable? = null
+    private var stableRunnable: Runnable? = null
     private var socket: WebSocket? = null
     private var stopped = true
 
@@ -69,6 +80,7 @@ class CameraSignalingClient(
         object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 handler.post {
+                    Log.i(LOG_TAG, "event=network_restored")
                     online = true
                     if (!stopped && socket == null) {
                         cancelRetry()
@@ -77,14 +89,32 @@ class CameraSignalingClient(
                 }
             }
 
+            override fun onCapabilitiesChanged(
+                network: Network,
+                capabilities: NetworkCapabilities,
+            ) {
+                handler.post {
+                    val restored =
+                        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    online = hasUsableNetwork()
+                    if (restored && online && !stopped && socket == null) {
+                        cancelRetry()
+                        openSocket()
+                    }
+                }
+            }
+
             override fun onLost(network: Network) {
                 handler.post {
-                    online = hasUsableNetwork()
-                    if (!online && !stopped) {
+                    Log.i(LOG_TAG, "event=network_lost")
+                    online = false
+                    if (!stopped) {
                         listener.onSignalingState(StreamingState.Offline)
                         generations.cancel()
+                        cancelRetry()
                         socket?.cancel()
                         socket = null
+                        cancelStableReset()
                     }
                 }
             }
@@ -122,11 +152,23 @@ class CameraSignalingClient(
         send(JSONObject().put("type", "connected").put("connectionId", connectionId))
     }
 
-    fun pause(connectionId: String?) {
+    fun requestReconnect() {
+        if (stopped) return
+        cancelRetry()
+        cancelStableReset()
+        generations.cancel()
+        socket?.cancel()
+        socket = null
+        online = hasUsableNetwork()
+        if (online) scheduleReconnect() else listener.onSignalingState(StreamingState.Offline)
+    }
+
+    fun pause(connectionIds: Collection<String> = emptyList()) {
         stopped = true
         cancelRetry()
+        cancelStableReset()
         generations.cancel()
-        if (connectionId != null) {
+        for (connectionId in connectionIds) {
             send(JSONObject().put("type", "disconnect").put("connectionId", connectionId))
         }
         socket?.close(1000, "Streaming screen stopped")
@@ -134,8 +176,8 @@ class CameraSignalingClient(
         unregisterNetworkCallback()
     }
 
-    fun disconnect(connectionId: String?) {
-        pause(connectionId)
+    fun disconnect(connectionIds: Collection<String> = emptyList()) {
+        pause(connectionIds)
         client.dispatcher.executorService.shutdown()
         client.connectionPool.evictAll()
     }
@@ -160,10 +202,10 @@ class CameraSignalingClient(
                             webSocket.close(1000, "Stale connection")
                             return
                         }
-                        retryAttempt = 0
                         handler.post {
-                            listener.onRetryAttempt(0)
+                            Log.i(LOG_TAG, "event=signaling_authenticated")
                             listener.onSignalingState(StreamingState.Ready)
+                            scheduleStableReset(generation, webSocket)
                         }
                     }
 
@@ -199,10 +241,11 @@ class CameraSignalingClient(
         handler.post {
             if (!generations.isCurrent(generation) || socket !== webSocket) return@post
             socket = null
+            cancelStableReset()
             if (authorizationLost) {
                 stopped = true
                 cancelRetry()
-                listener.onSignalingState(StreamingState.Failed)
+                listener.onAuthorizationLost()
             } else {
                 scheduleReconnect()
             }
@@ -210,17 +253,15 @@ class CameraSignalingClient(
     }
 
     private fun scheduleReconnect() {
-        if (stopped || !online) return
-        if (retryAttempt >= MAX_SIGNALING_RETRIES) {
-            listener.onSignalingState(StreamingState.Failed)
-            return
-        }
+        if (stopped || !online || !retryGate.schedule()) return
         val attempt = retryAttempt++
+        Log.i(LOG_TAG, "event=reconnect_scheduled attempt=${attempt + 1}")
         val generation = generations.next()
         listener.onSignalingState(StreamingState.Reconnecting)
         listener.onRetryAttempt(retryAttempt)
         val runnable =
             Runnable {
+                retryGate.clear()
                 retryRunnable = null
                 if (!stopped && online && generations.isCurrent(generation)) openSocket()
             }
@@ -231,16 +272,38 @@ class CameraSignalingClient(
     private fun cancelRetry() {
         retryRunnable?.let(handler::removeCallbacks)
         retryRunnable = null
+        retryGate.clear()
+    }
+
+    private fun scheduleStableReset(
+        generation: Int,
+        webSocket: WebSocket,
+    ) {
+        cancelStableReset()
+        val runnable =
+            Runnable {
+                stableRunnable = null
+                if (
+                    !stopped &&
+                    socket === webSocket &&
+                    generations.isCurrent(generation)
+                ) {
+                    retryAttempt = 0
+                    listener.onRetryAttempt(0)
+                }
+            }
+        stableRunnable = runnable
+        handler.postDelayed(runnable, STABLE_CONNECTION_MILLIS)
+    }
+
+    private fun cancelStableReset() {
+        stableRunnable?.let(handler::removeCallbacks)
+        stableRunnable = null
     }
 
     private fun registerNetworkCallback() {
         if (networkCallbackRegistered) return
-        connectivity.registerNetworkCallback(
-            NetworkRequest.Builder()
-                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                .build(),
-            networkCallback,
-        )
+        connectivity.registerDefaultNetworkCallback(networkCallback)
         networkCallbackRegistered = true
     }
 
@@ -254,6 +317,10 @@ class CameraSignalingClient(
         val network = connectivity.activeNetwork ?: return false
         return connectivity.getNetworkCapabilities(network)
             ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    }
+
+    companion object {
+        private const val LOG_TAG = "BeaconLifecycle"
     }
 
     private fun handle(message: JSONObject) {
@@ -285,7 +352,25 @@ class CameraSignalingClient(
                     )
                 }
             }
-            "peer-left" -> handler.post { listener.onPeerLeft() }
+            "peer-left" ->
+                handler.post {
+                    listener.onPeerLeft(message.getString("connectionId"))
+                }
+            "switch-source" ->
+                handler.post {
+                    listener.onSourceSwitch(message.getString("cameraId"))
+                }
+            "privacy-mode" ->
+                handler.post {
+                    listener.onPrivacyMode(message.getBoolean("enabled"))
+                }
+            "talk-state" ->
+                handler.post {
+                    listener.onTalkState(
+                        message.getString("connectionId"),
+                        message.getBoolean("active"),
+                    )
+                }
         }
     }
 

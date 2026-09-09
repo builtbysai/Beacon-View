@@ -1,0 +1,9 @@
+[Unit]
+Description=Verify Beacon encrypted backup repository
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/beacon/app/infrastructure/cloud
+ExecStart=/usr/bin/docker compose --env-file /etc/beacon/production.env --env-file /etc/beacon/backup.env run --rm backup check

@@ -44,6 +44,12 @@ const environmentSchema = z
       .max(600)
       .default(600),
     ICE_TRANSPORT_POLICY: z.enum(['all', 'relay']).default('all'),
+    GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
+    GOOGLE_OAUTH_REDIRECT_URI: z.string().url().optional(),
+    CONTACT_EMAIL_TO: z.string().email().optional(),
+    RESEND_API_KEY: z.string().min(1).optional(),
+    RESEND_FROM: z.string().min(3).max(320).optional(),
   })
   .superRefine((config, context) => {
     const insecureTransport =
@@ -72,6 +78,42 @@ const environmentSchema = z
         code: 'custom',
         message: 'The local TURN shared secret is forbidden in production',
         path: ['TURN_SHARED_SECRET'],
+      });
+    }
+    const googleFields = [
+      config.GOOGLE_OAUTH_CLIENT_ID,
+      config.GOOGLE_OAUTH_CLIENT_SECRET,
+      config.GOOGLE_OAUTH_REDIRECT_URI,
+    ];
+    if (googleFields.some(Boolean) && !googleFields.every(Boolean)) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Google OAuth client ID, secret, and redirect URI must be configured together',
+        path: ['GOOGLE_OAUTH_CLIENT_ID'],
+      });
+    }
+    const contactFields = [
+      config.CONTACT_EMAIL_TO,
+      config.RESEND_API_KEY,
+      config.RESEND_FROM,
+    ];
+    if (contactFields.some(Boolean) && !contactFields.every(Boolean)) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'CONTACT_EMAIL_TO, RESEND_API_KEY, and RESEND_FROM must be configured together',
+        path: ['CONTACT_EMAIL_TO'],
+      });
+    }
+    if (
+      config.GOOGLE_OAUTH_REDIRECT_URI &&
+      new URL(config.GOOGLE_OAUTH_REDIRECT_URI).origin !== config.WEB_ORIGIN
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Google OAuth redirect URI must use the web origin',
+        path: ['GOOGLE_OAUTH_REDIRECT_URI'],
       });
     }
     for (const [field, value] of [
@@ -108,10 +150,10 @@ export function parseConfig(environment: NodeJS.ProcessEnv): AppConfig {
   const result = environmentSchema.safeParse(environment);
 
   if (!result.success) {
-    const fields = result.error.issues
-      .map((issue) => issue.path.join('.'))
-      .join(', ');
-    throw new Error(`Invalid environment configuration for: ${fields}`);
+    const details = result.error.issues
+      .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+      .join('; ');
+    throw new Error(`Invalid environment configuration: ${details}`);
   }
 
   return result.data;

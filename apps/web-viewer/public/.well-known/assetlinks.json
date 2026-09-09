@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.beaconsecureview.camera",
+      "sha256_cert_fingerprints": [
+        "85:90:06:83:FC:3E:64:27:52:29:92:86:5C:D2:17:69:EE:8B:2C:A3:75:1B:1B:A9:47:76:D1:5B:4A:2D:07:51"
+      ]
+    }
+  }
+]

@@ -1,21 +1,51 @@
 # Architecture
 
-## Milestone 3 scope
+The runtime lifecycle and state-machine design is specified in
+[`device-lifecycle.md`](device-lifecycle.md). Android camera operation is owned
+by a foreground service rather than the activity. Signaling sessions are keyed
+by connection ID, allowing independent viewer cleanup, while an authenticated
+household event WebSocket keeps browser camera state current without polling.
+
+## Device and camera model
+
+A household owns devices; each device exposes one or more camera sources.
+Android and browser devices may produce video, while any responsive browser may
+view it. Producer and viewer roles are not mutually exclusive. See
+[`multi-camera-architecture.md`](multi-camera-architecture.md).
+
+The historical SQL `cameras` table now represents devices for migration
+compatibility. `camera_sources` contains independently addressable sources.
+Existing Android rows receive a default source without changing credentials or
+requiring repair.
+
+## Current scope
 
 The Fastify backend owns identity, authorization, device pairing, credential
 revocation, presence, and signaling authorization. PostgreSQL is the security
 state authority. The React viewer uses cookie-authenticated JSON and WebSocket
 endpoints, while Android uses a separate bearer credential.
 
-Android binds rear-camera CameraX preview and analysis to the visible activity.
+Android enumerates Camera2 sources and binds the selected CameraX source to the
+foreground service.
+Its authenticated heartbeat may include the current bounded battery percentage and
+charging state. These advisory fields are household-scoped device health, never media
+or capture authorization.
 YUV frames feed a WebRTC I420 video source at a target 640×480 and 15 fps. The
-peer connection has one send-only video transceiver and no audio source or track.
+peer connection has send-only video and audio transceivers backed by one shared
+CameraX/WebRTC media source. Viewer audio is muted until the user explicitly chooses
+Listen.
+
+Web live viewers may additionally request a single-owner talk channel. The signaling
+server arbitrates one talker per camera connection set, while Android keeps its incoming
+audio track disabled until that exact connection is granted. Viewer microphone capture
+is explicit and is released on stop, navigation, disconnection, or privacy shutdown.
 
 ## Ownership and credentials
 
 Account creation transactionally creates one household owned by that user.
-Cameras belong to one household. Only that household owner can create pairing
-codes, list cameras, and revoke camera credentials.
+Devices and camera sources belong to one household. Only that household owner
+can create pairing codes, register browser cameras, list inventory, view
+cameras, and revoke devices.
 
 Browser session and device tokens contain at least 32 random bytes. Only SHA-256
 token hashes are stored. Passwords use Argon2id. Browser sessions have a 7-day
@@ -29,16 +59,17 @@ transaction.
 
 ## Presence
 
-The Android client heartbeats every 30 seconds while its activity participates.
+The Android client heartbeats every 30 seconds while its foreground service
+participates.
 The server updates `last_seen_at`; a camera is online through exactly 90 seconds
 after its last successful heartbeat. There are no push channels.
 
 ## WebRTC signaling and media
 
-The device keeps one authenticated WebSocket open while its activity is visible.
+Each active camera source keeps one authenticated producer WebSocket.
 An owner opening a live view is reauthorized by browser session, Origin,
-household ownership, and active device credential. One viewer is allowed per
-camera.
+household ownership, and active device credential. Multiple viewers are allowed
+per camera with independent connection IDs and peer connections.
 
 The camera creates the offer; the browser returns the answer. Both peers exchange
 ICE candidates through the authorized connection. A 30-second unanswered
@@ -56,10 +87,13 @@ socket. Lifecycle diagnostics contain a correlation ID, public camera ID, role,
 bounded state/reason categories, and duration—never SDP, raw candidates, tokens,
 TURN credentials, household IDs, or database IDs.
 
-Browser and Android reconnect with bounded exponential backoff and jitter. Each
+Browser viewers use bounded exponential backoff. Android and browser producers
+continue transient retries with capped exponential backoff and jitter. Each
 connection generation invalidates stale sockets, peer connections, and timers.
-Android also observes network availability and releases CameraX/WebRTC when its
-screen stops. Authorization loss is terminal rather than endlessly retried.
+Android observes default-network availability while preserving its foreground
+service and pairing credential across network loss. Shared CameraX capture is
+released after the last viewer or explicit stop. Authorization loss is terminal
+rather than endlessly retried.
 
 WebRTC uses DTLS-SRTP transport encryption. The backend can see SDP and ICE but
 does not log their contents. Coturn may relay encrypted packets and observe
@@ -73,8 +107,11 @@ application-level end-to-end-encryption claim.
 - `POST /api/pairing-codes` and
   `DELETE /api/pairing-codes/:pairingCodeId`
 - `POST /api/devices/register`
-- `GET /api/cameras` and
+- `PUT /api/device/cameras` and `POST /api/browser-devices`
+- `GET /api/devices`, `GET /api/cameras`, `GET /api/diagnostics`, and
   `DELETE /api/cameras/:cameraId/credential`
+- `GET /api/devices/:deviceId` with its child sources and aggregate viewer count
+- `GET /api/cameras/:cameraId` for an independently addressable source
 - `POST /api/device/heartbeat`
 - `GET /api/signaling` as an authenticated WebSocket upgrade
 
@@ -86,3 +123,9 @@ credential and never accepts credentials in URLs.
 Drizzle defines and migrates the PostgreSQL schema through explicit checked-in
 SQL. Production startup never mutates schema. Coturn is an ICE relay fallback,
 not a media processor. TypeScript packages are not imported by Android.
+
+LAN development is an explicit orchestration mode around one validated laptop
+IPv4 address. Caddy terminates trusted development HTTPS/WSS, Vite retains a
+strict upstream port, and Coturn advertises and binds the selected address.
+PostgreSQL remains loopback-only. These bindings do not change deployment
+architecture or release trust policy.

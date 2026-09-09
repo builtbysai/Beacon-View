@@ -9,8 +9,9 @@ import {
   DEVICE_REGISTRATION_RATE_LIMITED,
   PostgresStore,
 } from '../src/store.js';
+import { resetTestDatabase, testDatabaseUrl } from './test-database.js';
 
-const databaseUrl = process.env.TEST_DATABASE_URL;
+const databaseUrl = testDatabaseUrl();
 const store = databaseUrl ? new PostgresStore(databaseUrl) : null;
 const config: AppConfig | null = databaseUrl
   ? {
@@ -38,9 +39,15 @@ const config: AppConfig | null = databaseUrl
 const app = store && config ? buildApp(config, store) : null;
 let baseUrl = '';
 
-function nextMessage(socket: WebSocket): Promise<Record<string, unknown>> {
+function nextMessage(
+  socket: WebSocket,
+  label = 'signaling message',
+): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Message timeout')), 2_000);
+    const timer = setTimeout(
+      () => reject(new Error(`Message timeout: ${label}`)),
+      2_000,
+    );
     socket.once('message', (data) => {
       clearTimeout(timer);
       const text = Array.isArray(data)
@@ -80,9 +87,7 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
   });
 
   beforeEach(async () => {
-    await store!.pool.query(
-      'TRUNCATE audit_events, pairing_codes, device_credentials, cameras, browser_sessions, households, users CASCADE',
-    );
+    await resetTestDatabase(store!.pool);
   });
 
   afterAll(async () => {
@@ -122,18 +127,20 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
       userId: owner.id,
     });
 
-    const device = connect('role=device', {
+    const device = connect(`role=device&cameraId=${camera.publicCameraId}`, {
       Authorization: `Bearer ${deviceCredential}`,
     });
-    expect(await nextMessage(device)).toEqual({ type: 'device-ready' });
+    expect(await nextMessage(device, 'device ready')).toEqual({
+      type: 'device-ready',
+    });
 
-    const viewer = connect(`role=viewer&cameraId=${camera.publicDeviceId}`, {
+    const viewer = connect(`role=viewer&cameraId=${camera.publicCameraId}`, {
       Cookie: `beacon_session=${sessionToken}`,
       Origin: config!.WEB_ORIGIN,
     });
     const [viewerReady, deviceReady] = await Promise.all([
-      nextMessage(viewer),
-      nextMessage(device),
+      nextMessage(viewer, 'viewer ready'),
+      nextMessage(device, 'viewer admission on device'),
     ]);
     expect(viewerReady).toMatchObject({ type: 'ready' });
     expect(deviceReady).toMatchObject({ type: 'viewer-ready' });
@@ -160,20 +167,23 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
     expect(deviceTurn?.username).not.toBe(viewerTurn?.username);
     const connectionId = viewerReady.connectionId as string;
 
+    const forwardedOffer = nextMessage(viewer, 'offer');
     device.send(
       JSON.stringify({ connectionId, sdp: 'offer-sdp', type: 'offer' }),
     );
-    expect(await nextMessage(viewer)).toMatchObject({
+    expect(await forwardedOffer).toMatchObject({
       sdp: 'offer-sdp',
       type: 'offer',
     });
+    const forwardedAnswer = nextMessage(device, 'answer');
     viewer.send(
       JSON.stringify({ connectionId, sdp: 'answer-sdp', type: 'answer' }),
     );
-    expect(await nextMessage(device)).toMatchObject({
+    expect(await forwardedAnswer).toMatchObject({
       sdp: 'answer-sdp',
       type: 'answer',
     });
+    const forwardedIce = nextMessage(device, 'ICE');
     viewer.send(
       JSON.stringify({
         candidate: {
@@ -185,7 +195,7 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
         type: 'ice',
       }),
     );
-    expect(await nextMessage(device)).toMatchObject({ type: 'ice' });
+    expect(await forwardedIce).toMatchObject({ type: 'ice' });
 
     const outsider = await store!.createAccount(
       'outsider@example.com',
@@ -201,7 +211,7 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
       userId: outsider.id,
     });
     const unauthorized = connect(
-      `role=viewer&cameraId=${camera.publicDeviceId}`,
+      `role=viewer&cameraId=${camera.publicCameraId}`,
       {
         Cookie: `beacon_session=${outsiderToken}`,
         Origin: config!.WEB_ORIGIN,
@@ -209,12 +219,59 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
     );
     expect(await nextClose(unauthorized)).toBe(4003);
 
-    const devicePeerLeft = nextMessage(device);
+    viewer.send(JSON.stringify({ connectionId, type: 'disconnect' }));
     viewer.close();
-    expect(await devicePeerLeft).toEqual({
-      code: 'viewer_disconnected',
-      type: 'peer-left',
+    device.close();
+  });
+
+  it('accepts a native bearer viewer without a browser origin', async () => {
+    const owner = await store!.createAccount(
+      'native-viewer@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    const deviceCredential = 'native-viewer-device-secret';
+    const code = 'NATIVEVIEW2';
+    await store!.createPairingCode(
+      owner.householdId,
+      hashSecret(code),
+      new Date(Date.now() + 60_000),
+    );
+    const camera = await store!.redeemPairingCode({
+      codeHash: hashSecret(code),
+      credentialHash: hashSecret(deviceCredential),
+      installationId: randomUUID(),
+      ipAddress: '127.0.0.1',
+      name: 'Native Camera',
+      now: new Date(),
     });
+    if (!camera || camera === DEVICE_REGISTRATION_RATE_LIMITED) {
+      throw new Error('Camera setup failed');
+    }
+    const sessionToken = 'native-viewer-session';
+    await store!.createSession({
+      absoluteExpiresAt: new Date(Date.now() + 60_000),
+      csrfHash: hashSecret('csrf'),
+      idleExpiresAt: new Date(Date.now() + 60_000),
+      tokenHash: hashSecret(sessionToken),
+      userId: owner.id,
+    });
+
+    const device = connect(`role=device&cameraId=${camera.publicCameraId}`, {
+      Authorization: `Bearer ${deviceCredential}`,
+    });
+    await nextMessage(device, 'native device ready');
+    const viewer = connect(`role=viewer&cameraId=${camera.publicCameraId}`, {
+      Authorization: `Bearer ${sessionToken}`,
+    });
+    const [viewerReady, deviceReady] = await Promise.all([
+      nextMessage(viewer, 'native viewer ready'),
+      nextMessage(device, 'native viewer admission'),
+    ]);
+    expect(viewerReady).toMatchObject({ type: 'ready' });
+    expect(deviceReady).toMatchObject({ type: 'viewer-ready' });
+
+    viewer.close();
     device.close();
   });
 
@@ -225,7 +282,7 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
     });
     expect(await nextClose(expired)).toBe(4003);
 
-    const revoked = connect('role=device', {
+    const revoked = connect(`role=device&cameraId=${randomUUID()}`, {
       Authorization: 'Bearer revoked',
     });
     expect(await nextClose(revoked)).toBe(4003);

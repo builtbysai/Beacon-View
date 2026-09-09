@@ -1,0 +1,9 @@
+[Unit]
+Description=Beacon encrypted PostgreSQL backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/beacon/app/infrastructure/cloud
+ExecStart=/usr/bin/docker compose --env-file /etc/beacon/production.env --env-file /etc/beacon/backup.env run --rm backup run
