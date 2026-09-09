@@ -15,6 +15,7 @@
   "customizations": {
     "vscode": {
       "extensions": [
+        "openai.chatgpt",
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
         "ms-azuretools.vscode-docker"
