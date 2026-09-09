@@ -45,9 +45,11 @@ installation and useful options, or
 [local development](docs/local-development.md) for lower-level commands. This
 project is not production-ready.
 
-For development without a local checkout, use the
-[cloud development workflow](docs/cloud-development.md) with GitHub
-Codespaces.
+For the recommended local/GitHub workflow, see the
+[development handoff](docs/development-handoff.md). GitHub is the source of
+truth; work on a `codex/*` feature branch, open a pull request, and merge to
+`main` only after CI passes. A successful merge to `main` deploys the web
+viewer to the Oracle private alpha automatically.
 
 ## Product surfaces
 
