@@ -15,6 +15,7 @@ import { MotionSettingsPanel } from './MotionSettingsPanel';
 import { MotionRetentionSettings } from './MotionRetentionSettings';
 import { BrowserSessions } from './BrowserSessions';
 import { AuthScreen } from './AuthScreen';
+import { SplashScreen } from './SplashScreen';
 import { CameraBrowser } from './CameraBrowser';
 import { ContactPage } from './ContactPage';
 import { Brand, Icon, type IconName } from './Icon';
@@ -81,6 +82,8 @@ type Page =
   | 'trust'
   | 'contact'
   | 'account deletion';
+
+const SPLASH_SEEN_KEY = 'beacon.splash.seen.v1';
 
 const pagePaths: Record<Page, string> = {
   'camera mode': '/camera-mode',
@@ -181,6 +184,13 @@ export function App() {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
+  const [splashSeen, setSplashSeen] = useState(() => {
+    try {
+      return localStorage.getItem(SPLASH_SEEN_KEY) === 'true';
+    } catch {
+      return true;
+    }
+  });
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [authBusy, setAuthBusy] = useState(false);
   const [error, setError] = useState('');
@@ -568,6 +578,20 @@ export function App() {
         <Brand />
         <p role="status">Opening your workspace…</p>
       </main>
+    );
+
+  if (!user && !splashSeen)
+    return (
+      <SplashScreen
+        onContinue={() => {
+          try {
+            localStorage.setItem(SPLASH_SEEN_KEY, 'true');
+          } catch {
+            /* Splash just reappears next visit if storage is unavailable. */
+          }
+          setSplashSeen(true);
+        }}
+      />
     );
 
   if (!user)

@@ -6,9 +6,15 @@ import {
   screen,
   within,
 } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './App';
+
+beforeEach(() => {
+  // Most tests exercise post-splash behavior; the splash itself has its own
+  // dedicated test below, which clears this first.
+  localStorage.setItem('beacon.splash.seen.v1', 'true');
+});
 
 afterEach(() => {
   cleanup();
@@ -36,6 +42,40 @@ class TestSocket {
 }
 
 describe('App', () => {
+  it('shows the one-time splash before sign-in, then remembers it was seen', async () => {
+    localStorage.removeItem('beacon.splash.seen.v1');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: () => Promise.resolve({ error: 'Authentication required' }),
+        ok: false,
+      }),
+    );
+    const view = render(<App />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Get started' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'Welcome to Beacon' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Welcome to Beacon' }),
+    ).toBeVisible();
+    expect(localStorage.getItem('beacon.splash.seen.v1')).toBe('true');
+
+    view.unmount();
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Welcome to Beacon' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Get started' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('shows the authentication form when no session exists', async () => {
     vi.stubGlobal(
       'fetch',

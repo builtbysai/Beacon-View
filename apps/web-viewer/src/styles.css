@@ -2579,6 +2579,119 @@ button > .icon:first-child {
   font-size: 0.85rem;
 }
 
+/* ---------- One-time splash screen ---------- */
+.splash-screen {
+  --bg: #070b14;
+  --surface: #101a2c;
+  --surface-2: #16223a;
+  --border: #223351;
+  --border-strong: #2c3f61;
+  --text: #eef2f8;
+  --text-secondary: #a7b3c8;
+  --text-muted: #7c89a3;
+  --accent: #38bdf8;
+  display: grid;
+  min-height: 100dvh;
+  padding: clamp(1.5rem, 5vw, 4rem);
+  background:
+    radial-gradient(circle at 15% 8%, rgb(56 189 248 / 26%), transparent 45%),
+    radial-gradient(circle at 85% 90%, rgb(125 211 252 / 12%), transparent 40%),
+    linear-gradient(165deg, #070b14 0%, #0c1830 60%, #0a1524 100%);
+  color: var(--text);
+  place-items: center;
+}
+
+.splash-content {
+  width: min(100%, 40rem);
+  text-align: center;
+}
+
+.splash-brand {
+  height: 2.2rem;
+  margin: 0 auto 2.5rem;
+}
+
+.splash-screen .eyebrow {
+  color: #7dd3fc;
+}
+
+.splash-screen h1 {
+  max-width: 26ch;
+  margin: 1rem auto 1.25rem;
+  color: #f5f9fd;
+  font-size: clamp(1.9rem, 4.5vw, 2.9rem);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.splash-screen h1 em {
+  color: #7dd3fc;
+  font-style: normal;
+}
+
+.splash-lead {
+  max-width: 32rem;
+  margin: 0 auto;
+  color: #b7c6de;
+  font-size: 1.05rem;
+}
+
+.splash-flow {
+  max-width: 30rem;
+  margin: 2.5rem auto;
+}
+
+.splash-promises {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3) var(--space-5);
+  margin-bottom: 2.5rem;
+}
+
+.splash-promises span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #b7c6de;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.splash-promises .icon {
+  color: #7dd3fc;
+}
+
+.splash-cta {
+  padding: 0.9rem 2rem;
+  color: #04101c;
+  font-size: 1rem;
+  background: #38bdf8;
+}
+
+.splash-cta:hover:not(:disabled) {
+  background: #7dd3fc;
+}
+
+.splash-trust-link {
+  display: block;
+  margin-top: 1.5rem;
+  color: #93a5c2;
+  font-size: 0.82rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.splash-trust-link:hover {
+  color: #b7c6de;
+}
+
+@media (max-width: 500px) {
+  .splash-flow .trust-flow-step span:not(.icon) {
+    display: none;
+  }
+}
+
 /* ---------- Auth landing (sign in / create account) ---------- */
 .auth-landing {
   display: grid;
