@@ -100,10 +100,17 @@ jobs:
             up -d --no-deps web
 
           domain="${BEACON_DOMAIN:-beaconapp.duckdns.org}"
-          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
+          # --retry-all-errors is required here: a freshly (re)started Caddy
+          # can briefly reject the TLS handshake (curl exit 35,
+          # SSL_ERROR_SYSCALL) before it's done initializing. Plain --retry
+          # only covers curl's "transient" error set (timeouts, 5xx, etc.)
+          # and does NOT retry on SSL connect errors, so without this flag
+          # a single early handshake failure fails the whole deploy even
+          # though the service comes up moments later.
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
             --resolve "${domain}:443:127.0.0.1" \
             "https://${domain}/health" > /dev/null
-          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
             --resolve "${domain}:443:127.0.0.1" \
             "https://${domain}/ready" > /dev/null
           REMOTE_SCRIPT
