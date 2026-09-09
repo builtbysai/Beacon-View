@@ -71,7 +71,6 @@ interface AccessEvent {
 
 type Page =
   | 'dashboard'
-  | 'monitor'
   | 'cameras'
   | 'devices'
   | 'camera mode'
@@ -89,7 +88,6 @@ const pagePaths: Record<Page, string> = {
   devices: '/devices',
   diagnostics: '/diagnostics',
   events: '/events',
-  monitor: '/monitor',
   settings: '/settings',
   trust: '/trust',
   contact: '/contact',
@@ -98,7 +96,6 @@ const pagePaths: Record<Page, string> = {
 
 const pageLabels: Record<Page, string> = {
   dashboard: 'Home',
-  monitor: 'Monitor',
   cameras: 'Cameras',
   events: 'Activity',
   'camera mode': 'Add camera',
@@ -112,8 +109,7 @@ const pageLabels: Record<Page, string> = {
 
 const pageDescriptions: Record<Page, string> = {
   dashboard: 'A quick check on the cameras in your space.',
-  cameras: 'Find a camera and choose when to connect.',
-  monitor: 'Your saved layout for watching multiple cameras.',
+  cameras: 'Find a camera, watch it live, or view several at once.',
   events: 'Review motion activity from your devices.',
   devices: 'Manage camera access, power, and preferences.',
   'camera mode': 'Give a spare device a new purpose.',
@@ -125,7 +121,6 @@ const pageDescriptions: Record<Page, string> = {
 };
 const navigationIcons: Record<string, IconName> = {
   dashboard: 'home',
-  monitor: 'monitor',
   cameras: 'camera',
   events: 'activity',
   settings: 'settings',
@@ -203,6 +198,15 @@ export function App() {
   const [highlightedCameraId, setHighlightedCameraId] = useState<string | null>(
     null,
   );
+  const [cameraView, setCameraView] = useState<'list' | 'grid'>(() => {
+    try {
+      return localStorage.getItem('beacon.cameras.view.v1') === 'grid'
+        ? 'grid'
+        : 'list';
+    } catch {
+      return 'list';
+    }
+  });
   const [motionEventRevision, setMotionEventRevision] = useState(0);
   const [motionClearRevision, setMotionClearRevision] = useState(0);
   const returnPage = useRef<Page>('cameras');
@@ -618,14 +622,15 @@ export function App() {
       <Sidebar
         email={user.email}
         onLogout={() => void logout()}
-        items={(
-          ['dashboard', 'monitor', 'cameras', 'events', 'settings'] as const
-        ).map((item) => ({
-          label: pageLabels[item],
-          icon: navigationIcons[item]!,
-          current: page === item || (page === 'devices' && item === 'settings'),
-          onSelect: () => navigate(item),
-        }))}
+        items={(['dashboard', 'cameras', 'events', 'settings'] as const).map(
+          (item) => ({
+            label: pageLabels[item],
+            icon: navigationIcons[item]!,
+            current:
+              page === item || (page === 'devices' && item === 'settings'),
+            onSelect: () => navigate(item),
+          }),
+        )}
       />
       <main className="workspace" id="main-content" tabIndex={-1}>
         {page !== 'dashboard' && (
@@ -640,6 +645,7 @@ export function App() {
             {page !== 'camera mode' && (
               <button
                 className="add-camera-button"
+                aria-label="Add camera"
                 onClick={() => navigate('camera mode')}
               >
                 <Icon name="plus" />
@@ -685,9 +691,9 @@ export function App() {
                 {cameras.length > 0 && (
                   <button
                     className="secondary"
-                    onClick={() => navigate('monitor')}
+                    onClick={() => navigate('cameras')}
                   >
-                    Open monitor
+                    View all cameras
                   </button>
                 )}
               </div>
@@ -753,34 +759,126 @@ export function App() {
                 onLive={openCamera}
               />
             </article>
+            {cameras.length === 0 && (
+              <article
+                className="card onboarding-steps"
+                aria-labelledby="onboarding-steps-title"
+              >
+                <p className="eyebrow">How Beacon works</p>
+                <h3 id="onboarding-steps-title">
+                  Three steps to your first view
+                </h3>
+                <ol>
+                  <li>
+                    <span className="onboarding-step-icon">
+                      <Icon name="phone" />
+                    </span>
+                    <div>
+                      <strong>Turn a device into a camera</strong>
+                      <p>
+                        Use a spare Android phone or tablet for an everyday
+                        camera, or this browser for a temporary one.
+                      </p>
+                    </div>
+                  </li>
+                  <li>
+                    <span className="onboarding-step-icon">
+                      <Icon name="lock" />
+                    </span>
+                    <div>
+                      <strong>Beacon connects it securely</strong>
+                      <p>
+                        A private, one-time pairing code links the camera to
+                        your household only.
+                      </p>
+                    </div>
+                  </li>
+                  <li>
+                    <span className="onboarding-step-icon">
+                      <Icon name="eye" />
+                    </span>
+                    <div>
+                      <strong>Watch it live, from anywhere</strong>
+                      <p>
+                        Open Beacon on any phone, tablet, or computer to check
+                        in whenever you like.
+                      </p>
+                    </div>
+                  </li>
+                </ol>
+              </article>
+            )}
           </section>
-        )}
-        {page === 'monitor' && (
-          <Monitoring
-            cameras={cameras}
-            devices={devices}
-            onDevice={openDevice}
-            onSwitchSource={async (cameraId) => {
-              await request(`/api/cameras/${cameraId}/activate`, {
-                body: '{}',
-                method: 'POST',
-              });
-            }}
-            storageKey={`beacon_workspaces_${user.id}`}
-          />
         )}
         {page === 'cameras' && (
           <section className="camera-catalog wide" aria-label="Your cameras">
-            <CameraBrowser cameras={cameras} key={user.id}>
-              {(items) => (
-                <CameraList
-                  cameras={items}
-                  highlightedCameraId={highlightedCameraId}
-                  onDevice={openDevice}
-                  onLive={openCamera}
-                />
-              )}
-            </CameraBrowser>
+            {cameras.length > 0 && (
+              <div
+                className="view-toggle"
+                role="radiogroup"
+                aria-label="Camera view"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={cameraView === 'list'}
+                  className={cameraView === 'list' ? 'view-toggle-active' : ''}
+                  onClick={() => {
+                    setCameraView('list');
+                    try {
+                      localStorage.setItem('beacon.cameras.view.v1', 'list');
+                    } catch {
+                      /* View preference just won't persist. */
+                    }
+                  }}
+                >
+                  <Icon name="list" />
+                  List
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={cameraView === 'grid'}
+                  className={cameraView === 'grid' ? 'view-toggle-active' : ''}
+                  onClick={() => {
+                    setCameraView('grid');
+                    try {
+                      localStorage.setItem('beacon.cameras.view.v1', 'grid');
+                    } catch {
+                      /* View preference just won't persist. */
+                    }
+                  }}
+                >
+                  <Icon name="grid" />
+                  Grid
+                </button>
+              </div>
+            )}
+            {cameraView === 'grid' && cameras.length > 0 ? (
+              <Monitoring
+                cameras={cameras}
+                devices={devices}
+                onDevice={openDevice}
+                onSwitchSource={async (cameraId) => {
+                  await request(`/api/cameras/${cameraId}/activate`, {
+                    body: '{}',
+                    method: 'POST',
+                  });
+                }}
+                storageKey={`beacon_workspaces_${user.id}`}
+              />
+            ) : (
+              <CameraBrowser cameras={cameras} key={user.id}>
+                {(items) => (
+                  <CameraList
+                    cameras={items}
+                    highlightedCameraId={highlightedCameraId}
+                    onDevice={openDevice}
+                    onLive={openCamera}
+                  />
+                )}
+              </CameraBrowser>
+            )}
           </section>
         )}
         {page === 'events' && (
@@ -1116,7 +1214,7 @@ function MobileAuthReturnPage() {
         <a className="trust-brand" href="/" aria-label="Beacon home">
           <Brand />
         </a>
-        <p className="eyebrow">Android Monitor</p>
+        <p className="eyebrow">Beacon for Android</p>
         <h1 id="mobile-auth-title">Finish in Beacon.</h1>
         <p className="trust-lead">{message}</p>
         <a className="secondary button-link" href="/">
@@ -1155,9 +1253,9 @@ function PublicTrustPage() {
             <span aria-hidden="true">↗</span>
             <h2>Live means intentional</h2>
             <p>
-              Opening a live view or Monitor connects the selected cameras.
-              Listening and talking each require their own action. Android
-              Camera Mode remains visible while capture is active.
+              Opening a live view or a camera grid connects the selected
+              cameras. Listening and talking each require their own action.
+              Android Camera Mode remains visible while capture is active.
             </p>
           </article>
           <article>
@@ -1188,7 +1286,7 @@ function PublicTrustPage() {
             for emergency response or life-safety monitoring.
           </p>
         </section>
-        <a className="secondary trust-return" href="/">
+        <a className="secondary button-link trust-return" href="/">
           Return to Beacon
         </a>
       </section>

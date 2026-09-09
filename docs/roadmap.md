@@ -1,9 +1,7 @@
 # Beacon delivery roadmap
 
-Updated September 8, 2026. This is the single actionable roadmap. It supersedes the
-delivery sequences in `ui-ux-roadmap.md` and `feature-opportunities.md`. Historical
-milestone notes are preserved in [roadmap-history.md](roadmap-history.md); they do
-not grant new scope. Detailed release gates remain in
+Updated September 8, 2026. This is the single actionable roadmap and current scope
+authority. Detailed release gates remain in
 [pre-deployment-readiness.md](pre-deployment-readiness.md).
 
 ## Current scope and evidence

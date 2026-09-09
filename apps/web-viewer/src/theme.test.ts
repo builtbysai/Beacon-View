@@ -21,20 +21,19 @@ describe('semantic theme contrast', () => {
       tokens[match[1]!] = match[2]!;
     }
     it(`keeps normal text and primary actions above 4.5:1 in ${index ? 'dark' : 'light'} mode`, () => {
-      const pairs = ['--surface-primary', '--surface-secondary'].flatMap(
-        (surface) =>
-          [
-            '--text-primary',
-            '--text-secondary',
-            '--text-muted',
-            '--status-online',
-            '--status-live',
-            '--status-offline',
-          ].map((text) => [text, surface]),
+      const pairs = ['--surface', '--surface-2'].flatMap((surface) =>
+        [
+          '--text',
+          '--text-secondary',
+          '--text-muted',
+          '--success',
+          '--live',
+          '--offline',
+        ].map((text) => [text, surface]),
       );
       pairs.push(
-        ['--text-on-action', '--action-primary'],
-        ['--text-on-action', '--action-primary-hover'],
+        ['--action-text', '--action-bg'],
+        ['--action-text', '--action-bg-hover'],
       );
       for (const [foreground, background] of pairs) {
         const a = luminance(tokens[foreground!]!);
