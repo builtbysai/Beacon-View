@@ -121,6 +121,10 @@ const report = [];
     navigator.mediaDevices.getUserMedia = async () => {
       throw new DOMException('QA permission denied', 'NotAllowedError');
     };
+    // This suite is about the sign-in form and the rest of the app, not the
+    // one-time splash — mark it seen so every visit behaves like a
+    // returning visitor. The splash itself gets a dedicated check below.
+    localStorage.setItem('beacon.splash.seen.v1', 'true');
   });
   let signedIn = false;
   let scenario = 'normal';
@@ -454,6 +458,32 @@ const report = [];
   await visit('/', '.sign-in-card');
   await page.addStyleTag({ content: 'html { font-size: 200%; }' });
   await capture('auth-large-type-short');
+
+  // One-time splash: verify it appears for a first-time visitor and hands
+  // off to the sign-in form after "Get started", on both a phone and a
+  // laptop width, and that it's remembered as seen afterward. The context's
+  // first addInitScript (above) marks the splash seen on every navigation
+  // for the rest of this suite — register a second one that runs after it
+  // and undoes that, so navigations from here on start "unseen" again.
+  await context.addInitScript(() => {
+    localStorage.removeItem('beacon.splash.seen.v1');
+  });
+  for (const [width, height] of [
+    [390, 844],
+    [1280, 800],
+  ]) {
+    await page.setViewportSize({ width, height });
+    signedIn = false;
+    await visit('/', '.splash-cta');
+    await capture(`splash-${width}`, true);
+    await page.locator('.splash-cta').click();
+    await page.locator('.sign-in-card').first().waitFor();
+    const seen = await page.evaluate(() =>
+      localStorage.getItem('beacon.splash.seen.v1'),
+    );
+    assert.equal(seen, 'true', 'Continuing past the splash must mark it seen');
+  }
+
   assert.deepEqual(errors, []);
   assert.deepEqual(unexpected, []);
   console.log(
