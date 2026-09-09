@@ -80,6 +80,71 @@ const shapes = {
       <path d="M9 3H4v18h5m5-14 5 5-5 5M8 12h12" />
     </>
   ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v6m0-9.5v.5" />
+    </>
+  ),
+  edit: (
+    <>
+      <path d="M17 3a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M4 7h16M9 7V4h6v3m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" />
+      <path d="M10 11v6m4-6v6" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="5" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="19" cy="12" r="1.6" />
+    </>
+  ),
+  close: <path d="m5 5 14 14M19 5 5 19" />,
+  mic: (
+    <>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+    </>
+  ),
+  micOff: (
+    <>
+      <path d="m3 3 18 18" />
+      <path d="M9 5a3 3 0 0 1 6 0v6c0 .4-.05.78-.15 1.14M15 14.16A3 3 0 0 1 9 12v-1" />
+      <path d="M5 11a7 7 0 0 0 10.5 6.06M19 11a7 7 0 0 1-1.05 3.7M12 18v3" />
+    </>
+  ),
+  maximize: (
+    <>
+      <path d="M9 3H4v5m11-5h5v5M4 16v5h5m11-5v5h-5" />
+    </>
+  ),
+  minimize: (
+    <>
+      <path d="M4 9h5V4M15 4v5h5M20 15h-5v5M9 20v-5H4" />
+    </>
+  ),
+  signal: (
+    <>
+      <path d="M4 20v-4m5 4v-8m5 8V8m5 12V4" />
+    </>
+  ),
+  snapshot: (
+    <>
+      <path d="M4 8V6a2 2 0 0 1 2-2h2m8 0h2a2 2 0 0 1 2 2v2M4 16v2a2 2 0 0 0 2 2h2m8 0h2a2 2 0 0 0 2-2v-2" />
+      <circle cx="12" cy="12" r="3.4" />
+    </>
+  ),
+  talk: (
+    <>
+      <path d="M3 11v2a2 2 0 0 0 2 2h1l3.5 4.5V6.5L6 11H5a2 2 0 0 0-2 2Z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof shapes;

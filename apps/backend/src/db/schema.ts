@@ -29,6 +29,7 @@ export const users = pgTable(
     email: text('email').notNull(),
     passwordHash: text('password_hash'),
     googleSubject: text('google_subject'),
+    avatarUrl: text('avatar_url'),
     ...timestamps,
   },
   (table) => [

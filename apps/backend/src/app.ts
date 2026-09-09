@@ -436,6 +436,7 @@ export function buildApp(
           );
         }
         const email = normalizeEmail(payload.email);
+        const avatarUrl = payload.picture ?? null;
         let user = await store.findUserByGoogleSubject(payload.sub);
         if (!user) {
           if (await store.findUserByEmail(email)) {
@@ -449,7 +450,11 @@ export function buildApp(
             email,
             payload.sub,
             request.ip,
+            avatarUrl,
           );
+        } else if (avatarUrl && avatarUrl !== user.avatarUrl) {
+          await store.updateGoogleAvatar(user.id, avatarUrl);
+          user = { ...user, avatarUrl };
         }
         await store.audit({
           eventType: 'google_login_succeeded',
@@ -556,7 +561,13 @@ export function buildApp(
   app.get('/api/auth/me', async (request, reply) => {
     const session = await authenticate(request, reply);
     if (!session) return;
-    return { user: { email: session.email, id: session.userId } };
+    return {
+      user: {
+        avatarUrl: session.avatarUrl,
+        email: session.email,
+        id: session.userId,
+      },
+    };
   });
 
   app.post('/api/auth/logout', async (request, reply) => {

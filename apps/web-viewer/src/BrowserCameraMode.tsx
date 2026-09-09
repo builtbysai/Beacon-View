@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { request } from './api';
 import { BrowserProducer } from './BrowserProducer';
+import { Icon } from './Icon';
 
 interface RegisteredSource {
   id: string;
@@ -40,6 +41,16 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState('');
   const [backgrounded, setBackgrounded] = useState(document.hidden);
   const [wakeLockEnabled, setWakeLockEnabled] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // The preview <video> element lives in different branches of the returned
+  // JSX (setup card vs. full-bleed broadcast stage) and gets remounted when
+  // `state` flips away from 'offline', which drops whatever srcObject was
+  // assigned directly in registerAndStart. Re-sync after every render so the
+  // newly-mounted node always reflects the current stream.
+  useEffect(() => {
+    if (previewRef.current) previewRef.current.srcObject = streamRef.current;
+  });
 
   useEffect(() => {
     const visibility = () => setBackgrounded(document.hidden);
@@ -181,6 +192,138 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
     wakeLockRef.current = await manager.request('screen');
   }
 
+  const fields = (
+    <>
+      <label>
+        Device name
+        <input
+          value={deviceName}
+          maxLength={100}
+          onChange={(event) => setDeviceName(event.target.value)}
+        />
+      </label>
+      <label>
+        Camera source
+        <select
+          value={selectedKey}
+          onChange={(event) => setSelectedKey(event.target.value)}
+        >
+          {inputs.map((input) => (
+            <option key={input.deviceId} value={input.deviceId}>
+              {input.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Selected camera name
+        <input
+          value={sourceNames[selectedKey] ?? ''}
+          maxLength={100}
+          onChange={(event) =>
+            setSourceNames((current) => ({
+              ...current,
+              [selectedKey]: event.target.value,
+            }))
+          }
+        />
+      </label>
+      <label className="checkbox-label">
+        <input
+          checked={wakeLockEnabled}
+          type="checkbox"
+          onChange={(event) => {
+            const enabled = event.target.checked;
+            setWakeLockEnabled(enabled);
+            if (!enabled) {
+              void wakeLockRef.current?.release();
+              wakeLockRef.current = null;
+            } else if (state !== 'offline') {
+              void acquireWakeLock();
+            }
+          }}
+        />
+        Keep this screen awake while Camera Mode is active
+      </label>
+      {registered.length > 1 && (
+        <p className="notice">
+          {registered.length} webcam sources are registered under this browser
+          device. Only the selected source is active.
+        </p>
+      )}
+    </>
+  );
+
+  if (state !== 'offline') {
+    return (
+      <main className="broadcast-stage">
+        <video
+          ref={previewRef}
+          autoPlay
+          className="broadcast-video"
+          playsInline
+          muted
+        />
+        <div className="broadcast-top">
+          <span className="broadcast-live" role="status">
+            <span aria-hidden="true" className="broadcast-live-dot" />
+            You&rsquo;re on camera
+          </span>
+          <div className="broadcast-top-actions">
+            {viewerCount > 0 && (
+              <span className="broadcast-viewers">
+                <Icon name="eye" />
+                {viewerCount}
+              </span>
+            )}
+            <button
+              aria-expanded={settingsOpen}
+              aria-label="Camera settings"
+              className="broadcast-icon-button"
+              onClick={() => setSettingsOpen((open) => !open)}
+              type="button"
+            >
+              <Icon name={settingsOpen ? 'close' : 'settings'} />
+            </button>
+          </div>
+        </div>
+        {backgrounded && (
+          <p className="broadcast-warning" role="status">
+            This tab is backgrounded. Capture or networking may be throttled.
+          </p>
+        )}
+        {error && (
+          <p className="broadcast-warning" role="alert">
+            {error}
+          </p>
+        )}
+        <p className="visually-hidden" role="status">
+          Camera: {state} · Viewers: {viewerCount} · Reconnects: {retryCount}
+        </p>
+        {settingsOpen && (
+          <div
+            className="broadcast-settings"
+            role="dialog"
+            aria-label="Camera settings"
+          >
+            {fields}
+            <div className="heading-actions">
+              <button onClick={() => void registerAndStart()}>
+                Switch camera
+              </button>
+              <button className="secondary" onClick={onBack} type="button">
+                Back to dashboard
+              </button>
+            </div>
+          </div>
+        )}
+        <button className="broadcast-stop" onClick={stop} type="button">
+          Stop being a camera
+        </button>
+      </main>
+    );
+  }
+
   return (
     <main className="shell camera-mode-shell">
       <section className="card wide" aria-labelledby="camera-mode-title">
@@ -210,78 +353,11 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
           </button>
         ) : (
           <div className="camera-mode-controls">
-            <label>
-              Device name
-              <input
-                value={deviceName}
-                maxLength={100}
-                onChange={(event) => setDeviceName(event.target.value)}
-              />
-            </label>
-            <label>
-              Camera source
-              <select
-                value={selectedKey}
-                onChange={(event) => setSelectedKey(event.target.value)}
-              >
-                {inputs.map((input) => (
-                  <option key={input.deviceId} value={input.deviceId}>
-                    {input.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Selected camera name
-              <input
-                value={sourceNames[selectedKey] ?? ''}
-                maxLength={100}
-                onChange={(event) =>
-                  setSourceNames((current) => ({
-                    ...current,
-                    [selectedKey]: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label>
-              <input
-                checked={wakeLockEnabled}
-                type="checkbox"
-                onChange={(event) => {
-                  const enabled = event.target.checked;
-                  setWakeLockEnabled(enabled);
-                  if (!enabled) {
-                    void wakeLockRef.current?.release();
-                    wakeLockRef.current = null;
-                  } else if (state !== 'offline') {
-                    void acquireWakeLock();
-                  }
-                }}
-              />
-              Keep this screen awake while Camera Mode is active
-            </label>
+            {fields}
             <button onClick={() => void registerAndStart()}>
-              {state === 'offline' ? 'Start camera' : 'Switch camera'}
+              Start camera
             </button>
-            {state !== 'offline' && (
-              <button className="secondary" onClick={stop}>
-                Stop camera
-              </button>
-            )}
           </div>
-        )}
-        <div className="video-frame" hidden={inputs.length === 0}>
-          <video ref={previewRef} autoPlay playsInline muted />
-        </div>
-        <p role="status">
-          Camera: {state} · Viewers: {viewerCount} · Reconnects: {retryCount}
-        </p>
-        {registered.length > 1 && (
-          <p className="notice">
-            {registered.length} webcam sources are registered under this browser
-            device. Only the selected source is active.
-          </p>
         )}
       </section>
     </main>

@@ -57,6 +57,9 @@ export function AuthScreen({
           <span>
             <Icon name="lock" /> Private access
           </span>
+          <span>
+            <Icon name="eyeOff" /> No cloud recordings
+          </span>
           <a href="/trust">Trust &amp; privacy</a>
         </div>
       </section>
@@ -76,6 +79,10 @@ export function AuthScreen({
           {mode === 'login'
             ? 'Sign in to access your cameras and live views.'
             : 'One account keeps every camera in reach.'}
+        </p>
+        <p className="sign-in-trust-strap">
+          <Icon name="shield" />
+          Private by design. No cloud recordings.
         </p>
         <a className="google-sign-in" href="/api/auth/google">
           <svg

@@ -88,4 +88,70 @@ describe('BrowserCameraMode', () => {
     expect(body.sources).toHaveLength(2);
     expect(body).not.toHaveProperty('credential');
   });
+
+  it('shows the full-bleed broadcast stage once streaming and returns to setup on stop', async () => {
+    const stop = vi.fn();
+    const stream = {
+      getTracks: () => [{ stop }],
+      getVideoTracks: () => [{ id: 'track' }],
+    } as unknown as MediaStream;
+    Object.defineProperty(window, 'isSecureContext', {
+      configurable: true,
+      value: true,
+    });
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: vi.fn().mockResolvedValue([
+          {
+            deviceId: 'built-in',
+            kind: 'videoinput',
+            label: 'Built-in webcam',
+          },
+        ]),
+        getUserMedia: vi.fn().mockResolvedValue(stream),
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            cameras: [
+              {
+                id: 'camera-one',
+                name: 'Built-in webcam',
+                sourceKey: 'browser:built-in',
+              },
+            ],
+          }),
+        ok: true,
+        status: 201,
+      }),
+    );
+    vi.stubGlobal('WebSocket', CameraSocket);
+    render(<BrowserCameraMode onBack={() => undefined} />);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Allow and find cameras' }),
+    );
+    await screen.findByText('Built-in webcam');
+    fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
+
+    expect(await screen.findByText('You’re on camera')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Stop being a camera' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Start camera' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Stop being a camera' }),
+    );
+    expect(
+      await screen.findByRole('button', { name: 'Start camera' }),
+    ).toBeVisible();
+    expect(stop).toHaveBeenCalled();
+  });
 });

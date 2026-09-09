@@ -12,6 +12,7 @@ export interface UserRecord {
   email: string;
   passwordHash: string | null;
   googleSubject: string | null;
+  avatarUrl: string | null;
   householdId: string;
 }
 
@@ -19,6 +20,7 @@ export interface SessionRecord {
   id: string;
   userId: string;
   email: string;
+  avatarUrl: string | null;
   householdId: string;
   tokenHash: string;
   csrfHash: string;
@@ -166,7 +168,9 @@ export interface MilestoneStore {
     email: string,
     googleSubject: string,
     ipAddress: string,
+    avatarUrl?: string | null,
   ): Promise<UserRecord>;
+  updateGoogleAvatar(userId: string, avatarUrl: string): Promise<void>;
   findUserByEmail(email: string): Promise<UserRecord | null>;
   findUserByGoogleSubject(googleSubject: string): Promise<UserRecord | null>;
   createSession(input: {
@@ -329,6 +333,7 @@ export class PostgresStore implements MilestoneStore {
       });
       await client.query('COMMIT');
       return {
+        avatarUrl: null,
         email,
         googleSubject: null,
         householdId,
@@ -346,7 +351,7 @@ export class PostgresStore implements MilestoneStore {
   async findUserByEmail(email: string): Promise<UserRecord | null> {
     const result = await this.pool.query<UserRecord>(
       `SELECT u.id, u.email, u.password_hash AS "passwordHash", u.google_subject AS "googleSubject",
-              h.id AS "householdId"
+              u.avatar_url AS "avatarUrl", h.id AS "householdId"
        FROM users u JOIN households h ON h.owner_id = u.id
        WHERE u.email = $1`,
       [email],
@@ -358,13 +363,14 @@ export class PostgresStore implements MilestoneStore {
     email: string,
     googleSubject: string,
     ipAddress: string,
+    avatarUrl: string | null = null,
   ): Promise<UserRecord> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       const user = await client.query<{ id: string }>(
-        `INSERT INTO users (email, google_subject) VALUES ($1, $2) RETURNING id`,
-        [email, googleSubject],
+        `INSERT INTO users (email, google_subject, avatar_url) VALUES ($1, $2, $3) RETURNING id`,
+        [email, googleSubject, avatarUrl],
       );
       const userId = user.rows[0]!.id;
       const household = await client.query<{ id: string }>(
@@ -381,6 +387,7 @@ export class PostgresStore implements MilestoneStore {
       });
       await client.query('COMMIT');
       return {
+        avatarUrl,
         email,
         googleSubject,
         householdId,
@@ -395,12 +402,19 @@ export class PostgresStore implements MilestoneStore {
     }
   }
 
+  async updateGoogleAvatar(userId: string, avatarUrl: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE users SET avatar_url = $2 WHERE id = $1 AND avatar_url IS DISTINCT FROM $2`,
+      [userId, avatarUrl],
+    );
+  }
+
   async findUserByGoogleSubject(
     googleSubject: string,
   ): Promise<UserRecord | null> {
     const result = await this.pool.query<UserRecord>(
       `SELECT u.id, u.email, u.password_hash AS "passwordHash", u.google_subject AS "googleSubject",
-              h.id AS "householdId"
+              u.avatar_url AS "avatarUrl", h.id AS "householdId"
        FROM users u JOIN households h ON h.owner_id = u.id
        WHERE u.google_subject = $1`,
       [googleSubject],
@@ -444,7 +458,7 @@ export class PostgresStore implements MilestoneStore {
        WHERE s.token_hash = $1 AND s.user_id = u.id AND h.owner_id = u.id
          AND s.revoked_at IS NULL AND s.idle_expires_at > $2
          AND s.absolute_expires_at > $2
-       RETURNING s.id, s.user_id AS "userId", u.email,
+       RETURNING s.id, s.user_id AS "userId", u.email, u.avatar_url AS "avatarUrl",
                  h.id AS "householdId", s.token_hash AS "tokenHash",
                  s.csrf_hash AS "csrfHash", s.idle_expires_at AS "idleExpiresAt",
                  s.absolute_expires_at AS "absoluteExpiresAt",

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Icon } from './Icon';
 import { TalkSession, type TalkState } from './talk';
 
 import {
@@ -147,6 +148,27 @@ export function LiveVideo({
   const [privacyBusy, setPrivacyBusy] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
   const playbackGeneration = useRef(0);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const hideControlsTimer = useRef<number | null>(null);
+
+  const wakeControls = useCallback(() => {
+    setControlsVisible(true);
+    if (hideControlsTimer.current !== null)
+      window.clearTimeout(hideControlsTimer.current);
+    hideControlsTimer.current = window.setTimeout(
+      () => setControlsVisible(false),
+      3_000,
+    );
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (hideControlsTimer.current !== null)
+        window.clearTimeout(hideControlsTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     let wasFullscreen = false;
@@ -471,23 +493,12 @@ export function LiveVideo({
 
   const content = (
     <>
-      {!compact && (
-        <div className="heading">
-          <div>
-            <p className="eyebrow">
-              {deviceName ? `${deviceName} / Live view` : 'Live view'}
-            </p>
-            <h1 id="live-title">{camera.name}</h1>
-            <span>
-              {viewerCount} {viewerCount === 1 ? 'viewer' : 'viewers'}
-            </span>
-          </div>
-          <button className="secondary" onClick={onBack} type="button">
-            Back to cameras
-          </button>
-        </div>
-      )}
-      <div className="video-frame">
+      <div
+        className="video-frame"
+        onFocus={!compact ? wakeControls : undefined}
+        onPointerDown={!compact ? wakeControls : undefined}
+        onPointerMove={!compact ? wakeControls : undefined}
+      >
         <video
           ref={videoRef}
           autoPlay
@@ -496,6 +507,33 @@ export function LiveVideo({
           onLoadedData={() => setVideoReady(true)}
           onPlaying={() => setVideoReady(true)}
         />
+        {!compact && (
+          <div className="video-top-scrim">
+            <button
+              aria-label="Back to cameras"
+              className="video-back"
+              onClick={onBack}
+              type="button"
+            >
+              <Icon name="chevronLeft" />
+            </button>
+            <div className="video-identity">
+              <span
+                className={`video-live-badge${
+                  status === 'connected' && videoReady ? ' is-live' : ''
+                }`}
+              >
+                {status === 'connected'
+                  ? videoReady
+                    ? 'LIVE'
+                    : 'STARTING'
+                  : status.toUpperCase()}
+              </span>
+              <h1 id="live-title">{camera.name}</h1>
+              {deviceName && <span>{deviceName}</span>}
+            </div>
+          </div>
+        )}
         {(status !== 'connected' || !videoReady || switching) && (
           <div className="video-overlay">
             <strong>
@@ -530,29 +568,99 @@ export function LiveVideo({
             </span>
           </div>
         )}
-      </div>
-      <p className="visually-hidden" role="status">
-        Connection: {status}
-      </p>
-      {!compact && (
-        <>
+        {!compact && (
           <div
-            className="heading-actions live-controls"
             aria-label="Live view controls"
+            className={`video-controls${controlsVisible ? ' is-visible' : ''}`}
           >
-            <span
-              className={
-                status === 'connected' && videoReady ? 'streaming' : 'offline'
-              }
-            >
-              {status === 'connected'
-                ? videoReady
-                  ? 'LIVE'
-                  : 'STARTING VIDEO'
-                : status.toUpperCase()}
-            </span>
             <button
-              className="secondary"
+              aria-pressed={listening}
+              className="video-control"
+              onClick={() => {
+                const next = !listening;
+                const current = ++playbackGeneration.current;
+                setControlError('');
+                setListening(next);
+                if (videoRef.current) {
+                  const video = videoRef.current;
+                  video.muted = !next;
+                  if (next)
+                    void Promise.resolve(video.play()).catch(() => {
+                      if (current !== playbackGeneration.current) return;
+                      video.muted = true;
+                      setListening(false);
+                      setControlError(
+                        'Sound could not start. Choose Listen to try again, and check your browser sound settings.',
+                      );
+                    });
+                }
+              }}
+              type="button"
+            >
+              <Icon name={listening ? 'mic' : 'micOff'} />
+              <span className="visually-hidden">
+                {listening ? 'Mute' : 'Listen'}
+              </span>
+            </button>
+            <button
+              aria-pressed={talkState === 'speaking'}
+              className={`video-control${talkState === 'speaking' ? ' is-active' : ''}`}
+              disabled={
+                switching ||
+                privacyBusy ||
+                privacyMode ||
+                (status !== 'connected' &&
+                  !['permission', 'connecting', 'speaking'].includes(talkState))
+              }
+              onClick={() => {
+                if (
+                  ['permission', 'connecting', 'speaking'].includes(talkState)
+                )
+                  talkSession.current?.stop();
+                else void talkSession.current?.start();
+              }}
+              type="button"
+            >
+              <Icon name="talk" />
+              <span className="visually-hidden">
+                {talkState === 'speaking'
+                  ? 'Stop talking'
+                  : talkState === 'permission' || talkState === 'connecting'
+                    ? 'Cancel talk'
+                    : 'Talk'}
+              </span>
+            </button>
+            {onPrivacy && (
+              <button
+                aria-pressed={privacyMode}
+                className={`video-control${privacyMode ? ' is-active' : ''}`}
+                disabled={privacyBusy}
+                onClick={() => {
+                  talkSession.current?.stop();
+                  setPrivacyBusy(true);
+                  setControlError('');
+                  void onPrivacy()
+                    .catch(() =>
+                      setControlError(
+                        'Privacy could not be changed. Check your connection and try again.',
+                      ),
+                    )
+                    .finally(() => setPrivacyBusy(false));
+                }}
+                type="button"
+              >
+                <Icon name="lock" />
+                <span className="visually-hidden">
+                  {privacyBusy
+                    ? 'Updating privacy…'
+                    : privacyMode
+                      ? 'Turn privacy off'
+                      : 'Turn privacy on'}
+                </span>
+              </button>
+            )}
+            <button
+              className="video-control"
               ref={fullscreenButton}
               onClick={() => {
                 setControlError('');
@@ -577,87 +685,73 @@ export function LiveVideo({
               }}
               type="button"
             >
-              {fullscreen ? 'Exit full screen' : 'Full screen'}
+              <Icon name={fullscreen ? 'minimize' : 'maximize'} />
+              <span className="visually-hidden">
+                {fullscreen ? 'Exit full screen' : 'Full screen'}
+              </span>
             </button>
-            <button
-              aria-pressed={listening}
-              className="secondary"
-              onClick={() => {
-                const next = !listening;
-                const current = ++playbackGeneration.current;
-                setControlError('');
-                setListening(next);
-                if (videoRef.current) {
-                  const video = videoRef.current;
-                  video.muted = !next;
-                  if (next)
-                    void Promise.resolve(video.play()).catch(() => {
-                      if (current !== playbackGeneration.current) return;
-                      video.muted = true;
-                      setListening(false);
-                      setControlError(
-                        'Sound could not start. Choose Listen to try again, and check your browser sound settings.',
-                      );
-                    });
-                }
-              }}
-              type="button"
-            >
-              {listening ? 'Mute' : 'Listen'}
-            </button>
-            <button
-              aria-pressed={talkState === 'speaking'}
-              className={talkState === 'speaking' ? '' : 'secondary'}
-              disabled={
-                switching ||
-                privacyBusy ||
-                privacyMode ||
-                (status !== 'connected' &&
-                  !['permission', 'connecting', 'speaking'].includes(talkState))
-              }
-              onClick={() => {
-                if (
-                  ['permission', 'connecting', 'speaking'].includes(talkState)
-                )
-                  talkSession.current?.stop();
-                else void talkSession.current?.start();
-              }}
-              type="button"
-            >
-              {talkState === 'speaking'
-                ? 'Stop talking'
-                : talkState === 'permission' || talkState === 'connecting'
-                  ? 'Cancel talk'
-                  : 'Talk'}
-            </button>
-            {onPrivacy && (
-              <button
-                className="secondary"
-                disabled={privacyBusy}
-                onClick={() => {
-                  talkSession.current?.stop();
-                  setPrivacyBusy(true);
-                  setControlError('');
-                  void onPrivacy()
-                    .catch(() =>
-                      setControlError(
-                        'Privacy could not be changed. Check your connection and try again.',
-                      ),
-                    )
-                    .finally(() => setPrivacyBusy(false));
-                }}
-                type="button"
-              >
-                {privacyBusy
-                  ? 'Updating privacy…'
-                  : privacyMode
-                    ? 'Turn privacy off'
-                    : 'Turn privacy on'}
-              </button>
-            )}
           </div>
+        )}
+        {!compact && (quality || viewerCount > 0) && (
+          <button
+            aria-expanded={statsOpen}
+            aria-label={`Stream info: ${viewerCount} ${
+              viewerCount === 1 ? 'viewer' : 'viewers'
+            }${quality ? `, ${quality.path}` : ''}`}
+            className={`video-stats-toggle${
+              controlsVisible || statsOpen ? ' is-visible' : ''
+            }`}
+            onClick={() => setStatsOpen((open) => !open)}
+            type="button"
+          >
+            <Icon name="eye" />
+            {viewerCount}
+            {quality && (
+              <>
+                <Icon name="signal" />
+                {quality.path}
+              </>
+            )}
+          </button>
+        )}
+        {!compact && statsOpen && quality && (
+          <div className="video-stats-panel">
+            <dl className="stream-quality" aria-label="Live stream quality">
+              <div>
+                <dt>Path</dt>
+                <dd>{quality.path}</dd>
+              </div>
+              <div>
+                <dt>Video</dt>
+                <dd>
+                  {quality.fps} fps · {quality.bitrateKbps} kbps
+                </dd>
+              </div>
+              <div>
+                <dt>Latency</dt>
+                <dd>
+                  {quality.rttMs} ms RTT · {quality.jitterMs} ms jitter
+                </dd>
+              </div>
+              <div>
+                <dt>Loss</dt>
+                <dd>{quality.lostPackets} packets</dd>
+              </div>
+            </dl>
+          </div>
+        )}
+      </div>
+      <p className="visually-hidden" role="status">
+        Connection: {status}
+      </p>
+      {!compact && (
+        <div className="live-footer">
           {controlError && <p role="alert">{controlError}</p>}
-          <p role="status" aria-label="Talk status">
+          <p
+            className="live-talk-status"
+            role="status"
+            aria-label="Talk status"
+          >
             {talkState === 'permission'
               ? 'Allow microphone access in your browser to talk. You can cancel at any time.'
               : talkState === 'connecting'
@@ -672,41 +766,15 @@ export function LiveVideo({
                         ? 'Your microphone is off. When the camera reconnects, choose Talk to speak again.'
                         : 'Your microphone is off.'}
           </p>
-          {quality && (
-            <details className="connection-details">
-              <summary>Connection details · {quality.path}</summary>
-              <dl className="stream-quality" aria-label="Live stream quality">
-                <div>
-                  <dt>Path</dt>
-                  <dd>{quality.path}</dd>
-                </div>
-                <div>
-                  <dt>Video</dt>
-                  <dd>
-                    {quality.fps} fps · {quality.bitrateKbps} kbps
-                  </dd>
-                </div>
-                <div>
-                  <dt>Latency</dt>
-                  <dd>
-                    {quality.rttMs} ms RTT · {quality.jitterMs} ms jitter
-                  </dd>
-                </div>
-                <div>
-                  <dt>Loss</dt>
-                  <dd>{quality.lostPackets} packets</dd>
-                </div>
-              </dl>
-            </details>
-          )}
           {siblingCameras.length > 1 && (
-            <div
-              className="heading-actions"
-              aria-label="Sibling camera sources"
-            >
+            <div className="live-siblings" aria-label="Sibling camera sources">
               {siblingCameras.map((sibling) => (
                 <button
-                  className={sibling.id === camera.id ? '' : 'secondary'}
+                  className={
+                    sibling.id === camera.id
+                      ? 'live-sibling is-active'
+                      : 'live-sibling'
+                  }
                   disabled={
                     sibling.id === camera.id ||
                     switching ||
@@ -752,7 +820,7 @@ export function LiveVideo({
             only after you choose Listen. Talk requests microphone access only
             when selected and plays a tone at the camera. Recording is disabled.
           </p>
-        </>
+        </div>
       )}
       {compact && (
         <div className="tile-controls">

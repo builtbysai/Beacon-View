@@ -316,10 +316,12 @@ describe('LiveVideo', () => {
       peer.onconnectionstatechange?.();
       await Promise.resolve();
     });
-    expect(screen.getByText('Connection details · TURN relay')).toBeVisible();
+    expect(screen.getByRole('button', { name: /TURN relay/ })).toBeVisible();
     expect(screen.getByText('Starting secure video')).toBeVisible();
     fireEvent.loadedData(container.querySelector('video')!);
     expect(screen.queryByText('Starting secure video')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /TURN relay/ }));
+    expect(screen.getByLabelText('Live stream quality')).toBeVisible();
     getStats.mockRejectedValueOnce(new Error('Peer closed'));
     await act(async () => {
       peer.onconnectionstatechange?.();
@@ -327,7 +329,7 @@ describe('LiveVideo', () => {
     });
     expect(screen.getByText('Connection: connected')).toBeInTheDocument();
     expect(
-      screen.queryByText('Connection details · TURN relay'),
+      screen.queryByRole('button', { name: /TURN relay/ }),
     ).not.toBeInTheDocument();
   });
 });
