@@ -45,6 +45,10 @@ installation and useful options, or
 [local development](docs/local-development.md) for lower-level commands. This
 project is not production-ready.
 
+For development without a local checkout, use the
+[cloud development workflow](docs/cloud-development.md) with GitHub
+Codespaces.
+
 ## Product surfaces
 
 - Dashboard: `/`
