@@ -1,8 +1,48 @@
 # Beacon SecureView development handoff
 
-Updated September 9, 2026. This is the shortest reliable orientation for a new
+Updated September 10, 2026. This is the shortest reliable orientation for a new
 development session. GitHub is canonical; the maintained local checkout is
 `C:\Dev\Beacon-SecureView`.
+
+## Most recent work (September 10, 2026)
+
+A third product/UX pass landed and deployed: PR #14, "Third product/UX pass:
+camera-first simplification" (merged to `main` as `cb3b1bb`). Devices is no
+longer a user-facing nav destination — one host device is presented as one
+Camera, with the backend's device/camera-source split unchanged underneath.
+The Live Viewer was rebuilt as a true full-bleed immersive stage (it had been
+rendering as a small card in empty page background — check this doesn't
+regress if `.live-shell` or `LiveVideo.tsx`'s top-level wrapper changes). An
+Android Chrome tap-highlight bug on the bottom nav was fixed
+(`-webkit-tap-highlight-color`). Access History now groups repeated live-view
+attempts by a real server-recorded `audit_events.viewer_session_id`
+(migration `0013_audit_events_viewer_session.sql`, applied to both the local
+and Oracle databases) instead of guessing from timestamps.
+
+Full write-up of what changed, what was deliberately left out, and why, is in
+the session transcript and PR #14's description — not duplicated here to keep
+this doc short. Known follow-ups not done in that pass:
+
+- `CameraFlipButton` (source-switch control) is wired into Camera Settings
+  but not yet into the Live Viewer or `BrowserCameraMode`'s source picker.
+- The overflow menus (camera tile, Live Viewer) are keyboard-reachable but
+  don't implement full ARIA menu roving-tabindex semantics.
+- Visual QA this pass was real but targeted (mobile portrait/landscape,
+  desktop for one fix), not the full viewport × state matrix from the
+  original brief.
+- Note for the next session: the `resize_window` browser tool did not
+  actually resize the window in this environment (silently no-op'd); the
+  working alternative was a same-origin `<iframe>` sized to the target
+  viewport, injected via `javascript_tool`, with clicks/zooms targeted using
+  real DOM `getBoundingClientRect()` coordinates rather than guessed pixel
+  math against the outer screenshot's own (scaled) coordinate space.
+- Note on migrations: this repo's `drizzle/meta/` does not keep intermediate
+  snapshot JSON files, only `_journal.json` and the SQL files themselves. A
+  bare `drizzle-kit generate` therefore has nothing to diff against and will
+  emit a full "recreate every table" migration — hand-write the minimal
+  `ALTER TABLE`/`CREATE INDEX` instead (see `0013` for the pattern), and
+  never apply a freshly generated migration to a database with existing data
+  without reading it first.
 
 ## Current source and deployment
 
@@ -73,15 +113,24 @@ with `main`; do not use the old OneDrive checkout.
 ## Product guardrails and next work
 
 Read [AGENTS.md](../AGENTS.md), this handoff, and [roadmap.md](roadmap.md)
-before planning. The product remains an Android-first camera agent with a
-responsive web viewer, Fastify/PostgreSQL backend, WebRTC signaling, STUN/TURN,
-visible capture controls, privacy mode, pairing, authentication, and media
-behavior. Recording, facial recognition, biometric storage, customer-media AI
-training, subscriptions, ads, and cross-platform native clients remain outside
-current scope.
+before planning. Any device with a camera and internet access should
+eventually be able to become a Beacon camera; Android is the current
+implementation path with the most native reliability (foreground capture,
+background operation), not the product's identity. Do not add or restore
+Android-only framing in product copy, architecture, or docs. The product is a
+responsive web viewer, Fastify/PostgreSQL backend, WebRTC signaling,
+STUN/TURN, visible capture controls, privacy mode, pairing, authentication,
+and media behavior. Recording, facial recognition, biometric storage,
+customer-media AI training, subscriptions, ads, and cross-platform native
+clients remain outside current scope.
 
-The owner has deferred page-by-page UI/UX redesign until explicitly directed.
-The most useful open evidence work is physical Android privacy/recovery and
+Three UI/UX passes have now landed (responsive/design audit, deeper visual
+QA, camera-first simplification — see "Most recent work" above for the
+latest). Further page-by-page redesign should still be scoped explicitly
+per session rather than done opportunistically; it is no longer a
+categorically deferred area, but it is also not open-ended standing
+permission. The most useful other open evidence work is physical Android
+privacy/recovery and
 media acceptance, backup-restore proof, domain/email identity, security/release
 review, legal/trust review, accessibility, and capacity measurements. See N1–N9
 in [roadmap.md](roadmap.md); completing a roadmap entry still requires its stated
