@@ -92,6 +92,13 @@
       "when": 1789254000000,
       "tag": "0012_session_user_agent",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789340400000,
+      "tag": "0013_audit_events_viewer_session",
+      "breakpoints": true
     }
   ]
 }

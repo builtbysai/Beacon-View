@@ -638,6 +638,7 @@ export function buildApp(
       reply.clearCookie(config.SESSION_COOKIE_NAME, { path: '/' });
       reply.clearCookie(CSRF_COOKIE, { path: '/' });
     }
+    householdEvents.closeSession(parameters.data.sessionId);
     return reply.code(204).send();
   });
 
@@ -667,6 +668,7 @@ export function buildApp(
     });
     reply.clearCookie(config.SESSION_COOKIE_NAME, { path: '/' });
     reply.clearCookie(CSRF_COOKIE, { path: '/' });
+    householdEvents.closeHousehold(session.householdId);
     return reply.code(204).send();
   });
 
@@ -1294,7 +1296,9 @@ export function buildApp(
         deviceName: event.deviceName,
         eventType: event.eventType,
         occurredAt: event.occurredAt.toISOString(),
+        reason: event.success ? null : (event.metadata.reason ?? null),
         success: event.success,
+        viewerSessionId: event.viewerSessionId,
       })),
     };
   });

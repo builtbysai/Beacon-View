@@ -65,7 +65,7 @@ export function MotionRetentionSettings() {
     <section aria-labelledby="motion-retention-title">
       <h4 id="motion-retention-title">Motion history</h4>
       <p>
-        Beacon stores motion time, camera name, and motion intensity—not
+        Beacon stores motion time, camera name, and motion intensity, not
         recordings, images, or audio. Expired history is deleted automatically.
       </p>
       {error && <p role="alert">{error}</p>}

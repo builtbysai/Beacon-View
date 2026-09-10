@@ -32,14 +32,23 @@ export type HouseholdEvent =
 
 export class HouseholdEventHub {
   readonly #subscribers = new Map<string, Set<WebSocket>>();
+  // Sessions are tracked separately from households so revoking one
+  // signed-in browser can close exactly that socket immediately, instead of
+  // waiting on the connection's own ~15s "is my session still valid?" poll.
+  readonly #sessionSockets = new Map<string, Set<WebSocket>>();
 
-  subscribe(householdId: string, socket: WebSocket): void {
+  subscribe(householdId: string, sessionId: string, socket: WebSocket): void {
     const household = this.#subscribers.get(householdId) ?? new Set();
     household.add(socket);
     this.#subscribers.set(householdId, household);
+    const session = this.#sessionSockets.get(sessionId) ?? new Set();
+    session.add(socket);
+    this.#sessionSockets.set(sessionId, session);
     socket.once('close', () => {
       household.delete(socket);
       if (household.size === 0) this.#subscribers.delete(householdId);
+      session.delete(socket);
+      if (session.size === 0) this.#sessionSockets.delete(sessionId);
     });
     socket.send(JSON.stringify({ type: 'subscribed' }));
   }
@@ -52,6 +61,25 @@ export class HouseholdEventHub {
     }
   }
 
+  /** Immediately close the realtime connection(s) for one signed-in browser
+   * session, e.g. right after it's revoked. Code 4001 tells the client this
+   * was a deliberate sign-out, not a network hiccup to reconnect from. */
+  closeSession(sessionId: string, reason = 'Session revoked'): void {
+    for (const socket of this.#sessionSockets.get(sessionId) ?? []) {
+      socket.close(4001, reason);
+    }
+    this.#sessionSockets.delete(sessionId);
+  }
+
+  /** Immediately close every realtime connection for a household, e.g. on
+   * account deletion where every session for that household ends at once. */
+  closeHousehold(householdId: string, reason = 'Account deleted'): void {
+    for (const socket of this.#subscribers.get(householdId) ?? []) {
+      socket.close(4001, reason);
+    }
+    this.#subscribers.delete(householdId);
+  }
+
   close(): void {
     for (const subscribers of this.#subscribers.values()) {
       for (const socket of subscribers) {
@@ -59,6 +87,7 @@ export class HouseholdEventHub {
       }
     }
     this.#subscribers.clear();
+    this.#sessionSockets.clear();
   }
 }
 
@@ -86,7 +115,7 @@ export function registerHouseholdEvents(
           socket.close(4003, 'Connection rejected');
           return;
         }
-        hub.subscribe(session.householdId, socket);
+        hub.subscribe(session.householdId, session.id, socket);
         const sessionHash = hashSecret(token!);
         let checking = false;
         const timer = setInterval(() => {

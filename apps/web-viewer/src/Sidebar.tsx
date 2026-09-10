@@ -1,34 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Avatar } from './Avatar';
 import { Brand, Icon, type IconName } from './Icon';
 
 const preferenceKey = 'beacon.sidebar.collapsed.v1';
-
-function Avatar({
-  email,
-  avatarUrl,
-}: {
-  email: string;
-  avatarUrl?: string | null | undefined;
-}) {
-  const [broken, setBroken] = useState(false);
-  if (avatarUrl && !broken) {
-    return (
-      <img
-        className="sidebar-avatar"
-        src={avatarUrl}
-        alt=""
-        referrerPolicy="no-referrer"
-        onError={() => setBroken(true)}
-      />
-    );
-  }
-  return (
-    <span className="sidebar-avatar sidebar-avatar-initial" aria-hidden="true">
-      {email.charAt(0).toUpperCase()}
-    </span>
-  );
-}
 
 export function Sidebar({
   email,

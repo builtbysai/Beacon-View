@@ -254,11 +254,20 @@ export const auditEvents = pgTable(
     success: boolean('success').notNull(),
     ipAddress: text('ip_address'),
     metadata: jsonb('metadata').notNull().default({}),
+    // Client-generated per-viewing-attempt id, sent once when a Live Viewer
+    // session opens and reused across its own automatic reconnects, so
+    // access-history can group "one continuous attempt, N tries" without
+    // guessing from timestamp proximity. Null for non-viewer event types
+    // and for rows written before this column existed.
+    viewerSessionId: uuid('viewer_session_id'),
     occurredAt: timestamp('occurred_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
-  (table) => [index('audit_events_occurred_idx').on(table.occurredAt)],
+  (table) => [
+    index('audit_events_occurred_idx').on(table.occurredAt),
+    index('audit_events_viewer_session_idx').on(table.viewerSessionId),
+  ],
 );
 
 export const motionEvents = pgTable(

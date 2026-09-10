@@ -8,6 +8,7 @@ import { hashSecret } from '../src/security.js';
 import {
   DEVICE_REGISTRATION_RATE_LIMITED,
   PostgresStore,
+  type AccessHistoryRecord,
 } from '../src/store.js';
 import { resetTestDatabase, testDatabaseUrl } from './test-database.js';
 
@@ -70,6 +71,23 @@ function nextClose(socket: WebSocket): Promise<number> {
       resolve(code);
     });
   });
+}
+
+/** A rejected viewer's socket closes (synchronously, inside the signaling
+ * hub) slightly before the route handler's own `await store.audit(...)`
+ * for that same rejection resolves, so a client-side close is not proof
+ * the audit row has landed yet. Poll briefly instead of asserting right
+ * after close. */
+async function waitForCondition(
+  check: () => Promise<boolean>,
+  label: string,
+): Promise<void> {
+  const deadline = Date.now() + 2_000;
+  for (;;) {
+    if (await check()) return;
+    if (Date.now() > deadline) throw new Error(`Timed out waiting: ${label}`);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
 }
 
 function connect(query: string, headers: Record<string, string>): WebSocket {
@@ -286,5 +304,86 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
       Authorization: 'Bearer revoked',
     });
     expect(await nextClose(revoked)).toBe(4003);
+  });
+
+  it('records the same viewer_session_id across repeated attempts by one viewer, so access-history can group them without guessing', async () => {
+    const owner = await store!.createAccount(
+      'grouping@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    const deviceCredential = 'grouping-device-secret';
+    const code = 'GROUPING234';
+    await store!.createPairingCode(
+      owner.householdId,
+      hashSecret(code),
+      new Date(Date.now() + 60_000),
+    );
+    const camera = await store!.redeemPairingCode({
+      codeHash: hashSecret(code),
+      credentialHash: hashSecret(deviceCredential),
+      installationId: randomUUID(),
+      ipAddress: '127.0.0.1',
+      name: 'Grouping Camera',
+      now: new Date(),
+    });
+    if (!camera || camera === DEVICE_REGISTRATION_RATE_LIMITED) {
+      throw new Error('Camera setup failed');
+    }
+    const sessionToken = 'grouping-viewer-session';
+    await store!.createSession({
+      absoluteExpiresAt: new Date(Date.now() + 60_000),
+      csrfHash: hashSecret('csrf'),
+      idleExpiresAt: new Date(Date.now() + 60_000),
+      tokenHash: hashSecret(sessionToken),
+      userId: owner.id,
+    });
+
+    // No device is connected, so both attempts are rejected as
+    // camera-offline — the scenario the frontend's own automatic retry
+    // loop produces when a camera briefly drops.
+    const viewerSessionId = randomUUID();
+    const attemptOne = connect(
+      `role=viewer&cameraId=${camera.publicCameraId}&viewerSessionId=${viewerSessionId}`,
+      { Cookie: `beacon_session=${sessionToken}`, Origin: config!.WEB_ORIGIN },
+    );
+    expect(await nextClose(attemptOne)).toBe(4003);
+    const attemptTwo = connect(
+      `role=viewer&cameraId=${camera.publicCameraId}&viewerSessionId=${viewerSessionId}`,
+      { Cookie: `beacon_session=${sessionToken}`, Origin: config!.WEB_ORIGIN },
+    );
+    expect(await nextClose(attemptTwo)).toBe(4003);
+
+    let forThisAttempt: AccessHistoryRecord[] = [];
+    await waitForCondition(async () => {
+      const history = await store!.listAccessHistory(owner.householdId);
+      forThisAttempt = history.filter(
+        (event) => event.viewerSessionId === viewerSessionId,
+      );
+      return forThisAttempt.length >= 2;
+    }, 'both rejected attempts to be recorded');
+    expect(forThisAttempt).toHaveLength(2);
+    for (const event of forThisAttempt) {
+      expect(event.success).toBe(false);
+      expect(event.eventType).toBe('live_view_rejected');
+      expect(event.metadata).toMatchObject({ reason: 'camera_offline' });
+    }
+
+    // A viewer connecting without an id (e.g. an older client) must not be
+    // grouped with anyone else's attempts.
+    const unlabeled = connect(`role=viewer&cameraId=${camera.publicCameraId}`, {
+      Cookie: `beacon_session=${sessionToken}`,
+      Origin: config!.WEB_ORIGIN,
+    });
+    expect(await nextClose(unlabeled)).toBe(4003);
+    let unlabeledRows: AccessHistoryRecord[] = [];
+    await waitForCondition(async () => {
+      const refreshed = await store!.listAccessHistory(owner.householdId);
+      unlabeledRows = refreshed.filter(
+        (event) => event.viewerSessionId === null,
+      );
+      return unlabeledRows.length >= 1;
+    }, 'the unlabeled attempt to be recorded');
+    expect(unlabeledRows).toHaveLength(1);
   });
 });

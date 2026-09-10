@@ -26,6 +26,18 @@ function friendlyDeviceLabel(label: string): string {
   return label.replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)\s*$/i, '').trim();
 }
 
+/** The four states a viewer of the broadcast stage's own status line needs
+ * to tell apart at a glance, per the concise-state list this screen is
+ * built around: ready, actively watched, reconnecting, or stopped. */
+function broadcastStatusLabel(state: string, viewerCount: number): string {
+  if (state === 'streaming') {
+    return viewerCount === 1 ? '1 watching' : `${viewerCount} watching`;
+  }
+  if (state === 'reconnecting') return 'Reconnecting…';
+  if (state === 'error') return 'Offline';
+  return 'Camera Mode ready';
+}
+
 function installationId(): string {
   const existing = localStorage.getItem(INSTALLATION_KEY);
   if (existing) return existing;
@@ -277,15 +289,11 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
         />
         <div className="broadcast-top">
           <span
-            className={`broadcast-live${viewerCount > 0 ? ' is-watched' : ''}`}
+            className={`broadcast-live${state === 'streaming' ? ' is-watched' : ''}`}
             role="status"
           >
             <span aria-hidden="true" className="broadcast-live-dot" />
-            {viewerCount > 0
-              ? viewerCount === 1
-                ? '1 viewer watching now'
-                : `${viewerCount} viewers watching now`
-              : 'Camera Mode active · ready for viewing'}
+            {broadcastStatusLabel(state, viewerCount)}
           </span>
           <div className="broadcast-top-actions">
             <button
@@ -341,18 +349,13 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
       <section className="card wide" aria-labelledby="camera-mode-title">
         <div className="heading">
           <div>
-            <p className="eyebrow">Producer</p>
-            <h1 id="camera-mode-title">Browser Camera Mode</h1>
+            <h1 id="camera-mode-title">Use this browser as a camera</h1>
+            <p>Temporary. Keep this tab open.</p>
           </div>
           <button className="secondary" onClick={onBack}>
             Back to dashboard
           </button>
         </div>
-        <p>
-          Use an attended browser and webcam as a Beacon camera. Browsers may
-          throttle background tabs and cannot match Android foreground-service
-          reliability.
-        </p>
         {backgrounded && (
           <p className="warning" role="status">
             This tab is backgrounded. Capture or networking may be throttled.

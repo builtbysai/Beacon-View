@@ -125,6 +125,13 @@
 html {
   background: var(--bg);
   scrollbar-gutter: stable;
+  /* Without this, Android Chrome draws its own default tap-highlight
+     overlay across a tapped control's full bounding box, sized well
+     beyond the visible pill/button background — on the bottom nav this
+     showed up as an oversized, brighter-than-intended rectangle that
+     washed out the icon and label. Explicit `:active` styles below
+     restore tap feedback without the native overlay. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -695,8 +702,16 @@ button > .icon:first-child {
   transform: none;
 }
 
+.nav-button:active:not(:disabled) {
+  background: var(--surface-hover);
+}
+
 .nav-active {
   color: var(--accent);
+  background: var(--action-soft-bg);
+}
+
+.nav-active:active {
   background: var(--action-soft-bg);
 }
 
@@ -721,22 +736,34 @@ button > .icon:first-child {
   border-top: 1px solid var(--border);
 }
 
-.sidebar-avatar {
+.avatar {
   overflow: hidden;
-  width: 2.1rem;
-  height: 2.1rem;
   flex: 0 0 auto;
   border-radius: 999px;
   object-fit: cover;
 }
 
-.sidebar-avatar-initial {
+.avatar-md {
+  width: 2.1rem;
+  height: 2.1rem;
+}
+
+.avatar-lg {
+  width: 3.25rem;
+  height: 3.25rem;
+}
+
+.avatar-initial {
   display: grid;
   color: var(--action-soft-text);
   font-size: 0.85rem;
   font-weight: 750;
   background: var(--action-soft-bg);
   place-items: center;
+}
+
+.avatar-lg.avatar-initial {
+  font-size: 1.25rem;
 }
 
 .sidebar-account {
@@ -880,12 +907,6 @@ button > .icon:first-child {
   margin-bottom: 0.2rem;
 }
 
-.page-description {
-  margin: 0;
-  max-width: 46rem;
-  font-size: 0.94rem;
-}
-
 .page-heading > button {
   flex: 0 0 auto;
 }
@@ -999,63 +1020,6 @@ button > .icon:first-child {
   background: rgb(255 255 255 / 12%);
 }
 
-.home-metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.home-metrics article {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: var(--space-3);
-  align-items: center;
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.home-metrics strong {
-  color: var(--text);
-  font-size: 1.5rem;
-  line-height: 1;
-}
-
-.home-metrics article > span:last-child {
-  grid-column: 2;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.metric-icon {
-  display: grid;
-  grid-row: span 2;
-  width: 2.3rem;
-  height: 2.3rem;
-  border-radius: 0.75rem;
-  place-items: center;
-}
-
-.metric-icon.ready {
-  color: var(--success);
-  background: var(--success-soft);
-}
-.metric-icon.privacy {
-  color: var(--privacy);
-  background: var(--privacy-soft);
-}
-.metric-icon.attention {
-  color: var(--warning);
-  background: var(--warning-soft);
-}
-.metric-icon.live {
-  color: var(--live);
-  background: var(--live-soft);
-}
-
 .section-heading {
   display: flex;
   gap: var(--space-3);
@@ -1066,70 +1030,6 @@ button > .icon:first-child {
 
 .section-heading .link {
   margin: 0;
-}
-
-.camera-summary {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.section-icon {
-  display: grid;
-  width: 3rem;
-  height: 3rem;
-  flex: 0 0 auto;
-  border-radius: 0.85rem;
-  color: var(--accent);
-  background: var(--action-soft-bg);
-  place-items: center;
-}
-
-.onboarding-steps ol {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
-  gap: var(--space-4);
-  padding: 0;
-  margin: var(--space-4) 0 0;
-  list-style: none;
-}
-
-.onboarding-steps li {
-  display: flex;
-  gap: var(--space-3);
-  align-items: flex-start;
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-}
-
-.onboarding-steps li > div {
-  display: grid;
-  gap: 0.25rem;
-  min-width: 0;
-}
-
-.onboarding-steps li strong {
-  color: var(--text);
-  font-size: 0.92rem;
-}
-
-.onboarding-steps li p {
-  margin: 0;
-  font-size: 0.84rem;
-}
-
-.onboarding-step-icon {
-  display: grid;
-  width: 2.4rem;
-  height: 2.4rem;
-  flex: 0 0 auto;
-  border-radius: 0.7rem;
-  color: var(--accent);
-  background: var(--action-soft-bg);
-  place-items: center;
 }
 
 /* ---------- Camera browser controls & view toggle ---------- */
@@ -1625,6 +1525,15 @@ button > .icon:first-child {
   box-shadow: var(--shadow-lg);
 }
 
+/* Camera tiles anchor their menu button near the bottom of the tile, so it
+   opens upward by default. The live viewer's identity bar anchors its own
+   copy of this menu near the top of the screen instead, where opening
+   upward would render mostly off-screen — open downward there. */
+.camera-tile-menu-below {
+  top: calc(100% + 0.4rem);
+  bottom: auto;
+}
+
 .camera-tile-menu button {
   display: flex;
   min-height: 38px;
@@ -1694,18 +1603,6 @@ button > .icon:first-child {
   place-items: center;
 }
 
-.setup-badge {
-  color: var(--accent-emphasis);
-  font-size: 0.72rem;
-  font-weight: 750;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.setup-badge.neutral {
-  color: var(--text-muted);
-}
-
 .setup-options h4 {
   margin: 0.2rem 0 0;
   font-size: 1.2rem;
@@ -1714,13 +1611,6 @@ button > .icon:first-child {
 .setup-options p {
   margin: 0;
   font-size: 0.9rem;
-}
-
-.setup-steps {
-  padding-left: 1.1rem;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  line-height: 1.8;
 }
 
 .setup-options button {
@@ -1930,6 +1820,64 @@ button > .icon:first-child {
   margin-bottom: var(--space-5);
 }
 
+.heading-with-rename {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.heading-with-rename h3 {
+  margin: 0;
+}
+
+.rename-affordance {
+  display: inline-flex;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: transparent;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  min-height: 0;
+}
+
+.rename-affordance:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-hover);
+  box-shadow: none;
+  transform: none;
+}
+
+.rename-affordance .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.inline-rename {
+  min-width: 8rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  background: var(--surface);
+}
+
+.inline-rename-heading {
+  font-size: 1.2rem;
+  font-weight: 750;
+}
+
+.camera-tile-identity .inline-rename {
+  width: 100%;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .device-back-button {
   flex-shrink: 0;
 }
@@ -2040,10 +1988,6 @@ button > .icon:first-child {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-2);
-}
-
-.device-source-note {
-  margin: var(--space-4) 0;
 }
 
 .device-settings-content {
@@ -2221,7 +2165,9 @@ button > .icon:first-child {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  padding: calc(var(--space-3) + env(safe-area-inset-top))
+    calc(var(--space-4) + env(safe-area-inset-right)) var(--space-3)
+    calc(var(--space-4) + env(safe-area-inset-left));
   background: linear-gradient(180deg, rgb(3 7 14 / 75%), transparent);
 }
 
@@ -2252,11 +2198,23 @@ button > .icon:first-child {
 
 .video-identity {
   display: flex;
+  flex: 1;
   min-width: 0;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 0.65rem;
   padding-top: 0.3rem;
+}
+
+.video-top-scrim .camera-tile-menu-anchor {
+  flex: 0 0 auto;
+}
+
+.video-top-scrim .camera-tile-action {
+  border-color: rgb(255 255 255 / 18%);
+  color: #f5fafd;
+  background: rgb(6 14 26 / 55%);
+  backdrop-filter: blur(6px);
 }
 
 .video-identity h1 {
@@ -2302,7 +2260,9 @@ button > .icon:first-child {
   align-items: center;
   justify-content: center;
   gap: var(--space-3);
-  padding: var(--space-4);
+  padding: var(--space-4) calc(var(--space-4) + env(safe-area-inset-right))
+    calc(var(--space-4) + env(safe-area-inset-bottom))
+    calc(var(--space-4) + env(safe-area-inset-left));
   background: linear-gradient(0deg, rgb(3 7 14 / 78%), transparent);
   opacity: 0;
   pointer-events: none;
@@ -2423,7 +2383,7 @@ button > .icon:first-child {
   font-weight: 700;
 }
 
-.live-surface {
+.live-shell {
   --bg: #070b14;
   --surface: #101a2c;
   --surface-2: #16223a;
@@ -2433,28 +2393,40 @@ button > .icon:first-child {
   --text-secondary: #a7b3c8;
   --text-muted: #7c89a3;
   --accent: #38bdf8;
-  overflow: hidden;
-  /* Theater sizing: the live view is the core product, not a dashboard
-     card, so it should claim most of a large desktop viewport instead of
-     sitting at a fixed width with empty space on either side. Width is
-     capped by three terms: a comfortable minimum, a share of the viewport
-     width, and — since the 16:9 video-frame's height tracks its width — a
-     share of the viewport *height* converted through that same ratio, so a
-     wide-but-short monitor never gets a page taller than its own viewport.
-     15rem approximates the fixed vertical chrome around the video (shell
-     padding plus the footer's status/controls row). */
-  max-width: min(92vw, 100rem, calc((100dvh - 15rem) * 16 / 9));
-  min-width: min(92vw, 60rem);
-  padding: 0;
+  /* The live view is the core product, not a dashboard card: it fills the
+     viewport edge to edge (fixed + inset:0, same pattern as Camera Mode's
+     own broadcast stage) rather than sitting inside the generic centered
+     page shell. `.video-frame` flexes to claim whatever height is left
+     after the identity/controls chrome, and its own `object-fit: contain`
+     video already preserves the stream's real aspect ratio (portrait or
+     landscape) without the frame needing a fixed shape of its own. */
+  position: fixed;
+  z-index: 10;
+  inset: 0;
+  display: flex;
+  overflow-y: auto;
+  flex-direction: column;
   color: var(--text);
   background: var(--bg);
+}
+
+.live-shell .video-frame {
+  aspect-ratio: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.live-shell .live-footer {
+  flex: 0 0 auto;
 }
 
 .live-footer {
   display: grid;
   gap: var(--space-3);
-  padding: var(--space-4) clamp(1.25rem, 2.5vw, 1.85rem)
-    clamp(1.25rem, 2.5vw, 1.85rem);
+  padding: var(--space-4)
+    calc(clamp(1.25rem, 2.5vw, 1.85rem) + env(safe-area-inset-right))
+    calc(clamp(1.25rem, 2.5vw, 1.85rem) + env(safe-area-inset-bottom))
+    calc(clamp(1.25rem, 2.5vw, 1.85rem) + env(safe-area-inset-left));
 }
 
 .live-talk-status {
@@ -2482,21 +2454,6 @@ button > .icon:first-child {
   color: var(--action-soft-text);
   border-color: var(--accent);
   background: var(--action-soft-bg);
-}
-
-.live-surface:fullscreen {
-  width: 100%;
-  max-width: none;
-  height: 100%;
-  overflow: auto;
-  border: 0;
-  border-radius: 0;
-  background: var(--bg);
-}
-
-.live-surface:fullscreen .video-frame {
-  height: max(10rem, calc(100dvh - 12rem));
-  aspect-ratio: auto;
 }
 
 /* ---------- Settings ---------- */
@@ -2554,6 +2511,13 @@ button > .icon:first-child {
 .settings-row > button,
 .settings-row > a {
   flex: 0 0 auto;
+}
+
+.settings-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .settings-section > section > h4 {
@@ -3169,40 +3133,42 @@ button > .icon:first-child {
   );
 }
 
-.trust-principles {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.trust-principle {
+.trust-facts {
   display: flex;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0 0 var(--space-5);
 }
 
-.trust-principle-icon {
-  display: grid;
-  width: 2.4rem;
-  height: 2.4rem;
-  flex: 0 0 auto;
-  border-radius: 0.75rem;
+.trust-facts dt {
+  font-size: 0.82rem;
+  font-weight: 650;
   color: var(--accent);
-  background: var(--action-soft-bg);
-  place-items: center;
 }
 
-.trust-principle h2 {
-  margin: 0 0 0.25rem;
-  font-size: 1rem;
-}
-
-.trust-principle p {
+.trust-facts dd {
   margin: 0;
   font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.trust-keep {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.trust-keep h2 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.trust-keep p {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
 }
 
 .trust-return {
@@ -3487,7 +3453,6 @@ button > .icon:first-child {
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1180px) {
-  .home-metrics,
   .device-health {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3610,7 +3575,12 @@ button > .icon:first-child {
     display: grid;
     gap: 0;
     margin: 0;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    /* Auto-flow columns (instead of a fixed repeat count) so the bar
+       always divides evenly across however many nav items exist, rather
+       than silently leaving dead space if an item is ever added or
+       removed. */
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
   }
 
   .nav-button,
@@ -3676,15 +3646,6 @@ button > .icon:first-child {
     flex: 1 1 10rem;
   }
 
-  .home-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.6rem;
-  }
-
-  .home-metrics article {
-    padding: 0.75rem;
-  }
-
   .device-health {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3711,7 +3672,7 @@ button > .icon:first-child {
     height: 1.7rem;
   }
 
-  .trust-principles {
+  .trust-keep {
     grid-template-columns: 1fr;
   }
 
@@ -3769,12 +3730,6 @@ button > .icon:first-child {
   }
 }
 
-@media (max-width: 430px) {
-  .home-metrics {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
 /* A short laptop viewport is a task screen, not a landing page — keep the
    primary action visible without decorative content pushing it below the fold. */
 @media (min-width: 761px) and (max-height: 800px) {
@@ -3794,14 +3749,6 @@ button > .icon:first-child {
     padding: 1.4rem 1.75rem;
   }
 
-  .onboarding-steps li {
-    padding: 0.85rem;
-  }
-
-  .onboarding-steps li p {
-    display: none;
-  }
-
   .auth-hero-preview {
     display: none;
   }
@@ -3817,11 +3764,6 @@ button > .icon:first-child {
 
   .shell {
     padding-block: 1.25rem;
-  }
-
-  .video-frame {
-    height: max(10rem, calc(100dvh - 14rem));
-    aspect-ratio: auto;
   }
 
   .live-footer {

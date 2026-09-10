@@ -138,9 +138,7 @@ describe('BrowserCameraMode', () => {
     await screen.findByText('Built-in webcam');
     fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
 
-    expect(
-      await screen.findByText('Camera Mode active · ready for viewing'),
-    ).toBeVisible();
+    expect(await screen.findByText('Camera Mode ready')).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'Stop Camera Mode' }),
     ).toBeVisible();

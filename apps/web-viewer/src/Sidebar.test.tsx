@@ -68,15 +68,13 @@ describe('account menu', () => {
         onLogout={vi.fn()}
       />,
     );
-    const image = container.querySelector('img.sidebar-avatar');
+    const image = container.querySelector('img.avatar');
     expect(image).toHaveAttribute(
       'src',
       'https://lh3.googleusercontent.com/a/photo',
     );
     fireEvent.error(image!);
-    expect(
-      container.querySelector('img.sidebar-avatar'),
-    ).not.toBeInTheDocument();
+    expect(container.querySelector('img.avatar')).not.toBeInTheDocument();
     expect(screen.getByText('O')).toBeInTheDocument();
   });
 

@@ -56,6 +56,14 @@ const shapes = {
     </>
   ),
   arrow: <path d="M4 12h16m-6-6 6 6-6 6" />,
+  flip: (
+    <>
+      <path d="M17 2 21 6l-4 4" />
+      <path d="M3 12v-2a4 4 0 0 1 4-4h14" />
+      <path d="M7 22 3 18l4-4" />
+      <path d="M21 12v2a4 4 0 0 1-4 4H3" />
+    </>
+  ),
   plus: <path d="M12 4v16M4 12h16" />,
   search: (
     <>

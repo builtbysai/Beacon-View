@@ -65,7 +65,7 @@ describe('BrowserSessions', () => {
     render(<BrowserSessions onCurrentRevoked={vi.fn()} />);
 
     expect(
-      await screen.findByText('Chrome on Windows · current session'),
+      await screen.findByText('Chrome on Windows (this session)'),
     ).toBeVisible();
     expect(
       screen.queryByRole('button', { name: 'Revoke' }),

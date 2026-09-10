@@ -100,7 +100,7 @@ export function ContactPage({
           <h2 id="contact-form-title">{title}</h2>
           {sent ? (
             <p role="status">
-              Thanks—your message has been sent. We’ll reply to the email you
+              Thanks, your message has been sent. We'll reply to the email you
               provided.
             </p>
           ) : (
