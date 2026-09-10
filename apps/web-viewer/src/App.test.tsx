@@ -110,7 +110,7 @@ describe('App', () => {
         name: 'Your camera stays under your control.',
       }),
     ).toBeVisible();
-    expect(screen.getByText('Nothing is recorded')).toBeVisible();
+    expect(screen.getByText('What Beacon never keeps')).toBeVisible();
     expect(
       screen.getByRole('link', { name: 'Return to Beacon' }),
     ).toHaveAttribute('href', '/');
@@ -160,9 +160,7 @@ describe('App', () => {
     );
     render(<App />);
 
-    expect(
-      await screen.findByText('Three steps to your first view'),
-    ).toBeVisible();
+    expect(await screen.findByText('Add your first camera')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute(
       'aria-current',
       'page',
@@ -199,7 +197,7 @@ describe('App', () => {
       ),
     );
     render(<App />);
-    await screen.findByRole('heading', { name: 'Home' });
+    await screen.findByText('Add your first camera');
     act(() => {
       window.history.pushState({}, '', '/trust');
       window.dispatchEvent(new PopStateEvent('popstate'));
@@ -291,14 +289,14 @@ describe('App', () => {
     );
     render(<App />);
     const open = await screen.findByRole('button', {
-      name: 'View live: Rear camera, Hallway phone',
+      name: 'View live: Hallway phone',
     });
     expect(open).toHaveAttribute('aria-disabled', 'true');
     expect(
       screen.getByRole('heading', { name: 'Your cameras are paused' }),
     ).toBeVisible();
     fireEvent.click(
-      screen.getByRole('button', { name: 'Rear camera options' }),
+      screen.getByRole('button', { name: 'Hallway phone options' }),
     );
     expect(
       screen.getByRole('menuitem', { name: 'Open live view' }),
@@ -339,10 +337,17 @@ describe('App', () => {
             cameras: [
               {
                 credentialRevoked: false,
+                deviceId: 'device-1',
+                deviceName: 'Android Camera',
                 id: 'camera-public-id',
                 lastSeenAt: new Date().toISOString(),
-                name: 'Android Camera',
+                name: 'Rear camera',
                 online: true,
+                platform: 'android',
+                enabled: true,
+                streaming: false,
+                viewerCount: 0,
+                facing: 'rear',
               },
             ],
           }),
@@ -357,11 +362,9 @@ describe('App', () => {
     vi.stubGlobal('fetch', fetch);
     render(<App />);
 
-    await screen.findByText('Three steps to your first view');
+    await screen.findByText('Add your first camera');
     fireEvent.click(screen.getAllByRole('button', { name: 'Add camera' })[0]!);
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Pair Android device' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Pair Android' }));
     expect(await screen.findByText('ABCD2345')).toBeVisible();
     vi.useFakeTimers();
     await act(async () => {
@@ -439,15 +442,15 @@ describe('App', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(<App />);
 
-    await screen.findByText('Rear camera');
+    await screen.findByText('Pixel');
     expect(
-      screen.getByRole('button', { name: 'Rear camera options' }),
+      screen.getByRole('button', { name: 'Pixel options' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'View live: Rear camera, Pixel' }),
+      screen.getByRole('button', { name: 'View live: Pixel' }),
     ).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Devices' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open device' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pixel options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Camera settings' }));
 
     expect(screen.getByRole('heading', { name: 'Pixel' })).toBeInTheDocument();
     expect(screen.getByText('Keep this camera ready')).toBeVisible();
@@ -466,7 +469,7 @@ describe('App', () => {
     expect(within(health).getByText('2 viewers')).toBeVisible();
     expect(within(health).getByText('82% · charging')).toBeVisible();
     expect(screen.getByText('Rear camera')).toBeVisible();
-    expect(window.location.pathname).toBe('/devices/device-1');
+    expect(window.location.pathname).toBe('/cameras/device-1/settings');
     expect(
       screen.queryByRole('button', { name: 'Disable device' }),
     ).not.toBeInTheDocument();
@@ -476,9 +479,9 @@ describe('App', () => {
     expect(
       screen.queryByRole('button', { name: 'Revoke device' }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('Device settings'));
+    fireEvent.click(screen.getByText('Advanced'));
     expect(screen.getByText(/Capabilities:/)).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove device' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove camera' }));
     expect(
       await screen.findByRole('heading', { name: 'Permanently delete Pixel?' }),
     ).toBeVisible();
@@ -492,7 +495,7 @@ describe('App', () => {
     ).toBeVisible();
   });
 
-  it('renames and deletes a camera from the Cameras page info panel', async () => {
+  it('renames and removes a camera from the Cameras grid', async () => {
     vi.stubGlobal('WebSocket', TestSocket);
     let cameras = [
       {
@@ -510,6 +513,18 @@ describe('App', () => {
         viewerCount: 0,
       },
     ];
+    let devices = [
+      {
+        deviceType: 'phone',
+        enabled: true,
+        id: 'device-1',
+        lastSeenAt: new Date().toISOString(),
+        name: 'Pixel',
+        online: true,
+        platform: 'android',
+        revoked: false,
+      },
+    ];
     const fetchMock = vi
       .fn()
       .mockImplementation((url: string, init?: RequestInit) => {
@@ -523,22 +538,28 @@ describe('App', () => {
             status: 200,
           });
         }
-        if (url === '/api/devices') {
+        if (url === '/api/devices' && (!init || init.method === undefined)) {
           return Promise.resolve({
-            json: () => Promise.resolve({ devices: [] }),
+            json: () => Promise.resolve({ devices }),
             ok: true,
             status: 200,
           });
         }
-        if (url === '/api/cameras/rear-camera' && init?.method === 'PATCH') {
-          cameras = [{ ...cameras[0]!, name: 'Front camera' }];
+        if (url === '/api/devices/device-1' && init?.method === 'PATCH') {
+          devices = [{ ...devices[0]!, name: 'Kitchen Pixel' }];
+          cameras = cameras.map((camera) =>
+            camera.deviceId === 'device-1'
+              ? { ...camera, deviceName: 'Kitchen Pixel' }
+              : camera,
+          );
           return Promise.resolve({
             json: () => Promise.resolve(undefined),
             ok: true,
             status: 204,
           });
         }
-        if (url === '/api/cameras/rear-camera' && init?.method === 'DELETE') {
+        if (url === '/api/devices/device-1' && init?.method === 'DELETE') {
+          devices = [];
           cameras = [];
           return Promise.resolve({
             json: () => Promise.resolve(undefined),
@@ -560,27 +581,25 @@ describe('App', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Cameras' }));
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Rear camera options' }),
+      await screen.findByRole('button', { name: 'Pixel options' }),
     );
-
-    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('Front camera');
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename camera' }));
-    expect(prompt).toHaveBeenCalledWith('Camera name', 'Rear camera');
-    await screen.findByText('Front camera');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    const input = screen.getByRole('textbox', { name: 'Rename Pixel' });
+    fireEvent.change(input, { target: { value: 'Kitchen Pixel' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await screen.findByText('Kitchen Pixel');
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Front camera options' }),
+      screen.getByRole('button', { name: 'Kitchen Pixel options' }),
     );
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete camera' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove camera' }));
     expect(
       await screen.findByRole('heading', {
-        name: 'Permanently delete Front camera?',
+        name: 'Permanently delete Kitchen Pixel?',
       }),
     ).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Delete camera' }));
-    expect(
-      await screen.findByText('No cameras are paired with this household.'),
-    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete device' }));
+    expect(await screen.findByText('No cameras yet.')).toBeVisible();
   });
 
   it('shows privacy-preserving motion metadata in the Events page', async () => {
@@ -646,7 +665,7 @@ describe('App', () => {
         }),
     );
     render(<App />);
-    await screen.findByText('Three steps to your first view');
+    await screen.findByText('Add your first camera');
     fireEvent.click(screen.getByRole('button', { name: 'Activity' }));
     expect(await screen.findByText('Motion detected')).toBeVisible();
     expect(screen.getByText('Hallway phone')).toBeVisible();

@@ -190,7 +190,7 @@ export function MotionEventList({
         Motion events
       </h3>
       <p className="notice">
-        Beacon saves camera, time, and motion intensity—never an image or
+        Beacon saves camera, time, and motion intensity, never an image or
         recording.
       </p>
       <div className="event-filters" aria-label="Motion event filters">

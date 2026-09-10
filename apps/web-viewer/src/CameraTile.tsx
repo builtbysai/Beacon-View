@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { cameraStatus, type CameraAvailability } from './camera-status';
 import { Icon } from './Icon';
+import { InlineRename } from './InlineRename';
 import { LiveVideo } from './LiveVideo';
+import { OverflowMenu } from './OverflowMenu';
 
 export interface TileCamera extends CameraAvailability {
   id: string;
@@ -22,7 +24,7 @@ function hoverCapable(): boolean {
   );
 }
 
-/** A calm, static placeholder — this is not a snapshot: Beacon never captures
+/** A calm, static placeholder. This is not a snapshot: Beacon never captures
  * or stores camera images, so the tile shows an icon until a viewer opts in
  * to a live glimpse via hover/tap. */
 function CameraGlyph({ privacyMode }: { privacyMode?: boolean | undefined }) {
@@ -48,6 +50,7 @@ function CameraGlyph({ privacyMode }: { privacyMode?: boolean | undefined }) {
 export function CameraTile({
   camera,
   highlighted,
+  groupedByHost = false,
   onOpen,
   onDevice,
   onRename,
@@ -55,18 +58,23 @@ export function CameraTile({
 }: {
   camera: TileCamera;
   highlighted?: boolean;
+  /** True when this tile represents a whole host device (Home/Cameras grid)
+   * rather than one specific source (CameraSettings' source list) — the
+   * device name is the primary identity, and rename/remove act on the
+   * device rather than just the active source. */
+  groupedByHost?: boolean;
   onOpen: (camera: TileCamera) => void;
   onDevice?: (deviceId: string) => void;
-  onRename?: (camera: TileCamera) => void;
+  onRename?: (camera: TileCamera, name: string) => void;
   onDelete?: (camera: TileCamera) => void;
 }) {
   const state = cameraStatus(camera);
   const [previewing, setPreviewing] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const hoverTimer = useRef<number | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const canPreview = state.available && hoverCapable();
   const hasMenu = Boolean(onDevice || onRename || onDelete);
+  const primaryName = groupedByHost ? camera.deviceName : camera.name;
 
   useEffect(
     () => () => {
@@ -74,26 +82,6 @@ export function CameraTile({
     },
     [],
   );
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const dismissOutside = (event: PointerEvent) => {
-      if (
-        event.target instanceof Node &&
-        !menuRef.current?.contains(event.target)
-      )
-        setMenuOpen(false);
-    };
-    const dismissEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuOpen(false);
-    };
-    window.addEventListener('pointerdown', dismissOutside);
-    window.addEventListener('keydown', dismissEscape);
-    return () => {
-      window.removeEventListener('pointerdown', dismissOutside);
-      window.removeEventListener('keydown', dismissEscape);
-    };
-  }, [menuOpen]);
 
   function startHover() {
     if (!canPreview) return;
@@ -115,10 +103,10 @@ export function CameraTile({
       <button
         type="button"
         className="camera-tile-open"
-        aria-label={`View live: ${camera.name}, ${camera.deviceName}`}
+        aria-label={`View live: ${primaryName}`}
         aria-disabled={!state.available}
         onClick={() => {
-          if (state.available) onOpen(camera);
+          if (state.available && !renaming) onOpen(camera);
         }}
       >
         <span className="camera-tile-frame">
@@ -147,30 +135,32 @@ export function CameraTile({
           )}
         </span>
         <span className="camera-tile-identity">
-          <strong>{camera.name}</strong>
-          <span>{camera.deviceName}</span>
+          {renaming ? (
+            <InlineRename
+              value={primaryName}
+              ariaLabel={`Rename ${primaryName}`}
+              onSubmit={(name) => {
+                setRenaming(false);
+                onRename?.(camera, name);
+              }}
+              onCancel={() => setRenaming(false)}
+            />
+          ) : (
+            <strong>{primaryName}</strong>
+          )}
+          {!groupedByHost && <span>{camera.deviceName}</span>}
         </span>
       </button>
       {hasMenu && (
-        <div className="camera-tile-menu-anchor" ref={menuRef}>
-          <button
-            type="button"
-            className="camera-tile-action camera-tile-more"
-            aria-label={`${camera.name} options`}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            <Icon name="more" />
-          </button>
-          {menuOpen && (
-            <div className="camera-tile-menu" role="menu">
+        <OverflowMenu label={`${primaryName} options`}>
+          {(close) => (
+            <>
               <button
                 role="menuitem"
                 type="button"
                 disabled={!state.available}
                 onClick={() => {
-                  setMenuOpen(false);
+                  close();
                   onOpen(camera);
                 }}
               >
@@ -182,12 +172,12 @@ export function CameraTile({
                   role="menuitem"
                   type="button"
                   onClick={() => {
-                    setMenuOpen(false);
+                    close();
                     onDevice(camera.deviceId);
                   }}
                 >
                   <Icon name="settings" />
-                  Device settings
+                  Camera settings
                 </button>
               )}
               {onRename && (
@@ -195,12 +185,12 @@ export function CameraTile({
                   role="menuitem"
                   type="button"
                   onClick={() => {
-                    setMenuOpen(false);
-                    onRename(camera);
+                    close();
+                    setRenaming(true);
                   }}
                 >
                   <Icon name="edit" />
-                  Rename camera
+                  Rename
                 </button>
               )}
               {onDelete && (
@@ -209,17 +199,17 @@ export function CameraTile({
                   type="button"
                   className="camera-tile-menu-danger"
                   onClick={() => {
-                    setMenuOpen(false);
+                    close();
                     onDelete(camera);
                   }}
                 >
                   <Icon name="trash" />
-                  Delete camera
+                  Remove camera
                 </button>
               )}
-            </div>
+            </>
           )}
-        </div>
+        </OverflowMenu>
       )}
     </article>
   );

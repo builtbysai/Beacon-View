@@ -61,7 +61,7 @@ describe('LiveVideo', () => {
     const { container } = render(
       <LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} />,
     );
-    const surface = container.querySelector('section')!;
+    const surface = container.querySelector('main')!;
     const requestFullscreen = vi.fn().mockRejectedValue(new Error('Denied'));
     Object.defineProperty(surface, 'requestFullscreen', {
       value: requestFullscreen,

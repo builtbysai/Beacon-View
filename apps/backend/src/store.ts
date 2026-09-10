@@ -102,6 +102,10 @@ export interface AuditInput {
   householdId?: string;
   cameraId?: string;
   metadata?: Record<string, string>;
+  /** Client-generated id shared across one continuous live-view attempt
+   * (including its own automatic reconnects), so access-history can group
+   * related rows without guessing from timestamps. */
+  viewerSessionId?: string;
 }
 
 export interface AccessHistoryRecord {
@@ -111,6 +115,8 @@ export interface AccessHistoryRecord {
   eventType: 'live_view_started' | 'live_view_rejected';
   occurredAt: Date;
   success: boolean;
+  viewerSessionId: string | null;
+  metadata: Record<string, string>;
 }
 
 export interface MotionEventRecord {
@@ -528,7 +534,8 @@ export class PostgresStore implements MilestoneStore {
     const result = await this.pool.query<AccessHistoryRecord>(
       `SELECT ae.id, u.email AS "actorEmail", d.name AS "deviceName",
               ae.event_type AS "eventType", ae.occurred_at AS "occurredAt",
-              ae.success
+              ae.success, ae.viewer_session_id AS "viewerSessionId",
+              ae.metadata
        FROM audit_events ae
        LEFT JOIN users u ON u.id = ae.user_id
        LEFT JOIN cameras d ON d.id = ae.camera_id
@@ -1318,8 +1325,8 @@ export class PostgresStore implements MilestoneStore {
   ): Promise<void> {
     await executor.query(
       `INSERT INTO audit_events
-       (user_id, household_id, camera_id, event_type, success, ip_address, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+       (user_id, household_id, camera_id, event_type, success, ip_address, metadata, viewer_session_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         input.userId ?? null,
         input.householdId ?? null,
@@ -1328,6 +1335,7 @@ export class PostgresStore implements MilestoneStore {
         input.success,
         input.ipAddress ?? null,
         JSON.stringify(input.metadata ?? {}),
+        input.viewerSessionId ?? null,
       ],
     );
   }

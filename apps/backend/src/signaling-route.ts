@@ -12,7 +12,15 @@ import { createTurnCredential } from './turn-credentials.js';
 const querySchema = z.discriminatedUnion('role', [
   z.object({ cameraId: z.string().uuid(), role: z.literal('device') }),
   z.object({ cameraId: z.string().uuid(), role: z.literal('producer') }),
-  z.object({ cameraId: z.string().uuid(), role: z.literal('viewer') }),
+  z.object({
+    cameraId: z.string().uuid(),
+    role: z.literal('viewer'),
+    // Client-generated id shared across one continuous live-view attempt
+    // (including its own automatic reconnects); optional so older clients
+    // and non-browser callers still work. Validated as a UUID here so a
+    // malformed value can never reach the database.
+    viewerSessionId: z.string().uuid().optional(),
+  }),
 ]);
 
 export function registerSignaling(
@@ -138,8 +146,12 @@ export function registerSignaling(
             eventType: 'live_view_rejected',
             householdId: session.householdId,
             ipAddress: request.ip,
+            metadata: { reason: 'not_authorized' },
             success: false,
             userId: session.userId,
+            ...(query.data.viewerSessionId
+              ? { viewerSessionId: query.data.viewerSessionId }
+              : {}),
           });
           socket.close(4003, 'Connection rejected');
           return;
@@ -172,6 +184,10 @@ export function registerSignaling(
           ipAddress: request.ip,
           success: admitted,
           userId: session.userId,
+          ...(admitted ? {} : { metadata: { reason: 'camera_offline' } }),
+          ...(query.data.viewerSessionId
+            ? { viewerSessionId: query.data.viewerSessionId }
+            : {}),
         });
       },
     );

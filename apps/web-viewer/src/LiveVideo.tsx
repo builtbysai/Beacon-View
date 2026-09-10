@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
+import { InlineRename } from './InlineRename';
+import { OverflowMenu } from './OverflowMenu';
 import { TalkSession, type TalkState } from './talk';
 
 import {
@@ -87,11 +89,12 @@ interface StreamStatsRecord extends CandidatePairStats {
   mediaType?: string;
 }
 
-function signalingUrl(cameraId: string): string {
+function signalingUrl(cameraId: string, viewerSessionId: string): string {
   const url = new URL('/api/signaling', window.location.href);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   url.searchParams.set('role', 'viewer');
   url.searchParams.set('cameraId', cameraId);
+  url.searchParams.set('viewerSessionId', viewerSessionId);
   return url.toString();
 }
 
@@ -107,6 +110,8 @@ export function LiveVideo({
   onPrivacy,
   privacyMode = false,
   siblingCameras = [],
+  onRename,
+  onDelete,
 }: {
   enabled?: boolean;
   camera: Camera;
@@ -119,6 +124,8 @@ export function LiveVideo({
   onPrivacy?: (() => Promise<void>) | undefined;
   privacyMode?: boolean | undefined;
   siblingCameras?: Camera[];
+  onRename?: (name: string) => void;
+  onDelete?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -126,6 +133,12 @@ export function LiveVideo({
   const connectionIdRef = useRef<string | null>(null);
   const pendingIce = useRef<RTCIceCandidateInit[]>([]);
   const generation = useRef(new RetryGeneration());
+  // One id per continuous viewing attempt: stable across this attempt's own
+  // automatic reconnects (so access-history can group them), regenerated
+  // when the viewer deliberately starts a fresh attempt (mount, switching
+  // cameras, or clicking Reconnect).
+  const viewerSessionId = useRef(crypto.randomUUID());
+  const previousCameraId = useRef<string | null>(null);
   const retryCount = useRef(0);
   const retryTimer = useRef<number | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
@@ -151,6 +164,11 @@ export function LiveVideo({
   const [controlsVisible, setControlsVisible] = useState(true);
   const [statsOpen, setStatsOpen] = useState(false);
   const hideControlsTimer = useRef<number | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  // Matches CameraTile's grouped-by-host convention: the device is the
+  // user-facing "camera", so its name leads; the source's own name (e.g.
+  // "Rear camera") is secondary and only shown when it actually differs.
+  const primaryName = deviceName || camera.name;
 
   const wakeControls = useCallback(() => {
     setControlsVisible(true);
@@ -187,6 +205,7 @@ export function LiveVideo({
     setRetryDisplay(0);
     generation.current.cancel();
     if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
+    viewerSessionId.current = crypto.randomUUID();
     setStatus('connecting');
     setAttempt((value) => value + 1);
   }, []);
@@ -201,10 +220,16 @@ export function LiveVideo({
     setStatus((current) =>
       current === 'reconnecting' ? current : 'connecting',
     );
+    if (previousCameraId.current !== camera.id) {
+      viewerSessionId.current = crypto.randomUUID();
+      previousCameraId.current = camera.id;
+    }
     const currentGeneration = generation.current.next();
     let active = true;
     let completed = false;
-    const socket = new WebSocket(signalingUrl(camera.id));
+    const socket = new WebSocket(
+      signalingUrl(camera.id, viewerSessionId.current),
+    );
     socketRef.current = socket;
     const timeout = window.setTimeout(
       () => fail('connection timed out'),
@@ -529,9 +554,73 @@ export function LiveVideo({
                     : 'STARTING'
                   : status.toUpperCase()}
               </span>
-              <h1 id="live-title">{camera.name}</h1>
-              {deviceName && <span>{deviceName}</span>}
+              {renaming ? (
+                <InlineRename
+                  value={primaryName}
+                  ariaLabel={`Rename ${primaryName}`}
+                  className="inline-rename-heading"
+                  onSubmit={(name) => {
+                    setRenaming(false);
+                    onRename?.(name);
+                  }}
+                  onCancel={() => setRenaming(false)}
+                />
+              ) : (
+                <h1 id="live-title">{primaryName}</h1>
+              )}
+              {camera.name !== primaryName && <span>{camera.name}</span>}
             </div>
+            {(onDevice || onRename || onDelete) && !renaming && (
+              <OverflowMenu
+                label={`${primaryName} options`}
+                menuClassName="camera-tile-menu camera-tile-menu-below"
+              >
+                {(close) => (
+                  <>
+                    {onDevice && (
+                      <button
+                        role="menuitem"
+                        type="button"
+                        onClick={() => {
+                          close();
+                          onDevice();
+                        }}
+                      >
+                        <Icon name="settings" />
+                        Camera settings
+                      </button>
+                    )}
+                    {onRename && (
+                      <button
+                        role="menuitem"
+                        type="button"
+                        onClick={() => {
+                          close();
+                          setRenaming(true);
+                        }}
+                      >
+                        <Icon name="edit" />
+                        Rename
+                      </button>
+                    )}
+                    {onDelete && (
+                      <button
+                        role="menuitem"
+                        type="button"
+                        className="camera-tile-menu-danger"
+                        onClick={() => {
+                          close();
+                          onDelete();
+                        }}
+                      >
+                        <Icon name="trash" />
+                        Remove camera
+                      </button>
+                    )}
+                  </>
+                )}
+              </OverflowMenu>
+            )}
           </div>
         )}
         {(status !== 'connected' || !videoReady || switching) && (
@@ -862,14 +951,8 @@ export function LiveVideo({
   return compact ? (
     content
   ) : (
-    <main className="shell">
-      <section
-        className="card wide live-surface"
-        ref={stageRef}
-        aria-labelledby="live-title"
-      >
-        {content}
-      </section>
+    <main className="live-shell" ref={stageRef} aria-labelledby="live-title">
+      {content}
     </main>
   );
 }

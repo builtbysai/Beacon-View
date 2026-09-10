@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { request } from './api';
 import { ConfirmDialog } from './ConfirmDialog';
+import { browserOsLabel } from './naming';
 
 interface BrowserSession {
   createdAt: string;
@@ -11,52 +12,12 @@ interface BrowserSession {
   userAgent?: string | null;
 }
 
-/** A short, privacy-preserving browser/OS label parsed from the session's
- * user-agent string — e.g. "Chrome on Windows", "Safari on iPhone". No IP
- * address or fingerprinting: just the same coarse browser family/OS info
- * every site already receives on every request. Falls back to a generic
- * label when the user-agent is missing or unrecognized. */
-export function friendlySessionLabel(userAgent: string | null | undefined): {
-  browser: string | null;
-  os: string | null;
-} {
-  if (!userAgent) return { browser: null, os: null };
-  const browser = /Edg\//.test(userAgent)
-    ? 'Edge'
-    : /OPR\//.test(userAgent)
-      ? 'Opera'
-      : /Chrome\/|CriOS\//.test(userAgent)
-        ? 'Chrome'
-        : /Firefox\/|FxiOS\//.test(userAgent)
-          ? 'Firefox'
-          : /Version\/.*Safari\//.test(userAgent)
-            ? 'Safari'
-            : null;
-  const os = /iPhone/.test(userAgent)
-    ? 'iPhone'
-    : /iPad/.test(userAgent)
-      ? 'iPad'
-      : /Android/.test(userAgent)
-        ? 'Android'
-        : /Mac OS X/.test(userAgent)
-          ? 'Mac'
-          : /Windows/.test(userAgent)
-            ? 'Windows'
-            : /Linux/.test(userAgent)
-              ? 'Linux'
-              : null;
-  return { browser, os };
-}
-
 function sessionLabel(session: BrowserSession): string {
-  const { browser, os } = friendlySessionLabel(session.userAgent);
-  const known =
-    browser && os
-      ? `${browser} on ${os}`
-      : (browser ??
-        os ??
-        (session.current ? 'This browser' : 'Signed-in browser'));
-  return session.current ? `${known} · current session` : known;
+  const known = browserOsLabel(
+    session.userAgent,
+    session.current ? 'This browser' : 'Signed-in browser',
+  );
+  return session.current ? `${known} (this session)` : known;
 }
 
 export function BrowserSessions({
@@ -112,9 +73,8 @@ export function BrowserSessions({
     <section aria-labelledby="browser-sessions-title">
       <h4 id="browser-sessions-title">Signed-in browsers</h4>
       <p className="notice">
-        Revoke any browser you do not recognize. Beacon never shows IP addresses
-        or device fingerprints here — only the browser and operating system
-        family.
+        Revoke any browser you do not recognize. Only the browser and operating
+        system are shown, never an IP address or device fingerprint.
       </p>
       {error && <p role="alert">{error}</p>}
       {sessions === null && !error && (
