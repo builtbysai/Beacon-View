@@ -75,3 +75,7 @@ separation, browser producers, independent multi-viewer sessions, privacy mode,
 and one-way camera audio. Recording, motion/events, notifications, distributed
 presence/signaling, production deployment, SFU fan-out, iOS/desktop agents, and
 IP-camera adapters remain future roadmap work.
+
+---
+
+*Built by [Hans Sai](https://builtbysai.com).*
