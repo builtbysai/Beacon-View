@@ -132,6 +132,18 @@ const shapes = {
       <path d="M5 11a7 7 0 0 0 10.5 6.06M19 11a7 7 0 0 1-1.05 3.7M12 18v3" />
     </>
   ),
+  speaker: (
+    <>
+      <path d="M3 10v4a2 2 0 0 0 2 2h2l4 4V4l-4 4H5a2 2 0 0 0-2 2Z" />
+      <path d="M16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12" />
+    </>
+  ),
+  speakerOff: (
+    <>
+      <path d="m3 3 18 18M10 8 11 7v10l-4-4H5a2 2 0 0 1-2-2V9" />
+      <path d="M16 9a4 4 0 0 1 1 2.5M19 6a8 8 0 0 1 1 6" />
+    </>
+  ),
   maximize: (
     <>
       <path d="M9 3H4v5m11-5h5v5M4 16v5h5m11-5v5h-5" />

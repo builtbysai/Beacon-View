@@ -33,7 +33,7 @@ export function SettingsPage({
           className="settings-section"
           aria-labelledby="notification-section-title"
         >
-          <h3 id="notification-section-title">Notifications</h3>
+          <h3 id="notification-section-title">Alerts</h3>
           <NotificationSettings />
         </section>
       )}
@@ -50,27 +50,8 @@ export function SettingsPage({
         className="settings-section"
         aria-labelledby="sharing-section-title"
       >
-        <h3 id="sharing-section-title">Sharing</h3>
+        <h3 id="sharing-section-title">People &amp; access</h3>
         <HouseholdSharingSettings cameras={cameras} role={household.role} />
-      </section>
-
-      <section
-        className="settings-section"
-        aria-labelledby="account-section-title"
-      >
-        <h3 id="account-section-title">Account</h3>
-        <div className="settings-row settings-row-identity">
-          <div className="settings-identity">
-            <Avatar email={user.email} avatarUrl={user.avatarUrl} size="lg" />
-            <div>
-              <strong>{user.email}</strong>
-              <p>This session</p>
-            </div>
-          </div>
-          <button className="secondary" onClick={onLogout}>
-            Sign out
-          </button>
-        </div>
       </section>
 
       <section
@@ -110,14 +91,30 @@ export function SettingsPage({
         <div className="settings-row">
           <div>
             <strong>Trust &amp; privacy</strong>
-            <p>
-              Viewing, listening, and talking are separate choices. See how
-              Beacon handles capture and account data.
-            </p>
+            <p>How capture, sharing, and account data are handled.</p>
           </div>
           <a className="secondary button-link" href="/trust">
             Read more
           </a>
+        </div>
+      </section>
+
+      <section
+        className="settings-section"
+        aria-labelledby="account-section-title"
+      >
+        <h3 id="account-section-title">Account</h3>
+        <div className="settings-row settings-row-identity">
+          <div className="settings-identity">
+            <Avatar email={user.email} avatarUrl={user.avatarUrl} size="lg" />
+            <div>
+              <strong>{user.email}</strong>
+              <p>Signed in</p>
+            </div>
+          </div>
+          <button className="secondary" onClick={onLogout}>
+            Sign out
+          </button>
         </div>
       </section>
 

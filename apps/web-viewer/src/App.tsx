@@ -91,6 +91,7 @@ export function App() {
   const [highlightedCameraId, setHighlightedCameraId] = useState<string | null>(
     null,
   );
+  const [activityNotice, setActivityNotice] = useState('');
   const [motionEventRevision, setMotionEventRevision] = useState(0);
   const [motionClearRevision, setMotionClearRevision] = useState(0);
   const returnPage = useRef<Page>('cameras');
@@ -212,6 +213,8 @@ export function App() {
       ) {
         void loadCameras().then(() => {
           if (message.type === 'camera-paired' && message.cameraId) {
+            setActivityNotice('A new camera is connected and ready to use.');
+            window.setTimeout(() => setActivityNotice(''), 6_000);
             setPairingState((state) => nextPairingState(state, 'completed'));
             setHighlightedCameraId(message.cameraId);
             window.setTimeout(() => setHighlightedCameraId(null), 5_000);
@@ -688,6 +691,12 @@ export function App() {
           </header>
         )}
         {error && <p role="alert">{error}</p>}
+        {activityNotice && (
+          <p className="activity-toast" role="status">
+            <Icon name="camera" />
+            {activityNotice}
+          </p>
+        )}
         {page === 'dashboard' && cameras.length === 0 && (
           <section className="home-dashboard home-dashboard-empty workspace-wide">
             <h1 className="home-title" ref={pageHeading} tabIndex={-1}>

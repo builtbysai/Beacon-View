@@ -135,9 +135,27 @@ export class PostgresAccountRepository {
   }
 
   async delete(userId: string): Promise<boolean> {
-    const result = await this.pool.query('DELETE FROM users WHERE id = $1', [
-      userId,
-    ]);
-    return (result.rowCount ?? 0) === 1;
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Invitations are historical management records, but their author FK is
+      // intentionally restrictive. Remove invitations authored by the account
+      // before cascading the user deletion so account removal cannot get stuck
+      // after household sharing has been used.
+      await client.query(
+        'DELETE FROM household_invitations WHERE invited_by_user_id = $1',
+        [userId],
+      );
+      const result = await client.query('DELETE FROM users WHERE id = $1', [
+        userId,
+      ]);
+      await client.query('COMMIT');
+      return (result.rowCount ?? 0) === 1;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }

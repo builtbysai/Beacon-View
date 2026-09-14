@@ -350,6 +350,14 @@ private fun BeaconCameraApp(
                                 }
                         },
                         onPair = { pairCamera(pairingCode) },
+                        onOpenPairingWeb = {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("${BuildConfig.BEACON_API_URL.trimEnd('/')}/pair"),
+                                ),
+                            )
+                        },
                         onBack = {
                             pairingCode = ""
                             message = ""
@@ -414,9 +422,17 @@ private fun BeaconCameraApp(
                         },
                         disconnecting = disconnecting,
                         onOpenBackgroundSettings = {
-                            context.startActivity(
-                                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
-                            )
+                            val request =
+                                Intent(
+                                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                    Uri.parse("package:${context.packageName}"),
+                                )
+                            runCatching { context.startActivity(request) }
+                                .onFailure {
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+                                    )
+                                }
                         },
                         onMonitor = { selectMonitor(true) },
                         monitorSignedIn = accountSessionStore.read() != null,

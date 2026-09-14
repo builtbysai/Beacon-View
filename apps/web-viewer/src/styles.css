@@ -4224,6 +4224,24 @@ button > .icon:first-child {
   min-height: 0;
 }
 
+.viewer-roster {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+}
+
+.viewer-roster span {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-secondary);
+}
+
+.viewer-roster small {
+  color: var(--text-tertiary);
+}
+
 .activity-toast:hover:not(:disabled) {
   background: color-mix(in srgb, var(--action-soft-bg), var(--accent) 12%);
   box-shadow: none;

@@ -591,6 +591,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         sessions.values.forEach(WebRtcCameraSession::close)
         sessions.clear()
         captureGeneration += 1
+        val generationForSourceSwitch = captureGeneration
         media?.close()
         media = null
         selectedCamera = next
@@ -607,8 +608,19 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 diagnostic = "Switching camera source",
             )
         }
-        if (!CameraRuntime.state.value.privacyMode) startLocalPreview()
-        startSignaling()
+        // CameraX unbinds asynchronously. Give the old provider a short, deterministic
+        // handoff window before binding the new lens; this avoids the intermittent native
+        // crash/reconnect loop seen when front/rear is flipped rapidly.
+        lifecycleScope.launch {
+            delay(250)
+            if (captureGeneration == generationForSourceSwitch &&
+                !CameraRuntime.state.value.privacyMode &&
+                selectedCamera?.id == next.id
+            ) {
+                startLocalPreview()
+                startSignaling()
+            }
+        }
     }
 
     private fun startRuntimeAgain() {

@@ -123,6 +123,7 @@ internal fun PairingScreen(
     onCodeChange: (String) -> Unit,
     onScan: () -> Unit,
     onPair: () -> Unit,
+    onOpenPairingWeb: () -> Unit,
     onBack: () -> Unit,
 ) {
     Column(
@@ -157,10 +158,13 @@ internal fun PairingScreen(
                 modifier = Modifier.padding(top = 14.dp),
             )
             Text(
-                "On Beacon web, choose Add camera. Scan the QR code shown there to pair securely.",
+                "Create a fresh code in Beacon web, then scan it here. Your camera stays offline until pairing succeeds.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp, bottom = 14.dp),
             )
+            OutlinedButton(onClick = onOpenPairingWeb, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Text("Create a new pairing code")
+            }
             Button(enabled = !busy, onClick = onScan, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.QrCodeScanner, null, modifier = Modifier.size(20.dp))
                 Text("Scan and connect", modifier = Modifier.padding(start = 8.dp))
@@ -472,18 +476,18 @@ internal fun CameraHome(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Background reliability",
+                                "Keep camera running",
                                 color = Color(0xFF5F4300),
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
-                                "Battery restrictions can interrupt an unattended camera.",
+                                "Allow unrestricted battery use for reliable unattended viewing.",
                                 color = Color(0xFF735600),
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
                         OutlinedButton(onClick = onOpenBackgroundSettings) {
-                            Text("Review")
+                            Text("Allow")
                         }
                     }
                 }
@@ -523,17 +527,6 @@ internal fun CameraHome(
                             runtime.privacyMode -> "Resume"
                             else -> "Pause"
                         },
-                        modifier = Modifier.padding(start = 7.dp),
-                    )
-                }
-                OutlinedButton(
-                    onClick = { disconnectConfirmationOpen = true },
-                    enabled = !disconnecting,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                ) {
-                    Icon(Icons.Outlined.LinkOff, null, modifier = Modifier.size(18.dp))
-                    Text(
-                        if (disconnecting) "Disconnecting…" else "Disconnect",
                         modifier = Modifier.padding(start = 7.dp),
                     )
                 }

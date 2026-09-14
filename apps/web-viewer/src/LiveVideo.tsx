@@ -617,7 +617,7 @@ export function LiveVideo({
               }}
               type="button"
             >
-              <Icon name={listening ? 'mic' : 'micOff'} />
+              <Icon name={listening ? 'speaker' : 'speakerOff'} />
               <span className="visually-hidden">
                 {!permissions.canListen
                   ? 'Listen unavailable'
@@ -748,30 +748,43 @@ export function LiveVideo({
             )}
           </button>
         )}
-        {!compact && statsOpen && quality && (
+        {!compact && statsOpen && (
           <div className="video-stats-panel">
-            <dl className="stream-quality" aria-label="Live stream quality">
-              <div>
-                <dt>Path</dt>
-                <dd>{quality.path}</dd>
-              </div>
-              <div>
-                <dt>Video</dt>
-                <dd>
-                  {quality.fps} fps · {quality.bitrateKbps} kbps
-                </dd>
-              </div>
-              <div>
-                <dt>Latency</dt>
-                <dd>
-                  {quality.rttMs} ms RTT · {quality.jitterMs} ms jitter
-                </dd>
-              </div>
-              <div>
-                <dt>Loss</dt>
-                <dd>{quality.lostPackets} packets</dd>
-              </div>
-            </dl>
+            <div className="viewer-roster" aria-label="Active viewers">
+              <strong>
+                {viewerCount === 0 ? 'No one else is watching' : 'Watching now'}
+              </strong>
+              {Array.from({ length: viewerCount }, (_, index) => (
+                <span key={index}>
+                  <Icon name="eye" /> Viewer {index + 1}
+                </span>
+              ))}
+              <small>Viewer names stay private in this live view.</small>
+            </div>
+            {quality && (
+              <dl className="stream-quality" aria-label="Live stream quality">
+                <div>
+                  <dt>Path</dt>
+                  <dd>{quality.path}</dd>
+                </div>
+                <div>
+                  <dt>Video</dt>
+                  <dd>
+                    {quality.fps} fps · {quality.bitrateKbps} kbps
+                  </dd>
+                </div>
+                <div>
+                  <dt>Latency</dt>
+                  <dd>
+                    {quality.rttMs} ms RTT · {quality.jitterMs} ms jitter
+                  </dd>
+                </div>
+                <div>
+                  <dt>Loss</dt>
+                  <dd>{quality.lostPackets} packets</dd>
+                </div>
+              </dl>
+            )}
           </div>
         )}
       </div>
