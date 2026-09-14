@@ -6,6 +6,47 @@ by a foreground service rather than the activity. Signaling sessions are keyed
 by connection ID, allowing independent viewer cleanup, while an authenticated
 household event WebSocket keeps browser camera state current without polling.
 
+## Application module boundaries
+
+Android's activity is a composition root for lifecycle, permissions, inbound links,
+and top-level mode. Camera-device presentation lives in `CameraModeUi`; native monitor
+state coordination, reusable components, navigation, presentation rules, and playback
+have separate modules. Capture, signaling, credentials, and runtime state remain
+independent services. UI modules may request actions but do not own camera or microphone
+lifetime.
+
+The web application shell coordinates authenticated routing and cross-feature realtime
+state. Public authentication-return, pairing, trust, diagnostics, and device-guidance
+surfaces are separate components. Domain contracts and independently testable feature surfaces live in separate modules. The
+backend application composes authentication, account, enrollment, service, signaling,
+camera-management, activity, and device-runtime features around one store contract; HTTP validation, camera response
+presentation, and session/CSRF policy are centralized modules. New recovery, notification, or sharing
+work must add policy and persistence boundaries rather than growing the application
+assembly files. See [ADR 0041](decisions/0041-maintainability-boundaries.md).
+
+The PostgreSQL store remains the application-facing persistence facade, while cohesive
+query families may be delegated to internal repositories. Motion settings, event
+insertion, cooldown and quiet-hours enforcement, history, and retention form one such
+repository. Audit insertion, access-history projection, and retention form another;
+transactional callers retain their existing database client. This preserves atomic
+behavior without exposing SQL concerns to routes or future notification services.
+Pairing lifecycle and registration throttling are isolated together, while browser
+session creation, rolling-expiry lookup, listing, and revocation form a session
+repository. Account creation, identity lookup, profile updates, and deletion form an
+account repository; account/household creation remains atomic with its audit event. The
+device repository owns inventory, source synchronization, browser registration,
+heartbeat health, privacy/revocation lifecycle, and signaling identity lookup.
+
+Notification transport is another PostgreSQL-backed boundary. Authenticated Android and
+web installations register an encrypted provider identifier against the current Beacon
+session. Per-device preferences default off. Accepted motion metadata creates its
+notification event and outbox rows in the same transaction. A bounded in-process worker
+leases outbox rows with `SKIP LOCKED`, sends generic data-only payloads through FCM HTTP
+v1 or standards-based Web Push, and resumes pending work after restart. Physical-device
+presence uses the existing 90-second online window plus a 120-second grace, with durable
+state ensuring one offline and one recovery transition. See
+[ADR 0044](decisions/0044-notification-transport-v1.md).
+
 ## Device and camera model
 
 A household owns devices; each device exposes one or more camera sources.
@@ -66,7 +107,12 @@ after its last successful heartbeat. There are no push channels.
 
 ## WebRTC signaling and media
 
-Each active camera source keeps one authenticated producer WebSocket.
+Each active camera source keeps one authenticated producer WebSocket. Viewer presence is
+counted only after the device confirms that the WebRTC peer is connected; negotiating
+sessions remain internal and bounded by timeout. Connected-viewer transitions publish a
+household event so badges refresh without waiting for polling. A transient browser
+`disconnected` state receives an eight-second recovery grace period before bounded
+renegotiation begins (ADR 0046).
 An owner opening a live view is reauthorized by browser session, Origin,
 household ownership, and active device credential. Multiple viewers are allowed
 per camera with independent connection IDs and peer connections.
@@ -110,6 +156,9 @@ application-level end-to-end-encryption claim.
 - `PUT /api/device/cameras` and `POST /api/browser-devices`
 - `GET /api/devices`, `GET /api/cameras`, `GET /api/diagnostics`, and
   `DELETE /api/cameras/:cameraId/credential`
+- `GET /api/access-history` for a household-scoped, 50-event security activity
+  window covering live-view attempts, privacy changes, credential revocation,
+  and camera/device removal without returning IP addresses or connection data
 - `GET /api/devices/:deviceId` with its child sources and aggregate viewer count
 - `GET /api/cameras/:cameraId` for an independently addressable source
 - `POST /api/device/heartbeat`

@@ -146,3 +146,21 @@ suppression, and Android detector reset while quiet. Manual acceptance must chan
 physical phone's settings and verify that metadata pauses while live viewing remains
 available, including an interval boundary and a daylight-saving transition where
 applicable.
+
+Notification transport coverage validates 32-byte key configuration, randomized
+AES-GCM envelope encryption, tamper failure, provider fingerprint idempotency, default-off
+preferences, session-bound revocation, atomic motion event/outbox creation, the exact
+90-second presence plus 120-second offline threshold, single offline/recovery transitions,
+and permission prompts only after user action. PostgreSQL cases require the dedicated
+`*_test` database. Physical acceptance must cover current Android FID registration,
+Doze/background delivery, denial, opt-out, logout, uninstall, FID rotation, installed-PWA
+subscription lifecycle, quiet hours, brief reconnect suppression, and real provider-invalid
+cleanup. Inspect database/log output to prove provider identifiers and payload details are
+not exposed.
+
+On September 12, 2026, `pnpm check`, Drizzle migration validation, clean and repeated
+migration execution, cloud Compose configuration validation, and Android
+`testDebugUnitTest lintDebug assembleDebug` passed locally. All 118 backend tests passed
+against a dedicated PostgreSQL 18 `beacon_secureview_test` database, including the 37
+PostgreSQL-backed cases and notification persistence. Docker Desktop was unavailable, so
+the database ran in the local Ubuntu WSL environment and was stopped after validation.

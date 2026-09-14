@@ -1,0 +1,187 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+
+import type { AppConfig } from './config.js';
+import { quietHoursSchema } from './motion-settings.js';
+import type { RateLimiter } from './rate-limit.js';
+import type { SessionAuth } from './session-auth.js';
+import type { MilestoneStore } from './store.js';
+
+const subscriptionSchema = z.discriminatedUnion('channel', [
+  z
+    .object({
+      channel: z.literal('fcm'),
+      installationId: z.string().uuid(),
+      deviceLabel: z.string().trim().min(1).max(80),
+      fid: z.string().trim().min(10).max(512),
+    })
+    .strict(),
+  z
+    .object({
+      channel: z.literal('web_push'),
+      installationId: z.string().uuid(),
+      deviceLabel: z.string().trim().min(1).max(80),
+      subscription: z
+        .object({
+          endpoint: z
+            .string()
+            .url()
+            .refine((value) => new URL(value).protocol === 'https:'),
+          expirationTime: z.number().nullable().optional(),
+          keys: z
+            .object({
+              p256dh: z.string().min(20).max(512),
+              auth: z.string().min(8).max(256),
+            })
+            .strict(),
+        })
+        .strict(),
+    })
+    .strict(),
+]);
+const subscriptionParameterSchema = z.object({
+  subscriptionId: z.string().uuid(),
+});
+const preferenceParameterSchema = z.object({ deviceId: z.string().uuid() });
+const preferenceSchema = z
+  .object({
+    motionEnabled: z.boolean(),
+    offlineEnabled: z.boolean(),
+    quietHours: quietHoursSchema.nullable(),
+  })
+  .strict();
+
+export function registerNotificationRoutes(
+  app: FastifyInstance,
+  dependencies: {
+    auth: SessionAuth;
+    config: AppConfig;
+    limiter: RateLimiter;
+    store: MilestoneStore;
+  },
+): void {
+  const { auth, config, limiter, store } = dependencies;
+
+  app.get('/api/notification-config/web-push-key', async (request, reply) => {
+    const session = await auth.authenticate(request, reply);
+    if (!session) return;
+    if (!config.WEB_PUSH_VAPID_PUBLIC_KEY)
+      return reply.code(404).send({ error: 'Web Push is unavailable' });
+    return { publicKey: config.WEB_PUSH_VAPID_PUBLIC_KEY };
+  });
+
+  app.post('/api/notification-subscriptions', async (request, reply) => {
+    const session = await auth.authenticateStateChange(request, reply);
+    if (!session) return;
+    if (!store.notificationsConfigured())
+      return reply
+        .code(503)
+        .send({ error: 'Notifications are not configured' });
+    if (
+      !limiter.take(
+        `notification-subscribe:${session.userId}:${request.ip}`,
+        20,
+        60 * 60 * 1_000,
+      )
+    ) {
+      return reply.code(429).send({ error: 'Too many notification changes' });
+    }
+    const parsed = subscriptionSchema.safeParse(request.body);
+    if (!parsed.success)
+      return reply
+        .code(400)
+        .send({ error: 'Invalid notification subscription' });
+    if (parsed.data.channel === 'fcm' && !config.FIREBASE_PROJECT_ID) {
+      return reply
+        .code(503)
+        .send({ error: 'Android notifications are unavailable' });
+    }
+    if (
+      parsed.data.channel === 'web_push' &&
+      !config.WEB_PUSH_VAPID_PUBLIC_KEY
+    ) {
+      return reply
+        .code(503)
+        .send({ error: 'Web notifications are unavailable' });
+    }
+    const providerMaterial =
+      parsed.data.channel === 'fcm'
+        ? parsed.data.fid
+        : JSON.stringify(parsed.data.subscription);
+    const id = await store.upsertNotificationSubscription({
+      channel: parsed.data.channel,
+      consentedAt: new Date(),
+      deviceLabel: parsed.data.deviceLabel,
+      installationId: parsed.data.installationId,
+      providerMaterial,
+      sessionId: session.id,
+      userId: session.userId,
+    });
+    await store.audit({
+      eventType: 'notification_subscription_created',
+      householdId: session.householdId,
+      ipAddress: request.ip,
+      metadata: { channel: parsed.data.channel },
+      success: true,
+      userId: session.userId,
+    });
+    return reply.code(201).send({ id });
+  });
+
+  app.delete(
+    '/api/notification-subscriptions/:subscriptionId',
+    async (request, reply) => {
+      const session = await auth.authenticateStateChange(request, reply);
+      if (!session) return;
+      const parameters = subscriptionParameterSchema.safeParse(request.params);
+      if (!parameters.success)
+        return reply.code(404).send({ error: 'Subscription not found' });
+      const revoked = await store.revokeNotificationSubscription(
+        session.userId,
+        session.id,
+        parameters.data.subscriptionId,
+      );
+      if (!revoked)
+        return reply.code(404).send({ error: 'Subscription not found' });
+      await store.audit({
+        eventType: 'notification_subscription_revoked',
+        householdId: session.householdId,
+        ipAddress: request.ip,
+        success: true,
+        userId: session.userId,
+      });
+      return reply.code(204).send();
+    },
+  );
+
+  app.get('/api/notification-preferences', async (request, reply) => {
+    const session = await auth.authenticate(request, reply);
+    if (!session) return;
+    return {
+      preferences: await store.listNotificationPreferences(session.userId),
+    };
+  });
+
+  app.put('/api/notification-preferences/:deviceId', async (request, reply) => {
+    const session = await auth.authenticateStateChange(request, reply);
+    if (!session) return;
+    const parameters = preferenceParameterSchema.safeParse(request.params);
+    const body = preferenceSchema.safeParse(request.body);
+    if (!parameters.success || !body.success)
+      return reply.code(400).send({ error: 'Invalid notification preference' });
+    const preference = await store.updateNotificationPreference({
+      userId: session.userId,
+      publicDeviceId: parameters.data.deviceId,
+      ...body.data,
+    });
+    if (!preference) return reply.code(404).send({ error: 'Camera not found' });
+    await store.audit({
+      eventType: 'notification_preference_changed',
+      householdId: session.householdId,
+      ipAddress: request.ip,
+      success: true,
+      userId: session.userId,
+    });
+    return { preference };
+  });
+}

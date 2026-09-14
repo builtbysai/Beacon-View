@@ -26,6 +26,7 @@ class AccountSessionStore(context: Context) {
             )
             .putString(IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             .putString(USER_ID, session.userId)
+            .remove(EMAIL)
             .apply()
     }
 
@@ -37,7 +38,10 @@ class AccountSessionStore(context: Context) {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)))
             val token = String(cipher.doFinal(Base64.decode(ciphertext, Base64.NO_WRAP)))
-            BeaconApi.AccountSession(token = token, userId = storedUserId ?: legacyUserKey(token))
+            BeaconApi.AccountSession(
+                token = token,
+                userId = storedUserId ?: legacyUserKey(token),
+            )
         }.getOrNull()
     }
 
@@ -70,6 +74,7 @@ class AccountSessionStore(context: Context) {
         const val CIPHERTEXT = "ciphertext"
         const val IV = "iv"
         const val USER_ID = "user_id"
+        const val EMAIL = "email"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
     }
 }

@@ -1,6 +1,8 @@
 import {
   boolean,
   check,
+  customType,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -21,6 +23,12 @@ const timestamps = {
     .notNull()
     .defaultNow(),
 };
+
+const bytea = customType<{ data: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
 
 export const users = pgTable(
   'users',
@@ -58,6 +66,98 @@ export const households = pgTable(
   ],
 );
 
+export const householdMembers = pgTable(
+  'household_members',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(),
+    status: text('status').notNull().default('active'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    joinedAt: timestamp('joined_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('household_members_household_user_unique').on(
+      table.householdId,
+      table.userId,
+    ),
+    uniqueIndex('household_members_id_household_unique').on(
+      table.id,
+      table.householdId,
+    ),
+    index('household_members_user_active_idx')
+      .on(table.userId, table.householdId)
+      .where(sql`${table.status} = 'active'`),
+    check(
+      'household_members_role_valid',
+      sql`${table.role} in ('owner', 'admin', 'viewer', 'guest')`,
+    ),
+    check(
+      'household_members_status_valid',
+      sql`${table.status} in ('active', 'revoked')`,
+    ),
+    check(
+      'household_members_revocation_consistent',
+      sql`(${table.status} = 'revoked') = (${table.revokedAt} is not null)`,
+    ),
+    check(
+      'household_members_guest_expiry_required',
+      sql`${table.role} <> 'guest' or ${table.expiresAt} is not null`,
+    ),
+  ],
+);
+
+export const householdInvitations = pgTable(
+  'household_invitations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    invitedEmail: text('invited_email').notNull(),
+    role: text('role').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    invitedByUserId: uuid('invited_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('household_invitations_token_hash_unique').on(table.tokenHash),
+    index('household_invitations_household_idx').on(
+      table.householdId,
+      table.createdAt,
+    ),
+    index('household_invitations_email_pending_idx')
+      .on(table.invitedEmail, table.expiresAt)
+      .where(sql`${table.acceptedAt} is null and ${table.revokedAt} is null`),
+    check(
+      'household_invitations_role_valid',
+      sql`${table.role} in ('admin', 'viewer', 'guest')`,
+    ),
+    check(
+      'household_invitations_email_normalized',
+      sql`${table.invitedEmail} = lower(btrim(${table.invitedEmail}))`,
+    ),
+    check(
+      'household_invitations_terminal_state_valid',
+      sql`${table.acceptedAt} is null or ${table.revokedAt} is null`,
+    ),
+  ],
+);
+
 export const browserSessions = pgTable(
   'browser_sessions',
   {
@@ -65,6 +165,9 @@ export const browserSessions = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
     tokenHash: text('token_hash').notNull(),
     csrfHash: text('csrf_hash').notNull(),
     userAgent: text('user_agent'),
@@ -90,6 +193,9 @@ export const browserSessions = pgTable(
   (table) => [
     uniqueIndex('browser_sessions_token_hash_unique').on(table.tokenHash),
     index('browser_sessions_user_idx').on(table.userId),
+    index('browser_sessions_household_idx')
+      .on(table.householdId, table.userId)
+      .where(sql`${table.revokedAt} is null`),
   ],
 );
 
@@ -187,6 +293,35 @@ export const cameraSources = pgTable(
       'camera_sources_facing_supported',
       sql`${table.facing} in ('front', 'rear', 'external', 'unknown')`,
     ),
+  ],
+);
+
+export const cameraGrants = pgTable(
+  'camera_grants',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    memberId: uuid('member_id').notNull(),
+    cameraSourceId: uuid('camera_source_id')
+      .notNull()
+      .references(() => cameraSources.id, { onDelete: 'cascade' }),
+    canListen: boolean('can_listen').notNull().default(false),
+    canTalk: boolean('can_talk').notNull().default(false),
+    ...timestamps,
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.memberId, table.householdId],
+      foreignColumns: [householdMembers.id, householdMembers.householdId],
+      name: 'camera_grants_member_household_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('camera_grants_member_camera_unique').on(
+      table.memberId,
+      table.cameraSourceId,
+    ),
+    index('camera_grants_household_idx').on(table.householdId),
   ],
 );
 
@@ -290,4 +425,172 @@ export const motionEvents = pgTable(
       table.occurredAt,
     ),
   ],
+);
+
+export const notificationSubscriptions = pgTable(
+  'notification_subscriptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => browserSessions.id, { onDelete: 'cascade' }),
+    installationId: uuid('installation_id').notNull(),
+    channel: text('channel').notNull(),
+    providerCiphertext: bytea('provider_ciphertext').notNull(),
+    providerIv: bytea('provider_iv').notNull(),
+    wrappedKey: bytea('wrapped_key').notNull(),
+    wrappedKeyIv: bytea('wrapped_key_iv').notNull(),
+    providerFingerprint: text('provider_fingerprint').notNull(),
+    keyVersion: integer('key_version').notNull(),
+    deviceLabel: text('device_label').notNull(),
+    consentedAt: timestamp('consented_at', { withTimezone: true }).notNull(),
+    lastRegisteredAt: timestamp('last_registered_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastSuccessAt: timestamp('last_success_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('notification_subscriptions_active_installation_unique')
+      .on(table.userId, table.installationId, table.channel)
+      .where(sql`${table.revokedAt} is null`),
+    uniqueIndex('notification_subscriptions_active_provider_unique')
+      .on(table.providerFingerprint)
+      .where(sql`${table.revokedAt} is null`),
+    index('notification_subscriptions_session_idx')
+      .on(table.sessionId)
+      .where(sql`${table.revokedAt} is null`),
+    check(
+      'notification_subscriptions_channel_valid',
+      sql`${table.channel} in ('fcm', 'web_push')`,
+    ),
+    check(
+      'notification_subscriptions_label_length',
+      sql`char_length(${table.deviceLabel}) between 1 and 80`,
+    ),
+  ],
+);
+
+export const notificationPreferences = pgTable(
+  'notification_preferences',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'cascade' }),
+    motionEnabled: boolean('motion_enabled').notNull().default(false),
+    offlineEnabled: boolean('offline_enabled').notNull().default(false),
+    quietStartMinute: integer('quiet_start_minute'),
+    quietEndMinute: integer('quiet_end_minute'),
+    quietTimeZone: text('quiet_time_zone'),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('notification_preferences_user_device_unique').on(
+      table.userId,
+      table.deviceId,
+    ),
+    check(
+      'notification_preferences_quiet_complete',
+      sql`(${table.quietStartMinute} is null) = (${table.quietEndMinute} is null) and (${table.quietStartMinute} is null) = (${table.quietTimeZone} is null)`,
+    ),
+    check(
+      'notification_preferences_quiet_valid',
+      sql`(${table.quietStartMinute} is null or ${table.quietStartMinute} between 0 and 1439) and (${table.quietEndMinute} is null or ${table.quietEndMinute} between 0 and 1439) and (${table.quietStartMinute} is null or ${table.quietStartMinute} <> ${table.quietEndMinute})`,
+    ),
+  ],
+);
+
+export const notificationEvents = pgTable(
+  'notification_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id').references(() => devices.id, {
+      onDelete: 'cascade',
+    }),
+    cameraSourceId: uuid('camera_source_id').references(
+      () => cameraSources.id,
+      { onDelete: 'cascade' },
+    ),
+    category: text('category').notNull(),
+    deduplicationKey: text('deduplication_key').notNull(),
+    safePayload: jsonb('safe_payload').notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('notification_events_deduplication_key_unique').on(
+      table.deduplicationKey,
+    ),
+    check(
+      'notification_events_category_valid',
+      sql`${table.category} in ('motion', 'offline', 'recovered')`,
+    ),
+  ],
+);
+
+export const notificationOutbox = pgTable(
+  'notification_outbox',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => notificationEvents.id, { onDelete: 'cascade' }),
+    subscriptionId: uuid('subscription_id')
+      .notNull()
+      .references(() => notificationSubscriptions.id, { onDelete: 'cascade' }),
+    safePayload: jsonb('safe_payload').notNull(),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    claimedUntil: timestamp('claimed_until', { withTimezone: true }),
+    deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+    terminalAt: timestamp('terminal_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('notification_outbox_event_subscription_unique').on(
+      table.eventId,
+      table.subscriptionId,
+    ),
+    index('notification_outbox_pending_idx')
+      .on(table.nextAttemptAt, table.id)
+      .where(sql`${table.deliveredAt} is null and ${table.terminalAt} is null`),
+    check(
+      'notification_outbox_attempt_count_valid',
+      sql`${table.attemptCount} between 0 and 5`,
+    ),
+  ],
+);
+
+export const notificationPresenceState = pgTable(
+  'notification_presence_state',
+  {
+    deviceId: uuid('device_id')
+      .primaryKey()
+      .references(() => devices.id, { onDelete: 'cascade' }),
+    candidateSince: timestamp('candidate_since', { withTimezone: true }),
+    offlineEventId: uuid('offline_event_id').references(
+      () => notificationEvents.id,
+      { onDelete: 'set null' },
+    ),
+    offlineSince: timestamp('offline_since', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
 );

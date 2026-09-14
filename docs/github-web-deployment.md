@@ -7,16 +7,31 @@ volumes.
 
 ## One-time GitHub setup
 
+Completed for the private alpha on September 12, 2026. The GitHub `production`
+environment contains the required values, and the Tailscale OIDC trust credential
+is restricted to `repo:builtbysai/Beacon-SecureView:environment:production`, the
+`auth_keys` write scope, and `tag:ci`. Keep the following list as the rebuild and
+rotation checklist.
+
 Create a GitHub Environment named `production` and add these environment secrets:
 
-- `ORACLE_HOST` — VM hostname or IP address.
 - `ORACLE_USER` — restricted SSH deployment user.
 - `ORACLE_SSH_PRIVATE_KEY` — an Ed25519 key used only for deployment.
-- `ORACLE_KNOWN_HOSTS` — the pinned `known_hosts` line for the VM.
+- `ORACLE_KNOWN_HOSTS` — the pinned `known_hosts` line for the VM's established
+  host-key alias (`129.213.128.206`).
+- `TS_OAUTH_CLIENT_ID` — the Tailscale workload-identity client ID restricted to
+  this GitHub repository and environment.
+- `TS_AUDIENCE` — the matching Tailscale workload-identity audience.
+
+Create `tag:ci` in the tailnet policy. Permit that tag to reach only
+`beacon-secureview-oracle:22`; do not grant it broad tailnet access. Configure the
+federated identity with only the `auth_keys` scope needed to create the temporary
+tagged runner node. The workflow uses the private hostname directly, so there is no
+`ORACLE_HOST` secret.
 
 Require an environment reviewer if deployments should require approval. The SSH
 user should be limited to the directories and commands needed by the workflow,
-and TCP 22 should remain restricted by the OCI and host firewalls. Never put the
+and TCP 22 must remain closed on the public OCI and host firewalls. Never put the
 private key, production environment file, or application secret in the repository.
 
 ## VM prerequisites
@@ -31,7 +46,9 @@ The VM must already have:
 - DNS, TLS, backend, PostgreSQL, and Coturn configured according to
   [oracle-cloud-staging.md](oracle-cloud-staging.md).
 
-The workflow uploads a Git archive to `/tmp`, extracts it into a commit-specific
+The workflow first joins the tailnet as an ephemeral `tag:ci` node and verifies
+connectivity to `beacon-secureview-oracle`. It then uploads a Git archive to `/tmp`,
+extracts it into a commit-specific
 directory under `/opt/beacon/releases`, builds the `web` image from that exact
 source, and runs `docker compose build web` followed by
 `docker compose up -d --no-deps web`. It then checks `/health` and `/ready` over
@@ -51,3 +68,8 @@ Oracle procedure.
 
 The workflow does not prove real WebRTC, TURN relay, physical Android privacy, or
 audio behavior. Those remain manual acceptance checks.
+
+The tailnet policy includes saved tests proving that `tag:ci` can reach the Oracle
+tailnet address on TCP 22 but cannot reach its web port or the maintainer's Windows
+device over SSH. After any policy edit, verify `ssh beacon-oracle` from a
+maintainer-owned device before ending the change window.

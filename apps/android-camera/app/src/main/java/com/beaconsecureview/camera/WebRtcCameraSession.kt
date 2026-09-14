@@ -18,6 +18,7 @@ class WebRtcCameraSession(
     relayOnly: Boolean,
     private val connectionId: String,
     private val signaling: CameraSignalingClient,
+    private val canListen: Boolean = true,
     private val onState: (StreamingState) -> Unit,
 ) {
     private val peer: PeerConnection
@@ -59,7 +60,7 @@ class WebRtcCameraSession(
                 listOf("beacon-stream"),
             ),
         )
-        media.audioTrack?.let { audioTrack ->
+        media.audioTrack?.takeIf { canListen }?.let { audioTrack ->
             peer.addTransceiver(
                 audioTrack,
                 RtpTransceiver.RtpTransceiverInit(

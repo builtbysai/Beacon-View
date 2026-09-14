@@ -43,6 +43,12 @@ export function registerSignaling(
         type: 'camera-presence-changed',
       });
     },
+    (householdId, cameraId) => {
+      householdEvents?.publish(householdId, {
+        cameraId,
+        type: 'camera-presence-changed',
+      });
+    },
   );
   void app.register((signalingApp) => {
     signalingApp.addHook('onClose', () => hub.close());
@@ -104,7 +110,11 @@ export function registerSignaling(
           return;
         }
         if (query.data.role === 'producer') {
-          if (bearerToken || request.headers.origin !== config.WEB_ORIGIN) {
+          if (
+            bearerToken ||
+            request.headers.origin !== config.WEB_ORIGIN ||
+            (session.role !== 'owner' && session.role !== 'admin')
+          ) {
             socket.close(4003, 'Connection rejected');
             return;
           }
@@ -129,6 +139,7 @@ export function registerSignaling(
             const current = await store.findSession(sessionHash, new Date());
             return Boolean(
               current &&
+              (current.role === 'owner' || current.role === 'admin') &&
               (await store.findManagedCamera(
                 current.householdId,
                 publicCameraId,
@@ -137,8 +148,10 @@ export function registerSignaling(
           });
           return;
         }
-        const camera = await store.findOwnedCamera(
+        const camera = await store.findAccessibleCamera(
           session.householdId,
+          session.userId,
+          session.role,
           publicCameraId,
         );
         if (!camera) {
@@ -160,6 +173,9 @@ export function registerSignaling(
           camera.cameraId,
           camera.publicCameraId,
           socket,
+          camera.canTalk,
+          session.id,
+          camera.canListen,
         );
         const sessionHash = hashSecret(sessionToken);
         if (admitted) {
@@ -170,8 +186,10 @@ export function registerSignaling(
             );
             if (!currentSession) return false;
             return Boolean(
-              await store.findOwnedCamera(
+              await store.findAccessibleCamera(
                 currentSession.householdId,
+                currentSession.userId,
+                currentSession.role,
                 publicCameraId,
               ),
             );

@@ -11,12 +11,28 @@ gates in [pre-deployment-readiness.md](pre-deployment-readiness.md).
 - An Ubuntu 24.04 ARM VM with Docker Engine and Docker Compose.
 - A DNS hostname that resolves to the VM's public IPv4 address.
 - OCI and host firewalls allowing TCP 80/443, TCP/UDP 3478, and TCP/UDP
-  49160-49200. Limit TCP 22 to the administrator's current public IP.
+  49160-49200. Do not expose TCP 22 publicly. Administrative SSH uses the
+  private Tailscale hostname `beacon-secureview-oracle` and the existing SSH key;
+  see [ADR 0045](decisions/0045-private-oracle-administration.md).
 - A public address kept stable while TURN is running. Update `TURN_EXTERNAL_IP` if
   the assigned public IP changes.
 
 Never expose PostgreSQL, backend port 3000, or Vite port 5173. Do not reuse local
 Compose credentials, Caddy development certificates, or TURN secrets.
+
+## Private administration
+
+Install Tailscale on an administrator device and join the same owner-controlled
+tailnet as the VM. Connect with:
+
+```bash
+ssh -i <private-key-path> ubuntu@beacon-secureview-oracle
+```
+
+Keep OpenSSH password authentication disabled. Tailscale and `tailscaled` must
+start automatically on the administrator device and VM. Before removing or
+changing either installation, establish a temporary, narrowly scoped recovery
+path through OCI. Do not restore a public TCP 22 rule as a permanent workaround.
 
 ## Deployment procedure
 

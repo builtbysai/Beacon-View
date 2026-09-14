@@ -65,22 +65,28 @@ export function deviceGuidance(device: DeviceGuidanceInput): DeviceGuidance {
   }
 
   if (!device.online) {
+    if (device.platform === 'browser') {
+      return {
+        attention: true,
+        title: 'Browser camera is paused',
+        summary:
+          'A browser camera is available only while Camera mode is open in that browser.',
+        steps: [
+          'Open Add camera on that computer and choose Use this browser.',
+          'Allow camera access and leave Camera mode open while you want to share.',
+        ],
+      };
+    }
     return {
       attention: true,
       title: 'Bring this device back online',
       summary:
         'Beacon has no current connection to this device and cannot inspect its local power, network, or permission state.',
-      steps:
-        device.platform === 'android'
-          ? [
-              'Connect the phone to power and a working Wi-Fi or cellular network.',
-              'Open Beacon and confirm Camera Mode is running with its persistent notification.',
-              'If it stays offline, check Android camera and notification permissions, then review battery optimization for Beacon.',
-            ]
-          : [
-              'Return to the attended Browser Camera Mode tab and keep it visible.',
-              'Confirm the site still has camera permission, then start Camera Mode again.',
-            ],
+      steps: [
+        'Connect the phone to power and a working Wi-Fi or cellular network.',
+        'Open Beacon and confirm Camera Mode is running with its persistent notification.',
+        'If it stays offline, check Android camera and notification permissions.',
+      ],
     };
   }
 

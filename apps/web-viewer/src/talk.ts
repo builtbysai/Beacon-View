@@ -93,7 +93,11 @@ export class TalkSession {
     }
   }
 
-  receive(message: { connectionId: string; active: boolean; reason?: 'busy' }) {
+  receive(message: {
+    connectionId: string;
+    active: boolean;
+    reason?: 'busy' | 'not_allowed';
+  }) {
     if (this.disposed || message.connectionId !== this.connectionId) return;
     if (message.active && this.requested && this.stream) {
       if (this.timer !== null) clearTimeout(this.timer);
@@ -103,7 +107,13 @@ export class TalkSession {
       });
       this.update('speaking');
     } else if (!message.active && this.requested) {
-      this.stop(message.reason === 'busy' ? 'busy' : 'idle');
+      this.stop(
+        message.reason === 'busy'
+          ? 'busy'
+          : message.reason === 'not_allowed'
+            ? 'unavailable'
+            : 'idle',
+      );
     } else if (message.active) {
       // A grant can race with Stop or a dismissed permission request.
       this.send({ connectionId: this.connectionId, type: 'talk-release' });

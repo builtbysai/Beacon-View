@@ -15,8 +15,10 @@ development, and opens the dashboard. See
 [`quick-start.md`](quick-start.md). The lower-level workflow is:
 
 Pairing codes are displayed both as text and as a QR code. In the Android app,
-choose **Scan pairing QR code** to fill the same expiring, one-time code without
-typing it. The QR code does not contain a session or device credential.
+choose **Scan and connect** to validate the same expiring, one-time code and
+begin pairing immediately without a second confirmation. Opening the QR link
+with an Android scanner has the same behavior. The QR code does not contain a
+session or device credential.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -87,8 +89,9 @@ The persistent notification distinguishes camera-only from camera-and-microphone
 capture. Android privacy mode is modeled and backend-enforced and releases both media
 sources immediately. Viewers start muted and require an explicit **Listen** action.
 There is no recording or hidden capture. Household
-settings now show the latest 50 successful or rejected live-view access events;
-the response intentionally excludes network addresses and signaling details.
+settings now show up to 50 recent live-view, privacy, credential-revocation, and
+camera-removal events; the response intentionally excludes network addresses,
+signaling details, credentials, and media.
 
 ## Manual live-video check
 

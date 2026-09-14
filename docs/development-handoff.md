@@ -1,10 +1,108 @@
 # Beacon SecureView development handoff
 
-Updated September 10, 2026. This is the shortest reliable orientation for a new
+Updated September 14, 2026. This is the shortest reliable orientation for a new
 development session. GitHub is canonical; the maintained local checkout is
 `C:\Dev\Beacon-SecureView`.
 
-## Most recent work (September 10, 2026)
+## September 12 interface-reliability follow-up
+
+The owner approved a bounded follow-up after the Chrome Web Push baseline: modernize
+the existing web sidebar without installing shadcn, keep the collapsed account menu's
+Trust & privacy and Sign out actions reachable, restructure notification settings, and
+make Android camera disconnect available whether capture is live or paused.
+
+The web sidebar now has a sticky header/footer, independently scrollable navigation,
+icon-collapse rail, `Ctrl`/`Cmd`+`B` toggle, active-state treatment, portal-rendered
+tooltips, and a portal-rendered account menu that cannot be clipped by the collapsed
+shell. Notification settings now separate browser delivery status from responsive
+per-camera alert cards, use switch controls, expose unsaved state, and avoid redundant
+saves. No component framework was added.
+
+Android now exposes Disconnect beside Pause and in the overflow menu, confirms the
+destructive action, clears the local device credential before stopping the foreground
+capture service, and performs server removal as best-effort cleanup. This prevents a
+network failure from leaving the phone capturing or able to restart with the old
+credential. The Pixel currently reports that its previous camera device was already
+removed, so final physical confirmation requires pairing it again; do not pair or
+disconnect it implicitly.
+
+The following reliability batches are also complete in the working tree. ADR 0046 adds
+an eight-second WebRTC disconnect grace and counts only device-confirmed viewers, with
+immediate household presence refreshes. Release `connection-reliability-20260912-2107`
+is live and a real Chrome-to-Pixel TURN view remained stable until intentional exit.
+ADR 0047 adds an Android battery-restriction warning/settings link and a notification
+**Pause camera** action without adding a background resume path. The installed Pixel
+build remained a foreground camera/microphone service and served a TURN viewer while its
+Activity was backgrounded.
+
+Validation: all 101 web tests pass, the Vite production build succeeds, ESLint and
+`git diff --check` are clean, and the isolated responsive audit passes 134 captures
+without page errors, unexpected API calls, horizontal overflow, or clipped controls.
+Android `testDebugUnitTest` plus `assembleDebug` succeeded, and the debug APK was
+update-installed on Pixel `34171JEHN07672` without clearing app data. The web-only
+release `ui-20260912-2049` is live; `/health`, `/ready`, deployed asset hashes, and the
+real Chrome rendering were verified. A rollback image was retained as
+`beacon-web-rollback:ui-20260912-2049`.
+
+## Most recent work (September 12, 2026)
+
+The Codex continuation branch is `codex/notification-transport-v1`, created from the
+detached worktree at `eb1947e` while `codex/android-experience-overhaul` remains checked
+out in `C:\Dev\Beacon-SecureView`. It collects the intentional continuation spanning
+the Android experience rebuild, web UI, backend maintainability boundaries,
+owned-domain cutover, notification transport, and household sharing. Review branch
+history and `git status` before editing overlapping files.
+
+Firebase project `beacon-view-158ad` now has Android package
+`com.beaconsecureview.camera` registered and FCM HTTP v1 enabled. The downloaded
+`google-services.json` is installed locally, validated, and ignored by Git. Android uses
+the official Google services plugin and Firebase BoM; FCM automatic initialization remains
+off until the authenticated user explicitly enables notifications. The Firebase build
+passed Android unit tests and was update-installed on Pixel 7a `34171JEHN07672` at
+20:38, preserving app data. A dedicated `beacon-fcm-sender` service account now has only
+the Firebase Cloud Messaging API Admin project role. Its owner-confirmed JSON key and a
+separate VAPID/application-key file are in a user-private local secrets directory outside
+this repository. Root-only production copies are installed on Oracle; the sender
+credential is bind-mounted read-only into the backend container.
+
+Notification Transport v1 is implemented and deployed to the Oracle private alpha
+(ADR 0044): current Firebase
+Installation ID registration, standards-based Web Push, session-bound subscription
+lifecycle, envelope-encrypted provider identifiers, default-off per-camera preferences
+and quiet hours, transactional motion outbox, bounded retry/dedup, generic payloads, and
+offline/recovery transitions after the existing 90-second presence window plus a
+120-second grace. Migration 0014, the notification-enabled backend, and the matching web
+and service-worker build were deployed on September 12 after a fresh encrypted backup.
+Health/readiness, authenticated route protection, all five tables, read-only credential
+mounting, empty initial subscription/outbox state, deployed asset hashes, and clean
+startup logs passed. Chrome on Windows was opted into Web Push for `Android Camera`, with
+motion and offline/recovery preferences enabled. A controlled Pixel app stop/restart
+produced one motion, one offline, and one recovery event; all three provider deliveries
+succeeded with zero failed or pending rows, and the Pixel returned to Online. Native FCM,
+unsubscribe, quiet-hours, invalidation, and lock-screen acceptance remain open. Clean
+and repeated local migrations plus all 118
+backend tests pass against a dedicated PostgreSQL 18 database in Ubuntu WSL, including
+all 37 integration cases; Docker Desktop remained unavailable because of a protected
+stale runtime socket. Android unit tests pass using the validated ignored Firebase client
+configuration copied through the repository installer. The current production-targeted
+debug build passed unit tests and was update-installed on Pixel 7a `34171JEHN07672` at
+15:01 on September 12, preserving app data; it launches in camera mode, reports online,
+and has no crash-level startup log entries. Continue from ADRs 0043–0044 and
+[firebase-notifications-setup.md](firebase-notifications-setup.md).
+
+The production domain is `https://beacon.builtbysai.com`. Cloudflare DNS, Caddy TLS,
+Google OAuth redirect configuration, and Resend DNS verification are complete. The
+notification backend and current web build were manually deployed from the continuation
+before its later sharing work. Public SSH
+is closed; use `ssh beacon-oracle` over Tailscale for administration. The tailnet now
+defines `tag:ci`, restricts it to the Oracle tailnet address on TCP 22, and contains deny
+tests for the Oracle web port and the maintainer's Windows SSH port. A GitHub OIDC trust
+credential restricted to this repository's `production` environment, the `auth_keys`
+scope, and `tag:ci` is configured, and its client ID and audience are in the GitHub
+`production` environment. The private deployment workflow still awaits merge to `main`
+and therefore has not run in GitHub Actions yet.
+
+## Earlier work (September 10, 2026)
 
 A third product/UX pass landed and deployed: PR #14, "Third product/UX pass:
 camera-first simplification" (merged to `main` as `cb3b1bb`). Devices is no
@@ -46,22 +144,25 @@ this doc short. Known follow-ups not done in that pass:
 
 ## Current source and deployment
 
-- Repository: `Spairkie/Beacon-SecureView`
+- Repository: `builtbysai/Beacon-SecureView`
 - Active local branch should be a new `codex/*` feature branch, never `main`.
 - Pull requests target `main`; required CI must pass before merge.
-- A successful CI run for a push to `main` triggers the protected
-  `Deploy web to Oracle` workflow.
+- Once the current workflow change is reviewed and merged, a successful CI run for a
+  push to `main` triggers the protected `Deploy web to Oracle` workflow.
 - Deployment is web-only. It uploads the validated web artifact to the Oracle
   VM and checks the local HTTPS `/health` and `/ready` endpoints.
-- Public private-alpha URL: <https://beaconapp.duckdns.org>
+- Canonical private-alpha URL: <https://beacon.builtbysai.com>
+- Domain cutover release: `domain-20260911-153201`; the former temporary hostname is
+  intentionally unsupported. Existing native installations need a canonical-domain
+  build.
 - Deployment details and rollback boundaries: [github-web-deployment.md](github-web-deployment.md)
 
 The repository does not contain production credentials. Keep application secrets
-on the VM in `/etc/beacon/production.env`; GitHub's `production` environment
-contains only the deployment SSH values (`ORACLE_HOST`, `ORACLE_USER`,
-`ORACLE_SSH_PRIVATE_KEY`, and `ORACLE_KNOWN_HOSTS`). Never commit `.env` files,
-Android signing material, certificates, screenshots, build output, or
-`.beacon-dev` artifacts.
+on the VM in `/etc/beacon/production.env`; GitHub's `production` environment contains
+the deployment SSH values plus `TS_OAUTH_CLIENT_ID` and `TS_AUDIENCE`. The legacy
+`ORACLE_HOST` secret remains stored but is not read by the private-hostname workflow.
+Never commit `.env` files, Android signing material, certificates, screenshots, build
+output, or `.beacon-dev` artifacts.
 
 ## Local setup
 
@@ -96,7 +197,8 @@ app data and do not clean-install without explicit approval.
 ## Safe continuation prompt
 
 ```text
-Work in Spairkie/Beacon-SecureView from the latest main.
+Work in builtbysai/Beacon-SecureView from the existing working tree on
+codex/android-experience-overhaul. Preserve all current uncommitted changes.
 Goal: <one concrete outcome>
 Scope: <files/features allowed to change>
 Preserve authentication, authorization, capture visibility, privacy mode,
@@ -145,7 +247,23 @@ owner approval and evidence.
 - `infrastructure` — local PostgreSQL/Coturn and Oracle deployment material
 - `docs/architecture.md` and `docs/threat-model.md` — runtime and security boundaries
 
-The web viewer currently has no committed web manifest or service-worker
-registration. It is a responsive HTTPS viewer, not an installable PWA yet; treat
-PWA install, offline caching, update behavior, and service-worker security as a
-separate explicitly scoped change.
+Migrations 0015/0016 and ADR 0048 add the household-sharing authorization
+foundation. Selected-household sessions,
+grant-filtered inventory/signaling, source-enforced Listen, hub-enforced Talk,
+admin-only household-wide reads/events, safe account deletion, immediate socket
+teardown, and the web household selector are implemented locally. The full SQL
+sequence applies on a clean PostgreSQL 18 database; the Windows
+Drizzle/integration runner cannot currently reach that WSL-only PostgreSQL port.
+The local authenticated API now implements invitation acceptance,
+member/invitation inventory, per-camera grant replacement, and revocation with
+audit and immediate socket teardown. Its 16-case PostgreSQL integration suite
+passes through a temporary local bridge (stopped after testing). The web settings
+UI implements manual-code invitation creation/acceptance, member and pending-
+invitation revocation, and independent View/Listen/Talk grants. Next: complete
+physical multi-account acceptance and security review, add transactional email
+only after sender readiness, then deploy migrations/backend/web together.
+
+The web viewer now includes a manifest and service worker for installable,
+background-capable notification behavior. Treat broader offline media caching as
+separate scope; live camera viewing still requires the network and authenticated
+backend services.

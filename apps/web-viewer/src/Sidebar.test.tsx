@@ -99,4 +99,29 @@ describe('account menu', () => {
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Outside' }));
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
+
+  it('portals the collapsed account menu outside the clipped sidebar', () => {
+    render(
+      <Sidebar email="owner@example.test" items={items} onLogout={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    fireEvent.click(screen.getByRole('button', { name: /Open account menu/ }));
+
+    const menu = screen.getByRole('menu');
+    expect(menu.parentElement).toBe(document.body);
+    expect(
+      screen.getByRole('menuitem', { name: /Trust & privacy/ }),
+    ).toBeVisible();
+    expect(screen.getByRole('menuitem', { name: /Sign out/ })).toBeVisible();
+  });
+
+  it('supports the standard control-b sidebar shortcut', () => {
+    render(
+      <Sidebar email="owner@example.test" items={items} onLogout={vi.fn()} />,
+    );
+    fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
+    expect(
+      screen.getByRole('button', { name: 'Expand sidebar' }),
+    ).toBeInTheDocument();
+  });
 });

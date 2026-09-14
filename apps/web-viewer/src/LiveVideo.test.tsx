@@ -130,7 +130,7 @@ describe('LiveVideo', () => {
       screen.queryByRole('button', { name: 'Reconnect' }),
     ).not.toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Turn privacy off' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
       await Promise.resolve();
     });
     expect(onPrivacy).toHaveBeenCalledOnce();
@@ -159,11 +159,13 @@ describe('LiveVideo', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Front' }));
+      fireEvent.click(screen.getByRole('button', { name: /Switch camera/ }));
       await Promise.resolve();
     });
-    expect(screen.getByRole('button', { name: 'Front' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Front' }));
+    expect(
+      screen.getByRole('button', { name: /Switch camera/ }),
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /Switch camera/ }));
     expect(onSelectCamera).toHaveBeenCalledOnce();
     await act(async () => {
       reject(new Error('Offline'));
@@ -173,7 +175,7 @@ describe('LiveVideo', () => {
       'Your current view remains selected',
     );
     expect(screen.getByRole('heading', { name: 'Rear' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Front' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Switch camera/ })).toBeEnabled();
   });
 
   it('starts muted and requires an explicit Listen action', () => {
@@ -201,8 +203,35 @@ describe('LiveVideo', () => {
       'aria-pressed',
       'true',
     );
-    expect(screen.queryByText(/record/i)).not.toBeNull();
     expect(screen.queryByRole('button', { name: /record/i })).toBeNull();
+    expect(screen.queryByText('How this view works')).not.toBeInTheDocument();
+  });
+
+  it('disables Listen and Talk when the camera grant excludes audio', async () => {
+    FakeWebSocket.instances = [];
+    FakePeer.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    render(<LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} />);
+
+    await act(async () => {
+      FakeWebSocket.instances[0]!.message({
+        canListen: false,
+        canTalk: false,
+        connectionId: 'connection-a',
+        iceServers: [],
+        iceTransportPolicy: 'all',
+        type: 'ready',
+      });
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole('button', { name: 'Listen unavailable' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Talk unavailable' }),
+    ).toBeDisabled();
   });
 
   it('keeps the same video connection for Talk and stops capture immediately on transport failure', async () => {
@@ -263,9 +292,51 @@ describe('LiveVideo', () => {
     act(() => socket.onerror?.());
     expect(track.stop).toHaveBeenCalledOnce();
     expect(screen.getByLabelText('Talk status')).toHaveTextContent(
-      'Your microphone is off',
+      'Microphone off',
     );
     unmount();
+  });
+
+  it('allows a transient disconnected state to recover without replacing the session', async () => {
+    vi.useFakeTimers();
+    FakeWebSocket.instances = [];
+    FakePeer.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    try {
+      render(<LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} />);
+      const socket = FakeWebSocket.instances[0]!;
+      await act(async () => {
+        socket.message({
+          type: 'ready',
+          connectionId: 'connection-a',
+          iceServers: [],
+          iceTransportPolicy: 'all',
+        });
+        await Promise.resolve();
+      });
+      const peer = FakePeer.instances[0]!;
+      act(() => {
+        peer.connectionState = 'connected';
+        peer.onconnectionstatechange?.();
+        peer.connectionState = 'disconnected';
+        peer.onconnectionstatechange?.();
+        vi.advanceTimersByTime(7_999);
+      });
+      expect(socket.close).not.toHaveBeenCalled();
+      expect(FakeWebSocket.instances).toHaveLength(1);
+
+      act(() => {
+        peer.connectionState = 'connected';
+        peer.onconnectionstatechange?.();
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(socket.close).not.toHaveBeenCalled();
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      expect(screen.getByText('Connection: connected')).toBeVisible();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('recognizes a local relay and tolerates unavailable connection statistics', async () => {

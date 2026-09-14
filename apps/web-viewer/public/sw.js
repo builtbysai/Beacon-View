@@ -74,3 +74,47 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+self.addEventListener('push', (event) => {
+  let payload;
+  try {
+    payload = event.data?.json();
+  } catch {
+    return;
+  }
+  if (!payload || payload.version !== '1') return;
+  const copy = {
+    motion: 'Beacon detected activity.',
+    offline: 'A Beacon camera needs attention.',
+    recovered: 'A Beacon camera is back online.',
+  };
+  if (!copy[payload.category]) return;
+  event.waitUntil(
+    self.registration.showNotification('Beacon', {
+      body: copy[payload.category],
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { route: payload.route === 'activity' ? '/activity' : '/' },
+      tag: `beacon-${String(payload.eventId || 'update')}`,
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const route = event.notification.data?.route || '/activity';
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clients) => {
+        const existing = clients.find(
+          (client) => new URL(client.url).origin === self.location.origin,
+        );
+        if (existing) {
+          existing.navigate(route);
+          return existing.focus();
+        }
+        return self.clients.openWindow(route);
+      }),
+  );
+});
