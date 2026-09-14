@@ -141,6 +141,80 @@ export function registerSharingRoutes(
       .send({ expiresAt: expiresAt.toISOString(), id, token });
   });
 
+  app.post(
+    '/api/household/invitations/:invitationId/resend',
+    async (request, reply) => {
+      const session = await auth.authenticateHouseholdAdminStateChange(
+        request,
+        reply,
+      );
+      if (!session) return;
+      if (!limiter.take(`household-invite:${session.householdId}`, 20, HOUR))
+        return reply.code(429).send({ error: 'Too many invitation changes' });
+      const parameters = invitationParameterSchema.safeParse(request.params);
+      if (!parameters.success)
+        return reply.code(404).send({ error: 'Invitation unavailable' });
+      const pending = (
+        await store.listHouseholdInvitations(session.householdId, new Date(0))
+      ).find((item) => item.id === parameters.data.invitationId);
+      if (
+        !pending ||
+        !canAssignRole(
+          { expiresAt: null, role: session.role, status: 'active' },
+          pending.role,
+        )
+      )
+        return reply.code(404).send({ error: 'Invitation unavailable' });
+      // Resending replaces the invitation outright (fresh token, fresh
+      // expiry) rather than re-mailing the existing one, so a lost or
+      // expired invite can be recovered the same way. The previous
+      // invitation is only revoked after the replacement is confirmed
+      // created and delivered, so a delivery failure never leaves the
+      // household without a working pending invitation.
+      const token = generateToken();
+      const expiresAt = new Date(Date.now() + 48 * HOUR);
+      const id = await store.createHouseholdInvitation({
+        expiresAt,
+        householdId: session.householdId,
+        invitedByUserId: session.userId,
+        invitedEmail: pending.invitedEmail,
+        role: pending.role,
+        tokenHash: hashSecret(token),
+      });
+      if (config.RESEND_API_KEY && config.RESEND_FROM) {
+        try {
+          await deliverHouseholdInvitation(config, {
+            expiresAt,
+            role: pending.role,
+            token,
+            to: pending.invitedEmail,
+          });
+        } catch {
+          await store.revokeHouseholdInvitation(session.householdId, id);
+          return reply
+            .code(503)
+            .send({ error: 'Invitation email could not be delivered' });
+        }
+      }
+      await store.revokeHouseholdInvitation(session.householdId, pending.id);
+      await store.audit({
+        eventType: 'household_invitation_resent',
+        householdId: session.householdId,
+        ipAddress: request.ip,
+        metadata: {
+          newInvitationId: id,
+          previousInvitationId: pending.id,
+          role: pending.role,
+        },
+        success: true,
+        userId: session.userId,
+      });
+      return reply
+        .code(201)
+        .send({ expiresAt: expiresAt.toISOString(), id, token });
+    },
+  );
+
   app.post('/api/household/invitations/accept', async (request, reply) => {
     const session = await auth.authenticateStateChange(request, reply);
     if (!session) return;
