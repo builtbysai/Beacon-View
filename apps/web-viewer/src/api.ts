@@ -22,7 +22,11 @@ export async function request<T>(
   options?: RequestInit,
 ): Promise<T> {
   const hasBody = options?.body !== undefined && options.body !== null;
+  const cache =
+    options?.cache ??
+    (!options?.method || options.method === 'GET' ? 'no-store' : null);
   const response = await fetch(path, {
+    ...(cache ? { cache } : {}),
     credentials: 'same-origin',
     ...options,
     headers: {

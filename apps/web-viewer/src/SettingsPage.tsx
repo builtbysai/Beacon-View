@@ -59,7 +59,12 @@ export function SettingsPage({
     'account',
     'privacy',
   ];
-  const [selected, setSelected] = useState<SettingsSection>('household');
+  const [selected, setSelected] = useState<SettingsSection>(() => {
+    const requested = new URLSearchParams(window.location.search).get(
+      'section',
+    ) as SettingsSection | null;
+    return requested && sections.includes(requested) ? requested : 'household';
+  });
 
   return (
     <div className="settings-workspace wide">

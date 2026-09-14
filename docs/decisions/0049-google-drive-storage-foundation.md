@@ -24,11 +24,19 @@ Beacon-owned app-data backup can use the private Drive app-data area. Camera
 recording, clips, household exports, retention, deletion, and user-visible Drive
 files require a separate consent and privacy design before implementation.
 
+Connection and verification must complete a read-only `files.list` request scoped
+to `appDataFolder`; refreshing an access token alone is not proof that the Drive
+API and required scope work. OAuth recovery starts a new consent and account
+selection flow, then returns to Cloud storage with an explicit result.
+
 ## Consequences
 
 - Drive access is opt-in and scoped to Beacon-owned app data.
 - Refresh tokens remain server-side and encrypted with a dedicated application key.
-- Revoking or deleting an account removes the stored connection; provider-side
-  revocation and data deletion need to be added before public release.
+- Disconnect attempts provider-side token revocation before permanently deleting
+  Beacon's encrypted token copy. Reauthorization always requests explicit consent.
+- Revoking or deleting an account removes the stored connection and attempts to
+  revoke the Google grant. App-data deletion remains required before public
+  release.
 - A configured Google OAuth client and Drive token-encryption key are required to
   enable the feature; local development can leave the feature disabled.

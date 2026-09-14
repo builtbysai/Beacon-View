@@ -245,6 +245,11 @@ export function CameraSettings({
                 key={camera.id}
                 camera={camera}
                 onOpen={onLive}
+                {...(onReconnect &&
+                device.platform === 'android' &&
+                (!device.online || device.revoked)
+                  ? { onReconnect: () => onReconnect(device) }
+                  : {})}
                 onRename={onCameraRename}
                 onDelete={onCameraDelete}
               />

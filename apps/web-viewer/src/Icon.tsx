@@ -70,6 +70,13 @@ const shapes = {
       <path d="M21 12v2a4 4 0 0 1-4 4H3" />
     </>
   ),
+  refresh: (
+    <>
+      <path d="M20 7v5h-5" />
+      <path d="M4 17v-5h5" />
+      <path d="M6.1 9a7 7 0 0 1 11.5-2L20 12M4 12l2.4 5a7 7 0 0 0 11.5-2" />
+    </>
+  ),
   plus: <path d="M12 4v16M4 12h16" />,
   search: (
     <>

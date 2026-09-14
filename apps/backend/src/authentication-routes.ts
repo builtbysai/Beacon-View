@@ -5,6 +5,7 @@ import type { AppConfig } from './config.js';
 import {
   driveProviderEmail,
   GOOGLE_DRIVE_SCOPE,
+  verifyDriveAppDataAccess,
 } from './google-drive-client.js';
 import {
   credentialsSchema,
@@ -169,7 +170,7 @@ export function registerAuthenticationRoutes(
       googleClient.generateAuthUrl({
         access_type: 'offline',
         include_granted_scopes: true,
-        prompt: 'consent',
+        prompt: 'consent select_account',
         redirect_uri: config.GOOGLE_OAUTH_REDIRECT_URI,
         scope: [GOOGLE_DRIVE_SCOPE],
         state,
@@ -190,6 +191,16 @@ export function registerAuthenticationRoutes(
       reply.clearCookie(GOOGLE_STATE_COOKIE, { path: '/' });
       reply.clearCookie(GOOGLE_DRIVE_STATE_COOKIE, { path: '/' });
       if (driveState && driveState.startsWith('drive.')) {
+        const callbackError = (request.query as { error?: unknown }).error;
+        const callbackState = (request.query as { state?: unknown }).state;
+        if (
+          callbackError === 'access_denied' &&
+          typeof callbackState === 'string' &&
+          secretsEqual(driveState, callbackState)
+        ) {
+          app.log.info('google drive connection declined');
+          return reply.redirect('/settings?section=storage&drive=denied');
+        }
         const session = await auth.authenticate(request, reply);
         if (
           !session ||
@@ -198,7 +209,7 @@ export function registerAuthenticationRoutes(
           !callback.success ||
           !secretsEqual(driveState, callback.data.state)
         ) {
-          return reply.redirect('/?drive=failed');
+          return reply.redirect('/settings?section=storage&drive=failed');
         }
         try {
           const token = await googleClient.getToken({
@@ -208,7 +219,8 @@ export function registerAuthenticationRoutes(
           const refreshToken = token.tokens.refresh_token;
           const accessToken = token.tokens.access_token;
           if (!refreshToken || !accessToken)
-            return reply.redirect('/?drive=failed');
+            return reply.redirect('/settings?section=storage&drive=failed');
+          await verifyDriveAppDataAccess(accessToken);
           await store.saveGoogleDriveConnection({
             providerEmail: await driveProviderEmail(accessToken),
             refreshToken,
@@ -223,9 +235,11 @@ export function registerAuthenticationRoutes(
             success: true,
             userId: session.userId,
           });
-          return reply.redirect('/?drive=connected');
+          app.log.info('google drive connection completed');
+          return reply.redirect('/settings?section=storage&drive=connected');
         } catch {
-          return reply.redirect('/?drive=failed');
+          app.log.warn('google drive connection failed');
+          return reply.redirect('/settings?section=storage&drive=failed');
         }
       }
       if (

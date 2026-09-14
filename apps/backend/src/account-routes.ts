@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
+import { revokeDriveRefreshToken } from './google-drive-client.js';
 import type { HouseholdEventHub } from './household-events.js';
 import {
   accountDeletionSchema,
@@ -162,6 +163,12 @@ export function registerAccountRoutes(
     const cameras = ownedHouseholdId
       ? await store.listCameras(ownedHouseholdId)
       : [];
+    const driveRefreshToken = await store.getGoogleDriveRefreshToken(
+      session.userId,
+    );
+    if (driveRefreshToken) {
+      await revokeDriveRefreshToken(driveRefreshToken).catch(() => false);
+    }
     for (const camera of cameras) {
       signaling.disconnectCamera(camera.publicCameraId, 'device_deleted');
     }

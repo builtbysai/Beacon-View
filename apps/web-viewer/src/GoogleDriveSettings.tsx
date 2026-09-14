@@ -15,9 +15,32 @@ export function GoogleDriveSettings() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  async function load() {
+  useEffect(() => {
+    const parameters = new URLSearchParams(window.location.search);
+    const result = parameters.get('drive');
+    if (result === 'connected') {
+      setMessage('Google Drive connected.');
+    } else if (result === 'denied') {
+      setError(
+        'Google Drive permission was not granted. Try again when ready.',
+      );
+    } else if (result === 'failed') {
+      setError('Google Drive could not be connected. Please try again.');
+    }
+    if (result) {
+      parameters.delete('drive');
+      const search = parameters.toString();
+      window.history.replaceState(
+        {},
+        '',
+        `${window.location.pathname}${search ? `?${search}` : ''}`,
+      );
+    }
+  }, []);
+
+  async function load(clearError = true) {
     try {
-      setError('');
+      if (clearError) setError('');
       setStatus(await request<DriveStatus>('/api/drive/status'));
     } catch (caught) {
       setError(
@@ -29,7 +52,7 @@ export function GoogleDriveSettings() {
   }
 
   useEffect(() => {
-    void load();
+    void load(false);
   }, []);
 
   async function verify() {
@@ -93,9 +116,9 @@ export function GoogleDriveSettings() {
           </a>
         )}
         {!status.configured && (
-          <button className="secondary" onClick={() => void load()}>
+          <a className="secondary button-link" href="/api/drive/connect">
             Retry setup
-          </button>
+          </a>
         )}
       </div>
       {status.connected && (

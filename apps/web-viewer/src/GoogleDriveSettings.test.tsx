@@ -36,6 +36,42 @@ describe('GoogleDriveSettings', () => {
     ).toBeVisible();
   });
 
+  it('turns unavailable-status recovery into a real OAuth setup link', async () => {
+    vi.mocked(request).mockResolvedValue({
+      connected: false,
+      configured: false,
+      providerEmail: null,
+      updatedAt: null,
+    });
+
+    render(<GoogleDriveSettings />);
+
+    expect(
+      await screen.findByRole('link', { name: 'Retry setup' }),
+    ).toHaveAttribute('href', '/api/drive/connect');
+  });
+
+  it('surfaces an OAuth callback result and cleans it from the URL', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/settings?section=storage&drive=failed',
+    );
+    vi.mocked(request).mockResolvedValue({
+      connected: false,
+      configured: true,
+      providerEmail: null,
+      updatedAt: null,
+    });
+
+    render(<GoogleDriveSettings />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Google Drive could not be connected',
+    );
+    expect(window.location.search).toBe('?section=storage');
+  });
+
   it('can verify and disconnect an existing connection', async () => {
     vi.mocked(request).mockImplementation((path, options) => {
       if (path === '/api/drive/status')

@@ -298,6 +298,17 @@ export function App() {
     void createPairingCode();
   }
 
+  function cameraNeedsPairing(camera: Camera): boolean {
+    const device = devices.find(
+      (candidate) => candidate.id === camera.deviceId,
+    );
+    return Boolean(
+      device &&
+      device.platform === 'android' &&
+      (device.revoked || !device.online),
+    );
+  }
+
   async function createPairingCode() {
     setError('');
     setPairingBusy(true);
@@ -759,6 +770,12 @@ export function App() {
                   highlighted={highlightedCameraId === camera.id}
                   onOpen={openCamera}
                   onDevice={openCameraSettings}
+                  {...(cameraNeedsPairing(camera)
+                    ? {
+                        onReconnect: (item: Camera) =>
+                          openPairing(item.deviceId),
+                      }
+                    : {})}
                   onRename={(item, name) => renameHostCamera(item, name)}
                   onDelete={(item) => requestDeleteHostCamera(item)}
                 />
@@ -843,6 +860,12 @@ export function App() {
                           highlighted={highlightedCameraId === camera.id}
                           onOpen={openCamera}
                           onDevice={openCameraSettings}
+                          {...(cameraNeedsPairing(camera)
+                            ? {
+                                onReconnect: (item: Camera) =>
+                                  openPairing(item.deviceId),
+                              }
+                            : {})}
                           onRename={(item, name) =>
                             renameHostCamera(item, name)
                           }
