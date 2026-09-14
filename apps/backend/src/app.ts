@@ -20,6 +20,21 @@ import { PostgresStore, type MilestoneStore } from './store.js';
 
 export { isCameraOnline } from './camera-presentation.js';
 
+export function createPostgresStore(config: AppConfig): PostgresStore {
+  const notificationKeys =
+    config.NOTIFICATION_ENCRYPTION_KEY && config.NOTIFICATION_FINGERPRINT_KEY
+      ? {
+          encryptionKey: config.NOTIFICATION_ENCRYPTION_KEY,
+          fingerprintKey: config.NOTIFICATION_FINGERPRINT_KEY,
+        }
+      : undefined;
+  return new PostgresStore(
+    config.DATABASE_URL,
+    notificationKeys,
+    config.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY,
+  );
+}
+
 export function buildApp(
   config: AppConfig,
   suppliedStore?: MilestoneStore,
@@ -43,20 +58,7 @@ export function buildApp(
     },
     requestIdHeader: 'x-request-id',
   });
-  const notificationKeys =
-    config.NOTIFICATION_ENCRYPTION_KEY && config.NOTIFICATION_FINGERPRINT_KEY
-      ? {
-          encryptionKey: config.NOTIFICATION_ENCRYPTION_KEY,
-          fingerprintKey: config.NOTIFICATION_FINGERPRINT_KEY,
-        }
-      : undefined;
-  const store =
-    suppliedStore ??
-    new PostgresStore(
-      config.DATABASE_URL,
-      notificationKeys,
-      config.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY,
-    );
+  const store = suppliedStore ?? createPostgresStore(config);
   const sessionAuth = createSessionAuth(config, store);
   const limiter = new RateLimiter();
 

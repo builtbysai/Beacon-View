@@ -1,11 +1,10 @@
 import { fileURLToPath } from 'node:url';
 import { config as loadEnvironment } from 'dotenv';
 
-import { buildApp } from './app.js';
+import { buildApp, createPostgresStore } from './app.js';
 import { startAuditRetentionJob } from './audit-retention.js';
 import { parseConfig } from './config.js';
 import { startMotionRetentionJob } from './motion-retention.js';
-import { PostgresStore } from './store.js';
 import { startNotificationJob } from './notification-job.js';
 
 loadEnvironment({
@@ -14,14 +13,7 @@ loadEnvironment({
 });
 
 const config = parseConfig(process.env);
-const notificationKeys =
-  config.NOTIFICATION_ENCRYPTION_KEY && config.NOTIFICATION_FINGERPRINT_KEY
-    ? {
-        encryptionKey: config.NOTIFICATION_ENCRYPTION_KEY,
-        fingerprintKey: config.NOTIFICATION_FINGERPRINT_KEY,
-      }
-    : undefined;
-const store = new PostgresStore(config.DATABASE_URL, notificationKeys);
+const store = createPostgresStore(config);
 const app = buildApp(config, store);
 let shuttingDown = false;
 let stopRetentionJob: (() => void) | undefined;
