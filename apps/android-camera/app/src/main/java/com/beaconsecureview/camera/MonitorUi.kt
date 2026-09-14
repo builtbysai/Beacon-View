@@ -468,6 +468,14 @@ internal fun MonitorHome(
                     modifier = Modifier.padding(top = 10.dp),
                 )
         } else {
+            // A stable snapshot, not repeated `session!!` reads: this branch
+            // only runs while session is non-null, but the callbacks below
+            // launch coroutines that can resume after a concurrent background
+            // refresh has already cleared `session` on authorization loss.
+            // Capturing it once here means those callbacks keep working with
+            // the session they started with instead of risking a null-pointer
+            // crash.
+            val currentSession = session!!
             when (monitorPage) {
                 MonitorPage.Home -> {
                     BeaconHeroPanel(modifier = Modifier.fillMaxWidth().height(238.dp)) {
@@ -510,11 +518,11 @@ internal fun MonitorHome(
                                 scope.launch {
                                     val result =
                                         withContext(Dispatchers.IO) {
-                                            runCatching { api.activateCamera(session!!.token, target.id) }
+                                            runCatching { api.activateCamera(currentSession.token, target.id) }
                                         }
                                     result.onSuccess {
                                         delay(650)
-                                        refresh(session!!.token, showLoading = false)
+                                        refresh(currentSession.token, showLoading = false)
                                         message = "${target.name} is now active."
                                     }.onFailure {
                                         message = it.message ?: "Could not switch camera"
@@ -529,12 +537,12 @@ internal fun MonitorHome(
                                     val result =
                                         withContext(Dispatchers.IO) {
                                             runCatching {
-                                                api.setDevicePrivacy(session!!.token, deviceId, enabled)
+                                                api.setDevicePrivacy(currentSession.token, deviceId, enabled)
                                             }
                                         }
                                     result.onSuccess {
                                         delay(400)
-                                        refresh(session!!.token, showLoading = false)
+                                        refresh(currentSession.token, showLoading = false)
                                         message =
                                             if (enabled) "Privacy mode enabled. Capture stopped."
                                             else "Privacy mode disabled. Camera available again."
@@ -552,7 +560,7 @@ internal fun MonitorHome(
                             supportingText = "Find a camera and watch it live.",
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { refresh(session!!.token, true) }) {
+                            OutlinedButton(onClick = { refresh(currentSession.token, true) }) {
                                 Icon(Icons.Outlined.Refresh, null, modifier = Modifier.size(18.dp))
                                 Text("Refresh", modifier = Modifier.padding(start = 6.dp))
                             }
@@ -584,7 +592,7 @@ internal fun MonitorHome(
                             onMove = { camera, direction ->
                                 val updated = movedCameraId(cameraOrderIds, camera.id, direction)
                                 cameraOrderIds = updated
-                                orderStore.write(session!!.userId, updated)
+                                orderStore.write(currentSession.userId, updated)
                             },
                         )
                     }
@@ -612,7 +620,7 @@ internal fun MonitorHome(
                     )
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("ACCOUNT", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                        Text(session!!.email ?: "Beacon account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        Text(currentSession.email ?: "Beacon account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                         Text("This session", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
@@ -658,7 +666,7 @@ internal fun MonitorHome(
                                         notificationPreferences = notificationPreferences.map { if (it.deviceId == changed.deviceId) changed else it }
                                         notificationBusy = true
                                         scope.launch {
-                                            val result = withContext(Dispatchers.IO) { runCatching { api.updateNotificationPreference(session!!.token, changed) } }
+                                            val result = withContext(Dispatchers.IO) { runCatching { api.updateNotificationPreference(currentSession.token, changed) } }
                                             result.onSuccess { saved -> notificationPreferences = notificationPreferences.map { if (it.deviceId == saved.deviceId) saved else it } }
                                                 .onFailure { message = it.message ?: "Notification preferences could not be saved" }
                                             notificationBusy = false
@@ -676,7 +684,7 @@ internal fun MonitorHome(
                                         notificationPreferences = notificationPreferences.map { if (it.deviceId == changed.deviceId) changed else it }
                                         notificationBusy = true
                                         scope.launch {
-                                            val result = withContext(Dispatchers.IO) { runCatching { api.updateNotificationPreference(session!!.token, changed) } }
+                                            val result = withContext(Dispatchers.IO) { runCatching { api.updateNotificationPreference(currentSession.token, changed) } }
                                             result.onSuccess { saved -> notificationPreferences = notificationPreferences.map { if (it.deviceId == saved.deviceId) saved else it } }
                                                 .onFailure { message = it.message ?: "Notification preferences could not be saved" }
                                             notificationBusy = false
@@ -708,7 +716,7 @@ internal fun MonitorHome(
                         val pageCount = (accessEvents.size + pageSize - 1) / pageSize
                         val page = accessHistoryPage.coerceIn(0, pageCount - 1)
                         accessEvents.drop(page * pageSize).take(pageSize).forEach { event ->
-                            AccessEventRow(event, session!!.email)
+                            AccessEventRow(event, currentSession.email)
                         }
                         if (pageCount > 1) {
                             Row(
@@ -755,7 +763,7 @@ internal fun MonitorHome(
                                     val days = motionRetentionDays ?: return@Button
                                     savingMotionRetention = true
                                     scope.launch {
-                                        val result = withContext(Dispatchers.IO) { runCatching { api.setMotionRetention(session!!.token, days) } }
+                                        val result = withContext(Dispatchers.IO) { runCatching { api.setMotionRetention(currentSession.token, days) } }
                                         result.onSuccess {
                                             motionRetentionDays = it
                                             savedMotionRetentionDays = it
@@ -786,7 +794,7 @@ internal fun MonitorHome(
                     }
                     OutlinedButton(
                         onClick = {
-                            val token = session!!.token
+                            val token = currentSession.token
                             val active = session
                             NotificationConsentStore(context).mute()
                             notificationConsent = false
