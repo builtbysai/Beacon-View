@@ -1,8 +1,18 @@
 plugins {
     id("com.android.application")
-    id("com.google.gms.google-services")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+// google-services.json is real Firebase client configuration, installed locally
+// via scripts/Install-BeaconFirebaseAndroidConfig.ps1 and gitignored (ADR 0043).
+// CI and fresh checkouts never have it, so this plugin is applied only when it's
+// present rather than unconditionally in the `plugins {}` block above — applying
+// it unconditionally makes `processDebugGoogleServices`/`processReleaseGoogleServices`
+// hard-fail the whole build when the file is missing, even for tasks (unit tests,
+// lint, plain compilation) that have nothing to do with Firebase.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
 }
 
 providers.gradleProperty("beaconBuildDir").orNull?.let {
