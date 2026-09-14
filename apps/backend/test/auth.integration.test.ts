@@ -362,11 +362,19 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       url: '/api/household/invitations/accept',
     });
     expect(accepted.statusCode).toBe(400);
+    // Every registration creates its own default household with the new
+    // user as owner (unrelated to sharing), so a bare email lookup here
+    // would always find a row — that's the guest's own household, not the
+    // inviting owner's. Scope to the specific household the invitation was
+    // for to actually verify the expired invitation granted no membership.
     await expect(
       store!.pool.query(
         `SELECT 1 FROM household_members hm
          JOIN users u ON u.id = hm.user_id
-         WHERE u.email = 'expiring-guest@example.com'`,
+         JOIN households h ON h.id = hm.household_id
+         JOIN users owner ON owner.id = h.owner_id
+         WHERE u.email = 'expiring-guest@example.com'
+           AND owner.email = 'guest-owner@example.com'`,
       ),
     ).resolves.toMatchObject({ rows: [] });
   });

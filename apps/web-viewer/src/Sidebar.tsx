@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from './Avatar';
 import { Brand, Icon, type IconName } from './Icon';
+import { useMenuKeyboardNav } from './useMenuKeyboardNav';
 
 const preferenceKey = 'beacon.sidebar.collapsed.v1';
 
@@ -61,7 +62,12 @@ export function Sidebar({
     timer.current = setTimeout(() => setTip(null), 120);
   }
   function showTip(target: EventTarget) {
-    if (!collapsed || !window.matchMedia('(min-width: 761px)').matches) return;
+    if (
+      !collapsed ||
+      typeof window.matchMedia !== 'function' ||
+      !window.matchMedia('(min-width: 761px)').matches
+    )
+      return;
     const control =
       target instanceof Element
         ? target.closest<HTMLElement>('[data-tooltip]')
@@ -141,6 +147,7 @@ export function Sidebar({
       window.removeEventListener('scroll', positionMenu, true);
     };
   }, [collapsed, menuOpen]);
+  useMenuKeyboardNav(menuOpen, menuRef, accountRef, () => setMenuOpen(false));
   function toggle() {
     const next = !collapsed;
     setCollapsed(next);
