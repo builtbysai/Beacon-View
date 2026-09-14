@@ -74,7 +74,9 @@ policy. Member and grant mutations close affected live/event sockets and are
 audited without token or invited-email metadata. The role-aware web settings UI
 supports invitation creation and acceptance, pending-invitation revocation,
 member removal, and independent per-camera View, Listen, and Talk controls.
-Transactional email delivery remains disabled.
+Transactional invitation email delivery is enabled when the configured Resend
+sender is available; manual code delivery remains a fallback for local development.
+Inbox, bounce, and complaint acceptance are still operational evidence gates.
 
 ## Validation
 

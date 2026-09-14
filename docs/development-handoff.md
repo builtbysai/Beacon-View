@@ -259,9 +259,10 @@ member/invitation inventory, per-camera grant replacement, and revocation with
 audit and immediate socket teardown. Its 16-case PostgreSQL integration suite
 passes through a temporary local bridge (stopped after testing). The web settings
 UI implements manual-code invitation creation/acceptance, member and pending-
-invitation revocation, and independent View/Listen/Talk grants. Next: complete
-physical multi-account acceptance and security review, add transactional email
-only after sender readiness, then deploy migrations/backend/web together.
+invitation revocation, and independent View/Listen/Talk grants. Transactional
+invitation email is now deployed through Resend with manual-code fallback for local
+development. Next: complete inbox/bounce evidence, physical multi-account
+acceptance, and independent security review.
 
 The web viewer now includes a manifest and service worker for installable,
 background-capable notification behavior. Treat broader offline media caching as
