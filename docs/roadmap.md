@@ -84,6 +84,12 @@ and remaining limitations; a passing build alone is insufficient.
 
 ## Now — release blockers
 
+September 14 follow-up: device-bound reconnect codes now let an owner/admin
+restore an existing Android camera from the signed-in viewer without deleting
+its settings (ADR 0050). The camera-side battery setup card refreshes on resume,
+and the Pixel confirms Beacon is in the user battery-exemption whitelist.
+Physical reconnect and repeated camera-flip acceptance remain open.
+
 | ID / priority | Action and owner                                                                     | Acceptance evidence / decision                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | N1 / P0       | Physical privacy and recovery — Engineering + Device tester                          | Pixel `34171JEHN07672`: local Privacy while offline releases video/audio immediately; restart stays paused; reconnect reconciles safely. Switch front/rear repeatedly; lose/restore Wi-Fi; no stuck camera or rapid retry loop. Record build/device/network and observed capture indicators in [testing-plan.md](testing-plan.md). Still open.                                                                                       |
