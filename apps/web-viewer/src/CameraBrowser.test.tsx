@@ -93,4 +93,27 @@ describe('camera browsing', () => {
     expect(screen.getByRole('list')).toBeEmptyDOMElement();
     expect(screen.queryByText('No matching cameras')).not.toBeInTheDocument();
   });
+  it('moves selection with arrow keys, wrapping and keeping roving tabindex in sync', () => {
+    mount();
+    const all = screen.getByRole('radio', { name: 'All cameras' });
+    const ready = screen.getByRole('radio', { name: 'Ready to view' });
+    const attention = screen.getByRole('radio', { name: 'Need attention' });
+    expect(all).toHaveAttribute('tabindex', '0');
+    expect(ready).toHaveAttribute('tabindex', '-1');
+
+    all.focus();
+    fireEvent.keyDown(all, { key: 'ArrowRight' });
+    expect(ready).toHaveFocus();
+    expect(ready).toHaveAttribute('aria-checked', 'true');
+    expect(ready).toHaveAttribute('tabindex', '0');
+    expect(all).toHaveAttribute('tabindex', '-1');
+
+    fireEvent.keyDown(ready, { key: 'ArrowLeft' });
+    expect(all).toHaveFocus();
+    expect(all).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.keyDown(all, { key: 'ArrowLeft' });
+    expect(attention).toHaveFocus();
+    expect(attention).toHaveAttribute('aria-checked', 'true');
+  });
 });

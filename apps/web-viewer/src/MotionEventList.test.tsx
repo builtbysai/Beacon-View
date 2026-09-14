@@ -210,4 +210,36 @@ describe('Activity timeline', () => {
     expect(screen.getByRole('status')).toHaveFocus();
     expect(fetch.mock.calls[1]![1].method).toBe('DELETE');
   });
+
+  it('moves the time filter with arrow keys, wrapping and keeping roving tabindex in sync', () => {
+    const fetch = vi
+      .fn<
+        (
+          url: string,
+          options: RequestInit,
+        ) => Promise<ReturnType<typeof response>>
+      >()
+      .mockResolvedValue(response([]));
+    vi.stubGlobal('fetch', fetch);
+    render(<MotionEventList {...props} />);
+    const day = screen.getByRole('radio', { name: '24 hours' });
+    const week = screen.getByRole('radio', { name: '7 days' });
+    const all = screen.getByRole('radio', { name: 'All time' });
+    expect(day).toHaveAttribute('tabindex', '0');
+    expect(week).toHaveAttribute('tabindex', '-1');
+
+    day.focus();
+    fireEvent.keyDown(day, { key: 'ArrowRight' });
+    expect(week).toHaveFocus();
+    expect(week).toHaveAttribute('aria-checked', 'true');
+    expect(week).toHaveAttribute('tabindex', '0');
+
+    fireEvent.keyDown(week, { key: 'ArrowRight' });
+    expect(all).toHaveFocus();
+    expect(all).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.keyDown(all, { key: 'ArrowRight' });
+    expect(day).toHaveFocus();
+    expect(day).toHaveAttribute('aria-checked', 'true');
+  });
 });

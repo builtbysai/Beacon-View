@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { request } from './api';
 import { Icon } from './Icon';
 import { ConfirmDialog } from './ConfirmDialog';
+import { useRadioGroupKeyboardNav } from './useRadioGroupKeyboardNav';
 
 const timeFilters = [
   { label: '24 hours', value: 'day' },
@@ -72,6 +73,8 @@ export function MotionEventList({
   const query = useRef('');
   const revision = useRef(refreshRevision);
   const heading = useRef<HTMLHeadingElement | null>(null);
+  const timeFilterRef = useRef<HTMLDivElement>(null);
+  useRadioGroupKeyboardNav(timeFilterRef);
   const status = useRef<HTMLParagraphElement | null>(null);
   revision.current = refreshRevision;
 
@@ -222,6 +225,7 @@ export function MotionEventList({
           className="filter-pills"
           role="radiogroup"
           aria-label="Filter motion events by time"
+          ref={timeFilterRef}
         >
           {timeFilters.map(({ label, value }) => (
             <button
