@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   driveProviderEmail,
+  GoogleDriveRequestError,
   revokeDriveRefreshToken,
   verifyDriveAppDataAccess,
 } from '../src/google-drive-client.js';
@@ -36,9 +37,10 @@ describe('Google Drive OAuth client', () => {
         .mockResolvedValue(new Response(null, { status: 403 })),
     );
 
-    await expect(driveProviderEmail('denied-token')).rejects.toThrow(
-      'Google Drive API is unavailable',
-    );
+    await expect(driveProviderEmail('denied-token')).rejects.toMatchObject({
+      operation: 'provider_identity',
+      status: 403,
+    } satisfies Partial<GoogleDriveRequestError>);
   });
 
   it('revokes a refresh token without placing it in the URL', async () => {

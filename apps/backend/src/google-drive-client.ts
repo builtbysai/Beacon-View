@@ -4,6 +4,16 @@ export const GOOGLE_DRIVE_SCOPE =
   'https://www.googleapis.com/auth/drive.appdata';
 const GOOGLE_REQUEST_TIMEOUT_MS = 10_000;
 
+export class GoogleDriveRequestError extends Error {
+  constructor(
+    readonly operation: 'app_data_list' | 'provider_identity',
+    readonly status: number,
+  ) {
+    super(`Google Drive request failed during ${operation}`);
+    this.name = 'GoogleDriveRequestError';
+  }
+}
+
 export async function driveProviderEmail(
   accessToken: string,
 ): Promise<string | null> {
@@ -14,7 +24,8 @@ export async function driveProviderEmail(
       signal: AbortSignal.timeout(GOOGLE_REQUEST_TIMEOUT_MS),
     },
   );
-  if (!response.ok) throw new Error('Google Drive API is unavailable');
+  if (!response.ok)
+    throw new GoogleDriveRequestError('provider_identity', response.status);
   const payload = (await response.json()) as {
     user?: { emailAddress?: string };
   };
@@ -36,7 +47,8 @@ export async function verifyDriveAppDataAccess(
       signal: AbortSignal.timeout(GOOGLE_REQUEST_TIMEOUT_MS),
     },
   );
-  if (!response.ok) throw new Error('Google Drive app-data access unavailable');
+  if (!response.ok)
+    throw new GoogleDriveRequestError('app_data_list', response.status);
 }
 
 export async function refreshDriveAccessToken(

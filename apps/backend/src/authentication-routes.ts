@@ -5,6 +5,7 @@ import type { AppConfig } from './config.js';
 import {
   driveProviderEmail,
   GOOGLE_DRIVE_SCOPE,
+  GoogleDriveRequestError,
   verifyDriveAppDataAccess,
 } from './google-drive-client.js';
 import {
@@ -30,6 +31,12 @@ const FIFTEEN_MINUTES = 15 * 60 * 1_000;
 const TEN_MINUTES = 10 * 60 * 1_000;
 const GOOGLE_STATE_COOKIE = 'beacon_google_oauth_state';
 const GOOGLE_DRIVE_STATE_COOKIE = 'beacon_google_drive_state';
+
+function oauthProviderStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const response = (error as { response?: { status?: unknown } }).response;
+  return typeof response?.status === 'number' ? response.status : undefined;
+}
 
 interface AuthenticationRouteDependencies {
   auth: SessionAuth;
@@ -211,6 +218,12 @@ export function registerAuthenticationRoutes(
         ) {
           return reply.redirect('/settings?section=storage&drive=failed');
         }
+        let stage:
+          | 'token_exchange'
+          | 'app_data_verification'
+          | 'provider_identity'
+          | 'credential_storage'
+          | 'audit' = 'token_exchange';
         try {
           const token = await googleClient.getToken({
             code: callback.data.code,
@@ -218,15 +231,29 @@ export function registerAuthenticationRoutes(
           });
           const refreshToken = token.tokens.refresh_token;
           const accessToken = token.tokens.access_token;
-          if (!refreshToken || !accessToken)
+          if (!refreshToken || !accessToken) {
+            app.log.warn(
+              {
+                accessTokenPresent: Boolean(accessToken),
+                refreshTokenPresent: Boolean(refreshToken),
+                stage: 'token_response',
+              },
+              'google drive connection failed',
+            );
             return reply.redirect('/settings?section=storage&drive=failed');
+          }
+          stage = 'app_data_verification';
           await verifyDriveAppDataAccess(accessToken);
+          stage = 'provider_identity';
+          const providerEmail = await driveProviderEmail(accessToken);
+          stage = 'credential_storage';
           await store.saveGoogleDriveConnection({
-            providerEmail: await driveProviderEmail(accessToken),
+            providerEmail,
             refreshToken,
             scopes: GOOGLE_DRIVE_SCOPE,
             userId: session.userId,
           });
+          stage = 'audit';
           await store.audit({
             eventType: 'google_drive_connected',
             householdId: session.householdId,
@@ -237,8 +264,22 @@ export function registerAuthenticationRoutes(
           });
           app.log.info('google drive connection completed');
           return reply.redirect('/settings?section=storage&drive=connected');
-        } catch {
-          app.log.warn('google drive connection failed');
+        } catch (error) {
+          app.log.warn(
+            {
+              errorName: error instanceof Error ? error.name : 'UnknownError',
+              operation:
+                error instanceof GoogleDriveRequestError
+                  ? error.operation
+                  : undefined,
+              providerStatus:
+                error instanceof GoogleDriveRequestError
+                  ? error.status
+                  : oauthProviderStatus(error),
+              stage,
+            },
+            'google drive connection failed',
+          );
           return reply.redirect('/settings?section=storage&drive=failed');
         }
       }
