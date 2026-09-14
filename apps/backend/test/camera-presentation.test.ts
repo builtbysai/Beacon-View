@@ -32,7 +32,6 @@ describe('camera API presentation', () => {
     const presented = presentCamera(
       { ...camera, lastSeenAt: new Date(now.getTime() - 120_000) },
       { producerConnected: true, viewerCount: 2 },
-      now,
     );
 
     expect(presented).toMatchObject({
@@ -43,13 +42,29 @@ describe('camera API presentation', () => {
     });
   });
 
+  it('does not call a stale heartbeat an available camera connection', () => {
+    const presented = presentCamera(camera, {
+      producerConnected: false,
+      viewerCount: 0,
+    });
+
+    expect(presented).toMatchObject({
+      availability: 'unavailable',
+      online: false,
+      streaming: false,
+    });
+  });
+
   it('never presents a disabled or private camera as online', () => {
     const status = { producerConnected: true, viewerCount: 0 };
+    expect(presentCamera({ ...camera, enabled: false }, status).online).toBe(
+      false,
+    );
+    expect(presentCamera({ ...camera, privacyMode: true }, status).online).toBe(
+      false,
+    );
     expect(
-      presentCamera({ ...camera, enabled: false }, status, now).online,
-    ).toBe(false);
-    expect(
-      presentCamera({ ...camera, privacyMode: true }, status, now).online,
+      presentCamera({ ...camera, credentialRevokedAt: now }, status).online,
     ).toBe(false);
   });
 });

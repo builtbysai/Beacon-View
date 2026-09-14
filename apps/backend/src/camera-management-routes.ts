@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
-import { isCameraOnline, presentCamera } from './camera-presentation.js';
+import { presentCamera } from './camera-presentation.js';
 import type { HouseholdEventHub } from './household-events.js';
 import {
   cameraParameterSchema,
@@ -30,7 +30,6 @@ export function registerCameraManagementRoutes(
   app.get('/api/cameras', async (request, reply) => {
     const session = await authenticate(request, reply);
     if (!session) return;
-    const now = new Date();
     const cameras = await store.listAccessibleCameras(
       session.householdId,
       session.userId,
@@ -38,11 +37,7 @@ export function registerCameraManagementRoutes(
     );
     return {
       cameras: cameras.map((camera) =>
-        presentCamera(
-          camera,
-          signaling.cameraStatus(camera.publicCameraId),
-          now,
-        ),
+        presentCamera(camera, signaling.cameraStatus(camera.publicCameraId)),
       ),
     };
   });
@@ -50,28 +45,53 @@ export function registerCameraManagementRoutes(
   app.get('/api/devices', async (request, reply) => {
     const session = await authenticate(request, reply);
     if (!session) return;
-    const devices = await store.listAccessibleDevices(
-      session.householdId,
-      session.userId,
-      session.role,
-    );
+    const [devices, cameras] = await Promise.all([
+      store.listAccessibleDevices(
+        session.householdId,
+        session.userId,
+        session.role,
+      ),
+      store.listAccessibleCameras(
+        session.householdId,
+        session.userId,
+        session.role,
+      ),
+    ]);
     return {
-      devices: devices.map((device) => ({
-        deviceType: device.deviceType,
-        capabilities: device.capabilities,
-        batteryPercent: device.batteryPercent,
-        batteryCharging: device.batteryCharging,
-        healthReportedAt: device.healthReportedAt?.toISOString() ?? null,
-        enabled: device.enabled,
-        privacyMode: device.privacyMode,
-        id: device.publicDeviceId,
-        lastSeenAt: device.lastSeenAt?.toISOString() ?? null,
-        name: device.name,
-        online: device.enabled && isCameraOnline(device.lastSeenAt),
-        platform: device.platform,
-        revoked: device.revokedAt !== null,
-        softwareVersion: device.softwareVersion,
-      })),
+      devices: devices.map((device) => {
+        const producerConnected = cameras
+          .filter((camera) => camera.publicDeviceId === device.publicDeviceId)
+          .some(
+            (camera) =>
+              signaling.cameraStatus(camera.publicCameraId).producerConnected,
+          );
+        const revoked = device.revokedAt !== null;
+        return {
+          deviceType: device.deviceType,
+          capabilities: device.capabilities,
+          batteryPercent: device.batteryPercent,
+          batteryCharging: device.batteryCharging,
+          connectionState: revoked
+            ? 'needs_pairing'
+            : !device.enabled
+              ? 'disabled'
+              : device.privacyMode
+                ? 'privacy'
+                : producerConnected
+                  ? 'connected'
+                  : 'offline',
+          healthReportedAt: device.healthReportedAt?.toISOString() ?? null,
+          enabled: device.enabled,
+          privacyMode: device.privacyMode,
+          id: device.publicDeviceId,
+          lastSeenAt: device.lastSeenAt?.toISOString() ?? null,
+          name: device.name,
+          online: device.enabled && !revoked && producerConnected,
+          platform: device.platform,
+          revoked,
+          softwareVersion: device.softwareVersion,
+        };
+      }),
     };
   });
 
@@ -98,15 +118,10 @@ export function registerCameraManagementRoutes(
       (candidate) => candidate.publicDeviceId === parameters.data.deviceId,
     );
     if (!device) return reply.code(404).send({ error: 'Device not found' });
-    const now = new Date();
     const childCameras = cameras
       .filter((camera) => camera.publicDeviceId === device.publicDeviceId)
       .map((camera) =>
-        presentCamera(
-          camera,
-          signaling.cameraStatus(camera.publicCameraId),
-          now,
-        ),
+        presentCamera(camera, signaling.cameraStatus(camera.publicCameraId)),
       );
     return {
       cameras: childCameras,
@@ -126,7 +141,22 @@ export function registerCameraManagementRoutes(
         id: device.publicDeviceId,
         lastSeenAt: device.lastSeenAt?.toISOString() ?? null,
         name: device.name,
-        online: device.enabled && isCameraOnline(device.lastSeenAt, now),
+        connectionState:
+          device.revokedAt !== null
+            ? 'needs_pairing'
+            : !device.enabled
+              ? 'disabled'
+              : device.privacyMode
+                ? 'privacy'
+                : childCameras.some(
+                      (camera) => camera.availability === 'available',
+                    )
+                  ? 'connected'
+                  : 'offline',
+        online:
+          device.enabled &&
+          device.revokedAt === null &&
+          childCameras.some((camera) => camera.availability === 'available'),
         platform: device.platform,
         revoked: device.revokedAt !== null,
         softwareVersion: device.softwareVersion,

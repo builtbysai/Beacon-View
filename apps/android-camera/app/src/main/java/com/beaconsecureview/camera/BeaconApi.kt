@@ -408,8 +408,9 @@ class BeaconApi(private val baseUrl: String) {
     }
 
     fun removeRegistration(credential: String) {
-        val connection = connection("/api/device/registration", "DELETE")
+        val connection = connection("/api/device/disconnect", "POST")
         connection.setRequestProperty("Authorization", "Bearer $credential")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
         responseBody(connection)
         if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
             throw IllegalStateException("Unable to remove device")

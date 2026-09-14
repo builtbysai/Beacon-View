@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { HouseholdEventHub } from './household-events.js';
 import {
@@ -173,7 +173,10 @@ export function registerDeviceRuntimeRoutes(
     return reply.code(200).send({ privacyMode: body.data.enabled });
   });
 
-  app.delete('/api/device/registration', async (request, reply) => {
+  const disconnectRegistration = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ) => {
     const authorization = request.headers.authorization;
     const token = authorization?.startsWith('Bearer ')
       ? authorization.slice('Bearer '.length)
@@ -188,16 +191,16 @@ export function registerDeviceRuntimeRoutes(
     const device = (await store.listDevices(identity.householdId)).find(
       (candidate) => candidate.publicDeviceId === identity.publicDeviceId,
     );
-    const deleted = await store.deleteDevice(
+    const revoked = await store.revokeDevice(
       identity.householdId,
       identity.publicDeviceId,
     );
-    if (!deleted) return reply.code(404).send({ error: 'Device not found' });
+    if (!revoked) return reply.code(404).send({ error: 'Device not found' });
     for (const camera of cameras) {
-      signaling.disconnectCamera(camera.publicCameraId, 'device_deleted');
+      signaling.disconnectCamera(camera.publicCameraId, 'device_revoked');
     }
     await store.audit({
-      eventType: 'device_self_removed',
+      eventType: 'device_self_disconnected',
       householdId: identity.householdId,
       ipAddress: request.ip,
       ...(device ? { metadata: { deviceName: device.name } } : {}),
@@ -207,5 +210,11 @@ export function registerDeviceRuntimeRoutes(
       type: 'device-management-changed',
     });
     return reply.code(204).send();
-  });
+  };
+
+  // POST with an explicit JSON body is the primary Android path. Keep DELETE
+  // for older camera builds, but both operations now preserve the device row
+  // so an owner can issue a device-bound re-pairing code.
+  app.post('/api/device/disconnect', disconnectRegistration);
+  app.delete('/api/device/registration', disconnectRegistration);
 }

@@ -15,10 +15,18 @@ export function registerDriveRoutes(
   app.get('/api/drive/status', async (request, reply) => {
     const session = await auth.authenticate(request, reply);
     if (!session) return;
+    reply.header('Cache-Control', 'no-store');
     const connection = await store.getGoogleDriveConnection(session.userId);
+    const configured =
+      store.googleDriveConfigured() &&
+      Boolean(
+        config.GOOGLE_OAUTH_CLIENT_ID &&
+        config.GOOGLE_OAUTH_CLIENT_SECRET &&
+        config.GOOGLE_OAUTH_REDIRECT_URI,
+      );
     return {
       connected: Boolean(connection),
-      configured: store.googleDriveConfigured(),
+      configured,
       providerEmail: connection?.providerEmail ?? null,
       updatedAt: connection?.updatedAt.toISOString() ?? null,
     };

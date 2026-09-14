@@ -735,17 +735,22 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
 
     const removed = await app!.inject({
       headers: { authorization: `Bearer ${deviceCredential}` },
-      method: 'DELETE',
-      url: '/api/device/registration',
+      method: 'POST',
+      payload: {},
+      url: '/api/device/disconnect',
     });
     expect(removed.statusCode).toBe(204);
-    await expect(store!.listDevices(account.householdId)).resolves.toEqual([]);
+    const retainedDevices = await store!.listDevices(account.householdId);
+    expect(retainedDevices).toHaveLength(1);
+    expect(retainedDevices[0]?.publicDeviceId).toBe(device.publicDeviceId);
+    expect(retainedDevices[0]?.revokedAt).toBeInstanceOf(Date);
 
     const nextCode = 'REPAIRAPI1';
     await store!.createPairingCode(
       account.householdId,
       hashSecret(nextCode),
       new Date(Date.now() + 60_000),
+      device.id,
     );
     const repaired = await store!.redeemPairingCode({
       codeHash: hashSecret(nextCode),

@@ -19,7 +19,6 @@ export function isCameraOnline(
 export function presentCamera(
   camera: CameraRecord,
   status: CameraConnectionStatus,
-  now = new Date(),
 ) {
   return {
     availability: status.producerConnected ? 'available' : 'unavailable',
@@ -35,7 +34,8 @@ export function presentCamera(
     online:
       camera.enabled &&
       !camera.privacyMode &&
-      (status.producerConnected || isCameraOnline(camera.lastSeenAt, now)),
+      camera.credentialRevokedAt === null &&
+      status.producerConnected,
     platform: camera.platform,
     privacyMode: camera.privacyMode,
     sourceKey: camera.sourceKey,
