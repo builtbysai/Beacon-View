@@ -130,7 +130,7 @@ describe('LiveVideo', () => {
       screen.queryByRole('button', { name: 'Reconnect' }),
     ).not.toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Turn privacy off' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
       await Promise.resolve();
     });
     expect(onPrivacy).toHaveBeenCalledOnce();
@@ -159,11 +159,13 @@ describe('LiveVideo', () => {
       />,
     );
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Front' }));
+      fireEvent.click(screen.getByRole('button', { name: /Switch camera/ }));
       await Promise.resolve();
     });
-    expect(screen.getByRole('button', { name: 'Front' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Front' }));
+    expect(
+      screen.getByRole('button', { name: /Switch camera/ }),
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /Switch camera/ }));
     expect(onSelectCamera).toHaveBeenCalledOnce();
     await act(async () => {
       reject(new Error('Offline'));
@@ -173,7 +175,7 @@ describe('LiveVideo', () => {
       'Your current view remains selected',
     );
     expect(screen.getByRole('heading', { name: 'Rear' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Front' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Switch camera/ })).toBeEnabled();
   });
 
   it('starts muted and requires an explicit Listen action', () => {
@@ -201,8 +203,8 @@ describe('LiveVideo', () => {
       'aria-pressed',
       'true',
     );
-    expect(screen.queryByText(/record/i)).not.toBeNull();
     expect(screen.queryByRole('button', { name: /record/i })).toBeNull();
+    expect(screen.queryByText('How this view works')).not.toBeInTheDocument();
   });
 
   it('keeps the same video connection for Talk and stops capture immediately on transport failure', async () => {
@@ -263,7 +265,7 @@ describe('LiveVideo', () => {
     act(() => socket.onerror?.());
     expect(track.stop).toHaveBeenCalledOnce();
     expect(screen.getByLabelText('Talk status')).toHaveTextContent(
-      'Your microphone is off',
+      'Microphone off',
     );
     unmount();
   });

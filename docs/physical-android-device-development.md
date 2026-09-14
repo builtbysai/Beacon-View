@@ -12,6 +12,8 @@ isolated development network only.
 - Android SDK Platform 35, JDK 17, and Android platform tools
 - Android developer options and USB debugging enabled
 - `apps/backend/.env` copied from `.env.example`
+- Firebase Android configuration installed with
+  `scripts/Install-BeaconFirebaseAndroidConfig.ps1` (the destination is ignored by Git)
 - dependencies installed and migrations applied
 
 Confirm the phone before starting:

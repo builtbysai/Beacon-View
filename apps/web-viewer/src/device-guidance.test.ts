@@ -38,15 +38,17 @@ describe('device setup and recovery guidance', () => {
   it('gives platform-specific offline recovery without claiming remote diagnosis', () => {
     const androidGuidance = deviceGuidance({ ...android, online: false });
     expect(androidGuidance.summary).toContain('cannot inspect');
-    expect(androidGuidance.steps.join(' ')).toContain('battery optimization');
+    expect(androidGuidance.steps.join(' ')).toContain(
+      'notification permissions',
+    );
 
     const browserGuidance = deviceGuidance({
       ...android,
       online: false,
       platform: 'browser',
     });
-    expect(browserGuidance.steps.join(' ')).toContain('attended');
-    expect(browserGuidance.steps.join(' ')).toContain('camera permission');
+    expect(browserGuidance.title).toBe('Browser camera is paused');
+    expect(browserGuidance.steps.join(' ')).toContain('Use this browser');
   });
 
   it('distinguishes unfinished setup from a ready device', () => {

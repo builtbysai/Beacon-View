@@ -1,16 +1,33 @@
 # Beacon delivery roadmap
 
-Updated September 8, 2026. This is the single actionable roadmap and current scope
+Updated September 11, 2026. This is the single actionable roadmap and current scope
 authority. Detailed release gates remain in
 [pre-deployment-readiness.md](pre-deployment-readiness.md).
 
+The owner approved a maintainability milestone on September 10–11: refactor existing
+Android, web, and backend code into reviewable feature/security boundaries without
+changing product behavior, and research recovery, notifications, sharing, and user-owned
+recording before those features receive implementation scope. ADR 0041 records the code
+boundary decision; [feature-architecture-research.md](feature-architecture-research.md)
+records the proposed sequencing and cost-conscious options. Existing release blockers
+remain higher priority than shipping the researched features.
+
+On September 11 the owner approved the Firebase notification foundation. Android is now
+registered with Firebase project `beacon-view-158ad`, FCM HTTP v1 is enabled, and the
+client build is integrated with opt-in auto-initialization disabled. ADR 0043 and
+[firebase-notifications-setup.md](firebase-notifications-setup.md) define the remaining
+credential and delivery milestone. This foundation does not authorize user-visible
+alerts, Firestore, Firebase Auth, analytics, or cloud media storage.
+
 ## Current scope and evidence
 
-The existing Oracle private alpha is served at https://beaconapp.duckdns.org. Its
-internet availability is not broad-release acceptance. Continue in the existing
-`codex/web-experience-rebuild` checkout, preserving its uncommitted work. No new
-worktree or scheduled task is authorized in this batch. The owner subsequently
-authorized committing and pushing the completed review batch on the existing branch.
+The Oracle private alpha completed its hard cutover to
+`https://beacon.builtbysai.com` on September 11. DNS, TLS, deployment health, and the
+OAuth authorization redirect are verified; interactive sign-in and physical Android
+acceptance remain human evidence gates. Its internet availability is not broad-release
+acceptance. Continue in the existing `codex/android-experience-overhaul` working tree,
+preserving its intentional uncommitted work. Do not commit, push, deploy, or discard it
+without a current explicit instruction.
 
 Approved now: roadmap reconciliation, the supplied compact auth-card direction,
 desktop sidebar collapse, responsive/state audit and fixes, established web
@@ -59,6 +76,7 @@ explicitly where a design, privacy, infrastructure, or release decision is requi
 | A2  | Existing account controls — Engineering + Owner                      | Browser-session inventory/revocation and confirmed account deletion exist (ADRs 0026, 0032). Verify logout/removal/error UI and retention disclosures; account access/export/correction remains an operational release gate, not an invented download button.                                                                                                                           |
 | A3  | Existing health and setup — Engineering + Device tester              | State-specific web guidance is implemented for ready, offline, privacy, disabled, revoked and source-missing devices (ADR 0036), using existing state only. The 129-capture audit covers offline/privacy details. Physical Android permission, battery-optimization and reconnect guidance still needs N1/N2 device evidence. New telemetry and room metadata need a reviewed contract. |
 | A4  | Android Monitor capacity study — Engineering + Device tester         | Measure N9 first. Produce a bounded workspace design only after evidence. Current native playback stays single-camera. Simultaneous native playback requires a separate approved milestone even if measurements pass.                                                                                                                                                                   |
+| A5  | Push transport foundation — Engineering + Owner                      | Android Firebase configuration, FCM HTTP v1 enablement, Git-safe setup tooling, and opt-in initialization boundary are complete (ADR 0043). Remaining: confirm/create a least-privilege sender credential and VAPID pair only when the authenticated subscription/outbox implementation is ready. No user-visible alert behavior exists yet.                                            |
 
 ## UI/UX completion — current approved batch
 

@@ -14,8 +14,8 @@ class PairingQrTest {
         assertEquals(
             "ABCD234567",
             parsePairingQr(
-                "https://beaconapp.duckdns.org/pair?code=ABCD234567",
-                "https://beaconapp.duckdns.org",
+                "https://beacon.builtbysai.com/pair?code=ABCD234567",
+                "https://beacon.builtbysai.com",
             ),
         )
     }
@@ -26,7 +26,7 @@ class PairingQrTest {
         assertNull(
             parsePairingQr(
                 "https://example.com/pair?code=ABCD234567",
-                "https://beaconapp.duckdns.org",
+                "https://beacon.builtbysai.com",
             ),
         )
         assertNull(parsePairingQr("beacon://pair?code=too-short"))
@@ -47,14 +47,27 @@ class PairingQrTest {
         assertEquals(
             code,
             parseMobileGoogleAuthLink(
-                "https://beaconapp.duckdns.org/auth/mobile#code=$code",
-                "https://beaconapp.duckdns.org",
+                "https://beacon.builtbysai.com/auth/mobile#code=$code",
+                "https://beacon.builtbysai.com",
+            ),
+        )
+        assertEquals(
+            code,
+            parseMobileGoogleAuthLink(
+                "beaconsecureview://auth/mobile?code=$code",
+                "https://beacon.builtbysai.com",
             ),
         )
         assertNull(
             parseMobileGoogleAuthLink(
                 "https://example.com/auth/mobile#code=$code",
-                "https://beaconapp.duckdns.org",
+                "https://beacon.builtbysai.com",
+            ),
+        )
+        assertNull(
+            parseMobileGoogleAuthLink(
+                "beaconsecureview://other/mobile?code=$code",
+                "https://beacon.builtbysai.com",
             ),
         )
     }

@@ -12,6 +12,15 @@ param(
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repositoryRoot
+$firebaseConfigPath = Join-Path $repositoryRoot 'apps\android-camera\app\google-services.json'
+
+if (-not (Test-Path -LiteralPath $firebaseConfigPath -PathType Leaf)) {
+    throw @"
+Firebase Android configuration is missing. Install the downloaded configuration first:
+  .\scripts\Install-BeaconFirebaseAndroidConfig.ps1 -SourcePath 'C:\path\to\google-services.json'
+The destination is intentionally ignored by Git.
+"@
+}
 
 function Resolve-Adb {
     $command = Get-Command adb -ErrorAction SilentlyContinue

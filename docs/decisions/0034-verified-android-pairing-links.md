@@ -13,8 +13,8 @@ must not be widened into a reusable device-registration mechanism.
 
 ## Decision
 
-Beacon QR codes and the copyable setup control use
-`https://beaconapp.duckdns.org/pair?code=<one-time-code>`. Android declares a
+Beacon QR codes and the copyable setup control use the configured canonical origin,
+currently migrating to `https://beacon.builtbysai.com/pair?code=<one-time-code>`. Android declares a
 verified App Link for that exact host and path. When Beacon is installed and
 the operating system verifies the association, Android opens Beacon; otherwise
 the browser shows a compact fallback with the manual code. The Android app
@@ -36,10 +36,9 @@ backwards compatibility, but new links use HTTPS.
   needed.
 - The browser fallback is intentionally not a browser camera replacement;
   Browser Camera Mode remains an explicitly attended, temporary option.
-- A future owned domain requires: serving the same association file on the new
-  hostname, adding that hostname to the Android intent filter, rebuilding the
-  Android app, and keeping the DuckDNS association until existing clients have
-  migrated.
+- The owned-domain migration serves the same association file on both hosts, advertises
+  both Android intent filters, and keeps the DuckDNS association until existing clients
+  have migrated. See [ADR 0042](0042-custom-domain-migration.md).
 - The code is a one-time, ten-minute pairing capability. Owners should share it
   only with a person authorized to add a camera to their household.
 

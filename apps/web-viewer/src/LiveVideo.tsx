@@ -1,8 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
+import { CameraFlipButton } from './CameraFlipButton';
 import { InlineRename } from './InlineRename';
 import { OverflowMenu } from './OverflowMenu';
 import { TalkSession, type TalkState } from './talk';
+import {
+  liveOverlay,
+  talkStatusText,
+  type ConnectionStatus,
+} from './live-video-presentation';
+import {
+  readStreamQuality,
+  type PreviousInboundBytes,
+  type StreamQuality,
+} from './live-video-quality';
 
 import {
   type ConnectionFailure,
@@ -46,48 +57,6 @@ type ServerMessage =
       type: 'talk-state';
     }
   | { code: string; type: 'error' | 'peer-left' };
-
-type ConnectionStatus =
-  | 'connected'
-  | 'connecting'
-  | 'reconnecting'
-  | 'stream unavailable'
-  | 'privacy on'
-  | 'switching source'
-  | ConnectionFailure;
-
-interface StreamQuality {
-  bitrateKbps: number;
-  fps: number;
-  jitterMs: number;
-  lostPackets: number;
-  path: string;
-  rttMs: number;
-}
-
-interface InboundVideoStats extends RTCStats {
-  bytesReceived: number;
-  framesPerSecond?: number;
-  jitter?: number;
-  kind?: string;
-  mediaType?: string;
-  packetsLost?: number;
-}
-
-interface CandidatePairStats extends RTCStats {
-  currentRoundTripTime?: number;
-  localCandidateId?: string;
-  nominated?: boolean;
-  remoteCandidateId?: string;
-  selected?: boolean;
-  state?: string;
-}
-
-interface StreamStatsRecord extends CandidatePairStats {
-  candidateType?: string;
-  kind?: string;
-  mediaType?: string;
-}
 
 function signalingUrl(cameraId: string, viewerSessionId: string): string {
   const url = new URL('/api/signaling', window.location.href);
@@ -149,9 +118,7 @@ export function LiveVideo({
   const [talkState, setTalkState] = useState<TalkState>('idle');
   const talkSession = useRef<TalkSession | null>(null);
   const qualityTimer = useRef<number | null>(null);
-  const previousBytes = useRef<{ bytes: number; timestamp: number } | null>(
-    null,
-  );
+  const previousBytes = useRef<PreviousInboundBytes | null>(null);
   const stageRef = useRef<HTMLElement>(null);
   const fullscreenButton = useRef<HTMLButtonElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
@@ -169,6 +136,7 @@ export function LiveVideo({
   // user-facing "camera", so its name leads; the source's own name (e.g.
   // "Rear camera") is secondary and only shown when it actually differs.
   const primaryName = deviceName || camera.name;
+  const overlay = liveOverlay(status, videoReady, switching, retryDisplay);
 
   const wakeControls = useCallback(() => {
     setControlsVisible(true);
@@ -423,61 +391,10 @@ export function LiveVideo({
     async function updateStreamQuality(peer: RTCPeerConnection) {
       const report = await peer.getStats();
       if (!active || !generation.current.isCurrent(currentGeneration)) return;
-      let inbound: InboundVideoStats | undefined;
-      let selectedPair: CandidatePairStats | undefined;
-      report.forEach((rawStat) => {
-        const stat = rawStat as unknown as StreamStatsRecord;
-        if (
-          stat.type === 'inbound-rtp' &&
-          (stat.kind === 'video' || stat.mediaType === 'video')
-        ) {
-          inbound = stat as InboundVideoStats;
-        }
-        if (
-          stat.type === 'candidate-pair' &&
-          stat.state === 'succeeded' &&
-          (stat.nominated || stat.selected)
-        ) {
-          selectedPair = stat;
-        }
-      });
-      if (!inbound) return;
-      const prior = previousBytes.current;
-      const bitrateKbps =
-        prior && inbound.timestamp > prior.timestamp
-          ? Math.max(
-              0,
-              Math.round(
-                ((inbound.bytesReceived - prior.bytes) * 8) /
-                  (inbound.timestamp - prior.timestamp),
-              ),
-            )
-          : 0;
-      previousBytes.current = {
-        bytes: inbound.bytesReceived,
-        timestamp: inbound.timestamp,
-      };
-      const remote = selectedPair?.remoteCandidateId
-        ? (report.get(selectedPair.remoteCandidateId) as unknown as
-            StreamStatsRecord | undefined)
-        : undefined;
-      const local = selectedPair?.localCandidateId
-        ? (report.get(selectedPair.localCandidateId) as unknown as
-            StreamStatsRecord | undefined)
-        : undefined;
-      setQuality({
-        bitrateKbps,
-        fps: Math.round(inbound.framesPerSecond ?? 0),
-        jitterMs: Math.round((inbound.jitter ?? 0) * 1_000),
-        lostPackets: inbound.packetsLost ?? 0,
-        path:
-          remote?.candidateType === 'relay' || local?.candidateType === 'relay'
-            ? 'TURN relay'
-            : remote && local
-              ? 'Direct'
-              : 'Checking connection',
-        rttMs: Math.round((selectedPair?.currentRoundTripTime ?? 0) * 1_000),
-      });
+      const sample = readStreamQuality(report, previousBytes.current);
+      if (!sample) return;
+      previousBytes.current = sample.previous;
+      setQuality(sample.quality);
     }
 
     socket.onmessage = (event) => {
@@ -515,6 +432,25 @@ export function LiveVideo({
       window.removeEventListener('pagehide', stopOnPageExit);
     };
   }, []);
+
+  function switchCamera(cameraId: string) {
+    if (switchInProgress.current || cameraId === camera.id) return;
+    switchInProgress.current = true;
+    talkSession.current?.stop();
+    setSwitching(true);
+    setControlError('');
+    void Promise.resolve()
+      .then(() => onSelectCamera?.(cameraId))
+      .catch(() =>
+        setControlError(
+          'The camera could not switch. Your current view remains selected. Try again.',
+        ),
+      )
+      .finally(() => {
+        switchInProgress.current = false;
+        setSwitching(false);
+      });
+  }
 
   const content = (
     <>
@@ -570,26 +506,23 @@ export function LiveVideo({
               )}
               {camera.name !== primaryName && <span>{camera.name}</span>}
             </div>
-            {(onDevice || onRename || onDelete) && !renaming && (
+            {onDevice && !onRename && !onDelete && !renaming && (
+              <button
+                aria-label="Camera settings"
+                className="video-settings-button"
+                onClick={onDevice}
+                type="button"
+              >
+                <Icon name="settings" />
+              </button>
+            )}
+            {(onRename || onDelete) && !renaming && (
               <OverflowMenu
                 label={`${primaryName} options`}
                 menuClassName="camera-tile-menu camera-tile-menu-below"
               >
                 {(close) => (
                   <>
-                    {onDevice && (
-                      <button
-                        role="menuitem"
-                        type="button"
-                        onClick={() => {
-                          close();
-                          onDevice();
-                        }}
-                      >
-                        <Icon name="settings" />
-                        Camera settings
-                      </button>
-                    )}
                     {onRename && (
                       <button
                         role="menuitem"
@@ -623,38 +556,10 @@ export function LiveVideo({
             )}
           </div>
         )}
-        {(status !== 'connected' || !videoReady || switching) && (
+        {overlay && (
           <div className="video-overlay">
-            <strong>
-              {switching
-                ? 'Switching camera'
-                : status === 'connected' && !videoReady
-                  ? 'Starting secure video'
-                  : status === 'privacy on'
-                    ? 'Privacy is on'
-                    : status === 'connecting'
-                      ? 'Connecting to camera'
-                      : status === 'reconnecting'
-                        ? 'Connection interrupted'
-                        : status === 'switching source'
-                          ? 'Switching camera'
-                          : status}
-            </strong>
-            <span>
-              {switching
-                ? 'The device is switching cameras.'
-                : status === 'connected' && !videoReady
-                  ? 'The secure connection is ready. Waiting for the first frame.'
-                  : status === 'privacy on'
-                    ? 'Live viewing is blocked. Turn privacy off when you are ready to resume.'
-                    : status === 'connecting'
-                      ? 'Waiting for the secure live stream.'
-                      : status === 'reconnecting'
-                        ? `Beacon is retrying${retryDisplay ? ` · attempt ${retryDisplay}` : ''}.`
-                        : status === 'switching source'
-                          ? 'The device is releasing the previous camera.'
-                          : 'This stream needs your attention.'}
-            </span>
+            <strong>{overlay.title}</strong>
+            <span>{overlay.detail}</span>
           </div>
         )}
         {!compact && (
@@ -719,6 +624,13 @@ export function LiveVideo({
                     : 'Talk'}
               </span>
             </button>
+            <CameraFlipButton
+              sources={siblingCameras}
+              activeId={camera.id}
+              busy={switching || privacyBusy || privacyMode}
+              className="video-control"
+              onSwitch={switchCamera}
+            />
             {onPrivacy && (
               <button
                 aria-pressed={privacyMode}
@@ -743,8 +655,8 @@ export function LiveVideo({
                   {privacyBusy
                     ? 'Updating privacy…'
                     : privacyMode
-                      ? 'Turn privacy off'
-                      : 'Turn privacy on'}
+                      ? 'Resume'
+                      : 'Pause'}
                 </span>
               </button>
             )}
@@ -833,71 +745,17 @@ export function LiveVideo({
       <p className="visually-hidden" role="status">
         Connection: {status}
       </p>
-      {!compact && (
+      {!compact && (controlError || talkState !== 'idle') && (
         <div className="live-footer">
           {controlError && <p role="alert">{controlError}</p>}
-          <p
-            className="live-talk-status"
-            role="status"
-            aria-label="Talk status"
-          >
-            {talkState === 'permission'
-              ? 'Allow microphone access in your browser to talk. You can cancel at any time.'
-              : talkState === 'connecting'
-                ? 'Connecting talk. Your microphone audio is not being sent yet.'
-                : talkState === 'speaking'
-                  ? 'Speaking · your microphone is on. The camera plays your voice.'
-                  : talkState === 'busy'
-                    ? 'Another viewer is talking. Try Talk again when they finish.'
-                    : talkState === 'unavailable'
-                      ? 'Talk is unavailable. Check microphone permission and that this camera supports talk, then try again.'
-                      : talkState === 'recovering'
-                        ? 'Your microphone is off. When the camera reconnects, choose Talk to speak again.'
-                        : 'Your microphone is off.'}
-          </p>
-          {siblingCameras.length > 1 && (
-            <div
-              className="live-siblings"
-              aria-label="Other cameras on this device"
+          {talkState !== 'idle' && (
+            <p
+              className="live-talk-status"
+              role="status"
+              aria-label="Talk status"
             >
-              {siblingCameras.map((sibling) => (
-                <button
-                  className={
-                    sibling.id === camera.id
-                      ? 'live-sibling is-active'
-                      : 'live-sibling'
-                  }
-                  disabled={
-                    sibling.id === camera.id ||
-                    switching ||
-                    privacyMode ||
-                    privacyBusy
-                  }
-                  key={sibling.id}
-                  onClick={() => {
-                    if (switchInProgress.current) return;
-                    switchInProgress.current = true;
-                    talkSession.current?.stop();
-                    setSwitching(true);
-                    setControlError('');
-                    void Promise.resolve()
-                      .then(() => onSelectCamera?.(sibling.id))
-                      .catch(() =>
-                        setControlError(
-                          'The camera could not switch. Your current view remains selected. Try again.',
-                        ),
-                      )
-                      .finally(() => {
-                        switchInProgress.current = false;
-                        setSwitching(false);
-                      });
-                  }}
-                  type="button"
-                >
-                  {sibling.name}
-                </button>
-              ))}
-            </div>
+              {talkStatusText(talkState)}
+            </p>
           )}
           {enabled &&
             !privacyMode &&
@@ -906,16 +764,6 @@ export function LiveVideo({
             status !== 'reconnecting' && (
               <button onClick={reconnect}>Reconnect</button>
             )}
-          <details className="live-info">
-            <summary>How this view works</summary>
-            <p className="notice">
-              Closing this view ends only your viewer session. The camera
-              remains online and ready for the next authorized viewer. Listening
-              starts only after you choose Listen. Talk requests microphone
-              access only when selected and plays a tone at the camera.
-              Recording is disabled.
-            </p>
-          </details>
         </div>
       )}
       {compact && (

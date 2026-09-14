@@ -16,13 +16,20 @@
 
     <application
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
         android:label="Beacon SecureView"
         android:networkSecurityConfig="@xml/network_security_config"
+        android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.BeaconSecureView">
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="barcode_ui" />
+        <!-- Push enrollment is opt-in. The notification milestone enables FCM only after the
+             signed-in user accepts the in-app explanation and Android permission prompt. -->
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -30,19 +37,31 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Verified HTTPS links open Beacon when installed and fall back to the web page otherwise. -->
+            <!-- Canonical verified HTTPS links open Beacon when installed and fall back to the web page otherwise. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
-                    android:host="beaconapp.duckdns.org"
+                    android:host="beacon.builtbysai.com"
                     android:pathPrefix="/pair"
                     android:scheme="https" />
                 <data
-                    android:host="beaconapp.duckdns.org"
+                    android:host="beacon.builtbysai.com"
                     android:pathPrefix="/auth/mobile"
                     android:scheme="https" />
+            </intent-filter>
+            <!-- OAuth returns through a one-time code. This explicit app scheme is the
+                 reliable fallback for locally/debug-signed builds that cannot satisfy
+                 production Android App Link certificate verification. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="auth"
+                    android:pathPrefix="/mobile"
+                    android:scheme="beaconsecureview" />
             </intent-filter>
         </activity>
         <service
@@ -50,5 +69,12 @@
             android:exported="false"
             android:foregroundServiceType="camera|microphone"
             android:stopWithTask="false" />
+        <service
+            android:name=".BeaconFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

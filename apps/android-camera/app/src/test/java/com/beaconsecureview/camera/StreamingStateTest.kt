@@ -1,6 +1,7 @@
 package com.beaconsecureview.camera
 
 import android.content.pm.ServiceInfo
+import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -216,6 +217,51 @@ class StreamingStateTest {
     }
 
     @Test
+    fun cameraRuntimeLabelPrioritizesPrivacyAndActiveViewing() {
+        assertEquals(
+            "PRIVACY ON",
+            cameraRuntimeLabel(
+                CameraRuntimeState(
+                    device = DeviceLifecycle.Streaming,
+                    activeViewers = 2,
+                    privacyMode = true,
+                ),
+            ),
+        )
+        assertEquals(
+            "LIVE",
+            cameraRuntimeLabel(
+                CameraRuntimeState(device = DeviceLifecycle.Streaming, activeViewers = 2),
+            ),
+        )
+        assertEquals(
+            "ONLINE",
+            cameraRuntimeLabel(CameraRuntimeState(device = DeviceLifecycle.Idle)),
+        )
+        assertEquals(
+            "RECONNECTING",
+            cameraRuntimeLabel(CameraRuntimeState(device = DeviceLifecycle.Reconnecting)),
+        )
+    }
+
+    @Test
+    fun monitorHomeCopyHighlightsEmptyHealthyAndAttentionStates() {
+        assertEquals("Set up your first camera", homeHeadline(emptyList()))
+        assertEquals(
+            "Pair a spare Android phone or tablet to begin.",
+            homeSupportingText(emptyList()),
+        )
+
+        val healthy = listOf(BeaconApi.MonitorCamera("one", "Kitchen", "Pixel", true, false, 0))
+        assertEquals("Your home is within reach", homeHeadline(healthy))
+        assertEquals("Every camera is ready when you need it.", homeSupportingText(healthy))
+
+        val privacy = listOf(BeaconApi.MonitorCamera("one", "Kitchen", "Pixel", true, true, 0))
+        assertEquals("A camera needs your attention", homeHeadline(privacy))
+        assertEquals("Review what needs attention.", homeSupportingText(privacy))
+    }
+
+    @Test
     fun sourceSwitchRejectsDuplicatesAndConcurrentTransitions() {
         assertEquals(
             true,
@@ -233,5 +279,100 @@ class StreamingStateTest {
             false,
             canSwitchCameraSource("rear", "front", CameraSourceLifecycle.Disabled, privacyMode = true),
         )
+    }
+
+    @Test
+    fun monitorShowsOneActiveSourcePerPhysicalDevice() {
+        val rear =
+            BeaconApi.MonitorCamera(
+                "rear",
+                "Rear camera",
+                "Hallway phone",
+                true,
+                false,
+                0,
+                deviceId = "phone",
+                facing = "rear",
+                available = false,
+            )
+        val front =
+            rear.copy(id = "front", name = "Front camera", facing = "front", available = true)
+        val laptop =
+            rear.copy(id = "laptop", name = "Webcam", deviceName = "Office laptop", deviceId = "computer", available = true)
+
+        assertEquals(listOf("front", "laptop"), monitorHostCameras(listOf(rear, front, laptop)).map { it.id })
+    }
+
+    @Test
+    fun viewerFlipCyclesEverySourceOnTheSameDevice() {
+        val rear =
+            BeaconApi.MonitorCamera(
+                "rear",
+                "Rear camera",
+                "Hallway phone",
+                true,
+                false,
+                0,
+                deviceId = "phone",
+            )
+        val front = rear.copy(id = "front", name = "Front camera")
+        val external = rear.copy(id = "external", name = "USB camera")
+        val otherDevice = rear.copy(id = "office", deviceId = "laptop")
+        val cameras = listOf(rear, otherDevice, front, external)
+
+        assertEquals("front", nextCameraSource(cameras, rear)?.id)
+        assertEquals("external", nextCameraSource(cameras, front)?.id)
+        assertEquals("rear", nextCameraSource(cameras, external)?.id)
+        assertEquals(null, nextCameraSource(cameras, otherDevice))
+    }
+
+    @Test
+    fun liveViewerFollowsTheNewlyActiveSourceAfterACameraSideFlip() {
+        val rear =
+            BeaconApi.MonitorCamera(
+                "rear",
+                "Rear camera",
+                "Hallway phone",
+                true,
+                false,
+                1,
+                deviceId = "phone",
+                available = true,
+            )
+        val front = rear.copy(id = "front", name = "Front camera", available = false)
+        val refreshed = listOf(rear.copy(available = false), front.copy(available = true))
+
+        assertEquals(
+            "front",
+            reconciledCameraId(listOf(rear, front), refreshed, selectedCameraId = "rear"),
+        )
+    }
+
+    @Test
+    fun accessHistoryTimestampIsReadableWithoutLeakingProtocolDetails() {
+        assertEquals(
+            "Sep 10, 2026 · 12:34 PM",
+            friendlyAccessTime("2026-09-10T12:34:56.000Z", ZoneId.of("UTC")),
+        )
+    }
+
+    @Test
+    fun accessHistoryNormalizesNullableApiFieldsAndHumanizesActors() {
+        assertEquals(null, nullableApiText("null"))
+        assertEquals(null, nullableApiText("  "))
+        assertEquals("Camera device", accessEventTarget("null", null))
+        assertEquals("Android Camera", accessEventTarget(null, "Android Camera"))
+        assertEquals("On camera device", accessEventActor("privacy_enabled", "null", "owner@example.com"))
+        assertEquals(null, accessEventActor("live_view_started", null, "owner@example.com"))
+        assertEquals("By you", accessEventActor("live_view_started", "OWNER@example.com", "owner@example.com"))
+    }
+
+    @Test
+    fun accessHistoryPresentsPrivacyDeletionAndRejectionEvents() {
+        assertEquals("Privacy mode enabled", accessEventLabel("privacy_enabled"))
+        assertEquals("Camera deleted", accessEventLabel("camera_source_deleted"))
+        assertEquals("Access rejected", accessEventLabel("live_view_rejected"))
+        assertEquals("Capture stopped", accessEventDetail("privacy_enabled", null))
+        assertEquals("Camera offline", accessEventDetail("live_view_rejected", "camera_offline"))
     }
 }
