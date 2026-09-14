@@ -11,17 +11,14 @@ export function InlineRename({
   className = '',
   onSubmit,
   onCancel,
-  explicitActions = false,
 }: {
   value: string;
   ariaLabel: string;
   className?: string;
   onSubmit: (value: string) => void;
   onCancel: () => void;
-  explicitActions?: boolean;
 }) {
   const settled = useRef(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   function commit(input: HTMLInputElement) {
     if (settled.current) return;
     settled.current = true;
@@ -29,9 +26,8 @@ export function InlineRename({
     if (next && next !== value) onSubmit(next);
     else onCancel();
   }
-  const input = (
+  return (
     <input
-      ref={inputRef}
       className={`inline-rename ${className}`.trim()}
       aria-label={ariaLabel}
       defaultValue={value}
@@ -48,33 +44,7 @@ export function InlineRename({
           onCancel();
         }
       }}
-      onBlur={
-        explicitActions ? undefined : (event) => commit(event.currentTarget)
-      }
+      onBlur={(event) => commit(event.currentTarget)}
     />
-  );
-  if (!explicitActions) return input;
-  return (
-    <div className="inline-rename-editor">
-      {input}
-      <div className="inline-rename-actions">
-        <button
-          type="button"
-          onClick={() => inputRef.current && commit(inputRef.current)}
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => {
-            settled.current = true;
-            onCancel();
-          }}
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
   );
 }

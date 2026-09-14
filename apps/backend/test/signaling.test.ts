@@ -291,22 +291,6 @@ describe('SignalingHub', () => {
     hub.close();
   });
 
-  it('notifies the connected camera device when its source list changes', () => {
-    const hub = new SignalingHub(
-      () => [],
-      () => [],
-    );
-    const device = socket();
-    hub.connectDevice('internal-rear', 'public-rear', device.ws);
-
-    expect(hub.notifySourcesChanged(['public-front', 'public-rear'])).toBe(
-      true,
-    );
-    expect(device.mock.sent.at(-1)).toEqual({ type: 'sources-changed' });
-    expect(hub.notifySourcesChanged(['offline'])).toBe(false);
-    hub.close();
-  });
-
   it('ends viewers immediately in privacy mode but keeps device control', () => {
     const hub = new SignalingHub(
       () => [],

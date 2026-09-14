@@ -25,12 +25,3 @@ disabled to avoid retaining authorization codes.
 The Google client secret belongs only in the VM's protected environment file.
 Email verification, password reset, and explicit account linking remain
 separate account-lifecycle work.
-
-Android monitor sign-in returns to the installed app through the exact
-`beaconsecureview://auth/mobile` callback. The callback contains only a
-high-entropy, single-use handoff code that expires after ten minutes; the app
-exchanges it with the backend over TLS for the account session. Session tokens
-and Google authorization codes are never placed in the app-link URI. The
-verified HTTPS mobile callback remains accepted for release builds whose app
-links are verified, while the custom scheme makes locally signed and sideloaded
-builds reliable as well.

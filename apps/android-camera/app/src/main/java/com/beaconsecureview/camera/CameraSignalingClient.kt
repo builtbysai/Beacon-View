@@ -41,8 +41,6 @@ interface CameraSignalingListener {
 
     fun onSourceSwitch(cameraId: String)
 
-    fun onSourcesChanged()
-
     fun onPrivacyMode(enabled: Boolean)
 
     fun onTalkState(connectionId: String, active: Boolean)
@@ -220,7 +218,7 @@ class CameraSignalingClient(
                     }
 
                     override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                        socketEnded(webSocket, generation, code == 4003, reason)
+                        socketEnded(webSocket, generation, code == 4003)
                     }
 
                     override fun onFailure(
@@ -228,11 +226,7 @@ class CameraSignalingClient(
                         throwable: Throwable,
                         response: Response?,
                     ) {
-                        socketEnded(
-                            webSocket,
-                            generation,
-                            response?.code == 401 || response?.code == 403,
-                        )
+                        socketEnded(webSocket, generation, response?.code == 401 || response?.code == 403)
                     }
                 },
             )
@@ -243,7 +237,6 @@ class CameraSignalingClient(
         webSocket: WebSocket,
         generation: Int,
         authorizationLost: Boolean,
-        closeReason: String? = null,
     ) {
         handler.post {
             if (!generations.isCurrent(generation) || socket !== webSocket) return@post
@@ -253,10 +246,6 @@ class CameraSignalingClient(
                 stopped = true
                 cancelRetry()
                 listener.onAuthorizationLost()
-            } else if (closeReason == "camera_removed") {
-                stopped = true
-                cancelRetry()
-                listener.onSourcesChanged()
             } else {
                 scheduleReconnect()
             }
@@ -371,7 +360,6 @@ class CameraSignalingClient(
                 handler.post {
                     listener.onSourceSwitch(message.getString("cameraId"))
                 }
-            "sources-changed" -> handler.post(listener::onSourcesChanged)
             "privacy-mode" ->
                 handler.post {
                     listener.onPrivacyMode(message.getBoolean("enabled"))

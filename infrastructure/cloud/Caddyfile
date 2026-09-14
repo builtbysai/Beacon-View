@@ -1,4 +1,6 @@
-(beacon_api) {
+{$BEACON_DOMAIN} {
+	encode zstd gzip
+
 	handle /api/* {
 		reverse_proxy backend:3000
 	}
@@ -10,11 +12,6 @@
 	handle /ready {
 		reverse_proxy backend:3000
 	}
-}
-
-{$BEACON_DOMAIN} {
-	encode zstd gzip
-	import beacon_api
 
 	handle {
 		root * /srv

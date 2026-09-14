@@ -270,14 +270,6 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       success: true,
       userId: identity.rows[0]!.userId,
     });
-    await store!.audit({
-      eventType: 'device_deleted',
-      householdId: identity.rows[0]!.householdId,
-      ipAddress: '192.0.2.45',
-      metadata: { deviceName: 'Old hallway phone' },
-      success: true,
-      userId: identity.rows[0]!.userId,
-    });
 
     const response = await app!.inject({
       headers: { cookie: credentials.cookie },
@@ -289,75 +281,18 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       events: [
         {
           actorEmail: 'owner@example.com',
-          deviceName: 'Old hallway phone',
-          eventType: 'device_deleted',
-          success: true,
-        },
-        {
-          actorEmail: 'owner@example.com',
           eventType: 'live_view_started',
           success: true,
         },
       ],
     });
     expect(response.body).not.toContain('192.0.2.44');
-    expect(response.body).not.toContain('192.0.2.45');
 
     const unauthenticated = await app!.inject({
       method: 'GET',
       url: '/api/access-history',
     });
     expect(unauthenticated.statusCode).toBe(401);
-  });
-
-  it('records a removed camera source with its display names', async () => {
-    const registration = await app!.inject({
-      method: 'POST',
-      payload: {
-        email: 'camera-audit@example.com',
-        password: 'correct horse battery staple',
-      },
-      remoteAddress: '127.0.0.17',
-      url: '/api/auth/register',
-    });
-    const credentials = sessionCookies(registration.headers);
-    const account = await store!.findUserByEmail('camera-audit@example.com');
-    if (!account) throw new Error('Expected registered account');
-    const browser = await store!.registerBrowserDevice({
-      householdId: account.householdId,
-      installationId: randomUUID(),
-      name: 'Office laptop',
-      now: new Date(),
-      sources: [
-        { sourceKey: 'external', facing: 'external', name: 'Desk webcam' },
-      ],
-    });
-
-    const removed = await app!.inject({
-      headers: {
-        cookie: credentials.cookie,
-        origin: config!.WEB_ORIGIN,
-        'x-csrf-token': credentials.csrf,
-      },
-      method: 'DELETE',
-      url: `/api/cameras/${browser.cameras[0]!.publicCameraId}`,
-    });
-    expect(removed.statusCode).toBe(204);
-
-    const history = await app!.inject({
-      headers: { cookie: credentials.cookie },
-      method: 'GET',
-      url: '/api/access-history',
-    });
-    expect(history.json()).toMatchObject({
-      events: [
-        {
-          cameraName: 'Desk webcam',
-          deviceName: 'Office laptop',
-          eventType: 'camera_source_deleted',
-        },
-      ],
-    });
   });
 
   it('enforces Android privacy mode through the authenticated API', async () => {

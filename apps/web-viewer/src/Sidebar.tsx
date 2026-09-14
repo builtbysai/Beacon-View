@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from './Avatar';
 import { Brand, Icon, type IconName } from './Icon';
-import { useMenuKeyboardNav } from './useMenuKeyboardNav';
 
 const preferenceKey = 'beacon.sidebar.collapsed.v1';
 
@@ -47,7 +46,6 @@ export function Sidebar({
   const [menuOpen, setMenuOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const accountRef = useRef<HTMLButtonElement>(null);
-  const accountMenuRef = useRef<HTMLDivElement>(null);
   function hideTip() {
     clearTimeout(timer.current);
     setTip(null);
@@ -57,12 +55,7 @@ export function Sidebar({
     timer.current = setTimeout(() => setTip(null), 120);
   }
   function showTip(target: EventTarget) {
-    if (
-      !collapsed ||
-      typeof window.matchMedia !== 'function' ||
-      !window.matchMedia('(min-width: 761px)').matches
-    )
-      return;
+    if (!collapsed || !window.matchMedia('(min-width: 761px)').matches) return;
     const control =
       target instanceof Element
         ? target.closest<HTMLElement>('[data-tooltip]')
@@ -110,9 +103,6 @@ export function Sidebar({
     window.addEventListener('pointerdown', dismissOutside);
     return () => window.removeEventListener('pointerdown', dismissOutside);
   }, [menuOpen]);
-  useMenuKeyboardNav(menuOpen, accountMenuRef, accountRef, () =>
-    setMenuOpen(false),
-  );
   function toggle() {
     const next = !collapsed;
     setCollapsed(next);
@@ -183,11 +173,7 @@ export function Sidebar({
           <Icon name="chevronRight" className="sidebar-account-chevron" />
         </button>
         {menuOpen && (
-          <div
-            className="sidebar-account-menu"
-            role="menu"
-            ref={accountMenuRef}
-          >
+          <div className="sidebar-account-menu" role="menu">
             <span className="sidebar-account-menu-email" title={email}>
               {email}
             </span>

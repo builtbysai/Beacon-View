@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { request } from './api';
 import { ConfirmDialog } from './ConfirmDialog';
-import { Icon } from './Icon';
 import { browserOsLabel } from './naming';
 
 interface BrowserSession {
@@ -85,17 +84,14 @@ export function BrowserSessions({
         <p className="empty">No active browser sessions.</p>
       )}
       {sessions && sessions.length > 0 && (
-        <ul className="session-list">
+        <ul className="device-list">
           {sessions.map((session) => (
-            <li className="session-row" key={session.id}>
-              <span className="item-icon">
-                <Icon name="browser" />
-              </span>
-              <div className="session-identity">
+            <li key={session.id}>
+              <div>
                 <strong>{sessionLabel(session)}</strong>
-                <time dateTime={session.lastSeenAt}>
+                <span>
                   Last active {new Date(session.lastSeenAt).toLocaleString()}
-                </time>
+                </span>
               </div>
               {/* Current session already has its own "Sign out" action in
                   Account — showing Revoke here too would be the same action
@@ -107,7 +103,6 @@ export function BrowserSessions({
                   onClick={() => setConfirmSession(session)}
                   type="button"
                 >
-                  <Icon name="logout" />
                   {revoking === session.id ? 'Revoking…' : 'Revoke'}
                 </button>
               )}

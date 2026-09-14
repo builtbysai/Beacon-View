@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-24.04
     environment:
       name: production
-      url: https://beacon.builtbysai.com/
+      url: https://beaconapp.duckdns.org/
     timeout-minutes: 20
     steps:
       - name: Check out the validated commit
@@ -99,7 +99,7 @@ jobs:
             --file "$compose_file" \
             up -d --no-deps web
 
-          domain="${BEACON_DOMAIN:-beacon.builtbysai.com}"
+          domain="${BEACON_DOMAIN:-beaconapp.duckdns.org}"
           # --retry-all-errors is required here: a freshly (re)started Caddy
           # can briefly reject the TLS handshake (curl exit 35,
           # SSL_ERROR_SYSCALL) before it's done initializing. Plain --retry

@@ -269,15 +269,6 @@ export class SignalingHub {
     return true;
   }
 
-  notifySourcesChanged(siblingCameraIds: string[]): boolean {
-    const sibling = [...this.#devices.values()].find((device) =>
-      siblingCameraIds.includes(device.publicCameraId),
-    );
-    if (!sibling) return false;
-    this.#send(sibling.socket, { type: 'sources-changed' });
-    return true;
-  }
-
   #listen(socket: WebSocket, role: PeerRole): void {
     socket.on('message', (data) => {
       if (typeof data !== 'string' && !Buffer.isBuffer(data)) return;

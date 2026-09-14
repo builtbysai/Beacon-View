@@ -48,9 +48,7 @@ export function ContactPage({
   const subject = accountDeletion ? 'Account deletion request' : undefined;
 
   return (
-    <main
-      className={`auth-layout contact-layout${accountDeletion ? ' account-deletion-layout' : ''}`}
-    >
+    <main className="auth-layout contact-layout">
       <header className="auth-header">
         <a href="/" aria-label="Beacon home">
           <Brand />

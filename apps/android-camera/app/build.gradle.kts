@@ -4,17 +4,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// google-services.json is real Firebase client configuration, installed locally
-// via scripts/Install-BeaconFirebaseAndroidConfig.ps1 and gitignored (ADR 0043).
-// CI and fresh checkouts never have it, so this plugin is applied only when it's
-// present rather than unconditionally in the `plugins {}` block above — applying
-// it unconditionally makes `processDebugGoogleServices`/`processReleaseGoogleServices`
-// hard-fail the whole build when the file is missing, even for tasks (unit tests,
-// lint, plain compilation) that have nothing to do with Firebase.
-if (file("google-services.json").exists()) {
-    apply(plugin = "com.google.gms.google-services")
-}
-
 providers.gradleProperty("beaconBuildDir").orNull?.let {
     layout.buildDirectory.set(file(it))
 }
@@ -73,13 +62,11 @@ android {
 
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
-    implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
     implementation("androidx.activity:activity-compose:1.10.0")
     implementation("androidx.camera:camera-camera2:1.4.2")
     implementation("androidx.camera:camera-lifecycle:1.4.2")
     implementation("androidx.camera:camera-view:1.4.2")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.lifecycle:lifecycle-service:2.8.7")
@@ -87,7 +74,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
-    implementation("com.google.firebase:firebase-messaging")
     implementation("io.github.webrtc-sdk:android:144.7559.08")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

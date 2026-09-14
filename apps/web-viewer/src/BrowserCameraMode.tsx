@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 import { request } from './api';
 import { BrowserProducer } from './BrowserProducer';
 import { Icon } from './Icon';
-import { ModalDialog } from './ModalDialog';
 
 interface RegisteredSource {
   id: string;
@@ -298,12 +297,13 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
           </span>
           <div className="broadcast-top-actions">
             <button
+              aria-expanded={settingsOpen}
               aria-label="Camera settings"
               className="broadcast-icon-button"
-              onClick={() => setSettingsOpen(true)}
+              onClick={() => setSettingsOpen((open) => !open)}
               type="button"
             >
-              <Icon name="settings" />
+              <Icon name={settingsOpen ? 'close' : 'settings'} />
             </button>
           </div>
         </div>
@@ -321,33 +321,21 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
           Camera: {state} · Viewers: {viewerCount} · Reconnects: {retryCount}
         </p>
         {settingsOpen && (
-          <ModalDialog
-            labelledBy="browser-camera-settings-title"
-            onDismiss={() => setSettingsOpen(false)}
+          <div
+            className="broadcast-settings"
+            role="dialog"
+            aria-label="Camera settings"
           >
-            <section className="live-camera-settings">
-              <div className="live-camera-settings-header">
-                <h2 id="browser-camera-settings-title">Camera settings</h2>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="Close camera settings"
-                  onClick={() => setSettingsOpen(false)}
-                >
-                  <Icon name="close" />
-                </button>
-              </div>
-              {fields}
-              <div className="heading-actions">
-                <button onClick={() => void registerAndStart()}>
-                  Switch camera
-                </button>
-                <button className="secondary" onClick={onBack} type="button">
-                  Back to dashboard
-                </button>
-              </div>
-            </section>
-          </ModalDialog>
+            {fields}
+            <div className="heading-actions">
+              <button onClick={() => void registerAndStart()}>
+                Switch camera
+              </button>
+              <button className="secondary" onClick={onBack} type="button">
+                Back to dashboard
+              </button>
+            </div>
+          </div>
         )}
         <button className="broadcast-stop" onClick={stop} type="button">
           Stop Camera Mode

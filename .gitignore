@@ -22,11 +22,6 @@ local.properties
 **/build/
 *.jks
 *.keystore
-# Firebase client configuration is installed locally by the setup script. Server
-# credentials are always secret and must remain outside the repository.
-**/google-services.json
-**/*firebase*service-account*.json
-**/*firebase*admin*.json
 
 # Logs
 *.log

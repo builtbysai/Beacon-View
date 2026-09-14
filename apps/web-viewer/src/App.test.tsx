@@ -490,7 +490,9 @@ describe('App', () => {
       screen.queryByRole('heading', { name: 'Permanently delete Pixel?' }),
     ).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(screen.getByRole('button', { name: 'Pause' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Turn privacy on' }),
+    ).toBeVisible();
   });
 
   it('renames and removes a camera from the Cameras grid', async () => {
@@ -698,104 +700,5 @@ describe('App', () => {
       await screen.findByRole('button', { name: 'Clear history' }),
     );
     expect(await screen.findByText('No activity yet.')).toBeVisible();
-  });
-
-  it('does not leave the pairing dialog open after a failed sign-out and a fresh sign-in', async () => {
-    vi.stubGlobal('WebSocket', TestSocket);
-    let signedIn = false;
-    const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url === '/api/auth/me') {
-        return Promise.resolve(
-          signedIn
-            ? {
-                ok: true,
-                status: 200,
-                json: () =>
-                  Promise.resolve({
-                    user: { email: 'owner@example.com', id: '1' },
-                  }),
-              }
-            : {
-                ok: false,
-                status: 401,
-                json: () =>
-                  Promise.resolve({ error: 'Authentication required' }),
-              },
-        );
-      }
-      if (url === '/api/cameras')
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve({ cameras: [] }),
-        });
-      if (url === '/api/devices')
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve({ devices: [] }),
-        });
-      if (url === '/api/auth/login') {
-        signedIn = true;
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () =>
-            Promise.resolve({ user: { email: 'owner@example.com', id: '1' } }),
-        });
-      }
-      if (url === '/api/pairing-codes')
-        return Promise.resolve({
-          ok: true,
-          status: 201,
-          json: () => Promise.resolve({ code: 'ABCD2345' }),
-        });
-      if (url === '/api/auth/logout') {
-        signedIn = false;
-        return Promise.resolve({
-          ok: false,
-          status: 500,
-          json: () => Promise.resolve({ error: 'Server error' }),
-        });
-      }
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    render(<App />);
-
-    // Starts signed out — sign in first.
-    await screen.findByRole('form', { name: 'Password sign in' });
-    fireEvent.change(screen.getByLabelText('Email'), {
-      target: { value: 'owner@example.com' },
-    });
-    fireEvent.change(screen.getByLabelText('Password'), {
-      target: { value: 'test-password-only' },
-    });
-    fireEvent.submit(screen.getByRole('form', { name: 'Password sign in' }));
-
-    await screen.findByText('Add your first camera');
-    fireEvent.click(screen.getAllByRole('button', { name: 'Add camera' })[0]!);
-    fireEvent.click(screen.getByRole('button', { name: 'Pair Android' }));
-    expect(await screen.findByText('ABCD2345')).toBeVisible();
-
-    // Sign out while the pairing dialog is open, with a failing logout
-    // request — the browser should still sign out locally.
-    fireEvent.click(screen.getByRole('button', { name: /owner@example\.com/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
-    await screen.findByRole('form', { name: 'Password sign in' });
-
-    // Sign back in — the stale pairing dialog must not reappear.
-    fireEvent.change(screen.getByLabelText('Email'), {
-      target: { value: 'owner@example.com' },
-    });
-    fireEvent.change(screen.getByLabelText('Password'), {
-      target: { value: 'test-password-only' },
-    });
-    fireEvent.submit(screen.getByRole('form', { name: 'Password sign in' }));
-
-    // Page state (still "camera mode" from before signing out) is unrelated
-    // to this fix — only the pairing dialog leaking across sessions is.
-    await screen.findByRole('button', { name: /owner@example\.com/ });
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

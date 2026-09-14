@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 const shapes = {
   chevronLeft: <path d="m15 18-6-6 6-6" />,
@@ -35,12 +35,6 @@ const shapes = {
     <>
       <path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6Z" />
       <path d="m8 12 3 3 5-6" />
-    </>
-  ),
-  shieldOff: (
-    <>
-      <path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6Z" />
-      <path d="M4 4 20 20" />
     </>
   ),
   lock: (
@@ -189,37 +183,95 @@ export function Icon({
   );
 }
 
-/** The Beacon lens-and-signal mark: visible capture at the center, with
- * symmetric connection waves and a stable base. It stays legible at favicon
- * size and uses the same geometry as the Android adaptive icon. */
+/**
+ * The Beacon "smart lighthouse" camera mark. `useId` namespaces every
+ * gradient/filter def so two <Brand> instances can render on one page
+ * (the sign-in screen mounts a hero mark and a card mark at once)
+ * without one instance's <defs> shadowing the other's.
+ */
 export function Brand({
   compact = false,
   className = '',
 }: { compact?: boolean; className?: string } = {}) {
+  const uid = useId().replace(/[:]/g, '');
+  const beam = `beacon-beam-${uid}`;
+  const hardware = `beacon-hardware-${uid}`;
+  const lens = `beacon-lens-${uid}`;
+  const glow = `beacon-glow-${uid}`;
+  const shadow = `beacon-shadow-${uid}`;
+
   const mark = (
     <>
+      <defs>
+        <linearGradient id={hardware} x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#7c8ba1" />
+          <stop offset="100%" stopColor="#293548" />
+        </linearGradient>
+        <radialGradient id={lens} cx="35%" cy="30%" r="75%">
+          <stop offset="0%" stopColor="#7dd3fc" />
+          <stop offset="55%" stopColor="#0284c7" />
+          <stop offset="100%" stopColor="#031525" />
+        </radialGradient>
+        <filter id={glow} x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="1.1" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <filter id={shadow} x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow
+            dx="0"
+            dy="1.5"
+            stdDeviation="1.5"
+            floodOpacity="0.28"
+          />
+        </filter>
+      </defs>
       <path
-        d="M11 11.5C5.5 16.2 5.5 23.8 11 28.5M33 11.5c5.5 4.7 5.5 12.3 0 17"
-        stroke="#38bdf8"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        fill="none"
-      />
-      <path
-        d="M15 15.5c-2.8 2.5-2.8 6.5 0 9M29 15.5c2.8 2.5 2.8 6.5 0 9"
-        stroke="#7dd3fc"
-        strokeWidth="2.3"
-        strokeLinecap="round"
-        fill="none"
-      />
-      <circle cx="22" cy="20" r="9" fill="#0ea5e9" />
-      <circle cx="22" cy="20" r="5.2" fill="#071b31" />
-      <circle cx="22" cy="20" r="2" fill="#e0f2fe" />
-      <path
-        d="M22 29v7M15 38h14"
+        d="M10 38h20"
         stroke="currentColor"
-        strokeWidth="2.8"
+        strokeOpacity="0.35"
+        strokeWidth="2"
         strokeLinecap="round"
+      />
+      <path
+        d="M 27 7 A 6 6 0 0 1 27 17"
+        stroke="#38bdf8"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        fill="none"
+        opacity="0.55"
+      />
+      <path
+        d="M 32 3 A 11 11 0 0 1 32 21"
+        stroke="#38bdf8"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        fill="none"
+        opacity="0.3"
+      />
+      <g filter={`url(#${shadow})`}>
+        <path d="M14 37 L26 37 L23 20 L17 20 Z" fill={`url(#${hardware})`} />
+        <rect x="18" y="17" width="4" height="3" fill="#1e293b" />
+        <rect
+          x="13"
+          y="5"
+          width="14"
+          height="13"
+          rx="4.5"
+          fill={`url(#${hardware})`}
+        />
+      </g>
+      <circle cx="20" cy="11.5" r="4.5" fill="#0f172a" />
+      <circle cx="20" cy="11.5" r="3.5" fill={`url(#${lens})`} />
+      <circle cx="20" cy="11.5" r="1" fill="#bae6fd" filter={`url(#${glow})`} />
+      <circle
+        cx="24"
+        cy="7.5"
+        r="0.8"
+        fill="#f87171"
+        filter={`url(#${glow})`}
       />
     </>
   );
@@ -228,7 +280,7 @@ export function Brand({
     return (
       <svg
         className={`brand-mark ${className}`}
-        viewBox="0 0 44 44"
+        viewBox="6 0 30 42"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         role="img"
@@ -242,16 +294,24 @@ export function Brand({
   return (
     <svg
       className={`brand-lockup ${className}`}
-      viewBox="0 0 232 44"
+      viewBox="0 0 232 45"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
       aria-label="Beacon"
     >
+      <defs>
+        <linearGradient id={beam} x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.22" />
+          <stop offset="12%" stopColor="#0ea5e9" stopOpacity="0.12" />
+          <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d="M20 12 L232 -12 L232 40 Z" fill={`url(#${beam})`} />
       {mark}
       <text
-        x="50"
-        y="29"
+        x="42"
+        y="30"
         fontFamily="Inter, -apple-system, system-ui, sans-serif"
         fontSize="21"
         letterSpacing="-0.4"

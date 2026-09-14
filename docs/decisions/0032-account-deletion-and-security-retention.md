@@ -12,13 +12,6 @@ pairing codes, camera sources, browser sessions, and motion metadata. The server
 the requesting browser cookies and writes one unlinked `account_deleted` security event
 containing only the request IP and event outcome.
 
-Both the web viewer and Android client expose deletion inside Settings. They use one
-calm confirmation dialog headed "Sorry to see you go," explain the data and active
-connections affected, disclose the normal encrypted-backup expiry policy, and offer a
-clear cancel action. They do not require a survey or typed phrase in addition to the
-confirmation. After success, the Android client stops its capture service and clears
-the local account credential so the deleted account cannot remain signed in on-device.
-
 Security/audit events are automatically deleted after 90 days by a single-instance
 hourly backend job. Docker service logs use bounded local rotation (three 10 MB files
 per service) and host/systemd journals are capped at 30 days, 200 MB, with 1 GB disk

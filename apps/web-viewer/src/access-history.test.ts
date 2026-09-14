@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  accessEventPresentation,
   groupAccessEvents,
   rejectionReasonLabel,
   type AccessEvent,
@@ -9,7 +8,6 @@ import {
 function event(overrides: Partial<AccessEvent>): AccessEvent {
   return {
     actorEmail: null,
-    cameraName: null,
     deviceName: 'Pixel',
     eventType:
       overrides.success === false ? 'live_view_rejected' : 'live_view_started',
@@ -106,16 +104,5 @@ describe('rejectionReasonLabel', () => {
     expect(rejectionReasonLabel('some_future_code')).toBe(
       'connection could not be established',
     );
-  });
-});
-
-describe('accessEventPresentation', () => {
-  it('uses clear labels for camera management and privacy events', () => {
-    expect(
-      accessEventPresentation(event({ eventType: 'privacy_enabled' })),
-    ).toMatchObject({ label: 'Privacy mode enabled', tone: 'neutral' });
-    expect(
-      accessEventPresentation(event({ eventType: 'camera_source_deleted' })),
-    ).toMatchObject({ label: 'Camera deleted', tone: 'danger' });
   });
 });

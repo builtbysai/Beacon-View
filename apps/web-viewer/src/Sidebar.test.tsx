@@ -99,36 +99,4 @@ describe('account menu', () => {
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Outside' }));
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
-
-  it('supports roving-tabindex keyboard navigation and returns focus on Escape', () => {
-    render(
-      <Sidebar email="owner@example.test" items={items} onLogout={vi.fn()} />,
-    );
-    const trigger = screen.getByRole('button', {
-      name: /owner@example\.test/,
-    });
-    fireEvent.click(trigger);
-    const menuItems = screen.getAllByRole('menuitem');
-    expect(menuItems[0]).toHaveFocus();
-    expect(menuItems[0]).toHaveAttribute('tabindex', '0');
-    expect(menuItems[1]).toHaveAttribute('tabindex', '-1');
-
-    fireEvent.keyDown(menuItems[0]!, { key: 'ArrowDown' });
-    expect(menuItems[1]).toHaveFocus();
-    expect(menuItems[1]).toHaveAttribute('tabindex', '0');
-    expect(menuItems[0]).toHaveAttribute('tabindex', '-1');
-
-    fireEvent.keyDown(menuItems[1]!, { key: 'ArrowDown' });
-    expect(menuItems[0]).toHaveFocus();
-
-    fireEvent.keyDown(menuItems[0]!, { key: 'End' });
-    expect(menuItems[1]).toHaveFocus();
-
-    fireEvent.keyDown(menuItems[1]!, { key: 'Home' });
-    expect(menuItems[0]).toHaveFocus();
-
-    fireEvent.keyDown(menuItems[0]!, { key: 'Escape' });
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
-  });
 });

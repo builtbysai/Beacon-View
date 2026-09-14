@@ -6,38 +6,6 @@ by a foreground service rather than the activity. Signaling sessions are keyed
 by connection ID, allowing independent viewer cleanup, while an authenticated
 household event WebSocket keeps browser camera state current without polling.
 
-## Application module boundaries
-
-Android's activity is a composition root for lifecycle, permissions, inbound links,
-and top-level mode. Camera-device presentation lives in `CameraModeUi`; native monitor
-state coordination, reusable components, navigation, presentation rules, and playback
-have separate modules. Capture, signaling, credentials, and runtime state remain
-independent services. UI modules may request actions but do not own camera or microphone
-lifetime.
-
-The web application shell coordinates authenticated routing and cross-feature realtime
-state. Public authentication-return, pairing, trust, diagnostics, and device-guidance
-surfaces are separate components. Domain contracts and independently testable feature surfaces live in separate modules. The
-backend application composes authentication, account, enrollment, service, signaling,
-camera-management, activity, and device-runtime features around one store contract; HTTP validation, camera response
-presentation, and session/CSRF policy are centralized modules. New recovery, notification, or sharing
-work must add policy and persistence boundaries rather than growing the application
-assembly files. See [ADR 0041](decisions/0041-maintainability-boundaries.md).
-
-The PostgreSQL store remains the application-facing persistence facade, while cohesive
-query families may be delegated to internal repositories. Motion settings, event
-insertion, cooldown and quiet-hours enforcement, history, and retention form one such
-repository. Audit insertion, access-history projection, and retention form another;
-transactional callers retain their existing database client. This preserves atomic
-behavior without exposing SQL concerns to routes or future notification services.
-Pairing lifecycle and registration throttling are isolated together, while browser
-session creation, rolling-expiry lookup, listing, and revocation form a session
-repository. Account creation, identity lookup, profile updates, and deletion form an
-account repository; account/household creation remains atomic with its audit event. The
-device repository owns inventory, source synchronization, browser registration,
-heartbeat health, privacy/revocation lifecycle, and signaling identity lookup. The
-application-facing store contract remains unchanged.
-
 ## Device and camera model
 
 A household owns devices; each device exposes one or more camera sources.
@@ -142,9 +110,6 @@ application-level end-to-end-encryption claim.
 - `PUT /api/device/cameras` and `POST /api/browser-devices`
 - `GET /api/devices`, `GET /api/cameras`, `GET /api/diagnostics`, and
   `DELETE /api/cameras/:cameraId/credential`
-- `GET /api/access-history` for a household-scoped, 50-event security activity
-  window covering live-view attempts, privacy changes, credential revocation,
-  and camera/device removal without returning IP addresses or connection data
 - `GET /api/devices/:deviceId` with its child sources and aggregate viewer count
 - `GET /api/cameras/:cameraId` for an independently addressable source
 - `POST /api/device/heartbeat`

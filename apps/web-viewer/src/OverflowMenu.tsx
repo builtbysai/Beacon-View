@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon } from './Icon';
-import { useMenuKeyboardNav } from './useMenuKeyboardNav';
 
-/** Shared anchored "..." menu: outside-click dismissal, proper `menu`/
- * `menuitem` ARIA with roving-tabindex keyboard navigation (see
- * `useMenuKeyboardNav`), no layout jump. Used anywhere a tile or surface
+/** Shared anchored "..." menu: outside-click and Escape dismissal, proper
+ * `menu`/`menuitem` ARIA, no layout jump. Used anywhere a tile or surface
  * needs a few secondary actions behind one icon button instead of a row of
  * always-visible buttons (camera tiles, the live viewer's identity bar). */
 export function OverflowMenu({
@@ -22,8 +20,6 @@ export function OverflowMenu({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -31,16 +27,20 @@ export function OverflowMenu({
       if (event.target instanceof Node && !ref.current?.contains(event.target))
         setOpen(false);
     };
+    const dismissEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
     window.addEventListener('pointerdown', dismissOutside);
-    return () => window.removeEventListener('pointerdown', dismissOutside);
+    window.addEventListener('keydown', dismissEscape);
+    return () => {
+      window.removeEventListener('pointerdown', dismissOutside);
+      window.removeEventListener('keydown', dismissEscape);
+    };
   }, [open]);
-
-  useMenuKeyboardNav(open, menuRef, triggerRef, () => setOpen(false));
 
   return (
     <div className={anchorClassName} ref={ref}>
       <button
-        ref={triggerRef}
         type="button"
         className={buttonClassName}
         aria-label={label}
@@ -51,7 +51,7 @@ export function OverflowMenu({
         <Icon name="more" />
       </button>
       {open && (
-        <div className={menuClassName} role="menu" ref={menuRef}>
+        <div className={menuClassName} role="menu">
           {children(() => setOpen(false))}
         </div>
       )}

@@ -89,30 +89,6 @@ browser decoded a 240×320 stream (`readyState=4`), and the live surface now kee
 starting overlay until the first media frame instead of treating peer connection as
 visible video.
 
-## September 10 camera and activity polish
-
-The generic `.device-list` presentation was removed. Pending camera devices,
-signed-in browser sessions, diagnostics, and security activity now use separate
-semantic list treatments so icons, actions, density, and responsive behavior match
-the information each row represents. Pending devices have a camera-device icon and
-direct Settings action; browser-session revocation uses a sign-out icon rather than
-a generic destructive affordance.
-
-Settings now presents the latest household camera-security activity in six-item
-pages. The existing 50-row server limit and 90-day audit retention remain unchanged.
-The household-scoped response adds privacy changes, credential revocation, and
-camera/device removals to live-view attempts while continuing to exclude IP addresses,
-transport details, credentials, and media. Deleted items preserve only their former
-display names in audit metadata so the history remains understandable after the
-source row is gone.
-
-The ordinary desktop contact form now has contact-specific vertical spacing and a
-responsive assertion proving that 1280×800 and 2560×1080 layouts fit the viewport.
-Short and narrow forms still use natural page scrolling, so content is never clipped.
-The audit harness was also reconciled with the camera-first routes and labels from the
-September 10 merge. Its primary viewport matrix and 33 extended-state captures pass
-without horizontal overflow, clipped controls, page errors, or unexpected API calls.
-
 ## September 8 physical Android evidence
 
 A Pixel 7a running Android was clean-installed and exercised in portrait and
@@ -142,8 +118,8 @@ The final debug APK was installed as a data-preserving update.
 
 ## September 7 release result
 
-The tested web build was deployed to the Oracle private alpha's former temporary
-hostname by rebuilding and recreating only the web service.
+The tested web build was deployed to the Oracle private alpha at
+https://beaconapp.duckdns.org by rebuilding and recreating only the web service.
 The public HTTPS response returned 200, `/ready` returned
 `{"service":"backend","status":"ok"}`, and the backend, PostgreSQL and TURN
 container IDs were unchanged. Publicly fetched assets matched the tested local build:
