@@ -183,6 +183,20 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 synchronized.cameras.map {
                     RegisteredCameraSource(it.id, it.sourceKey, it.name, it.facing)
                 }
+            if (cameras.isEmpty()) {
+                initializing = false
+                selectedCamera = null
+                CameraRuntime.update {
+                    it.copy(
+                        cameraEnabled = false,
+                        cameras = emptyList(),
+                        selectedCameraId = null,
+                        sourceLifecycle = CameraSourceLifecycle.Disabled,
+                        diagnostic = "No camera sources are shared",
+                    )
+                }
+                return@launch
+            }
             val preferred =
                 getSharedPreferences(PREFERENCES, MODE_PRIVATE)
                     .getString(SELECTED_CAMERA_ID, null)
@@ -314,6 +328,10 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
 
     override fun onSourceSwitch(cameraId: String) {
         selectCamera(cameraId)
+    }
+
+    override fun onSourcesChanged() {
+        restart(this)
     }
 
     override fun onPrivacyMode(enabled: Boolean) {
