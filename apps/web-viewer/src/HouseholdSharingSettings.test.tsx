@@ -69,6 +69,42 @@ describe('HouseholdSharingSettings', () => {
     );
   });
 
+  it('resends a pending invitation with a fresh code', async () => {
+    vi.mocked(request).mockImplementation((path, options) => {
+      if (path === '/api/household/sharing')
+        return Promise.resolve({
+          invitations: [
+            {
+              expiresAt: '2026-09-14T12:00:00.000Z',
+              id: 'a3f6c8f0-6e8a-4b64-9b3d-9c0b6a2a8f77',
+              invitedEmail: 'guest@example.com',
+              role: 'guest',
+            },
+          ],
+          members: [],
+        });
+      if (
+        path ===
+          '/api/household/invitations/a3f6c8f0-6e8a-4b64-9b3d-9c0b6a2a8f77/resend' &&
+        options?.method === 'POST'
+      )
+        return Promise.resolve({
+          expiresAt: '2026-09-16T12:00:00.000Z',
+          token: 'fresh-one-time-code',
+        });
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+    render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
+    await screen.findByText('guest@example.com');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resend invitation' }));
+
+    expect(await screen.findByText('fresh-one-time-code')).toBeVisible();
+    expect(
+      screen.getByText(/New invitation created for guest@example\.com/),
+    ).toBeVisible();
+  });
+
   it('saves explicit View and Listen grants without implicitly enabling Talk', async () => {
     vi.mocked(request).mockImplementation((path, options) => {
       if (path === '/api/household/sharing')

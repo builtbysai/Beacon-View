@@ -141,6 +141,32 @@ export function HouseholdSharingSettings({
     }
   }
 
+  async function resendInvitation(invitation: Invitation) {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    setCreatedInvite(null);
+    try {
+      const result = await request<{ expiresAt: string; token: string }>(
+        `/api/household/invitations/${invitation.id}/resend`,
+        { method: 'POST' },
+      );
+      setCreatedInvite({ code: result.token, expiresAt: result.expiresAt });
+      setMessage(
+        `New invitation created for ${invitation.invitedEmail}. Share this code through a trusted channel.`,
+      );
+      await load();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Unable to resend invitation',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function revokeInvitation(invitation: Invitation) {
     setBusy(true);
     setError('');
@@ -303,14 +329,24 @@ export function HouseholdSharingSettings({
                     </p>
                   </div>
                   {(role === 'owner' || invitation.role !== 'admin') && (
-                    <button
-                      className="danger"
-                      disabled={busy}
-                      onClick={() => void revokeInvitation(invitation)}
-                      type="button"
-                    >
-                      Revoke invitation
-                    </button>
+                    <>
+                      <button
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() => void resendInvitation(invitation)}
+                        type="button"
+                      >
+                        Resend invitation
+                      </button>
+                      <button
+                        className="danger"
+                        disabled={busy}
+                        onClick={() => void revokeInvitation(invitation)}
+                        type="button"
+                      >
+                        Revoke invitation
+                      </button>
+                    </>
                   )}
                 </div>
               ))}

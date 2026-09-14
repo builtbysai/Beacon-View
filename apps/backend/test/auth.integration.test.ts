@@ -307,6 +307,82 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     expect(afterRevocation.statusCode).toBe(401);
   });
 
+  it('resends an invitation with a fresh token and revokes the original', async () => {
+    const ownerRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'resend-owner@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.44',
+      url: '/api/auth/register',
+    });
+    const ownerCredentials = sessionCookies(ownerRegistration.headers);
+
+    const invitation = await app!.inject({
+      headers: {
+        cookie: ownerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': ownerCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { email: 'resend-guest@example.com', role: 'viewer' },
+      url: '/api/household/invitations',
+    });
+    expect(invitation.statusCode).toBe(201);
+    const original = invitation.json<{ id: string; token: string }>();
+
+    const resent = await app!.inject({
+      headers: {
+        cookie: ownerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': ownerCredentials.csrf,
+      },
+      method: 'POST',
+      url: `/api/household/invitations/${original.id}/resend`,
+    });
+    expect(resent.statusCode).toBe(201);
+    const resentInvitation = resent.json<{ id: string; token: string }>();
+    expect(resentInvitation.id).not.toBe(original.id);
+    expect(resentInvitation.token).not.toBe(original.token);
+
+    const guestRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'resend-guest@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.45',
+      url: '/api/auth/register',
+    });
+    const guestCredentials = sessionCookies(guestRegistration.headers);
+
+    const acceptedOriginal = await app!.inject({
+      headers: {
+        cookie: guestCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': guestCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { token: original.token },
+      url: '/api/household/invitations/accept',
+    });
+    expect(acceptedOriginal.statusCode).toBe(400);
+
+    const acceptedResent = await app!.inject({
+      headers: {
+        cookie: guestCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': guestCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { token: resentInvitation.token },
+      url: '/api/household/invitations/accept',
+    });
+    expect(acceptedResent.statusCode).toBe(200);
+    expect(acceptedResent.json()).toMatchObject({ role: 'viewer' });
+  });
+
   it('rejects an expired guest invitation before creating membership', async () => {
     const ownerRegistration = await app!.inject({
       method: 'POST',
