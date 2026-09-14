@@ -307,6 +307,70 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     expect(afterRevocation.statusCode).toBe(401);
   });
 
+  it('rejects an expired guest invitation before creating membership', async () => {
+    const ownerRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'guest-owner@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.42',
+      url: '/api/auth/register',
+    });
+    const ownerCredentials = sessionCookies(ownerRegistration.headers);
+
+    const guestRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'expiring-guest@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.43',
+      url: '/api/auth/register',
+    });
+    const guestCredentials = sessionCookies(guestRegistration.headers);
+
+    const invitation = await app!.inject({
+      headers: {
+        cookie: ownerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': ownerCredentials.csrf,
+      },
+      method: 'POST',
+      payload: {
+        email: 'expiring-guest@example.com',
+        expiresInHours: 1,
+        role: 'guest',
+      },
+      url: '/api/household/invitations',
+    });
+    expect(invitation.statusCode).toBe(201);
+    const token = invitation.json<{ token: string }>().token;
+    await store!.pool.query(
+      `UPDATE household_invitations
+       SET expires_at = now() - interval '1 second'`,
+    );
+
+    const accepted = await app!.inject({
+      headers: {
+        cookie: guestCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': guestCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { token },
+      url: '/api/household/invitations/accept',
+    });
+    expect(accepted.statusCode).toBe(400);
+    await expect(
+      store!.pool.query(
+        `SELECT 1 FROM household_members hm
+         JOIN users u ON u.id = hm.user_id
+         WHERE u.email = 'expiring-guest@example.com'`,
+      ),
+    ).resolves.toMatchObject({ rows: [] });
+  });
+
   it('uses generic login errors and revokes a session with CSRF protection', async () => {
     const registration = await app!.inject({
       method: 'POST',
