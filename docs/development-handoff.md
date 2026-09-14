@@ -1,10 +1,32 @@
 # Beacon SecureView development handoff
 
-Updated September 10, 2026. This is the shortest reliable orientation for a new
+Updated September 11, 2026. This is the shortest reliable orientation for a new
 development session. GitHub is canonical; the maintained local checkout is
 `C:\Dev\Beacon-SecureView`.
 
-## Most recent work (September 10, 2026)
+## Most recent work (September 11, 2026)
+
+The active local branch is `codex/android-experience-overhaul` and contains a large,
+intentional, uncommitted continuation spanning the Android experience rebuild, web UI,
+backend maintainability boundaries, owned-domain cutover, and notification foundation.
+Do not discard, reset, or replace this working tree. Review `git status` and the focused
+diff before editing overlapping files.
+
+Firebase project `beacon-view-158ad` now has Android package
+`com.beaconsecureview.camera` registered and FCM HTTP v1 enabled. The downloaded
+`google-services.json` is installed locally, validated, and ignored by Git. Android uses
+the official Google services plugin and Firebase BoM; FCM automatic initialization is
+disabled until an authenticated notification-consent workflow exists. The Firebase build
+passed Android unit tests and was update-installed on Pixel 7a `34171JEHN07672` at
+20:38, preserving app data. No server sender credential or VAPID private key has been
+created. Continue from ADR 0043 and [firebase-notifications-setup.md](firebase-notifications-setup.md).
+
+The production domain is `https://beacon.builtbysai.com`. Cloudflare DNS, Caddy TLS,
+Google OAuth redirect configuration, and Resend DNS verification are complete. The
+latest maintainability/Firebase working-tree changes have not been committed, pushed,
+or deployed.
+
+## Earlier work (September 10, 2026)
 
 A third product/UX pass landed and deployed: PR #14, "Third product/UX pass:
 camera-first simplification" (merged to `main` as `cb3b1bb`). Devices is no
@@ -46,14 +68,17 @@ this doc short. Known follow-ups not done in that pass:
 
 ## Current source and deployment
 
-- Repository: `Spairkie/Beacon-SecureView`
+- Repository: `builtbysai/Beacon-SecureView`
 - Active local branch should be a new `codex/*` feature branch, never `main`.
 - Pull requests target `main`; required CI must pass before merge.
 - A successful CI run for a push to `main` triggers the protected
   `Deploy web to Oracle` workflow.
 - Deployment is web-only. It uploads the validated web artifact to the Oracle
   VM and checks the local HTTPS `/health` and `/ready` endpoints.
-- Public private-alpha URL: <https://beaconapp.duckdns.org>
+- Canonical private-alpha URL: <https://beacon.builtbysai.com>
+- Domain cutover release: `domain-20260911-153201`; the former temporary hostname is
+  intentionally unsupported. Existing native installations need a canonical-domain
+  build.
 - Deployment details and rollback boundaries: [github-web-deployment.md](github-web-deployment.md)
 
 The repository does not contain production credentials. Keep application secrets
@@ -96,7 +121,8 @@ app data and do not clean-install without explicit approval.
 ## Safe continuation prompt
 
 ```text
-Work in Spairkie/Beacon-SecureView from the latest main.
+Work in builtbysai/Beacon-SecureView from the existing working tree on
+codex/android-experience-overhaul. Preserve all current uncommitted changes.
 Goal: <one concrete outcome>
 Scope: <files/features allowed to change>
 Preserve authentication, authorization, capture visibility, privacy mode,
