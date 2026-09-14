@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 
 import { request } from './api';
 import type { Camera, HouseholdRole } from './domain';
@@ -340,6 +346,31 @@ function MemberRow({
     Object.fromEntries(member.grants.map((grant) => [grant.cameraId, grant])),
   );
   const [saving, setSaving] = useState(false);
+  // `member` is replaced wholesale after `onChanged()` reloads the household
+  // from the server (e.g. after this row's own save, or another admin's
+  // change). Without resyncing here, local checkbox state would keep
+  // reflecting whatever was on screen before that reload instead of the
+  // now-confirmed server state.
+  useEffect(() => {
+    setGrants(
+      Object.fromEntries(member.grants.map((grant) => [grant.cameraId, grant])),
+    );
+  }, [member]);
+  // Unchecking "View" removes the whole grant entry (including its
+  // canListen/canTalk), so remember the last values per camera locally and
+  // restore them on re-check instead of silently resetting to off — the
+  // admin shouldn't have to re-configure Listen/Talk just from a stray
+  // View toggle within the same edit session.
+  const lastKnownPrefs = useRef<
+    Record<string, { canListen: boolean; canTalk: boolean }>
+  >(
+    Object.fromEntries(
+      member.grants.map((grant) => [
+        grant.cameraId,
+        { canListen: grant.canListen, canTalk: grant.canTalk },
+      ]),
+    ),
+  );
   const editable =
     member.status === 'active' &&
     (member.role === 'viewer' || member.role === 'guest');
@@ -399,14 +430,24 @@ function MemberRow({
                     onChange={(event) =>
                       setGrants((current) => {
                         const next = { ...current };
-                        if (event.target.checked)
+                        if (event.target.checked) {
+                          const remembered = lastKnownPrefs.current[camera.id];
                           next[camera.id] = {
                             cameraId: camera.id,
                             cameraName: camera.name,
-                            canListen: false,
-                            canTalk: false,
+                            canListen: remembered?.canListen ?? false,
+                            canTalk: remembered?.canTalk ?? false,
                           };
-                        else delete next[camera.id];
+                        } else {
+                          const existing = next[camera.id];
+                          if (existing) {
+                            lastKnownPrefs.current[camera.id] = {
+                              canListen: existing.canListen,
+                              canTalk: existing.canTalk,
+                            };
+                          }
+                          delete next[camera.id];
+                        }
                         return next;
                       })
                     }

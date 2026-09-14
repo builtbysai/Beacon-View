@@ -53,6 +53,7 @@ export function NotificationSettings() {
   const [channelBusy, setChannelBusy] = useState(false);
   const [savingDeviceId, setSavingDeviceId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [messageIsError, setMessageIsError] = useState(false);
 
   useEffect(() => {
     void request<{ preferences: Preference[] }>('/api/notification-preferences')
@@ -60,9 +61,10 @@ export function NotificationSettings() {
         setPreferences(result.preferences);
         setSavedPreferences(result.preferences);
       })
-      .catch(() =>
-        setMessage('Notification preferences are temporarily unavailable.'),
-      );
+      .catch(() => {
+        setMessageIsError(true);
+        setMessage('Notification preferences are temporarily unavailable.');
+      });
     if ('serviceWorker' in navigator) {
       void navigator.serviceWorker
         .getRegistration('/')
@@ -77,6 +79,7 @@ export function NotificationSettings() {
   async function enable() {
     setChannelBusy(true);
     setMessage('');
+    setMessageIsError(false);
     try {
       if (!('serviceWorker' in navigator) || !('PushManager' in window))
         throw new Error('This browser does not support notifications.');
@@ -113,6 +116,7 @@ export function NotificationSettings() {
       setEnabled(true);
       setMessage('Notifications are on. Lock-screen details stay private.');
     } catch (error) {
+      setMessageIsError(true);
       setMessage(
         error instanceof Error
           ? error.message
@@ -126,6 +130,7 @@ export function NotificationSettings() {
   async function disable() {
     setChannelBusy(true);
     setMessage('');
+    setMessageIsError(false);
     try {
       await disableWebNotifications();
       setEnabled(false);
@@ -138,6 +143,7 @@ export function NotificationSettings() {
   async function save(preference: Preference) {
     setSavingDeviceId(preference.deviceId);
     setMessage('');
+    setMessageIsError(false);
     try {
       const result = await request<{ preference: Preference }>(
         `/api/notification-preferences/${encodeURIComponent(preference.deviceId)}`,
@@ -166,6 +172,7 @@ export function NotificationSettings() {
       );
       setMessage(`${preference.deviceName} notification preferences saved.`);
     } catch (error) {
+      setMessageIsError(true);
       setMessage(
         error instanceof Error
           ? error.message
@@ -372,7 +379,10 @@ export function NotificationSettings() {
         </div>
       )}
       {message && (
-        <p className="notification-message" role="status">
+        <p
+          className="notification-message"
+          role={messageIsError ? 'alert' : 'status'}
+        >
           {message}
         </p>
       )}

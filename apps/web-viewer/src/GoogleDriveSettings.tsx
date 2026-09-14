@@ -92,7 +92,17 @@ export function GoogleDriveSettings() {
     }
   }
 
-  if (!status) return <p>Loading Google Drive…</p>;
+  if (!status) {
+    return (
+      <div className="drive-settings">
+        {error ? (
+          <p role="alert">{error}</p>
+        ) : (
+          <p role="status">Loading Google Drive…</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="drive-settings">
