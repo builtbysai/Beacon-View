@@ -21,6 +21,7 @@ export function CameraSettings({
   onCameraRename,
   onCameraDelete,
   onSwitchSource,
+  onReconnect,
 }: {
   cameras: Camera[];
   device: Device | undefined;
@@ -32,6 +33,7 @@ export function CameraSettings({
   onCameraRename: (camera: Camera, name: string) => void;
   onCameraDelete: (camera: Camera) => void;
   onSwitchSource: (camera: Camera) => void;
+  onReconnect?: (device: Device) => void;
 }) {
   const [renamingDevice, setRenamingDevice] = useState(false);
   if (!device) {
@@ -155,6 +157,20 @@ export function CameraSettings({
           {warning}
         </p>
       )}
+      {onReconnect &&
+        device.platform === 'android' &&
+        (!device.online || device.revoked) && (
+          <section
+            className="device-controls"
+            aria-labelledby="device-reconnect-title"
+          >
+            <div>
+              <h4 id="device-reconnect-title">Camera disconnected</h4>
+              <p>Reconnect this phone without deleting its settings.</p>
+            </div>
+            <button onClick={() => onReconnect(device)}>Reconnect</button>
+          </section>
+        )}
       <details
         className={`device-guidance${guidance.attention ? ' attention' : ''}`}
       >

@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { HouseholdEventHub } from './household-events.js';
 import {
   browserDeviceSchema,
+  deviceParameterSchema,
   pairingCodeParameterSchema,
   registerDeviceSchema,
   syncCameraSourcesSchema,
@@ -74,6 +75,43 @@ export function registerEnrollmentRoutes(
     return revoked
       ? reply.code(204).send()
       : reply.code(404).send({ error: 'Pairing code not found' });
+  });
+
+  app.post('/api/devices/:deviceId/pairing-code', async (request, reply) => {
+    const session = await authenticateHouseholdAdminStateChange(request, reply);
+    if (!session) return;
+    const parameters = deviceParameterSchema.safeParse(request.params);
+    if (!parameters.success) {
+      return reply.code(404).send({ error: 'Camera not found' });
+    }
+    const device = (await store.listDevices(session.householdId)).find(
+      (candidate) =>
+        candidate.publicDeviceId === parameters.data.deviceId &&
+        candidate.platform === 'android',
+    );
+    if (!device) return reply.code(404).send({ error: 'Camera not found' });
+    if (!limiter.take(`pairing-reconnect:${session.userId}`, 10, HOUR)) {
+      return reply.code(429).send({ error: 'Too many requests' });
+    }
+    const code = generatePairingCode();
+    const expiresAt = new Date(Date.now() + TEN_MINUTES);
+    const id = await store.createPairingCode(
+      session.householdId,
+      hashSecret(code),
+      expiresAt,
+      device.id,
+    );
+    await store.audit({
+      eventType: 'device_reconnect_code_created',
+      householdId: session.householdId,
+      ipAddress: request.ip,
+      metadata: { deviceName: device.name },
+      success: true,
+      userId: session.userId,
+    });
+    return reply
+      .code(201)
+      .send({ code, expiresAt: expiresAt.toISOString(), id });
   });
 
   app.post('/api/devices/register', async (request, reply) => {

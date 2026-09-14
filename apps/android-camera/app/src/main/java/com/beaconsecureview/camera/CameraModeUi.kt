@@ -123,7 +123,6 @@ internal fun PairingScreen(
     onCodeChange: (String) -> Unit,
     onScan: () -> Unit,
     onPair: () -> Unit,
-    onOpenPairingWeb: () -> Unit,
     onBack: () -> Unit,
 ) {
     Column(
@@ -158,13 +157,10 @@ internal fun PairingScreen(
                 modifier = Modifier.padding(top = 14.dp),
             )
             Text(
-                "Create a fresh code in Beacon web, then scan it here. Your camera stays offline until pairing succeeds.",
+                "In your signed-in Beacon viewer, open this camera and choose Reconnect. Then scan the new code here.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp, bottom = 14.dp),
             )
-            OutlinedButton(onClick = onOpenPairingWeb, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                Text("Create a new pairing code")
-            }
             Button(enabled = !busy, onClick = onScan, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.QrCodeScanner, null, modifier = Modifier.size(20.dp))
                 Text("Scan and connect", modifier = Modifier.padding(start = 8.dp))

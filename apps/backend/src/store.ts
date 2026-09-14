@@ -425,8 +425,14 @@ export class PostgresStore implements MilestoneStore {
     householdId: string,
     codeHash: string,
     expiresAt: Date,
+    targetDeviceId?: string,
   ): Promise<string> {
-    return this.pairing.createCode(householdId, codeHash, expiresAt);
+    return this.pairing.createCode(
+      householdId,
+      codeHash,
+      expiresAt,
+      targetDeviceId,
+    );
   }
 
   async revokePairingCode(

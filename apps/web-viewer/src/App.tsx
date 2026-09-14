@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { request } from './api';
+import { ApiError, request } from './api';
 import { nextPairingState } from './lifecycle';
 import { cameraStatus } from './camera-status';
 import type { PairingLifecycle } from './lifecycle';
@@ -95,6 +95,7 @@ export function App() {
   const [motionEventRevision, setMotionEventRevision] = useState(0);
   const [motionClearRevision, setMotionClearRevision] = useState(0);
   const returnPage = useRef<Page>('cameras');
+  const reconnectDeviceId = useRef<string | null>(null);
   const pageHeading = useRef<HTMLHeadingElement>(null);
   const priorPage = useRef(page);
 
@@ -288,8 +289,9 @@ export function App() {
     setPairingOpen(false);
   }
 
-  function openPairing() {
+  function openPairing(deviceId?: string) {
     returnPage.current = page;
+    reconnectDeviceId.current = deviceId ?? null;
     setPairingState('pending');
     setPairingCode('');
     setPairingOpen(true);
@@ -300,7 +302,10 @@ export function App() {
     setError('');
     setPairingBusy(true);
     try {
-      const result = await request<{ code: string }>('/api/pairing-codes', {
+      const path = reconnectDeviceId.current
+        ? `/api/devices/${encodeURIComponent(reconnectDeviceId.current)}/pairing-code`
+        : '/api/pairing-codes';
+      const result = await request<{ code: string }>(path, {
         body: '{}',
         method: 'POST',
       });
@@ -317,6 +322,7 @@ export function App() {
     setPairingState((state) => nextPairingState(state, 'cancelled'));
     setPairingOpen(false);
     setPairingCode('');
+    reconnectDeviceId.current = null;
     navigate(returnPage.current);
   }
 
@@ -471,6 +477,19 @@ export function App() {
       window.history.pushState({}, '', '/');
       setPage('dashboard');
     } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 403) {
+        setPendingConfirm({
+          title: 'Confirm it’s you',
+          description:
+            'For security, account deletion requires a recent sign-in. Sign out, sign back in, then choose Delete account again.',
+          confirmLabel: 'Sign out',
+          onConfirm: () => {
+            setPendingConfirm(null);
+            void logout();
+          },
+        });
+        return;
+      }
       setError(
         caught instanceof Error
           ? caught.message
@@ -791,6 +810,7 @@ export function App() {
                 onCameraDelete={(camera) => requestDeleteCamera(camera)}
                 onPrivacy={(device) => void setPrivacy(device)}
                 onSwitchSource={(camera) => void switchSource(camera)}
+                onReconnect={(device) => openPairing(device.id)}
               />
             </section>
           ) : (
@@ -861,7 +881,7 @@ export function App() {
         )}
         {page === 'camera mode' && (
           <AddCameraPage
-            onPairAndroid={openPairing}
+            onPairAndroid={() => openPairing()}
             onUseBrowser={() => setBrowserCameraActive(true)}
           />
         )}
@@ -872,6 +892,7 @@ export function App() {
           code={pairingCode}
           error={error}
           state={pairingState}
+          reconnecting={reconnectDeviceId.current !== null}
           onCopyError={() => setError('Could not copy the setup link.')}
           onDismiss={cancelPairing}
           onRetry={() => void createPairingCode()}

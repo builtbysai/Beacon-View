@@ -11,6 +11,7 @@ type PairingDialogProps = {
   onCopyError: () => void;
   onDismiss: () => void;
   onRetry: () => void;
+  reconnecting?: boolean;
 };
 
 export function PairingDialog({
@@ -21,6 +22,7 @@ export function PairingDialog({
   onCopyError,
   onDismiss,
   onRetry,
+  reconnecting = false,
 }: PairingDialogProps) {
   return (
     <ModalDialog labelledBy="pair-title" onDismiss={onDismiss}>
@@ -33,10 +35,16 @@ export function PairingDialog({
           </div>
         ) : (
           <>
-            <p className="eyebrow">New camera</p>
-            <h2 id="pair-title">Pair a device</h2>
+            <p className="eyebrow">
+              {reconnecting ? 'Reconnect' : 'New camera'}
+            </p>
+            <h2 id="pair-title">
+              {reconnecting ? 'Reconnect camera' : 'Pair a device'}
+            </h2>
             <p>
-              Scan with Beacon on Android, or share this one-time setup link.
+              {reconnecting
+                ? 'On the disconnected Android camera, scan this code to restore its existing settings.'
+                : 'Scan with Beacon on Android, or share this one-time setup link.'}
             </p>
             {code ? (
               <div className="pairing" role="status">

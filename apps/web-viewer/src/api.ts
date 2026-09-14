@@ -1,3 +1,13 @@
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 export function csrfToken(): string {
   return (
     document.cookie
@@ -27,7 +37,7 @@ export async function request<T>(
     const payload = (await response.json().catch(() => ({}))) as {
       error?: string;
     };
-    throw new Error(payload.error ?? 'Request failed');
+    throw new ApiError(payload.error ?? 'Request failed', response.status);
   }
   return response.status === 204
     ? (undefined as T)

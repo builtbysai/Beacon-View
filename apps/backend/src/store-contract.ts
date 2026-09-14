@@ -366,6 +366,7 @@ export interface MilestoneStore {
     householdId: string,
     codeHash: string,
     expiresAt: Date,
+    targetDeviceId?: string,
   ): Promise<string>;
   revokePairingCode(
     householdId: string,

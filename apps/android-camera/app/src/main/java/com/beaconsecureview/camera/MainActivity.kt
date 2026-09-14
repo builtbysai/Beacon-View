@@ -80,13 +80,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        CameraRuntime.update {
-            it.copy(
-                batteryOptimizationRestricted =
-                    !powerManager.isIgnoringBatteryOptimizations(packageName),
-            )
-        }
+        refreshBatteryOptimizationState()
         val monitorMode =
             getSharedPreferences("beacon_navigation", MODE_PRIVATE)
                 .getBoolean("monitor_destination", false)
@@ -108,6 +102,23 @@ class MainActivity : ComponentActivity() {
             CameraForegroundService.start(this)
         } else if (monitorMode) {
             CameraForegroundService.stop(this)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // The battery exemption sheet can return without restarting this Activity.
+        // Refresh here so the setup card disappears immediately after approval.
+        refreshBatteryOptimizationState()
+    }
+
+    private fun refreshBatteryOptimizationState() {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        CameraRuntime.update {
+            it.copy(
+                batteryOptimizationRestricted =
+                    !powerManager.isIgnoringBatteryOptimizations(packageName),
+            )
         }
     }
 }
@@ -350,14 +361,6 @@ private fun BeaconCameraApp(
                                 }
                         },
                         onPair = { pairCamera(pairingCode) },
-                        onOpenPairingWeb = {
-                            context.startActivity(
-                                Intent(
-                                    Intent.ACTION_VIEW,
-                                    Uri.parse("${BuildConfig.BEACON_API_URL.trimEnd('/')}/pair"),
-                                ),
-                            )
-                        },
                         onBack = {
                             pairingCode = ""
                             message = ""

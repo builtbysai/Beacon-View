@@ -2650,10 +2650,57 @@ button > .icon:first-child {
 }
 
 /* ---------- Settings ---------- */
+.settings-workspace {
+  display: grid;
+  align-items: start;
+  gap: var(--space-5);
+  grid-template-columns: 13rem minmax(0, 44rem);
+}
+
+.settings-nav {
+  display: grid;
+  gap: 0.25rem;
+  position: sticky;
+  top: var(--space-4);
+}
+
+.settings-nav button {
+  min-height: 2.65rem;
+  justify-content: flex-start;
+  padding: 0.6rem 0.8rem;
+  border-color: transparent;
+  color: var(--text-secondary);
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+.settings-nav button:hover:not(:disabled) {
+  border-color: var(--border);
+  color: var(--text);
+  background: var(--surface-2);
+  box-shadow: none;
+}
+
+.settings-nav button.is-active {
+  color: var(--action-soft-text);
+  border-color: color-mix(in srgb, var(--accent), transparent 70%);
+  background: var(--action-soft-bg);
+}
+
 .settings-layout {
   display: grid;
-  max-width: 44rem;
+  min-width: 0;
   gap: var(--space-4);
+}
+
+.settings-section-heading h3 {
+  margin: 0;
+  font-size: clamp(1.25rem, 2vw, 1.55rem);
+}
+
+.settings-section-stack {
+  display: grid;
 }
 
 .settings-section > .notification-settings {
@@ -3104,6 +3151,25 @@ button > .icon:first-child {
 }
 
 @media (max-width: 800px) {
+  .settings-workspace {
+    display: grid;
+    gap: var(--space-4);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-nav {
+    display: flex;
+    position: static;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+    scrollbar-width: thin;
+  }
+
+  .settings-nav button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
   .sharing-invite,
   .sharing-accept,
   .sharing-code,
@@ -4240,6 +4306,37 @@ button > .icon:first-child {
 
 .viewer-roster small {
   color: var(--text-tertiary);
+}
+
+.video-control[data-tooltip] {
+  position: relative;
+}
+
+.video-control[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.55rem);
+  z-index: 20;
+  padding: 0.38rem 0.55rem;
+  border-radius: 0.45rem;
+  background: rgba(3, 11, 23, 0.94);
+  color: white;
+  font-size: 0.75rem;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 0.2rem);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.video-control[data-tooltip]:hover::after,
+.video-control[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .activity-toast:hover:not(:disabled) {

@@ -17,6 +17,7 @@ export function GoogleDriveSettings() {
 
   async function load() {
     try {
+      setError('');
       setStatus(await request<DriveStatus>('/api/drive/status'));
     } catch (caught) {
       setError(
@@ -80,8 +81,7 @@ export function GoogleDriveSettings() {
               : 'Use Google Drive for Beacon data'}
           </strong>
           <p>
-            Beacon requests access only to its private app-data area. Camera
-            media and recordings are not uploaded by this connection.
+            Private app data only. Camera media and recordings are not uploaded.
           </p>
           {status.providerEmail && (
             <p>Connected account: {status.providerEmail}</p>
@@ -93,7 +93,9 @@ export function GoogleDriveSettings() {
           </a>
         )}
         {!status.configured && (
-          <span className="settings-muted">Not enabled on this server</span>
+          <button className="secondary" onClick={() => void load()}>
+            Retry setup
+          </button>
         )}
       </div>
       {status.connected && (

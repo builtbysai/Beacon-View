@@ -24,11 +24,12 @@ export class PostgresPairingRepository {
     householdId: string,
     codeHash: string,
     expiresAt: Date,
+    targetDeviceId?: string,
   ): Promise<string> {
     const result = await this.pool.query<{ id: string }>(
-      `INSERT INTO pairing_codes (household_id, code_hash, expires_at)
-       VALUES ($1, $2, $3) RETURNING id`,
-      [householdId, codeHash, expiresAt],
+      `INSERT INTO pairing_codes (household_id, code_hash, expires_at, camera_id)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [householdId, codeHash, expiresAt, targetDeviceId ?? null],
     );
     return result.rows[0]!.id;
   }
@@ -53,8 +54,13 @@ export class PostgresPairingRepository {
     let pairingHouseholdId: string | undefined;
     try {
       await client.query('BEGIN');
-      const code = await client.query<{ id: string; householdId: string }>(
-        `SELECT id, household_id AS "householdId" FROM pairing_codes
+      const code = await client.query<{
+        id: string;
+        householdId: string;
+        targetDeviceId: string | null;
+      }>(
+        `SELECT id, household_id AS "householdId", camera_id AS "targetDeviceId"
+         FROM pairing_codes
          WHERE code_hash = $1 AND expires_at > $2 AND consumed_at IS NULL
            AND revoked_at IS NULL FOR UPDATE`,
         [input.codeHash, input.now],
@@ -71,6 +77,65 @@ export class PostgresPairingRepository {
         return null;
       }
       pairingHouseholdId = pairingCode.householdId;
+      if (pairingCode.targetDeviceId) {
+        const device = await client.query<{
+          id: string;
+          publicDeviceId: string;
+          name: string;
+        }>(
+          `UPDATE cameras SET revoked_at = NULL, enabled = true, updated_at = now()
+           WHERE id = $1 AND household_id = $2 AND installation_id = $3
+           RETURNING id, public_device_id AS "publicDeviceId", name`,
+          [
+            pairingCode.targetDeviceId,
+            pairingCode.householdId,
+            input.installationId,
+          ],
+        );
+        const reconnected = device.rows[0];
+        if (!reconnected) {
+          await this.audit.insert(client, {
+            eventType: 'pairing_failed',
+            householdId: pairingCode.householdId,
+            ipAddress: input.ipAddress,
+            metadata: { reason: 'reconnect_device_mismatch' },
+            success: false,
+          });
+          await client.query('COMMIT');
+          return null;
+        }
+        await client.query(
+          'DELETE FROM device_credentials WHERE camera_id = $1',
+          [reconnected.id],
+        );
+        await client.query(
+          `INSERT INTO device_credentials (camera_id, credential_hash)
+           VALUES ($1, $2)`,
+          [reconnected.id, input.credentialHash],
+        );
+        const camera = await client.query<{ publicCameraId: string }>(
+          `SELECT public_camera_id AS "publicCameraId" FROM camera_sources
+           WHERE device_id = $1
+           ORDER BY created_at LIMIT 1`,
+          [reconnected.id],
+        );
+        await client.query(
+          `UPDATE pairing_codes SET consumed_at = $2 WHERE id = $1`,
+          [pairingCode.id, input.now],
+        );
+        await this.audit.insert(client, {
+          cameraId: reconnected.id,
+          eventType: 'device_reconnected',
+          householdId: pairingCode.householdId,
+          ipAddress: input.ipAddress,
+          success: true,
+        });
+        await client.query('COMMIT');
+        return {
+          ...reconnected,
+          publicCameraId: camera.rows[0]!.publicCameraId,
+        };
+      }
       const registrations = await client.query<{ count: number }>(
         `SELECT count(*)::int AS count FROM cameras
          WHERE household_id = $1

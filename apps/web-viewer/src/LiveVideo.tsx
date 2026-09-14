@@ -595,6 +595,9 @@ export function LiveVideo({
             <button
               aria-pressed={listening}
               className="video-control"
+              data-tooltip={
+                listening ? 'Mute camera audio' : 'Listen to camera'
+              }
               disabled={!permissions.canListen}
               onClick={() => {
                 const next = !listening;
@@ -629,6 +632,11 @@ export function LiveVideo({
             <button
               aria-pressed={talkState === 'speaking'}
               className={`video-control${talkState === 'speaking' ? ' is-active' : ''}`}
+              data-tooltip={
+                talkState === 'speaking'
+                  ? 'Stop talking'
+                  : 'Talk through camera'
+              }
               disabled={
                 !permissions.canTalk ||
                 switching ||
@@ -646,7 +654,7 @@ export function LiveVideo({
               }}
               type="button"
             >
-              <Icon name="talk" />
+              <Icon name={talkState === 'speaking' ? 'micOff' : 'mic'} />
               <span className="visually-hidden">
                 {talkState === 'speaking'
                   ? 'Stop talking'
@@ -695,6 +703,7 @@ export function LiveVideo({
             )}
             <button
               className="video-control"
+              data-tooltip={fullscreen ? 'Exit full screen' : 'Full screen'}
               ref={fullscreenButton}
               onClick={() => {
                 setControlError('');
@@ -756,7 +765,8 @@ export function LiveVideo({
               </strong>
               {Array.from({ length: viewerCount }, (_, index) => (
                 <span key={index}>
-                  <Icon name="eye" /> Viewer {index + 1}
+                  <Icon name="eye" />
+                  {index === 0 ? 'You' : `Household viewer ${index}`}
                 </span>
               ))}
               <small>Viewer names stay private in this live view.</small>
