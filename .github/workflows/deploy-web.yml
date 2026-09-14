@@ -113,6 +113,11 @@ jobs:
             --project-name beacon-secureview-cloud \
             --env-file /etc/beacon/production.env \
             --file "$compose_file" \
+            run --rm backup
+          sudo docker compose \
+            --project-name beacon-secureview-cloud \
+            --env-file /etc/beacon/production.env \
+            --file "$compose_file" \
             run --rm migrate
           sudo docker compose \
             --project-name beacon-secureview-cloud \

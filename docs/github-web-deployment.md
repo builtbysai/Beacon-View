@@ -49,9 +49,10 @@ The workflow first joins the tailnet as an ephemeral `tag:ci` node and verifies
 connectivity to `beacon-secureview-oracle`. It then uploads a Git archive to `/tmp`,
 extracts it into a commit-specific directory under `/opt/beacon/releases`, builds
 the `backend`, `migrate`, and `web` images from that exact source, starts the
-existing PostgreSQL service, runs the migration container once, and restarts the
+existing PostgreSQL service, creates a fresh encrypted backup through the backup
+container, runs the migration container once, and restarts the
 backend and web services. It then checks `/health` and `/ready` over HTTPS. A
-failed migration stops the release before the backend is restarted.
+failed backup or migration stops the release before the backend is restarted.
 
 ## How to deploy
 
