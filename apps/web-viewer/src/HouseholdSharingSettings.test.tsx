@@ -97,9 +97,7 @@ describe('HouseholdSharingSettings', () => {
     render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
     await screen.findByText('guest@example.com');
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Resend invitation' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Resend invitation' }));
 
     expect(await screen.findByText('fresh-one-time-code')).toBeVisible();
     expect(
