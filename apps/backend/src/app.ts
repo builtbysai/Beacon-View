@@ -105,6 +105,7 @@ export function buildApp(
   });
   registerSharingRoutes(app, {
     auth: sessionAuth,
+    config,
     householdEvents,
     limiter,
     signaling,

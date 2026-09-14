@@ -1,4 +1,4 @@
-name: Deploy web to Oracle
+name: Deploy Beacon to Oracle
 
 on:
   workflow_run:
@@ -74,7 +74,7 @@ jobs:
           "beacon-${RELEASE_SHA}.tar.gz"
           "${ORACLE_USER}@${ORACLE_HOST}:/tmp/beacon-${RELEASE_SHA}.tar.gz"
 
-      - name: Deploy only the web service and verify readiness
+      - name: Apply migrations, deploy backend and web, and verify readiness
         shell: bash
         env:
           ORACLE_HOST: beacon-secureview-oracle
@@ -103,12 +103,22 @@ jobs:
             --project-name beacon-secureview-cloud \
             --env-file /etc/beacon/production.env \
             --file "$compose_file" \
-            build web
+            build backend migrate web
           sudo docker compose \
             --project-name beacon-secureview-cloud \
             --env-file /etc/beacon/production.env \
             --file "$compose_file" \
-            up -d --no-deps web
+            up -d postgres
+          sudo docker compose \
+            --project-name beacon-secureview-cloud \
+            --env-file /etc/beacon/production.env \
+            --file "$compose_file" \
+            run --rm migrate
+          sudo docker compose \
+            --project-name beacon-secureview-cloud \
+            --env-file /etc/beacon/production.env \
+            --file "$compose_file" \
+            up -d --no-deps backend web
 
           domain="${BEACON_DOMAIN:-beacon.builtbysai.com}"
           # --retry-all-errors is required here: a freshly (re)started Caddy

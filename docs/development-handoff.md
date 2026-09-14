@@ -39,8 +39,8 @@ Validation: all 101 web tests pass, the Vite production build succeeds, ESLint a
 `git diff --check` are clean, and the isolated responsive audit passes 134 captures
 without page errors, unexpected API calls, horizontal overflow, or clipped controls.
 Android `testDebugUnitTest` plus `assembleDebug` succeeded, and the debug APK was
-update-installed on Pixel `34171JEHN07672` without clearing app data. The web-only
-release `ui-20260912-2049` is live; `/health`, `/ready`, deployed asset hashes, and the
+update-installed on Pixel `34171JEHN07672` without clearing app data. The historical
+web-only release `ui-20260912-2049` is live; `/health`, `/ready`, deployed asset hashes, and the
 real Chrome rendering were verified. A rollback image was retained as
 `beacon-web-rollback:ui-20260912-2049`.
 
@@ -148,9 +148,9 @@ this doc short. Known follow-ups not done in that pass:
 - Active local branch should be a new `codex/*` feature branch, never `main`.
 - Pull requests target `main`; required CI must pass before merge.
 - Once the current workflow change is reviewed and merged, a successful CI run for a
-  push to `main` triggers the protected `Deploy web to Oracle` workflow.
-- Deployment is web-only. It uploads the validated web artifact to the Oracle
-  VM and checks the local HTTPS `/health` and `/ready` endpoints.
+  push to `main` triggers the protected `Deploy Beacon to Oracle` workflow.
+- Deployment uploads the validated source, applies migrations, restarts the backend
+  and web services, and checks the local HTTPS `/health` and `/ready` endpoints.
 - Canonical private-alpha URL: <https://beacon.builtbysai.com>
 - Domain cutover release: `domain-20260911-153201`; the former temporary hostname is
   intentionally unsupported. Existing native installations need a canonical-domain

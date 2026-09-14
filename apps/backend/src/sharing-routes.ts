@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { canAssignRole } from './household-authorization.js';
+import { deliverHouseholdInvitation } from './contact.js';
+import type { AppConfig } from './config.js';
 import type { HouseholdEventHub } from './household-events.js';
 import type { RateLimiter } from './rate-limit.js';
 import { generateToken, hashSecret, normalizeEmail } from './security.js';
@@ -48,13 +50,15 @@ export function registerSharingRoutes(
   app: FastifyInstance,
   dependencies: {
     auth: SessionAuth;
+    config: AppConfig;
     householdEvents: HouseholdEventHub;
     limiter: RateLimiter;
     signaling: SignalingHub;
     store: MilestoneStore;
   },
 ): void {
-  const { auth, householdEvents, limiter, signaling, store } = dependencies;
+  const { auth, config, householdEvents, limiter, signaling, store } =
+    dependencies;
 
   app.get('/api/household/sharing', async (request, reply) => {
     const session = await auth.authenticateHouseholdAdmin(request, reply);
@@ -109,6 +113,21 @@ export function registerSharingRoutes(
       role: body.data.role,
       tokenHash: hashSecret(token),
     });
+    if (config.RESEND_API_KEY && config.RESEND_FROM) {
+      try {
+        await deliverHouseholdInvitation(config, {
+          expiresAt,
+          role: body.data.role,
+          token,
+          to: body.data.email,
+        });
+      } catch {
+        await store.revokeHouseholdInvitation(session.householdId, id);
+        return reply
+          .code(503)
+          .send({ error: 'Invitation email could not be delivered' });
+      }
+    }
     await store.audit({
       eventType: 'household_invitation_created',
       householdId: session.householdId,

@@ -1,9 +1,8 @@
-# GitHub web deployment
+# GitHub deployment
 
-The repository can deploy the web viewer to the Oracle private-alpha VM after a
-successful CI run on `main`. The workflow is intentionally web-only: it does not
-run migrations or recreate the backend, PostgreSQL, Coturn, or persistent Caddy
-volumes.
+The repository can deploy a coordinated backend, migration, and web release to
+the Oracle private-alpha VM after a successful CI run on `main`. The workflow does
+not recreate persistent PostgreSQL data, Coturn, or Caddy volumes.
 
 ## One-time GitHub setup
 
@@ -48,17 +47,16 @@ The VM must already have:
 
 The workflow first joins the tailnet as an ephemeral `tag:ci` node and verifies
 connectivity to `beacon-secureview-oracle`. It then uploads a Git archive to `/tmp`,
-extracts it into a commit-specific
-directory under `/opt/beacon/releases`, builds the `web` image from that exact
-source, and runs `docker compose build web` followed by
-`docker compose up -d --no-deps web`. It then checks `/health` and `/ready` over
-HTTPS. It does not apply database migrations; backend or schema releases remain
-deliberate separate operations.
+extracts it into a commit-specific directory under `/opt/beacon/releases`, builds
+the `backend`, `migrate`, and `web` images from that exact source, starts the
+existing PostgreSQL service, runs the migration container once, and restarts the
+backend and web services. It then checks `/health` and `/ready` over HTTPS. A
+failed migration stops the release before the backend is restarted.
 
 ## How to deploy
 
 Merge reviewed web changes to `main`. After the `CI` workflow succeeds, the
-`Deploy web to Oracle` workflow runs automatically. The deployment is serialized
+`Deploy Beacon to Oracle` workflow runs automatically. The deployment is serialized
 so two web releases cannot replace one another concurrently.
 
 For a safer first rollout, configure the `production` environment with required
