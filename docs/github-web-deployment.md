@@ -39,6 +39,8 @@ The VM must already have:
 
 - Docker Engine and Compose.
 - `/etc/beacon/production.env` owned by root with mode `600`.
+- `/etc/beacon/backup.env` owned by root with mode `600`, containing the
+  Object Storage and independent Restic repository settings.
 - `/opt/beacon/releases` writable by root.
 - Passwordless `sudo` for the deployment user for the required Docker and install
   commands.
@@ -49,7 +51,8 @@ The workflow first joins the tailnet as an ephemeral `tag:ci` node and verifies
 connectivity to `beacon-secureview-oracle`. It then uploads a Git archive to `/tmp`,
 extracts it into a commit-specific directory under `/opt/beacon/releases`, builds
 the `backend`, `migrate`, and `web` images from that exact source, starts the
-existing PostgreSQL service, creates a fresh encrypted backup through the backup
+existing PostgreSQL service, loads both protected environment files, creates a
+fresh encrypted backup through the backup
 container, runs the migration container once, and restarts the
 backend and web services. It then checks `/health` and `/ready` over HTTPS. A
 failed backup or migration stops the release before the backend is restarted.

@@ -94,6 +94,7 @@ jobs:
           archive="/tmp/beacon-${RELEASE_SHA}.tar.gz"
           release_dir="/opt/beacon/releases/web-${RELEASE_SHA}"
           compose_file="${release_dir}/infrastructure/cloud/compose.yaml"
+          env_files=(--env-file /etc/beacon/production.env --env-file /etc/beacon/backup.env)
 
           sudo install -d -m 0755 "$release_dir"
           sudo tar --extract --gzip --file "$archive" --directory "$release_dir"
@@ -101,27 +102,27 @@ jobs:
 
           sudo docker compose \
             --project-name beacon-secureview-cloud \
-            --env-file /etc/beacon/production.env \
+            "${env_files[@]}" \
             --file "$compose_file" \
             build backend migrate web
           sudo docker compose \
             --project-name beacon-secureview-cloud \
-            --env-file /etc/beacon/production.env \
+            "${env_files[@]}" \
             --file "$compose_file" \
             up -d postgres
           sudo docker compose \
             --project-name beacon-secureview-cloud \
-            --env-file /etc/beacon/production.env \
+            "${env_files[@]}" \
             --file "$compose_file" \
             run --rm backup
           sudo docker compose \
             --project-name beacon-secureview-cloud \
-            --env-file /etc/beacon/production.env \
+            "${env_files[@]}" \
             --file "$compose_file" \
             run --rm migrate
           sudo docker compose \
             --project-name beacon-secureview-cloud \
-            --env-file /etc/beacon/production.env \
+            "${env_files[@]}" \
             --file "$compose_file" \
             up -d --no-deps backend web
 
