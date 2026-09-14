@@ -12,6 +12,10 @@ local multi-camera monitoring workspaces, explicit Listen controls, a single-own
 web-to-Android talk path, Android privacy mode, and on-device motion metadata.
 Recording, object recognition, and notifications are not implemented.
 
+<p align="center">
+  <img src="assets/architecture.svg" width="900" alt="Beacon SecureView system architecture: Android camera client, Fastify backend, React web viewer">
+</p>
+
 ## Repository layout
 
 - `apps/android-camera` — Kotlin/Compose CameraX and WebRTC camera client
@@ -75,3 +79,7 @@ separation, browser producers, independent multi-viewer sessions, privacy mode,
 and one-way camera audio. Recording, motion/events, notifications, distributed
 presence/signaling, production deployment, SFU fan-out, iOS/desktop agents, and
 IP-camera adapters remain future roadmap work.
+
+---
+
+*Built by [Hans Sai](https://builtbysai.com).*

@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="660" viewBox="0 0 1000 660" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img" aria-label="Beacon SecureView system architecture: Android camera client, Fastify backend, and React web viewer">
+<rect x="1" y="1" width="998" height="658" rx="14" fill="#fdfdfa" stroke="#ddd8c8" stroke-width="2"/>
+
+<!-- header -->
+<g transform="translate(60,54)">
+  <circle r="6" fill="#0f766e"/>
+  <path d="M -12 -8 Q -23 0 -12 8" stroke="#0f766e" stroke-width="2.4" fill="none" opacity="0.55" stroke-linecap="round"/>
+  <path d="M 12 -8 Q 23 0 12 8" stroke="#0f766e" stroke-width="2.4" fill="none" opacity="0.55" stroke-linecap="round"/>
+</g>
+<text x="92" y="62" fill="#243431" font-size="20" font-weight="700">Beacon SecureView — system overview</text>
+<text x="92" y="86" fill="#6b7a77" font-size="12.5">Device-agnostic camera platform — Android first: an unused phone becomes a remotely accessible smart security camera.</text>
+
+<g>
+  <rect x="840" y="36" width="116" height="28" rx="14" fill="#fdf0d3" stroke="#e0ae4e" stroke-width="1.4"/>
+  <text x="898" y="54.5" text-anchor="middle" fill="#8a5a12" font-size="11" font-weight="700" letter-spacing="1">PRIVATE ALPHA</text>
+  <text x="956" y="82" text-anchor="end" fill="#97835c" font-size="11">not production-ready</text>
+</g>
+
+<!-- card 1: android camera -->
+<g>
+  <rect x="44" y="118" width="268" height="232" rx="12" fill="#ffffff" stroke="#d8d4c3" stroke-width="1.5"/>
+  <g transform="translate(84,158)" stroke="#0f766e" stroke-width="2.2" fill="none" stroke-linecap="round">
+    <rect x="-13" y="-22" width="26" height="44" rx="6"/>
+    <circle cx="0" cy="-13" r="3.4" fill="#0f766e" stroke="none"/>
+    <path d="M -5 15 h 10"/>
+  </g>
+  <text x="108" y="164" fill="#243431" font-size="14.5" font-weight="700">Android camera</text>
+  <g fill="#0f766e"><circle cx="66" cy="201" r="3"/><circle cx="66" cy="222" r="3"/><circle cx="66" cy="243" r="3"/><circle cx="66" cy="264" r="3"/><circle cx="66" cy="285" r="3"/></g>
+  <g fill="#45544f" font-size="12">
+    <text x="78" y="205">Kotlin · CameraX + WebRTC</text>
+    <text x="78" y="226">Foreground-service readiness</text>
+    <text x="78" y="247">Secure pairing · 30 s heartbeat</text>
+    <text x="78" y="268">On-device motion metadata</text>
+    <text x="78" y="289">Fail-closed privacy mode</text>
+  </g>
+  <text x="78" y="326" fill="#8a988f" font-size="11">640×480 · 15 fps · muted until Listen</text>
+</g>
+
+<!-- card 2: backend -->
+<g>
+  <rect x="366" y="118" width="268" height="232" rx="12" fill="#ffffff" stroke="#d8d4c3" stroke-width="1.5"/>
+  <g transform="translate(406,158)" stroke="#0f766e" stroke-width="2.2" fill="none" stroke-linecap="round">
+    <rect x="-16" y="-19" width="32" height="38" rx="5"/>
+    <path d="M -16 -6 h 32 M -16 7 h 32"/>
+    <circle cx="-10" cy="-12.5" r="1.8" fill="#0f766e" stroke="none"/>
+    <circle cx="-10" cy="0.5" r="1.8" fill="#0f766e" stroke="none"/>
+    <circle cx="-10" cy="13" r="1.8" fill="#0f766e" stroke="none"/>
+  </g>
+  <text x="430" y="164" fill="#243431" font-size="14.5" font-weight="700">Backend</text>
+  <g fill="#0f766e"><circle cx="388" cy="201" r="3"/><circle cx="388" cy="222" r="3"/><circle cx="388" cy="243" r="3"/><circle cx="388" cy="264" r="3"/></g>
+  <g fill="#45544f" font-size="12">
+    <text x="400" y="205">Fastify API + WebSocket signaling</text>
+    <text x="400" y="226">PostgreSQL (security state)</text>
+    <text x="400" y="247">Coturn TURN · 10-min credentials</text>
+    <text x="400" y="268">Oracle Cloud staging</text>
+  </g>
+  <text x="400" y="326" fill="#8a988f" font-size="11">never carries media · sees only SDP/ICE</text>
+</g>
+
+<!-- card 3: web viewer -->
+<g>
+  <rect x="688" y="118" width="268" height="232" rx="12" fill="#ffffff" stroke="#d8d4c3" stroke-width="1.5"/>
+  <g transform="translate(728,158)" stroke="#0f766e" stroke-width="2.2" fill="none" stroke-linecap="round">
+    <rect x="-19" y="-15" width="38" height="30" rx="5"/>
+    <path d="M -19 -5 h 38"/>
+    <path d="M -4 -2 L 7 0 L -4 2 Z" fill="#0f766e" stroke="none"/>
+  </g>
+  <text x="752" y="164" fill="#243431" font-size="14.5" font-weight="700">Web viewer</text>
+  <g fill="#0f766e"><circle cx="710" cy="201" r="3"/><circle cx="710" cy="222" r="3"/><circle cx="710" cy="243" r="3"/><circle cx="710" cy="264" r="3"/><circle cx="710" cy="285" r="3"/></g>
+  <g fill="#45544f" font-size="12">
+    <text x="722" y="205">React PWA</text>
+    <text x="722" y="226">Dashboard · Cameras · Devices</text>
+    <text x="722" y="247">Authorized multi-viewer WebRTC</text>
+    <text x="722" y="268">Explicit Listen · owner-only Talk</text>
+    <text x="722" y="289">Browser Camera Mode (attended)</text>
+  </g>
+  <text x="722" y="326" fill="#8a988f" font-size="11">installable · light &amp; dark themes</text>
+</g>
+
+<!-- connectors between cards -->
+<g stroke="#0f766e" stroke-width="2" opacity="0.75">
+  <path d="M 320 234 L 358 234"/>
+  <path d="M 328 229 L 320 234 L 328 239 Z" fill="#0f766e" stroke="none"/>
+  <path d="M 350 229 L 358 234 L 350 239 Z" fill="#0f766e" stroke="none"/>
+  <path d="M 642 234 L 680 234"/>
+  <path d="M 650 229 L 642 234 L 650 239 Z" fill="#0f766e" stroke="none"/>
+  <path d="M 672 229 L 680 234 L 672 239 Z" fill="#0f766e" stroke="none"/>
+</g>
+
+<!-- how they connect -->
+<rect x="44" y="372" width="912" height="112" rx="10" fill="#f5f3ea" stroke="#e0dcc9" stroke-width="1.2"/>
+<text x="68" y="398" fill="#243431" font-size="12.5" font-weight="700">How they connect</text>
+<g font-size="12">
+  <text x="68" y="424" fill="#0f766e" font-weight="700">Camera ↔ backend</text>
+  <text x="222" y="424" fill="#45544f">secure pairing · 30 s heartbeat · authorized WebSocket signaling · 10-min TURN credentials</text>
+  <text x="68" y="448" fill="#0f766e" font-weight="700">Camera ⇢ viewer</text>
+  <text x="222" y="448" fill="#45544f">WebRTC media (DTLS-SRTP), direct or relayed by Coturn when needed — the backend never carries media</text>
+  <text x="68" y="472" fill="#0f766e" font-weight="700">Viewer ↔ backend</text>
+  <text x="222" y="472" fill="#45544f">cookie-authenticated REST + WebSocket · explicit Listen and single-owner Talk consent</text>
+</g>
+
+<!-- in the foundation today -->
+<text x="60" y="524" fill="#243431" font-size="13" font-weight="700">In the foundation today</text>
+<g font-size="11.5" fill="#45544f">
+  <rect x="60" y="536" width="104" height="28" rx="14" fill="#ffffff" stroke="#d8d4c3"/><text x="112" y="554" text-anchor="middle">secure pairing</text>
+  <rect x="172" y="536" width="192" height="28" rx="14" fill="#ffffff" stroke="#d8d4c3"/><text x="268" y="554" text-anchor="middle">foreground-service readiness</text>
+  <rect x="372" y="536" width="182" height="28" rx="14" fill="#ffffff" stroke="#d8d4c3"/><text x="463" y="554" text-anchor="middle">multiple sources / device</text>
+  <rect x="562" y="536" width="178" height="28" rx="14" fill="#ffffff" stroke="#d8d4c3"/><text x="651" y="554" text-anchor="middle">on-device motion metadata</text>
+  <rect x="60" y="572" width="164" height="28" rx="14" fill="#ffffff" stroke="#d8d4c3"/><text x="142" y="590" text-anchor="middle">explicit Listen controls</text>
+  <rect x="232" y="572" width="196" height="28" rx="14" fill="#ffffff" stroke="#d8d4c3"/><text x="330" y="590" text-anchor="middle">single-owner web→Android talk</text>
+  <rect x="436" y="572" width="168" height="28" rx="14" fill="#ffffff" stroke="#d8d4c3"/><text x="520" y="590" text-anchor="middle">fail-closed privacy mode</text>
+</g>
+
+<!-- footer honesty line -->
+<text x="60" y="634" fill="#8a988f" font-size="12">Not implemented: recording · object recognition · notifications</text>
+<text x="940" y="634" text-anchor="end" fill="#8a988f" font-size="12">Fastify · WebRTC · React · PostgreSQL · Coturn</text>
+</svg>
