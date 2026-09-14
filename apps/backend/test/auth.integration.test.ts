@@ -383,6 +383,111 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     expect(acceptedResent.json()).toMatchObject({ role: 'viewer' });
   });
 
+  it('blocks a viewer from every household-admin sharing action', async () => {
+    const ownerRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'admin-check-owner@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.46',
+      url: '/api/auth/register',
+    });
+    const ownerCredentials = sessionCookies(ownerRegistration.headers);
+    const owner = await store!.findUserByEmail('admin-check-owner@example.com');
+
+    const invitation = await app!.inject({
+      headers: {
+        cookie: ownerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': ownerCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { email: 'admin-check-viewer@example.com', role: 'viewer' },
+      url: '/api/household/invitations',
+    });
+    expect(invitation.statusCode).toBe(201);
+    const { id: invitationId, token } = invitation.json<{
+      id: string;
+      token: string;
+    }>();
+
+    const viewerRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'admin-check-viewer@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.47',
+      url: '/api/auth/register',
+    });
+    const viewerCredentials = sessionCookies(viewerRegistration.headers);
+    await app!.inject({
+      headers: {
+        cookie: viewerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': viewerCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { token },
+      url: '/api/household/invitations/accept',
+    });
+    await app!.inject({
+      headers: {
+        cookie: viewerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': viewerCredentials.csrf,
+      },
+      method: 'PUT',
+      payload: { householdId: owner!.householdId },
+      url: '/api/account/household',
+    });
+
+    const viewerAuthHeaders = {
+      cookie: viewerCredentials.cookie,
+      origin: config!.WEB_ORIGIN,
+      'x-csrf-token': viewerCredentials.csrf,
+    };
+    const forbidden = await Promise.all([
+      app!.inject({
+        headers: viewerAuthHeaders,
+        method: 'GET',
+        url: '/api/household/sharing',
+      }),
+      app!.inject({
+        headers: viewerAuthHeaders,
+        method: 'POST',
+        payload: { email: 'someone-else@example.com', role: 'viewer' },
+        url: '/api/household/invitations',
+      }),
+      app!.inject({
+        headers: viewerAuthHeaders,
+        method: 'POST',
+        url: `/api/household/invitations/${invitationId}/resend`,
+      }),
+      app!.inject({
+        headers: viewerAuthHeaders,
+        method: 'DELETE',
+        url: `/api/household/invitations/${invitationId}`,
+      }),
+      app!.inject({
+        headers: viewerAuthHeaders,
+        method: 'PUT',
+        payload: { grants: [] },
+        // The admin-role check runs before the memberId is ever looked up,
+        // so a placeholder id is enough to prove this route is unreachable
+        // for a viewer, regardless of whose access it names.
+        url: `/api/household/members/${randomUUID()}/grants`,
+      }),
+      app!.inject({
+        headers: viewerAuthHeaders,
+        method: 'DELETE',
+        url: `/api/household/members/${randomUUID()}`,
+      }),
+    ]);
+    for (const response of forbidden) expect(response.statusCode).toBe(403);
+  });
+
   it('rejects an expired guest invitation before creating membership', async () => {
     const ownerRegistration = await app!.inject({
       method: 'POST',
