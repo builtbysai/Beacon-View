@@ -60,6 +60,8 @@ const environmentSchema = z
     GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
     GOOGLE_OAUTH_REDIRECT_URI: z.string().url().optional(),
+    GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY:
+      optionalNotificationText(notificationKey),
     CONTACT_EMAIL_TO: z.string().email().optional(),
     RESEND_API_KEY: z.string().min(1).optional(),
     RESEND_FROM: z.string().min(3).max(320).optional(),
@@ -117,6 +119,17 @@ const environmentSchema = z
         message:
           'Google OAuth client ID, secret, and redirect URI must be configured together',
         path: ['GOOGLE_OAUTH_CLIENT_ID'],
+      });
+    }
+    if (
+      config.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY &&
+      !googleFields.every(Boolean)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Google Drive token encryption requires the Google OAuth client configuration',
+        path: ['GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY'],
       });
     }
     const contactFields = [

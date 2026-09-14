@@ -3,6 +3,10 @@ import type { FastifyInstance } from 'fastify';
 
 import type { AppConfig } from './config.js';
 import {
+  driveProviderEmail,
+  GOOGLE_DRIVE_SCOPE,
+} from './google-drive-client.js';
+import {
   credentialsSchema,
   googleCallbackSchema,
   googleStartSchema,
@@ -24,6 +28,7 @@ const HOUR = 60 * 60 * 1_000;
 const FIFTEEN_MINUTES = 15 * 60 * 1_000;
 const TEN_MINUTES = 10 * 60 * 1_000;
 const GOOGLE_STATE_COOKIE = 'beacon_google_oauth_state';
+const GOOGLE_DRIVE_STATE_COOKIE = 'beacon_google_drive_state';
 
 interface AuthenticationRouteDependencies {
   auth: SessionAuth;
@@ -143,16 +148,86 @@ export function registerAuthenticationRoutes(
     );
   });
 
+  app.get('/api/drive/connect', async (request, reply) => {
+    const session = await auth.authenticate(request, reply);
+    if (!session) return;
+    if (
+      !googleClient ||
+      !config.GOOGLE_OAUTH_REDIRECT_URI ||
+      !store.googleDriveConfigured()
+    )
+      return reply.code(503).send({ error: 'Google Drive is unavailable' });
+    const state = `drive.${generateToken()}`;
+    reply.setCookie(GOOGLE_DRIVE_STATE_COOKIE, state, {
+      httpOnly: true,
+      maxAge: TEN_MINUTES / 1_000,
+      path: '/',
+      sameSite: 'lax',
+      secure: config.NODE_ENV === 'production',
+    });
+    return reply.redirect(
+      googleClient.generateAuthUrl({
+        access_type: 'offline',
+        include_granted_scopes: true,
+        prompt: 'consent',
+        redirect_uri: config.GOOGLE_OAUTH_REDIRECT_URI,
+        scope: [GOOGLE_DRIVE_SCOPE],
+        state,
+      }),
+    );
+  });
+
   app.get(
     '/api/auth/google/callback',
     { logLevel: 'silent' },
     async (request, reply) => {
       const callback = googleCallbackSchema.safeParse(request.query);
       const state = request.cookies[GOOGLE_STATE_COOKIE];
+      const driveState = request.cookies[GOOGLE_DRIVE_STATE_COOKIE];
       const googleClientId = config.GOOGLE_OAUTH_CLIENT_ID;
       const googleRedirectUri = config.GOOGLE_OAUTH_REDIRECT_URI;
       const android = state?.startsWith('android.') === true;
       reply.clearCookie(GOOGLE_STATE_COOKIE, { path: '/' });
+      reply.clearCookie(GOOGLE_DRIVE_STATE_COOKIE, { path: '/' });
+      if (driveState && driveState.startsWith('drive.')) {
+        const session = await auth.authenticate(request, reply);
+        if (
+          !session ||
+          !googleClient ||
+          !config.GOOGLE_OAUTH_REDIRECT_URI ||
+          !callback.success ||
+          !secretsEqual(driveState, callback.data.state)
+        ) {
+          return reply.redirect('/?drive=failed');
+        }
+        try {
+          const token = await googleClient.getToken({
+            code: callback.data.code,
+            redirect_uri: config.GOOGLE_OAUTH_REDIRECT_URI,
+          });
+          const refreshToken = token.tokens.refresh_token;
+          const accessToken = token.tokens.access_token;
+          if (!refreshToken || !accessToken)
+            return reply.redirect('/?drive=failed');
+          await store.saveGoogleDriveConnection({
+            providerEmail: await driveProviderEmail(accessToken),
+            refreshToken,
+            scopes: GOOGLE_DRIVE_SCOPE,
+            userId: session.userId,
+          });
+          await store.audit({
+            eventType: 'google_drive_connected',
+            householdId: session.householdId,
+            ipAddress: request.ip,
+            metadata: { scope: GOOGLE_DRIVE_SCOPE },
+            success: true,
+            userId: session.userId,
+          });
+          return reply.redirect('/?drive=connected');
+        } catch {
+          return reply.redirect('/?drive=failed');
+        }
+      }
       if (
         !googleClient ||
         !googleClientId ||

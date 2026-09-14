@@ -7,6 +7,7 @@ import { registerAuthenticationRoutes } from './authentication-routes.js';
 import { registerCameraManagementRoutes } from './camera-management-routes.js';
 import type { AppConfig } from './config.js';
 import { registerDeviceRuntimeRoutes } from './device-runtime-routes.js';
+import { registerDriveRoutes } from './drive-routes.js';
 import { registerEnrollmentRoutes } from './enrollment-routes.js';
 import { RateLimiter } from './rate-limit.js';
 import { registerHouseholdEvents } from './household-events.js';
@@ -50,7 +51,12 @@ export function buildApp(
         }
       : undefined;
   const store =
-    suppliedStore ?? new PostgresStore(config.DATABASE_URL, notificationKeys);
+    suppliedStore ??
+    new PostgresStore(
+      config.DATABASE_URL,
+      notificationKeys,
+      config.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY,
+    );
   const sessionAuth = createSessionAuth(config, store);
   const limiter = new RateLimiter();
 
@@ -103,6 +109,7 @@ export function buildApp(
     limiter,
     store,
   });
+  registerDriveRoutes(app, { auth: sessionAuth, config, store });
   registerSharingRoutes(app, {
     auth: sessionAuth,
     config,

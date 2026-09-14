@@ -12,6 +12,8 @@ import { PostgresSessionRepository } from './postgres-session-repository.js';
 import { PostgresNotificationRepository } from './postgres-notification-repository.js';
 import { PostgresSharingRepository } from './postgres-sharing-repository.js';
 import { NotificationCipher } from './notification-crypto.js';
+import { GoogleDriveTokenCipher } from './google-drive-crypto.js';
+import { PostgresGoogleDriveRepository } from './postgres-google-drive-repository.js';
 import type {
   NotificationDelivery,
   NotificationPreferenceRecord,
@@ -37,6 +39,7 @@ import {
   type HouseholdAccessRecord,
   type HouseholdInvitationRecord,
   type HouseholdMemberRecord,
+  type GoogleDriveConnectionRecord,
   type UserRecord,
 } from './store-contract.js';
 
@@ -52,10 +55,12 @@ export class PostgresStore implements MilestoneStore {
   private readonly sessions: PostgresSessionRepository;
   private readonly sharing: PostgresSharingRepository;
   private readonly notifications: PostgresNotificationRepository;
+  private readonly googleDrive: PostgresGoogleDriveRepository;
 
   constructor(
     databaseUrl: string,
     notificationKeys?: { encryptionKey: string; fingerprintKey: string },
+    googleDriveTokenEncryptionKey?: string,
   ) {
     this.pool = new Pool({ connectionString: databaseUrl, max: 10 });
     this.notifications = new PostgresNotificationRepository(
@@ -65,6 +70,12 @@ export class PostgresStore implements MilestoneStore {
             notificationKeys.encryptionKey,
             notificationKeys.fingerprintKey,
           )
+        : null,
+    );
+    this.googleDrive = new PostgresGoogleDriveRepository(
+      this.pool,
+      googleDriveTokenEncryptionKey
+        ? new GoogleDriveTokenCipher(googleDriveTokenEncryptionKey)
         : null,
     );
     this.auditRepository = new PostgresAuditRepository(this.pool);
@@ -87,6 +98,33 @@ export class PostgresStore implements MilestoneStore {
 
   notificationsConfigured(): boolean {
     return this.notifications.configured;
+  }
+
+  googleDriveConfigured(): boolean {
+    return this.googleDrive.configured;
+  }
+
+  async getGoogleDriveConnection(
+    userId: string,
+  ): Promise<GoogleDriveConnectionRecord | null> {
+    return this.googleDrive.get(userId);
+  }
+
+  async getGoogleDriveRefreshToken(userId: string): Promise<string | null> {
+    return this.googleDrive.getRefreshToken(userId);
+  }
+
+  async saveGoogleDriveConnection(input: {
+    providerEmail: string | null;
+    refreshToken: string;
+    scopes: string;
+    userId: string;
+  }): Promise<void> {
+    await this.googleDrive.upsert(input);
+  }
+
+  async removeGoogleDriveConnection(userId: string): Promise<boolean> {
+    return this.googleDrive.remove(userId);
   }
 
   async upsertNotificationSubscription(

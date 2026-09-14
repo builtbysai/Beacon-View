@@ -7,6 +7,7 @@ import { NotificationSettings } from './NotificationSettings';
 import { HouseholdSwitcher } from './HouseholdSwitcher';
 import type { HouseholdSession } from './domain';
 import { HouseholdSharingSettings } from './HouseholdSharingSettings';
+import { GoogleDriveSettings } from './GoogleDriveSettings';
 
 type SettingsPageProps = {
   user: User;
@@ -70,6 +71,14 @@ export function SettingsPage({
             Sign out
           </button>
         </div>
+      </section>
+
+      <section
+        className="settings-section"
+        aria-labelledby="storage-section-title"
+      >
+        <h3 id="storage-section-title">Cloud storage</h3>
+        <GoogleDriveSettings />
       </section>
 
       {(household.role === 'owner' || household.role === 'admin') && (

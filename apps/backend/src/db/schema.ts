@@ -46,6 +46,17 @@ export const users = pgTable(
   ],
 );
 
+export const googleDriveConnections = pgTable('google_drive_connections', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  refreshTokenCiphertext: bytea('refresh_token_ciphertext').notNull(),
+  refreshTokenIv: bytea('refresh_token_iv').notNull(),
+  providerEmail: text('provider_email'),
+  scopes: text('scopes').notNull(),
+  ...timestamps,
+});
+
 export const households = pgTable(
   'households',
   {

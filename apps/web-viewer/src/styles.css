@@ -3009,6 +3009,18 @@ button > .icon:first-child {
   flex: 0 0 auto;
 }
 
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: 0 clamp(1.25rem, 2.5vw, 1.85rem) var(--space-4);
+}
+
+.settings-muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .settings-identity {
   display: flex;
   align-items: center;

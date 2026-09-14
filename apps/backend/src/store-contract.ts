@@ -71,6 +71,12 @@ export interface HouseholdInvitationRecord {
   createdAt: Date;
 }
 
+export interface GoogleDriveConnectionRecord {
+  providerEmail: string | null;
+  scopes: string;
+  updatedAt: Date;
+}
+
 export interface CameraRecord {
   id: string;
   publicCameraId: string;
@@ -201,6 +207,18 @@ export type PairingRedemptionResult =
   PairedDeviceRecord | null | typeof DEVICE_REGISTRATION_RATE_LIMITED;
 
 export interface MilestoneStore {
+  googleDriveConfigured(): boolean;
+  getGoogleDriveConnection(
+    userId: string,
+  ): Promise<GoogleDriveConnectionRecord | null>;
+  getGoogleDriveRefreshToken(userId: string): Promise<string | null>;
+  saveGoogleDriveConnection(input: {
+    providerEmail: string | null;
+    refreshToken: string;
+    scopes: string;
+    userId: string;
+  }): Promise<void>;
+  removeGoogleDriveConnection(userId: string): Promise<boolean>;
   notificationsConfigured(): boolean;
   upsertNotificationSubscription(
     input: NotificationSubscriptionInput,
