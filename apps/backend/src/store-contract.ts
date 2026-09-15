@@ -6,6 +6,7 @@ import type {
   NotificationDelivery,
   NotificationPreferenceRecord,
   NotificationSubscriptionInput,
+  SecurityEventType,
 } from './notification-types.js';
 import type {
   RecordingDeletionClaim,
@@ -272,6 +273,11 @@ export interface MilestoneStore {
   }): Promise<void>;
   removeGoogleDriveConnection(userId: string): Promise<boolean>;
   notificationsConfigured(): boolean;
+  recordSecurityEvent(input: {
+    userId: string;
+    securityEventType: SecurityEventType;
+    now: Date;
+  }): Promise<void>;
   upsertNotificationSubscription(
     input: NotificationSubscriptionInput,
   ): Promise<string>;

@@ -650,7 +650,7 @@ export const notificationEvents = pgTable(
     ),
     check(
       'notification_events_category_valid',
-      sql`${table.category} in ('motion', 'offline', 'recovered')`,
+      sql`${table.category} in ('motion', 'offline', 'recovered', 'security')`,
     ),
   ],
 );

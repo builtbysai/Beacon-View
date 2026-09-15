@@ -58,6 +58,16 @@ export function registerAuthenticationRoutes(
   const { auth, config, limiter, store } = dependencies;
   const { issueSession } = auth;
   const dummyPasswordHash = hashPassword(generateToken());
+  const recordSignIn = (userId: string): Promise<void> =>
+    store
+      .recordSecurityEvent({
+        now: new Date(),
+        securityEventType: 'sign_in',
+        userId,
+      })
+      .catch((error: unknown) =>
+        app.log.warn({ err: error }, 'failed to record sign-in security event'),
+      );
   const mobileGoogleHandoffs = new Map<
     string,
     { email: string; expiresAt: number; householdId: string; userId: string }
@@ -132,6 +142,7 @@ export function registerAuthenticationRoutes(
     if (!valid || !user) {
       return reply.code(401).send({ error: 'Invalid email or password' });
     }
+    await recordSignIn(user.id);
     await issueSession(reply, user.id, true, request.headers['user-agent']);
     return reply.send({ user: { email: user.email, id: user.id } });
   });
@@ -391,6 +402,7 @@ export function registerAuthenticationRoutes(
             `beaconsecureview://auth/mobile?code=${encodeURIComponent(handoffCode)}`,
           );
         }
+        await recordSignIn(user.id);
         await issueSession(reply, user.id, true, request.headers['user-agent']);
         return reply.redirect('/');
       } catch {
@@ -425,6 +437,7 @@ export function registerAuthenticationRoutes(
       success: true,
       userId: handoff.userId,
     });
+    await recordSignIn(handoff.userId);
     const token = await issueSession(
       reply,
       handoff.userId,
@@ -468,6 +481,7 @@ export function registerAuthenticationRoutes(
       success: true,
       userId: user.id,
     });
+    await recordSignIn(user.id);
     const token = await issueSession(
       reply,
       user.id,

@@ -1,5 +1,23 @@
 export type NotificationChannel = 'fcm' | 'web_push';
-export type NotificationCategory = 'motion' | 'offline' | 'recovered';
+export type NotificationCategory =
+  'motion' | 'offline' | 'recovered' | 'security';
+
+/** Security events cannot be silenced by camera-level preferences the way
+ * motion/offline/recovered can -- there is no per-device row to disable
+ * them, unlike NotificationCategory's other members.
+ *
+ * Password changes and account deletion are deliberately NOT here: both
+ * revoke every one of the user's sessions (and, with it, every push
+ * subscription tied to those sessions -- see
+ * PostgresSessionRepository.revoke/revokeAllOwned), so an outbox entry for
+ * either would almost never have a live subscription left to deliver to.
+ * Both get an email alert instead (account-recovery-email.ts), which
+ * doesn't depend on a still-active session. */
+export type SecurityEventType =
+  | 'sign_in'
+  | 'email_verified'
+  | 'device_revoked'
+  | 'household_membership_changed';
 
 export interface NotificationPreferenceRecord {
   deviceId: string;

@@ -215,4 +215,72 @@ describe.skipIf(!store)('notification transport persistence', () => {
       ).rowCount,
     ).toBe(1);
   });
+
+  it('delivers a security event to every active subscription with no preference to disable it', async () => {
+    const { now, owner, sessionId } = await fixture();
+    await store!.upsertNotificationSubscription({
+      channel: 'fcm',
+      consentedAt: now,
+      deviceLabel: 'Security event test',
+      installationId: randomUUID(),
+      providerMaterial: 'security-event-provider-token',
+      sessionId,
+      userId: owner.id,
+    });
+    // Deliberately no notification_preferences row at all, and no motion/
+    // offline opt-in -- unlike motion/offline/recovered, a security event
+    // has nothing it could join against to be silenced by.
+    await store!.recordSecurityEvent({
+      now,
+      securityEventType: 'sign_in',
+      userId: owner.id,
+    });
+    const rows = await store!.pool.query<{
+      category: string;
+      outboxCount: number;
+    }>(
+      `SELECT category, (SELECT count(*)::int FROM notification_outbox WHERE event_id = e.id) AS "outboxCount"
+       FROM notification_events e WHERE user_id = $1`,
+      [owner.id],
+    );
+    expect(rows.rows).toEqual([{ category: 'security', outboxCount: 1 }]);
+  });
+
+  it('records a security event that reaches no subscriber without error', async () => {
+    const { now, owner } = await fixture();
+    await expect(
+      store!.recordSecurityEvent({
+        now,
+        securityEventType: 'device_revoked',
+        userId: owner.id,
+      }),
+    ).resolves.toBeUndefined();
+    const rows = await store!.pool.query<{ outboxCount: number }>(
+      `SELECT count(*)::int AS "outboxCount" FROM notification_outbox`,
+    );
+    expect(rows.rows[0]!.outboxCount).toBe(0);
+  });
+
+  it('never delivers a distinct security event to a revoked subscription', async () => {
+    const { now, owner, sessionId } = await fixture();
+    await store!.upsertNotificationSubscription({
+      channel: 'fcm',
+      consentedAt: now,
+      deviceLabel: 'Revoked before security event',
+      installationId: randomUUID(),
+      providerMaterial: 'soon-to-be-revoked-provider-token',
+      sessionId,
+      userId: owner.id,
+    });
+    await store!.revokeSession(sessionId);
+    await store!.recordSecurityEvent({
+      now,
+      securityEventType: 'household_membership_changed',
+      userId: owner.id,
+    });
+    const rows = await store!.pool.query<{ outboxCount: number }>(
+      `SELECT count(*)::int AS "outboxCount" FROM notification_outbox`,
+    );
+    expect(rows.rows[0]!.outboxCount).toBe(0);
+  });
 });

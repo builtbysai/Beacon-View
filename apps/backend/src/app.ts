@@ -79,6 +79,7 @@ export function buildApp(
   });
   registerAccountRoutes(app, {
     auth: sessionAuth,
+    config,
     householdEvents,
     signaling,
     store,

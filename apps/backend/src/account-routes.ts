@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
+import { deliverAccountDeletedAlert } from './account-recovery-email.js';
+import type { AppConfig } from './config.js';
 import { revokeDriveRefreshToken } from './google-drive-client.js';
 import type { HouseholdEventHub } from './household-events.js';
 import {
@@ -15,6 +17,7 @@ const REAUTHENTICATION_WINDOW = 10 * 60 * 1_000;
 
 interface AccountRouteDependencies {
   auth: SessionAuth;
+  config: AppConfig;
   householdEvents: HouseholdEventHub;
   signaling: SignalingHub;
   store: MilestoneStore;
@@ -24,7 +27,7 @@ export function registerAccountRoutes(
   app: FastifyInstance,
   dependencies: AccountRouteDependencies,
 ): void {
-  const { auth, householdEvents, signaling, store } = dependencies;
+  const { auth, config, householdEvents, signaling, store } = dependencies;
 
   app.get('/api/auth/me', async (request, reply) => {
     const session = await auth.authenticate(request, reply);
@@ -179,6 +182,9 @@ export function registerAccountRoutes(
       ipAddress: request.ip,
       success: true,
     });
+    if (config.RESEND_API_KEY && config.RESEND_FROM) {
+      await deliverAccountDeletedAlert(config, session.email).catch(() => {});
+    }
     auth.clearSessionCookies(reply);
     for (const browserSession of browserSessions) {
       householdEvents.closeSession(browserSession.id, 'Account deleted');

@@ -61,6 +61,24 @@ export async function deliverGoogleOnlyPasswordResetEmail(
   });
 }
 
+export async function deliverAccountDeletedAlert(
+  config: ResendConfig,
+  to: string,
+): Promise<void> {
+  await deliverResendEmail(config, {
+    from: config.RESEND_FROM!,
+    subject: 'Your Beacon SecureView account was deleted',
+    text: [
+      'This Beacon SecureView account and its household were just deleted.',
+      '',
+      'If this was not you, your email account may be compromised --',
+      'secure it immediately. There is nothing further to recover here: the',
+      'account, its cameras, and its data are already gone.',
+    ].join('\n'),
+    to,
+  });
+}
+
 export async function deliverPasswordChangedAlert(
   config: ResendConfig,
   to: string,

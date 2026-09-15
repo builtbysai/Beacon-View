@@ -56,6 +56,7 @@ class BeaconFirebaseMessagingService : FirebaseMessagingService() {
             "motion" -> "Beacon detected activity."
             "offline" -> "A Beacon camera needs attention."
             "recovered" -> "A Beacon camera is back online."
+            "security" -> "A security event occurred on your Beacon account."
             else -> return
         }
         val manager = getSystemService(NotificationManager::class.java)

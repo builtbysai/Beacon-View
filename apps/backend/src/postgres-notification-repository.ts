@@ -12,6 +12,7 @@ import type {
   NotificationDelivery,
   NotificationPreferenceRecord,
   NotificationSubscriptionInput,
+  SecurityEventType,
 } from './notification-types.js';
 import {
   CAMERA_ONLINE_WINDOW_MS,
@@ -435,6 +436,55 @@ export class PostgresNotificationRepository {
          AND EXISTS (SELECT 1 FROM failed WHERE subscription_id=$5)`,
       [id, now, permanent, providerRetryAt, subscriptionId],
     );
+  }
+
+  /** Security events have no per-device preference row to join against, so
+   * unlike motion/offline/recovered there is nothing in Beacon for a user to
+   * mute them with -- they always reach every active subscription. */
+  async recordSecurityEvent(input: {
+    userId: string;
+    securityEventType: SecurityEventType;
+    now: Date;
+  }): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const eventId = randomUUID();
+      const safePayload = {
+        version: '1',
+        eventId,
+        category: 'security' as const,
+        route: 'settings',
+      };
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO notification_events
+         (id, user_id, category, deduplication_key, safe_payload, occurred_at)
+         VALUES ($1, $2, 'security', $3, $4, $5)
+         RETURNING id`,
+        [
+          eventId,
+          input.userId,
+          `security:${input.securityEventType}:${eventId}`,
+          JSON.stringify(safePayload),
+          input.now,
+        ],
+      );
+      const persistedId = inserted.rows[0]!.id;
+      await client.query(
+        `INSERT INTO notification_outbox (event_id, subscription_id, safe_payload)
+         SELECT $1, ns.id, $2 FROM notification_subscriptions ns
+         JOIN browser_sessions bs ON bs.id = ns.session_id
+         WHERE ns.user_id=$3 AND ns.revoked_at IS NULL AND bs.revoked_at IS NULL
+           AND bs.idle_expires_at > $4 AND bs.absolute_expires_at > $4 ON CONFLICT DO NOTHING`,
+        [persistedId, JSON.stringify(safePayload), input.userId, input.now],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async #enqueueEvent(

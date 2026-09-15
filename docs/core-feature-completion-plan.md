@@ -14,13 +14,22 @@ not considered complete.
 
 ### 1. Notifications and security events
 
-- Correct FCM registration-token enrollment and provider payloads.
-- Verify Web Push and FCM delivery, unsubscribe, invalid-token cleanup, retries,
-  quiet hours, offline/recovery transitions, and lock-screen redaction.
-- Add a shared security-event outbox for sign-in, password/email changes,
-  membership changes, device revocation, and account deletion. Security events
-  cannot be silenced like motion alerts.
-- Add delivery evidence and operational metrics without logging tokens or media.
+- [x] Correct FCM registration-token enrollment and provider payloads (the
+      client was sending the Firebase Installation ID, not the actual
+      messaging token -- push could never have worked).
+- [ ] Verify Web Push and FCM delivery, unsubscribe, invalid-token cleanup,
+      retries, quiet hours, offline/recovery transitions, and lock-screen
+      redaction -- Chrome Web Push baseline passed; native FCM and the
+      remaining physical acceptance matrix are still open (N1/N2).
+- [x] Add a shared security-event outbox for sign-in, email changes,
+      membership changes, and device revocation (ADR 0053). Password changes
+      and account deletion get an email alert instead of an outbox entry --
+      both revoke every session, which would revoke the very push
+      subscription meant to carry the alert; see the ADR's Consequences.
+      Security events have no per-device preference row to be silenced with.
+- [ ] Add delivery evidence and operational metrics without logging tokens
+      or media -- still open; no physical/operational evidence collected yet
+      for the new security-event category specifically.
 
 ### 2. Household and sharing completion
 

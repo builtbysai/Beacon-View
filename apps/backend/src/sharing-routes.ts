@@ -239,6 +239,15 @@ export function registerSharingRoutes(
       success: true,
       userId: session.userId,
     });
+    await store
+      .recordSecurityEvent({
+        now: new Date(),
+        securityEventType: 'household_membership_changed',
+        userId: session.userId,
+      })
+      .catch((error: unknown) =>
+        app.log.warn({ err: error }, 'failed to record security event'),
+      );
     return reply.code(200).send(accepted);
   });
 
@@ -367,6 +376,15 @@ export function registerSharingRoutes(
       success: true,
       userId: session.userId,
     });
+    await store
+      .recordSecurityEvent({
+        now: new Date(),
+        securityEventType: 'household_membership_changed',
+        userId: session.userId,
+      })
+      .catch((error: unknown) =>
+        app.log.warn({ err: error }, 'failed to record security event'),
+      );
     return reply.code(204).send();
   });
 }

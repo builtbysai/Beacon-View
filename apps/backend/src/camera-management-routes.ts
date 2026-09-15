@@ -320,6 +320,15 @@ export function registerCameraManagementRoutes(
     householdEvents.publish(session.householdId, {
       type: 'device-credential-revoked',
     });
+    await store
+      .recordSecurityEvent({
+        now: new Date(),
+        securityEventType: 'device_revoked',
+        userId: session.userId,
+      })
+      .catch((error: unknown) =>
+        app.log.warn({ err: error }, 'failed to record security event'),
+      );
     return reply.code(204).send();
   });
 
@@ -355,6 +364,15 @@ export function registerCameraManagementRoutes(
     householdEvents.publish(session.householdId, {
       type: 'device-management-changed',
     });
+    await store
+      .recordSecurityEvent({
+        now: new Date(),
+        securityEventType: 'device_revoked',
+        userId: session.userId,
+      })
+      .catch((error: unknown) =>
+        app.log.warn({ err: error }, 'failed to record security event'),
+      );
     return reply.code(204).send();
   });
 

@@ -87,14 +87,17 @@ self.addEventListener('push', (event) => {
     motion: 'Beacon detected activity.',
     offline: 'A Beacon camera needs attention.',
     recovered: 'A Beacon camera is back online.',
+    security: 'A security event occurred on your Beacon account.',
   };
   if (!copy[payload.category]) return;
+  const route = payload.route === 'settings' ? '/settings' : '/activity';
   event.waitUntil(
     self.registration.showNotification('Beacon', {
       body: copy[payload.category],
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
-      data: { route: payload.route === 'activity' ? '/activity' : '/' },
+      data: { route },
+      requireInteraction: payload.category === 'security',
       tag: `beacon-${String(payload.eventId || 'update')}`,
     }),
   );

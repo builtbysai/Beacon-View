@@ -25,6 +25,7 @@ import type {
   NotificationDelivery,
   NotificationPreferenceRecord,
   NotificationSubscriptionInput,
+  SecurityEventType,
 } from './notification-types.js';
 import {
   type AccessHistoryRecord,
@@ -109,6 +110,14 @@ export class PostgresStore implements MilestoneStore {
 
   notificationsConfigured(): boolean {
     return this.notifications.configured;
+  }
+
+  async recordSecurityEvent(input: {
+    userId: string;
+    securityEventType: SecurityEventType;
+    now: Date;
+  }): Promise<void> {
+    await this.notifications.recordSecurityEvent(input);
   }
 
   googleDriveConfigured(): boolean {
