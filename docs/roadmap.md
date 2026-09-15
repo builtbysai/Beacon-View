@@ -35,6 +35,13 @@ remaining physical lifecycle matrix remain gated.
 
 ## Current scope and evidence
 
+The backend completion sequence is tracked in
+[core-feature-completion-plan.md](core-feature-completion-plan.md). The owner has
+approved moving notifications, household/sharing completion, and user-owned
+recording into the active engineering scope; the earlier no-recording hard
+boundary is superseded for this milestone. Trust/legal/release documentation
+remains intentionally last.
+
 The Oracle private alpha completed its hard cutover to
 `https://beacon.builtbysai.com` on September 11. DNS, TLS, deployment health, and the
 OAuth authorization redirect are verified; interactive sign-in and physical Android
@@ -133,19 +140,23 @@ explicitly where a design, privacy, infrastructure, or release decision is requi
 
 ## Later / deferred — requires a separate approved milestone
 
+The following table is retained for historical sequencing. Notifications,
+household sharing, and user-owned recording are now active engineering work under
+the owner-approved [core feature completion plan](core-feature-completion-plan.md).
+
 | Candidate / proposed owner                                                                                                  | Required design and acceptance before implementation                                                                                                                                                                                                                                                                            |
 | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Notification security alerts / Engineering + Owner                                                                          | Transport is deployed and the Chrome Web Push baseline passed; native/remaining physical acceptance is pending. Account-security event design and non-silenceable delivery still belong with N5 recovery/reauthentication.                                                                                                      |
+| Notification security alerts / Engineering + Owner                                                                          | Active core work: finish native/physical acceptance, security-event outbox, non-silenceable delivery, invalid-token cleanup, and operational evidence.                                                                                                                                                                          |
 | Activity zones/calibration / Engineering + Device tester                                                                    | Apply on device to the existing luma detector, no frame upload; persistent source/orientation mapping and measured false positives/CPU/heat. Privacy masks require a distinct capture/rendering design.                                                                                                                         |
-| Household sharing / Engineering + Owner + Reviewer                                                                          | Private-alpha API, explicit invitations, role/camera permissions, guest expiry/revocation, authorization/audit tests, role-aware web management UI, and configured transactional delivery are deployed. Remaining gates are inbox/bounce evidence, physical multi-account acceptance, and independent security review.          |
+| Household sharing / Engineering + Owner + Reviewer                                                                          | Active core work: finish inbox/bounce evidence, resend/expiry/revocation behavior, physical multi-account acceptance, recording grants, and independent security review.                                                                                                                                                        |
 | Rich device health, room labels / Engineering + Owner                                                                       | Minimal telemetry/retention contract, actionable warnings, manual room labels; no inferred location/maps or unnecessary collection.                                                                                                                                                                                             |
 | Account data export, expanded support center / Engineering + Owner                                                          | Define authorized scope, identity verification, data minimization and secure delivery; complete recovery/support process. Existing contact form does not prove a support SLA.                                                                                                                                                   |
-| Recordings/clips, cloud recording / Owner + Reviewer                                                                        | Separate consent, storage/key-management, deletion/export/backup semantics, costs and threat model. No current media upload or recording implementation is authorized.                                                                                                                                                          |
+| Recordings/clips, cloud recording / Owner + Reviewer                                                                        | Active core work: implement explicit short-clip consent/lifecycle and encrypted direct export to user-owned Google Drive with least-privileged `drive.file`; no continuous or hidden recording.                                                                                                                                 |
 | Smart detection / Owner + Device tester + Reviewer                                                                          | Separate on-device experiment, feature flag, thermal/battery/false-positive measurements. Never facial recognition or biometric identity storage.                                                                                                                                                                               |
 | Paid plans/subscriptions, ads / Owner + Reviewer                                                                            | No implementation now; separate approved milestone and renewed product/legal/privacy review. ADR 0031 currently prohibits advertising and customer-media AI training.                                                                                                                                                           |
 | Cross-platform installed clients (Windows, Linux, macOS and iOS); IP cameras; cloud-synced workspaces / Owner + Engineering | Google Drive connection foundation is implemented as ADR 0049 with least-scope app-data access; camera media, recordings, and user-visible cloud files remain disabled pending separate consent, retention, deletion, and threat-model decisions. Other native clients and IP cameras still require their own design milestone. |
 
-**Hard boundaries:** no cloud recording, facial recognition, biometric storage,
+**Hard boundaries:** no continuous or hidden recording, facial recognition, biometric storage,
 customer-media AI training, subscriptions, ads, cross-platform client expansion, or simultaneous
 native multi-camera playback in current scope. Facial recognition remains excluded;
 do not interpret the historical object-detection brief as permission to add it.

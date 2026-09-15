@@ -14,6 +14,12 @@ import { PostgresSharingRepository } from './postgres-sharing-repository.js';
 import { NotificationCipher } from './notification-crypto.js';
 import { GoogleDriveTokenCipher } from './google-drive-crypto.js';
 import { PostgresGoogleDriveRepository } from './postgres-google-drive-repository.js';
+import { PostgresRecordingRepository } from './postgres-recording-repository.js';
+import type {
+  RecordingDeletionClaim,
+  RecordingRecord,
+  RecordingUploadClaim,
+} from './recording-types.js';
 import type {
   NotificationDelivery,
   NotificationPreferenceRecord,
@@ -56,6 +62,7 @@ export class PostgresStore implements MilestoneStore {
   private readonly sharing: PostgresSharingRepository;
   private readonly notifications: PostgresNotificationRepository;
   private readonly googleDrive: PostgresGoogleDriveRepository;
+  private readonly recordings: PostgresRecordingRepository;
 
   constructor(
     databaseUrl: string,
@@ -78,6 +85,7 @@ export class PostgresStore implements MilestoneStore {
         ? new GoogleDriveTokenCipher(googleDriveTokenEncryptionKey)
         : null,
     );
+    this.recordings = new PostgresRecordingRepository(this.pool);
     this.auditRepository = new PostgresAuditRepository(this.pool);
     this.accounts = new PostgresAccountRepository(
       this.pool,
@@ -102,6 +110,88 @@ export class PostgresStore implements MilestoneStore {
 
   googleDriveConfigured(): boolean {
     return this.googleDrive.configured;
+  }
+
+  async createRecordingRequest(input: {
+    cameraSourceId: string;
+    householdId: string;
+    userId: string;
+  }): Promise<RecordingRecord | null> {
+    return this.recordings.createRequested(input);
+  }
+
+  async listRecordings(
+    householdId: string,
+    cameraSourceIds: string[],
+  ): Promise<RecordingRecord[]> {
+    return this.recordings.listForCameraSources(householdId, cameraSourceIds);
+  }
+
+  async deleteRecording(
+    householdId: string,
+    recordingId: string,
+  ): Promise<boolean> {
+    return this.recordings.markDeleted(householdId, recordingId);
+  }
+
+  async beginAvailableRecordingDeletion(
+    householdId: string,
+    recordingId: string,
+  ): Promise<RecordingDeletionClaim | null> {
+    return this.recordings.beginAvailableDeletion(householdId, recordingId);
+  }
+
+  async finishRecordingDeletion(
+    householdId: string,
+    recordingId: string,
+  ): Promise<boolean> {
+    return this.recordings.finishDeletion(householdId, recordingId);
+  }
+
+  async cancelRecordingDeletion(recordingId: string): Promise<void> {
+    await this.recordings.cancelDeletion(recordingId);
+  }
+
+  async beginRecordingUpload(input: {
+    byteSize: number;
+    checksumSha256: string;
+    credentialHash: string;
+    durationMs: number;
+    mimeType: 'video/mp4' | 'video/webm';
+    recordingId: string;
+  }): Promise<RecordingUploadClaim | null> {
+    return this.recordings.beginUpload(input);
+  }
+
+  async beginOwnerRecordingUpload(input: {
+    byteSize: number;
+    checksumSha256: string;
+    durationMs: number;
+    householdId: string;
+    mimeType: 'video/mp4' | 'video/webm';
+    recordingId: string;
+    userId: string;
+  }): Promise<RecordingUploadClaim | null> {
+    return this.recordings.beginOwnerUpload(input);
+  }
+
+  async getRecordingUploadClaim(
+    userId: string,
+    recordingId: string,
+  ): Promise<RecordingUploadClaim | null> {
+    return this.recordings.getUploadClaim(userId, recordingId);
+  }
+
+  async markRecordingUploadFailed(recordingId: string): Promise<void> {
+    await this.recordings.markUploadFailed(recordingId);
+  }
+
+  async completeRecordingUpload(input: {
+    recordingId: string;
+    providerFileId: string;
+    userId: string;
+  }): Promise<boolean> {
+    return this.recordings.completeUpload(input);
   }
 
   async getGoogleDriveConnection(

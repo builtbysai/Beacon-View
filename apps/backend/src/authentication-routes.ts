@@ -1,12 +1,15 @@
 import { OAuth2Client } from 'google-auth-library';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
 import {
   driveProviderEmail,
+  GOOGLE_DRIVE_RECORDING_SCOPE,
   GOOGLE_DRIVE_SCOPE,
   GoogleDriveRequestError,
   verifyDriveAppDataAccess,
+  verifyDriveRecordingAccess,
 } from './google-drive-client.js';
 import {
   credentialsSchema,
@@ -31,6 +34,9 @@ const FIFTEEN_MINUTES = 15 * 60 * 1_000;
 const TEN_MINUTES = 10 * 60 * 1_000;
 const GOOGLE_STATE_COOKIE = 'beacon_google_oauth_state';
 const GOOGLE_DRIVE_STATE_COOKIE = 'beacon_google_drive_state';
+const driveConnectSchema = z
+  .object({ purpose: z.enum(['appdata', 'recordings']).optional() })
+  .strict();
 
 function oauthProviderStatus(error: unknown): number | undefined {
   if (!error || typeof error !== 'object') return undefined;
@@ -165,7 +171,11 @@ export function registerAuthenticationRoutes(
       !store.googleDriveConfigured()
     )
       return reply.code(503).send({ error: 'Google Drive is unavailable' });
-    const state = `drive.${generateToken()}`;
+    const parsed = driveConnectSchema.safeParse(request.query);
+    if (!parsed.success)
+      return reply.code(400).send({ error: 'Invalid Google Drive request' });
+    const recordings = parsed.data.purpose === 'recordings';
+    const state = `${recordings ? 'drive-recordings' : 'drive'}.${generateToken()}`;
     reply.setCookie(GOOGLE_DRIVE_STATE_COOKIE, state, {
       httpOnly: true,
       maxAge: TEN_MINUTES / 1_000,
@@ -179,7 +189,9 @@ export function registerAuthenticationRoutes(
         include_granted_scopes: true,
         prompt: 'consent select_account',
         redirect_uri: config.GOOGLE_OAUTH_REDIRECT_URI,
-        scope: [GOOGLE_DRIVE_SCOPE],
+        scope: recordings
+          ? [GOOGLE_DRIVE_SCOPE, GOOGLE_DRIVE_RECORDING_SCOPE]
+          : [GOOGLE_DRIVE_SCOPE],
         state,
       }),
     );
@@ -197,7 +209,12 @@ export function registerAuthenticationRoutes(
       const android = state?.startsWith('android.') === true;
       reply.clearCookie(GOOGLE_STATE_COOKIE, { path: '/' });
       reply.clearCookie(GOOGLE_DRIVE_STATE_COOKIE, { path: '/' });
-      if (driveState && driveState.startsWith('drive.')) {
+      if (
+        driveState &&
+        (driveState.startsWith('drive.') ||
+          driveState.startsWith('drive-recordings.'))
+      ) {
+        const recordings = driveState.startsWith('drive-recordings.');
         const callbackError = (request.query as { error?: unknown }).error;
         const callbackState = (request.query as { state?: unknown }).state;
         if (
@@ -222,6 +239,7 @@ export function registerAuthenticationRoutes(
           | 'token_exchange'
           | 'app_data_verification'
           | 'provider_identity'
+          | 'recording_verification'
           | 'credential_storage'
           | 'audit' = 'token_exchange';
         try {
@@ -244,13 +262,22 @@ export function registerAuthenticationRoutes(
           }
           stage = 'app_data_verification';
           await verifyDriveAppDataAccess(accessToken);
+          if (recordings) {
+            stage = 'recording_verification';
+            await verifyDriveRecordingAccess(accessToken);
+          }
           stage = 'provider_identity';
           const providerEmail = await driveProviderEmail(accessToken);
           stage = 'credential_storage';
           await store.saveGoogleDriveConnection({
             providerEmail,
             refreshToken,
-            scopes: GOOGLE_DRIVE_SCOPE,
+            scopes:
+              token.tokens.scope ??
+              [
+                GOOGLE_DRIVE_SCOPE,
+                ...(recordings ? [GOOGLE_DRIVE_RECORDING_SCOPE] : []),
+              ].join(' '),
             userId: session.userId,
           });
           stage = 'audit';
@@ -258,7 +285,9 @@ export function registerAuthenticationRoutes(
             eventType: 'google_drive_connected',
             householdId: session.householdId,
             ipAddress: request.ip,
-            metadata: { scope: GOOGLE_DRIVE_SCOPE },
+            metadata: {
+              scope: recordings ? 'appdata recordings' : 'appdata',
+            },
             success: true,
             userId: session.userId,
           });

@@ -7,6 +7,11 @@ import type {
   NotificationPreferenceRecord,
   NotificationSubscriptionInput,
 } from './notification-types.js';
+import type {
+  RecordingDeletionClaim,
+  RecordingRecord,
+} from './recording-types.js';
+import type { RecordingUploadClaim } from './recording-types.js';
 
 export interface UserRecord {
   id: string;
@@ -207,6 +212,52 @@ export type PairingRedemptionResult =
   PairedDeviceRecord | null | typeof DEVICE_REGISTRATION_RATE_LIMITED;
 
 export interface MilestoneStore {
+  createRecordingRequest(input: {
+    cameraSourceId: string;
+    householdId: string;
+    userId: string;
+  }): Promise<RecordingRecord | null>;
+  listRecordings(
+    householdId: string,
+    cameraSourceIds: string[],
+  ): Promise<RecordingRecord[]>;
+  deleteRecording(householdId: string, recordingId: string): Promise<boolean>;
+  beginAvailableRecordingDeletion(
+    householdId: string,
+    recordingId: string,
+  ): Promise<RecordingDeletionClaim | null>;
+  finishRecordingDeletion(
+    householdId: string,
+    recordingId: string,
+  ): Promise<boolean>;
+  cancelRecordingDeletion(recordingId: string): Promise<void>;
+  beginRecordingUpload(input: {
+    byteSize: number;
+    checksumSha256: string;
+    credentialHash: string;
+    durationMs: number;
+    mimeType: 'video/mp4' | 'video/webm';
+    recordingId: string;
+  }): Promise<RecordingUploadClaim | null>;
+  beginOwnerRecordingUpload(input: {
+    byteSize: number;
+    checksumSha256: string;
+    durationMs: number;
+    householdId: string;
+    mimeType: 'video/mp4' | 'video/webm';
+    recordingId: string;
+    userId: string;
+  }): Promise<RecordingUploadClaim | null>;
+  getRecordingUploadClaim(
+    userId: string,
+    recordingId: string,
+  ): Promise<RecordingUploadClaim | null>;
+  markRecordingUploadFailed(recordingId: string): Promise<void>;
+  completeRecordingUpload(input: {
+    recordingId: string;
+    providerFileId: string;
+    userId: string;
+  }): Promise<boolean>;
   googleDriveConfigured(): boolean;
   getGoogleDriveConnection(
     userId: string,

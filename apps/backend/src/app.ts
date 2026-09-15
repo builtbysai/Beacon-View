@@ -15,6 +15,7 @@ import { createSessionAuth } from './session-auth.js';
 import { registerSignaling } from './signaling-route.js';
 import { registerServiceRoutes } from './service-routes.js';
 import { registerNotificationRoutes } from './notification-routes.js';
+import { registerRecordingRoutes } from './recording-routes.js';
 import { registerSharingRoutes } from './sharing-routes.js';
 import { PostgresStore, type MilestoneStore } from './store.js';
 
@@ -112,6 +113,12 @@ export function buildApp(
     store,
   });
   registerDriveRoutes(app, { auth: sessionAuth, config, store });
+  registerRecordingRoutes(app, {
+    auth: sessionAuth,
+    config,
+    signaling,
+    store,
+  });
   registerSharingRoutes(app, {
     auth: sessionAuth,
     config,

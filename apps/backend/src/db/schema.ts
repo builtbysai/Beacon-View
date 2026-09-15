@@ -307,6 +307,63 @@ export const cameraSources = pgTable(
   ],
 );
 
+export const recordings = pgTable(
+  'recordings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    cameraSourceId: uuid('camera_source_id')
+      .notNull()
+      .references(() => cameraSources.id, { onDelete: 'cascade' }),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('requested'),
+    provider: text('provider').notNull().default('google_drive'),
+    providerFileId: text('provider_file_id'),
+    durationMs: integer('duration_ms'),
+    byteSize: integer('byte_size'),
+    checksumSha256: text('checksum_sha256'),
+    mimeType: text('mime_type'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index('recordings_household_created_idx').on(
+      table.householdId,
+      table.createdAt,
+    ),
+    index('recordings_camera_created_idx').on(
+      table.cameraSourceId,
+      table.createdAt,
+    ),
+    uniqueIndex('recordings_provider_file_unique').on(table.providerFileId),
+    check(
+      'recordings_status_valid',
+      sql`${table.status} in ('requested', 'recording', 'uploading', 'available', 'failed', 'deleting', 'deleted')`,
+    ),
+    check(
+      'recordings_provider_valid',
+      sql`${table.provider} in ('google_drive')`,
+    ),
+    check(
+      'recordings_duration_valid',
+      sql`${table.durationMs} is null or ${table.durationMs} > 0`,
+    ),
+    check(
+      'recordings_size_valid',
+      sql`${table.byteSize} is null or ${table.byteSize} > 0`,
+    ),
+    check(
+      'recordings_mime_type_valid',
+      sql`${table.mimeType} is null or ${table.mimeType} in ('video/mp4', 'video/webm')`,
+    ),
+  ],
+);
+
 export const cameraGrants = pgTable(
   'camera_grants',
   {

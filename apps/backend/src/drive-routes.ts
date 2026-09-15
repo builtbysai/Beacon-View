@@ -3,9 +3,11 @@ import type { FastifyInstance } from 'fastify';
 
 import type { AppConfig } from './config.js';
 import {
+  GOOGLE_DRIVE_RECORDING_SCOPE,
   refreshDriveAccessToken,
   revokeDriveRefreshToken,
   verifyDriveAppDataAccess,
+  verifyDriveRecordingAccess,
 } from './google-drive-client.js';
 import type { SessionAuth } from './session-auth.js';
 import type { MilestoneStore } from './store.js';
@@ -31,6 +33,9 @@ export function registerDriveRoutes(
     return {
       connected: Boolean(connection),
       configured,
+      recordingsConnected: Boolean(
+        connection && hasScope(connection.scopes, GOOGLE_DRIVE_RECORDING_SCOPE),
+      ),
       providerEmail: connection?.providerEmail ?? null,
       updatedAt: connection?.updatedAt.toISOString() ?? null,
     };
@@ -78,6 +83,12 @@ export function registerDriveRoutes(
       );
       const accessToken = await refreshDriveAccessToken(client, refreshToken);
       await verifyDriveAppDataAccess(accessToken);
+      const connection = await store.getGoogleDriveConnection(session.userId);
+      if (
+        connection &&
+        hasScope(connection.scopes, GOOGLE_DRIVE_RECORDING_SCOPE)
+      )
+        await verifyDriveRecordingAccess(accessToken);
       return reply.code(204).send();
     } catch {
       return reply
@@ -85,4 +96,8 @@ export function registerDriveRoutes(
         .send({ error: 'Google Drive verification failed' });
     }
   });
+}
+
+function hasScope(scopes: string, expected: string): boolean {
+  return scopes.split(/\s+/u).includes(expected);
 }
