@@ -119,7 +119,7 @@ export function registerRecordingRoutes(
     await store.audit({
       eventType: 'recording_requested',
       householdId: session.householdId,
-      cameraId: camera.cameraId,
+      cameraId: camera.deviceId,
       ipAddress: request.ip,
       metadata: { recordingId: recording.id },
       success: true,
