@@ -185,6 +185,28 @@ export class PostgresRecordingRepository {
     return result.rows[0] ?? null;
   }
 
+  /** Device-credential counterpart to getUploadClaim: lets the camera that
+   * started a device-initiated upload (beginUpload) report completion
+   * itself, without requiring a browser session to be open. */
+  async getUploadClaimByCredential(
+    credentialHash: string,
+    recordingId: string,
+  ): Promise<RecordingUploadClaim | null> {
+    const result = await this.pool.query<RecordingUploadClaim>(
+      `SELECT r.id AS "recordingId", r.created_by_user_id AS "userId",
+              r.byte_size AS "byteSize", r.mime_type AS "mimeType"
+       FROM recordings r
+       JOIN camera_sources cs ON cs.id = r.camera_source_id
+       JOIN cameras d ON d.id = cs.device_id
+       JOIN device_credentials dc ON dc.camera_id = d.id
+       WHERE r.id = $2 AND dc.credential_hash = $1 AND dc.revoked_at IS NULL
+         AND r.status = 'uploading' AND r.deleted_at IS NULL
+         AND r.byte_size IS NOT NULL AND r.mime_type IS NOT NULL`,
+      [credentialHash, recordingId],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async markUploadFailed(recordingId: string): Promise<void> {
     await this.pool.query(
       `UPDATE recordings SET status='failed', updated_at=now()

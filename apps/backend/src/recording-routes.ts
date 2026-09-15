@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
 
@@ -234,6 +234,61 @@ export function registerRecordingRoutes(
     },
   );
 
+  // Shared by both the owner (session-authenticated) and device
+  // (credential-authenticated) completion routes below: verify the
+  // uploaded Drive file actually matches this claim before ever trusting
+  // the caller's say-so that the upload succeeded.
+  const finalizeRecordingUpload = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    claim: {
+      byteSize: number;
+      mimeType: 'video/mp4' | 'video/webm';
+      recordingId: string;
+      userId: string;
+    },
+    providerFileId: string,
+    householdId?: string,
+  ) => {
+    try {
+      const accessToken = await recordingAccessToken(claim.userId);
+      await verifyDriveRecordingFile({
+        accessToken,
+        byteSize: claim.byteSize,
+        mimeType: claim.mimeType,
+        providerFileId,
+        recordingId: claim.recordingId,
+      });
+      const completed = await store.completeRecordingUpload({
+        providerFileId,
+        recordingId: claim.recordingId,
+        userId: claim.userId,
+      });
+      if (!completed)
+        return reply.code(409).send({ error: 'Recording state changed' });
+      await store.audit({
+        eventType: 'recording_available',
+        ipAddress: request.ip,
+        metadata: { recordingId: claim.recordingId },
+        success: true,
+        userId: claim.userId,
+        ...(householdId ? { householdId } : {}),
+      });
+      return reply.code(204).send();
+    } catch (error) {
+      app.log.warn(
+        {
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+          recordingId: claim.recordingId,
+        },
+        'recording completion verification failed',
+      );
+      return reply
+        .code(409)
+        .send({ error: 'Uploaded recording could not be verified' });
+    }
+  };
+
   app.post('/api/recordings/:recordingId/complete', async (request, reply) => {
     const session = await auth.authenticateStateChange(request, reply);
     if (!session) return;
@@ -249,44 +304,41 @@ export function registerRecordingRoutes(
     );
     if (!claim)
       return reply.code(404).send({ error: 'Recording upload unavailable' });
-    try {
-      const accessToken = await recordingAccessToken(session.userId);
-      await verifyDriveRecordingFile({
-        accessToken,
-        byteSize: claim.byteSize,
-        mimeType: claim.mimeType,
-        providerFileId: body.data.providerFileId,
-        recordingId: claim.recordingId,
-      });
-      const completed = await store.completeRecordingUpload({
-        providerFileId: body.data.providerFileId,
-        recordingId: claim.recordingId,
-        userId: session.userId,
-      });
-      if (!completed)
-        return reply.code(409).send({ error: 'Recording state changed' });
-      await store.audit({
-        eventType: 'recording_available',
-        householdId: session.householdId,
-        ipAddress: request.ip,
-        metadata: { recordingId: claim.recordingId },
-        success: true,
-        userId: session.userId,
-      });
-      return reply.code(204).send();
-    } catch (error) {
-      app.log.warn(
-        {
-          errorName: error instanceof Error ? error.name : 'UnknownError',
-          recordingId: claim.recordingId,
-        },
-        'recording completion verification failed',
-      );
-      return reply
-        .code(409)
-        .send({ error: 'Uploaded recording could not be verified' });
-    }
+    return finalizeRecordingUpload(
+      request,
+      reply,
+      claim,
+      body.data.providerFileId,
+      session.householdId,
+    );
   });
+
+  app.post(
+    '/api/device/recordings/:recordingId/complete',
+    async (request, reply) => {
+      const authorization = request.headers.authorization;
+      const token = authorization?.startsWith('Bearer ')
+        ? authorization.slice('Bearer '.length)
+        : '';
+      const parameters = parametersSchema.safeParse(request.params);
+      const body = completeSchema.safeParse(request.body);
+      if (!token) return unauthorized(reply);
+      if (!parameters.success || !body.success)
+        return reply.code(400).send({ error: 'Invalid recording result' });
+      const claim = await store.getRecordingUploadClaimByCredential(
+        hashSecret(token),
+        parameters.data.recordingId,
+      );
+      if (!claim)
+        return reply.code(404).send({ error: 'Recording upload unavailable' });
+      return finalizeRecordingUpload(
+        request,
+        reply,
+        claim,
+        body.data.providerFileId,
+      );
+    },
+  );
 
   app.post(
     '/api/device/recordings/:recordingId/upload-session',

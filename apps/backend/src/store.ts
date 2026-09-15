@@ -194,6 +194,16 @@ export class PostgresStore implements MilestoneStore {
     return this.recordings.getUploadClaim(userId, recordingId);
   }
 
+  async getRecordingUploadClaimByCredential(
+    credentialHash: string,
+    recordingId: string,
+  ): Promise<RecordingUploadClaim | null> {
+    return this.recordings.getUploadClaimByCredential(
+      credentialHash,
+      recordingId,
+    );
+  }
+
   async markRecordingUploadFailed(recordingId: string): Promise<void> {
     await this.recordings.markUploadFailed(recordingId);
   }

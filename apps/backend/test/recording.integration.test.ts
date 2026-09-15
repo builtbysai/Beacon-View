@@ -108,4 +108,108 @@ describe.skipIf(!store)('recording persistence', () => {
       await store!.listRecordings(owner.householdId, [camera!.cameraId]),
     ).toHaveLength(0);
   });
+
+  it('lets the recording camera itself complete a device-initiated upload', async () => {
+    const owner = await store!.createAccount(
+      'device-recordings@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    await store!.createPairingCode(
+      owner.householdId,
+      hashSecret('RECORDING2'),
+      new Date(Date.now() + 60_000),
+    );
+    const device = await store!.redeemPairingCode({
+      codeHash: hashSecret('RECORDING2'),
+      credentialHash: hashSecret('device-recording-credential'),
+      installationId: randomUUID(),
+      ipAddress: '127.0.0.1',
+      name: 'Device-triggered camera',
+      now: new Date(),
+    });
+    if (!device || typeof device === 'string')
+      throw new Error('Expected device');
+    const camera = await store!.findAccessibleCamera(
+      owner.householdId,
+      owner.id,
+      'owner',
+      device.publicCameraId,
+    );
+    const requested = await store!.createRecordingRequest({
+      cameraSourceId: camera!.cameraId,
+      householdId: owner.householdId,
+      userId: owner.id,
+    });
+
+    // No browser session exists at all here -- only the device's own
+    // credential -- exactly the motion-triggered scenario ADR 0051 requires.
+    const claim = await store!.beginRecordingUpload({
+      byteSize: 2_048,
+      checksumSha256: 'b'.repeat(64),
+      credentialHash: hashSecret('device-recording-credential'),
+      durationMs: 8_000,
+      mimeType: 'video/mp4',
+      recordingId: requested!.id,
+    });
+    expect(claim).toMatchObject({
+      byteSize: 2_048,
+      mimeType: 'video/mp4',
+      recordingId: requested!.id,
+      userId: owner.id,
+    });
+
+    expect(
+      await store!.getRecordingUploadClaimByCredential(
+        hashSecret('wrong-credential'),
+        requested!.id,
+      ),
+    ).toBeNull();
+    const claimByCredential = await store!.getRecordingUploadClaimByCredential(
+      hashSecret('device-recording-credential'),
+      requested!.id,
+    );
+    expect(claimByCredential).toMatchObject({
+      byteSize: 2_048,
+      mimeType: 'video/mp4',
+      recordingId: requested!.id,
+      userId: owner.id,
+    });
+
+    expect(
+      await store!.completeRecordingUpload({
+        providerFileId: 'drive-file-for-device-recording-test',
+        recordingId: requested!.id,
+        userId: owner.id,
+      }),
+    ).toBe(true);
+    expect(
+      await store!.listRecordings(owner.householdId, [camera!.cameraId]),
+    ).toEqual([expect.objectContaining({ status: 'available' })]);
+
+    // A revoked credential can no longer claim a still-pending upload.
+    const second = await store!.createRecordingRequest({
+      cameraSourceId: camera!.cameraId,
+      householdId: owner.householdId,
+      userId: owner.id,
+    });
+    await store!.beginRecordingUpload({
+      byteSize: 4_096,
+      checksumSha256: 'c'.repeat(64),
+      credentialHash: hashSecret('device-recording-credential'),
+      durationMs: 3_000,
+      mimeType: 'video/mp4',
+      recordingId: second!.id,
+    });
+    await store!.pool.query(
+      `UPDATE device_credentials SET revoked_at = now() WHERE credential_hash = $1`,
+      [hashSecret('device-recording-credential')],
+    );
+    expect(
+      await store!.getRecordingUploadClaimByCredential(
+        hashSecret('device-recording-credential'),
+        second!.id,
+      ),
+    ).toBeNull();
+  });
 });
