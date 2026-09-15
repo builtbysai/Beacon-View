@@ -69,6 +69,7 @@ export function buildApp(
   const householdEvents = registerHouseholdEvents(app, config, store);
   const signaling = registerSignaling(app, config, store, householdEvents);
   app.addHook('onClose', async () => store.close());
+  app.addHook('onClose', () => limiter.close());
   registerServiceRoutes(app, config, store, limiter);
   registerAuthenticationRoutes(app, {
     auth: sessionAuth,

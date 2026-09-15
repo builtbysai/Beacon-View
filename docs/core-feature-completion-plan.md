@@ -42,8 +42,17 @@ not considered complete.
       sensitive-action reauth window (account deletion today) can refresh
       without a full re-login; still needs wiring into email-change and
       other future high-impact-membership/credential routes as they're built.
-- [ ] Run the authentication/CSRF/session/rate-limit review before recording
-      access — recording (step 4) shipped ahead of this review; still owed.
+- [x] Run the authentication/CSRF/session/rate-limit review before recording
+      access — done retroactively (recording shipped first). Audited every
+      state-changing route: cookie-authenticated ones consistently require
+      `authenticateStateChange`/`authenticateHouseholdAdminStateChange`
+      (session-bound CSRF token, constant-time compared, not naive
+      double-submit); device routes use bearer credentials, immune to CSRF
+      by design; no secrets found leaking into audit metadata or logs. One
+      real finding fixed: `RateLimiter`'s internal map never evicted stale
+      keys, so an attacker cycling through distinct emails/IPs against
+      password-reset/login could grow it unboundedly for the process
+      lifetime — added a periodic sweep (`rate-limit.test.ts`).
 - [ ] Wire verification/reset/reauth into the web UI (belongs with step 6).
 - [ ] Non-silenceable push/in-app security alerts belong with step 1's
       notification outbox, not this step — email alerts ship here instead.
