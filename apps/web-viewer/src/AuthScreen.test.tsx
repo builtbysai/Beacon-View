@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import type { FormEvent } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AuthScreen } from './AuthScreen';
 afterEach(() => {
@@ -37,6 +38,36 @@ it('preserves OAuth collision guidance, password visibility, and registration gu
     'new-password',
   );
   expect(screen.getByText('Use at least 12 characters.')).toBeVisible();
+});
+it('blocks registration submit until the confirm-password field matches', () => {
+  const onSubmit = vi.fn((event: FormEvent<HTMLFormElement>) =>
+    event.preventDefault(),
+  );
+  render(
+    <AuthScreen
+      busy={false}
+      error=""
+      mode="register"
+      onMode={vi.fn()}
+      onSubmit={onSubmit}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText('Password'), {
+    target: { value: 'a very long password' },
+  });
+  fireEvent.change(screen.getByLabelText('Confirm password'), {
+    target: { value: 'a different password' },
+  });
+  expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+  expect(screen.getByText("Passwords don't match.")).toBeVisible();
+
+  fireEvent.change(screen.getByLabelText('Confirm password'), {
+    target: { value: 'a very long password' },
+  });
+  expect(
+    screen.getByRole('button', { name: 'Create account' }),
+  ).not.toBeDisabled();
+  expect(screen.queryByText("Passwords don't match.")).not.toBeInTheDocument();
 });
 it('requests a password reset without revealing whether the email exists', async () => {
   const fetchMock = vi.fn().mockResolvedValue({

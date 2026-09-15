@@ -41,6 +41,9 @@ const emailVerificationConfirmSchema = z
 const reauthenticationSchema = z
   .object({ password: z.string().min(12).max(128) })
   .strict();
+const passwordSetSchema = z
+  .object({ password: z.string().min(12).max(128) })
+  .strict();
 
 interface AccountRecoveryRouteDependencies {
   auth: SessionAuth;
@@ -199,10 +202,7 @@ export function registerAccountRecoveryRoutes(
       // -- there is no account to enumerate, so the caller can be told the
       // send genuinely failed and is worth retrying, rather than a generic
       // 500 with a raw stack trace.
-      app.log.warn(
-        { err: error },
-        'email verification email delivery failed',
-      );
+      app.log.warn({ err: error }, 'email verification email delivery failed');
       return reply
         .code(503)
         .send({ error: 'The verification email could not be sent' });
@@ -286,6 +286,37 @@ export function registerAccountRecoveryRoutes(
       success: true,
       userId: session.userId,
     });
+    return reply.code(204).send();
+  });
+
+  // For a Google-only account: adds a password as a second sign-in method,
+  // without the "prove you know the current password" step change-password
+  // would need, since there isn't one yet to prove.
+  app.post('/api/account/password/set', async (request, reply) => {
+    const session = await auth.authenticateStateChange(request, reply);
+    if (!session) return;
+    if (!limiter.take(`password-set:${session.userId}`, 5, HOUR))
+      return reply.code(429).send({ error: 'Too many requests' });
+    const parsed = passwordSetSchema.safeParse(request.body);
+    if (!parsed.success)
+      return reply.code(400).send({ error: 'Invalid password' });
+    const user = await store.findUserById(session.userId);
+    if (!user) return reply.code(404).send({ error: 'Account not found' });
+    if (user.passwordHash)
+      return reply
+        .code(409)
+        .send({ error: 'This account already has a password' });
+    const passwordHash = await hashPassword(parsed.data.password);
+    await store.updatePassword(session.userId, passwordHash);
+    await store.audit({
+      eventType: 'password_set',
+      householdId: session.householdId,
+      ipAddress: request.ip,
+      success: true,
+      userId: session.userId,
+    });
+    if (emailConfigured)
+      await deliverPasswordChangedAlert(config, user.email).catch(() => {});
     return reply.code(204).send();
   });
 }

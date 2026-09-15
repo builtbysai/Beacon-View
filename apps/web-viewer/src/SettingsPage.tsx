@@ -12,6 +12,7 @@ import { Icon } from './Icon';
 import { LinkGoogleAccount } from './LinkGoogleAccount';
 import { MotionRetentionSettings } from './MotionRetentionSettings';
 import { NotificationSettings } from './NotificationSettings';
+import { SetPassword } from './SetPassword';
 import { SettingsRow, SettingsSectionHeader } from './SettingsUI';
 import type { Camera, HouseholdSession, User } from './domain';
 
@@ -22,6 +23,7 @@ type SettingsPageProps = {
   onLogout: () => void;
   onDeleteAccount: () => void;
   onCurrentSessionRevoked: (message?: string) => void;
+  onUserChanged: () => void;
 };
 
 type SettingsSection =
@@ -87,6 +89,7 @@ export function SettingsPage({
   onLogout,
   onDeleteAccount,
   onCurrentSessionRevoked,
+  onUserChanged,
 }: SettingsPageProps) {
   const manager = household.role === 'owner' || household.role === 'admin';
   const sections: SettingsSection[] = [
@@ -170,6 +173,7 @@ export function SettingsPage({
               </button>
             </SettingsRow>
             <EmailVerification verified={Boolean(user.emailVerified)} />
+            {!user.hasPassword && <SetPassword onSet={onUserChanged} />}
             <LinkGoogleAccount linked={Boolean(user.googleLinked)} />
             <SettingsRow
               title="Delete account"

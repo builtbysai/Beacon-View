@@ -22,6 +22,7 @@ describe('GoogleDriveSettings', () => {
     vi.mocked(request).mockResolvedValue({
       connected: false,
       configured: true,
+      recordingsConnected: false,
       providerEmail: null,
       updatedAt: null,
     });
@@ -30,16 +31,15 @@ describe('GoogleDriveSettings', () => {
 
     expect(
       await screen.findByRole('link', { name: 'Connect Google Drive' }),
-    ).toHaveAttribute('href', '/api/drive/connect');
-    expect(
-      screen.getByText(/camera media and recordings are not uploaded/i),
-    ).toBeVisible();
+    ).toHaveAttribute('href', '/api/drive/connect?purpose=recordings');
+    expect(screen.getByText(/turn on cloud recording below/i)).toBeVisible();
   });
 
   it('turns unavailable-status recovery into a real OAuth setup link', async () => {
     vi.mocked(request).mockResolvedValue({
       connected: false,
       configured: false,
+      recordingsConnected: false,
       providerEmail: null,
       updatedAt: null,
     });
@@ -48,7 +48,7 @@ describe('GoogleDriveSettings', () => {
 
     expect(
       await screen.findByRole('link', { name: 'Retry setup' }),
-    ).toHaveAttribute('href', '/api/drive/connect');
+    ).toHaveAttribute('href', '/api/drive/connect?purpose=recordings');
   });
 
   it('surfaces an OAuth callback result and cleans it from the URL', async () => {
@@ -60,6 +60,7 @@ describe('GoogleDriveSettings', () => {
     vi.mocked(request).mockResolvedValue({
       connected: false,
       configured: true,
+      recordingsConnected: false,
       providerEmail: null,
       updatedAt: null,
     });
@@ -72,12 +73,30 @@ describe('GoogleDriveSettings', () => {
     expect(window.location.search).toBe('?section=storage');
   });
 
+  it('offers to upgrade an appdata-only connection to cloud recording', async () => {
+    vi.mocked(request).mockResolvedValue({
+      connected: true,
+      configured: true,
+      recordingsConnected: false,
+      providerEmail: 'drive@example.com',
+      updatedAt: '2026-09-14T12:00:00.000Z',
+    });
+
+    render(<GoogleDriveSettings />);
+
+    expect(
+      await screen.findByRole('link', { name: 'Turn on' }),
+    ).toHaveAttribute('href', '/api/drive/connect?purpose=recordings');
+    expect(screen.getByText('Turn on cloud recording')).toBeVisible();
+  });
+
   it('can verify and disconnect an existing connection', async () => {
     vi.mocked(request).mockImplementation((path, options) => {
       if (path === '/api/drive/status')
         return Promise.resolve({
           connected: true,
           configured: true,
+          recordingsConnected: true,
           providerEmail: 'drive@example.com',
           updatedAt: '2026-09-14T12:00:00.000Z',
         });

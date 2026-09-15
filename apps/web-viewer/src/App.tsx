@@ -96,6 +96,7 @@ export function App() {
   const [activityNotice, setActivityNotice] = useState('');
   const [motionEventRevision, setMotionEventRevision] = useState(0);
   const [motionClearRevision, setMotionClearRevision] = useState(0);
+  const [driveRecordingReady, setDriveRecordingReady] = useState(false);
   const returnPage = useRef<Page>('cameras');
   const reconnectDeviceId = useRef<string | null>(null);
   const pageHeading = useRef<HTMLHeadingElement>(null);
@@ -121,8 +122,8 @@ export function App() {
     }
   }, []);
 
-  const navigate = useCallback((next: Page) => {
-    window.history.pushState({}, '', pagePaths[next]);
+  const navigate = useCallback((next: Page, search?: string) => {
+    window.history.pushState({}, '', `${pagePaths[next]}${search ?? ''}`);
     setPage(next);
     setSelectedDeviceId(null);
     setSelectedCamera(null);
@@ -255,6 +256,30 @@ export function App() {
     };
   }, [user !== null]);
 
+  // Only the household owner can request recordings, and only the live
+  // viewer (where the record control actually appears) needs to know
+  // whether Drive is ready to accept one -- fetched just for that view
+  // rather than globally, so it drives whether LiveVideo shows a working
+  // record button or a way to connect Drive instead of a dead-end error
+  // after tapping record.
+  useEffect(() => {
+    if (!selectedCamera || household?.role !== 'owner') {
+      setDriveRecordingReady(false);
+      return;
+    }
+    let cancelled = false;
+    void request<{ recordingsConnected: boolean }>('/api/drive/status')
+      .then((result) => {
+        if (!cancelled) setDriveRecordingReady(result.recordingsConnected);
+      })
+      .catch(() => {
+        if (!cancelled) setDriveRecordingReady(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCamera, household?.role]);
+
   // Applies a /join link's stashed token once a session exists -- either
   // immediately (already signed in) or right after this same load's sign-in/
   // register completes, since authenticate() below also triggers a re-render
@@ -273,10 +298,10 @@ export function App() {
     } catch {
       /* Not essential; a stale entry just gets overwritten by the next join link. */
     }
-    void request<{ householdId: string }>(
-      '/api/household/invitations/accept',
-      { body: JSON.stringify({ token }), method: 'POST' },
-    )
+    void request<{ householdId: string }>('/api/household/invitations/accept', {
+      body: JSON.stringify({ token }),
+      method: 'POST',
+    })
       .then((accepted) =>
         request('/api/account/household', {
           body: JSON.stringify({ householdId: accepted.householdId }),
@@ -372,7 +397,13 @@ export function App() {
       setUser(result.user);
       setHousehold(result.household ?? { id: '', role: 'owner' });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Request failed');
+      setError(
+        caught instanceof Error && caught.message === 'googleAccountExists'
+          ? "This email already has a Google account. Use “Continue with Google” above, then add a password from Settings once you're signed in."
+          : caught instanceof Error
+            ? caught.message
+            : 'Request failed',
+      );
     } finally {
       setAuthBusy(false);
     }
@@ -738,6 +769,10 @@ export function App() {
           siblingCameras={siblings}
           onDevice={() => setLiveSettingsOpen(true)}
           canRecord={household?.role === 'owner'}
+          recordingReady={driveRecordingReady}
+          onConnectDriveForRecording={() =>
+            navigate('settings', '?section=storage')
+          }
         />
         {liveSettingsOpen && liveDevice && (
           <LiveCameraSettingsDialog
@@ -1016,6 +1051,16 @@ export function App() {
             onLogout={() => void logout()}
             onDeleteAccount={requestDeleteAccount}
             onCurrentSessionRevoked={clearLocalSession}
+            onUserChanged={() => {
+              void request<{ household: HouseholdSession; user: User }>(
+                '/api/auth/me',
+              )
+                .then((result) => {
+                  setUser(result.user);
+                  setHousehold(result.household ?? { id: '', role: 'owner' });
+                })
+                .catch(() => undefined);
+            }}
           />
         )}
         {page === 'camera mode' && (

@@ -152,6 +152,22 @@ export class PostgresSharingRepository {
         await client.query('ROLLBACK');
         return null;
       }
+      // A viewer is meant to see the whole household by default -- camera
+      // access is something an admin *restricts* for them afterward, not
+      // something granted one-by-one before it does anything. Guests stay
+      // opt-in per camera: their access is meant to be narrow and deliberate.
+      if (pending.role === 'viewer') {
+        await client.query(
+          `INSERT INTO camera_grants
+           (household_id, member_id, camera_source_id, can_listen, can_talk)
+           SELECT $1, $2, cs.id, false, false FROM camera_sources cs
+           JOIN cameras d ON d.id = cs.device_id
+           WHERE d.household_id = $1 AND cs.enabled = true
+             AND cs.removed_at IS NULL AND d.revoked_at IS NULL
+           ON CONFLICT (member_id, camera_source_id) DO NOTHING`,
+          [pending.householdId, membership.rows[0]!.id],
+        );
+      }
       await client.query(
         'UPDATE household_invitations SET accepted_at=$2, updated_at=$2 WHERE id=$1',
         [pending.id, input.now],

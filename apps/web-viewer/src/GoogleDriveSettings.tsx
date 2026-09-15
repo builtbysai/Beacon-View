@@ -6,6 +6,7 @@ import { SettingsCard, SettingsRow } from './SettingsUI';
 interface DriveStatus {
   connected: boolean;
   configured: boolean;
+  recordingsConnected: boolean;
   providerEmail: string | null;
   updatedAt: string | null;
 }
@@ -111,7 +112,8 @@ export function GoogleDriveSettings() {
         }
         description={
           <>
-            Private app data only. Camera media and recordings are not uploaded.
+            Private app data, plus recorded clips if you turn on cloud recording
+            below.
             {status.providerEmail && (
               <>
                 <br />
@@ -122,16 +124,45 @@ export function GoogleDriveSettings() {
         }
       >
         {!status.connected && status.configured && (
-          <a className="secondary button-link" href="/api/drive/connect">
+          <a
+            className="secondary button-link"
+            href="/api/drive/connect?purpose=recordings"
+          >
             Connect Google Drive
           </a>
         )}
         {!status.configured && (
-          <a className="secondary button-link" href="/api/drive/connect">
+          <a
+            className="secondary button-link"
+            href="/api/drive/connect?purpose=recordings"
+          >
             Retry setup
           </a>
         )}
       </SettingsRow>
+      {status.connected && (
+        <SettingsRow
+          title={
+            status.recordingsConnected
+              ? 'Cloud recording is on'
+              : 'Turn on cloud recording'
+          }
+          description={
+            status.recordingsConnected
+              ? 'Recorded clips upload to your Google Drive.'
+              : 'Grant one more permission so recorded clips can upload to your Google Drive.'
+          }
+        >
+          {!status.recordingsConnected && (
+            <a
+              className="button-link"
+              href="/api/drive/connect?purpose=recordings"
+            >
+              Turn on
+            </a>
+          )}
+        </SettingsRow>
+      )}
       {status.connected && (
         <SettingsRow
           title="Manage connection"

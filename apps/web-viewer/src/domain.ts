@@ -4,6 +4,7 @@ export interface User {
   avatarUrl?: string | null;
   emailVerified?: boolean;
   googleLinked?: boolean;
+  hasPassword?: boolean;
 }
 
 export type HouseholdRole = 'owner' | 'admin' | 'viewer' | 'guest';

@@ -359,6 +359,27 @@ describe('LiveVideo', () => {
     unmount();
   });
 
+  it('offers to connect Google Drive instead of a dead-end error when recording is not ready', () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    const onConnectDriveForRecording = vi.fn();
+    render(
+      <LiveVideo
+        camera={{ id: 'camera', name: 'Kitchen' }}
+        canRecord
+        recordingReady={false}
+        onConnectDriveForRecording={onConnectDriveForRecording}
+      />,
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Record a short clip' }),
+    ).not.toBeInTheDocument();
+    const connectButton = screen.getByRole('button', {
+      name: 'Connect Google Drive to record',
+    });
+    fireEvent.click(connectButton);
+    expect(onConnectDriveForRecording).toHaveBeenCalledTimes(1);
+  });
+
   it('hides the recording control for a non-owner viewer', () => {
     vi.stubGlobal('WebSocket', FakeWebSocket);
     render(<LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} />);
@@ -411,7 +432,9 @@ describe('LiveVideo', () => {
           active: true,
         }),
       );
-      expect(screen.getByRole('button', { name: 'Stop talking' })).toBeEnabled();
+      expect(
+        screen.getByRole('button', { name: 'Stop talking' }),
+      ).toBeEnabled();
 
       // A hard failure (not the in-place 8-second grace) tears the whole
       // connection down and schedules a full reconnect.

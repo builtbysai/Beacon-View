@@ -103,6 +103,8 @@ export function LiveVideo({
   onRename,
   onDelete,
   canRecord = false,
+  recordingReady = true,
+  onConnectDriveForRecording,
 }: {
   enabled?: boolean;
   camera: Camera;
@@ -121,6 +123,11 @@ export function LiveVideo({
    * /api/recordings) -- the control is hidden rather than shown disabled
    * for everyone else, matching how Listen/Talk grants already work. */
   canRecord?: boolean;
+  /** Whether Google Drive is connected with the recording scope granted.
+   * When it isn't, the record control becomes a link to go connect it
+   * instead of a button that always fails with a 409 once pressed. */
+  recordingReady?: boolean;
+  onConnectDriveForRecording?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -210,8 +217,7 @@ export function LiveVideo({
   // polls the existing list endpoint for this one recording's lifecycle
   // rather than owning any of the actual capture/upload.
   useEffect(() => {
-    if (!recording || !RECORDING_IN_PROGRESS.includes(recording.status))
-      return;
+    if (!recording || !RECORDING_IN_PROGRESS.includes(recording.status)) return;
     let active = true;
     const timer = window.setTimeout(() => {
       void request<{ recordings: RecordingProgress[] }>('/api/recordings')
@@ -793,7 +799,20 @@ export function LiveVideo({
                 </span>
               </button>
             )}
-            {canRecord && (
+            {canRecord && !recordingReady && (
+              <button
+                className="video-control"
+                data-tooltip="Connect Google Drive to record"
+                onClick={onConnectDriveForRecording}
+                type="button"
+              >
+                <Icon name="record" />
+                <span className="visually-hidden">
+                  Connect Google Drive to record
+                </span>
+              </button>
+            )}
+            {canRecord && recordingReady && (
               <button
                 aria-pressed={
                   !!recording &&

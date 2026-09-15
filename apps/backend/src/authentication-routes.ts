@@ -129,6 +129,16 @@ export function registerAuthenticationRoutes(
         'code' in error &&
         error.code === '23505'
       ) {
+        // A duplicate email here almost always means "signed up with Google
+        // already" -- that account has no password to collide with, so tell
+        // the caller which case this is instead of a dead-end error the
+        // existing Google user has no path out of.
+        const existing = await store.findUserByEmail(email);
+        if (existing && !existing.passwordHash) {
+          return reply
+            .code(409)
+            .send({ error: 'googleAccountExists', field: 'email' });
+        }
         return reply.code(409).send({ error: 'Unable to create account' });
       }
       throw error;

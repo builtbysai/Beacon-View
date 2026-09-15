@@ -75,9 +75,15 @@ export function AuthScreen({
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const googleResult = new URLSearchParams(window.location.search).get(
     'googleSignIn',
   );
+  const confirmMismatch =
+    mode === 'register' &&
+    confirmPassword.length > 0 &&
+    confirmPassword !== password;
   return (
     <main className="auth-landing">
       <section className="auth-hero" aria-labelledby="landing-title">
@@ -215,6 +221,8 @@ export function AuthScreen({
               minLength={12}
               required
               disabled={busy}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
               aria-describedby={
                 mode === 'register' ? 'password-guidance' : undefined
               }
@@ -235,8 +243,40 @@ export function AuthScreen({
               Use at least 12 characters.
             </p>
           )}
+          {mode === 'register' && (
+            <>
+              <label htmlFor="beacon-password-confirm">Confirm password</label>
+              <input
+                id="beacon-password-confirm"
+                name="confirmPassword"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                placeholder="Re-enter your password"
+                minLength={12}
+                required
+                disabled={busy}
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                aria-invalid={confirmMismatch}
+                aria-describedby={
+                  confirmMismatch ? 'password-confirm-mismatch' : undefined
+                }
+              />
+              {confirmMismatch && (
+                <p role="alert" id="password-confirm-mismatch">
+                  Passwords don't match.
+                </p>
+              )}
+            </>
+          )}
           {error && <p role="alert">{error}</p>}
-          <button className="password-submit" type="submit" disabled={busy}>
+          <button
+            className="password-submit"
+            type="submit"
+            disabled={
+              busy || (mode === 'register' && password !== confirmPassword)
+            }
+          >
             {busy
               ? mode === 'login'
                 ? 'Signing in…'
@@ -263,6 +303,8 @@ export function AuthScreen({
               onClick={() => {
                 setShowPassword(false);
                 setShowRecovery(false);
+                setPassword('');
+                setConfirmPassword('');
                 onMode();
               }}
             >

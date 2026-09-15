@@ -1617,4 +1617,94 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     );
     expect(audit.rows[0]!.count).toBe(1);
   });
+
+  async function googleSessionCookies(userId: string): Promise<{
+    cookie: string;
+    csrf: string;
+  }> {
+    const token = randomBytes(32).toString('hex');
+    const csrf = randomBytes(32).toString('hex');
+    const now = Date.now();
+    await store!.createSession({
+      absoluteExpiresAt: new Date(now + 30 * 24 * 60 * 60 * 1_000),
+      csrfHash: hashSecret(csrf),
+      idleExpiresAt: new Date(now + 7 * 24 * 60 * 60 * 1_000),
+      reauthenticatedAt: new Date(now),
+      tokenHash: hashSecret(token),
+      userId,
+    });
+    return {
+      cookie: `beacon_session=${token}; beacon_csrf=${csrf}`,
+      csrf,
+    };
+  }
+
+  it('tells a duplicate registration its email already has a Google account', async () => {
+    await store!.createGoogleAccount(
+      'google-only@example.com',
+      'google-subject-duplicate-register',
+      '127.0.0.1',
+    );
+    const attempt = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'google-only@example.com',
+        password: 'another secure test password',
+      },
+      remoteAddress: '127.0.0.50',
+      url: '/api/auth/register',
+    });
+    expect(attempt.statusCode).toBe(409);
+    expect(attempt.json<{ error: string }>().error).toBe('googleAccountExists');
+  });
+
+  it('lets a Google-only account add a password it can then sign in with', async () => {
+    const account = await store!.createGoogleAccount(
+      'google-add-password@example.com',
+      'google-subject-add-password',
+      '127.0.0.1',
+    );
+    const credentials = await googleSessionCookies(account.id);
+
+    const before = await app!.inject({
+      headers: { cookie: credentials.cookie },
+      method: 'GET',
+      url: '/api/auth/me',
+    });
+    expect(
+      before.json<{ user: { hasPassword: boolean } }>().user.hasPassword,
+    ).toBe(false);
+
+    const setPassword = await app!.inject({
+      headers: {
+        cookie: credentials.cookie,
+        'x-csrf-token': credentials.csrf,
+      },
+      method: 'POST',
+      payload: { password: 'a brand new password' },
+      url: '/api/account/password/set',
+    });
+    expect(setPassword.statusCode).toBe(204);
+
+    const login = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'google-add-password@example.com',
+        password: 'a brand new password',
+      },
+      url: '/api/auth/login',
+    });
+    expect(login.statusCode).toBe(200);
+
+    const again = await app!.inject({
+      headers: {
+        cookie: credentials.cookie,
+        'x-csrf-token': credentials.csrf,
+      },
+      method: 'POST',
+      payload: { password: 'yet another password' },
+      url: '/api/account/password/set',
+    });
+    expect(again.statusCode).toBe(409);
+  });
 });
