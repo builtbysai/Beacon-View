@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { request } from './api';
+import { SettingsCard, SettingsField, SettingsFieldRow } from './SettingsUI';
 
 const OPTIONS = [
   { days: 1, label: '1 day' },
@@ -62,15 +63,21 @@ export function MotionRetentionSettings() {
   }
 
   return (
-    <section aria-labelledby="motion-retention-title">
-      <h4 id="motion-retention-title">Motion history</h4>
-      <p>
-        Beacon stores motion time, camera name, and motion intensity, not
-        recordings, images, or audio. Expired history is deleted automatically.
-      </p>
-      {error && <p role="alert">{error}</p>}
+    <SettingsCard
+      title="Motion history"
+      description="Beacon stores motion time, camera name, and motion intensity, not recordings, images, or audio. Expired history is deleted automatically."
+    >
+      {error && (
+        <p role="alert" className="settings-card-inline-message">
+          {error}
+        </p>
+      )}
       {days === null ? (
-        !error && <p role="status">Loading motion history settings…</p>
+        !error && (
+          <p role="status" className="settings-card-inline-message">
+            Loading motion history settings…
+          </p>
+        )
       ) : (
         <form
           aria-label="Motion history retention"
@@ -79,34 +86,39 @@ export function MotionRetentionSettings() {
             void save();
           }}
         >
-          <label>
-            Keep motion history for
-            <select
-              aria-label="Keep motion history for"
-              disabled={saving}
-              value={days}
-              onChange={(event) => {
-                setJustSaved(false);
-                setDays(Number(event.target.value));
-              }}
+          <SettingsFieldRow>
+            <SettingsField
+              label="Keep motion history for"
+              htmlFor="motion-retention-days"
             >
-              {OPTIONS.map((option) => (
-                <option key={option.days} value={option.days}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" disabled={saving || days === savedDays}>
-            {saving ? 'Saving…' : 'Save changes'}
-          </button>
-          {justSaved && (
-            <p className="setting-saved" role="status">
-              ✓ Saved
-            </p>
-          )}
+              <select
+                id="motion-retention-days"
+                aria-label="Keep motion history for"
+                disabled={saving}
+                value={days}
+                onChange={(event) => {
+                  setJustSaved(false);
+                  setDays(Number(event.target.value));
+                }}
+              >
+                {OPTIONS.map((option) => (
+                  <option key={option.days} value={option.days}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </SettingsField>
+            <button type="submit" disabled={saving || days === savedDays}>
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+            {justSaved && (
+              <p className="setting-saved" role="status">
+                ✓ Saved
+              </p>
+            )}
+          </SettingsFieldRow>
         </form>
       )}
-    </section>
+    </SettingsCard>
   );
 }

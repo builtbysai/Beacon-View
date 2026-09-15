@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { request } from './api';
+import { SettingsCard, SettingsRow } from './SettingsUI';
 
 interface DriveStatus {
   connected: boolean;
@@ -93,33 +94,33 @@ export function GoogleDriveSettings() {
   }
 
   if (!status) {
-    return (
-      <div className="drive-settings">
-        {error ? (
-          <p role="alert">{error}</p>
-        ) : (
-          <p role="status">Loading Google Drive…</p>
-        )}
-      </div>
+    return error ? (
+      <p role="alert">{error}</p>
+    ) : (
+      <p role="status">Loading Google Drive…</p>
     );
   }
 
   return (
-    <div className="drive-settings">
-      <div className="settings-row">
-        <div>
-          <strong>
-            {status.connected
-              ? 'Google Drive connected'
-              : 'Use Google Drive for Beacon data'}
-          </strong>
-          <p>
+    <SettingsCard aria-label="Google Drive">
+      <SettingsRow
+        title={
+          status.connected
+            ? 'Google Drive connected'
+            : 'Use Google Drive for Beacon data'
+        }
+        description={
+          <>
             Private app data only. Camera media and recordings are not uploaded.
-          </p>
-          {status.providerEmail && (
-            <p>Connected account: {status.providerEmail}</p>
-          )}
-        </div>
+            {status.providerEmail && (
+              <>
+                <br />
+                Connected account: {status.providerEmail}
+              </>
+            )}
+          </>
+        }
+      >
         {!status.connected && status.configured && (
           <a className="secondary button-link" href="/api/drive/connect">
             Connect Google Drive
@@ -130,9 +131,12 @@ export function GoogleDriveSettings() {
             Retry setup
           </a>
         )}
-      </div>
+      </SettingsRow>
       {status.connected && (
-        <div className="settings-actions">
+        <SettingsRow
+          title="Manage connection"
+          description="Verify Beacon can still reach Drive, or disconnect it."
+        >
           <button
             className="secondary"
             disabled={busy}
@@ -147,10 +151,10 @@ export function GoogleDriveSettings() {
           >
             Disconnect Drive
           </button>
-        </div>
+        </SettingsRow>
       )}
       {message && <p role="status">{message}</p>}
       {error && <p role="alert">{error}</p>}
-    </div>
+    </SettingsCard>
   );
 }

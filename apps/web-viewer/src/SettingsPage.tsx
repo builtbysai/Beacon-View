@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { IconName } from './Icon';
 
 import { AccessHistory } from './AccessHistory';
 import { Avatar } from './Avatar';
@@ -7,9 +8,11 @@ import { EmailVerification } from './EmailVerification';
 import { GoogleDriveSettings } from './GoogleDriveSettings';
 import { HouseholdSharingSettings } from './HouseholdSharingSettings';
 import { HouseholdSwitcher } from './HouseholdSwitcher';
+import { Icon } from './Icon';
 import { LinkGoogleAccount } from './LinkGoogleAccount';
 import { MotionRetentionSettings } from './MotionRetentionSettings';
 import { NotificationSettings } from './NotificationSettings';
+import { SettingsRow, SettingsSectionHeader } from './SettingsUI';
 import type { Camera, HouseholdSession, User } from './domain';
 
 type SettingsPageProps = {
@@ -31,15 +34,50 @@ type SettingsSection =
   | 'account'
   | 'privacy';
 
-const labels: Record<SettingsSection, string> = {
-  household: 'Household',
-  alerts: 'Alerts',
-  access: 'People & access',
-  camera: 'Camera & motion',
-  storage: 'Cloud storage',
-  security: 'Security',
-  account: 'Account',
-  privacy: 'Privacy',
+const sectionInfo: Record<
+  SettingsSection,
+  { label: string; icon: IconName; description: string }
+> = {
+  household: {
+    label: 'Household',
+    icon: 'home',
+    description: 'The household this account belongs to.',
+  },
+  alerts: {
+    label: 'Alerts',
+    icon: 'alert',
+    description: 'Push delivery and per-camera alert preferences.',
+  },
+  access: {
+    label: 'People & access',
+    icon: 'users',
+    description: 'Who can view or share this household, and what they can do.',
+  },
+  camera: {
+    label: 'Camera & motion',
+    icon: 'camera',
+    description: 'How long motion history is kept.',
+  },
+  storage: {
+    label: 'Cloud storage',
+    icon: 'cloud',
+    description: 'Connect Google Drive for Beacon app data and recordings.',
+  },
+  security: {
+    label: 'Security',
+    icon: 'shield',
+    description: 'Active browser sessions and recent account access.',
+  },
+  account: {
+    label: 'Account',
+    icon: 'user',
+    description: 'Sign-in methods, verification, and account deletion.',
+  },
+  privacy: {
+    label: 'Privacy',
+    icon: 'lock',
+    description: 'Capture, sharing, retention, and account data.',
+  },
 };
 
 export function SettingsPage({
@@ -67,6 +105,7 @@ export function SettingsPage({
     ) as SettingsSection | null;
     return requested && sections.includes(requested) ? requested : 'household';
   });
+  const active = sectionInfo[selected];
 
   return (
     <div className="settings-workspace">
@@ -79,96 +118,81 @@ export function SettingsPage({
             onClick={() => setSelected(section)}
             type="button"
           >
-            {labels[section]}
+            <Icon name={sectionInfo[section].icon} />
+            {sectionInfo[section].label}
           </button>
         ))}
       </nav>
 
       <div className="settings-layout">
-        <header className="settings-section-heading">
-          <h3>{labels[selected]}</h3>
-        </header>
+        <SettingsSectionHeader
+          title={active.label}
+          description={active.description}
+        />
 
         {selected === 'household' && (
-          <section className="settings-section" aria-label="Household">
+          <div aria-label="Household">
             <HouseholdSwitcher currentHouseholdId={household.id} />
-          </section>
+          </div>
         )}
         {selected === 'alerts' && manager && (
-          <section className="settings-section" aria-label="Alerts">
+          <div aria-label="Alerts">
             <NotificationSettings />
-          </section>
+          </div>
         )}
         {selected === 'access' && (
-          <section className="settings-section" aria-label="People and access">
+          <div aria-label="People and access">
             <HouseholdSharingSettings cameras={cameras} role={household.role} />
-          </section>
+          </div>
         )}
         {selected === 'camera' && manager && (
-          <section className="settings-section" aria-label="Camera and motion">
+          <div aria-label="Camera and motion">
             <MotionRetentionSettings />
-          </section>
+          </div>
         )}
         {selected === 'storage' && (
-          <section className="settings-section" aria-label="Cloud storage">
+          <div aria-label="Cloud storage">
             <GoogleDriveSettings />
-          </section>
+          </div>
         )}
         {selected === 'security' && manager && (
-          <section
-            className="settings-section settings-section-stack"
-            aria-label="Security"
-          >
+          <div aria-label="Security" className="settings-card-stack">
             <BrowserSessions onCurrentRevoked={onCurrentSessionRevoked} />
             <AccessHistory currentEmail={user.email} />
-          </section>
+          </div>
         )}
         {selected === 'account' && (
-          <section
-            className="settings-section settings-section-stack"
-            aria-label="Account"
-          >
-            <div className="settings-row settings-row-identity">
-              <div className="settings-identity">
-                <Avatar
-                  email={user.email}
-                  avatarUrl={user.avatarUrl}
-                  size="lg"
-                />
-                <div>
-                  <strong>{user.email}</strong>
-                  <p>Signed in</p>
-                </div>
-              </div>
+          <div aria-label="Account" className="settings-card-stack">
+            <SettingsRow title={user.email} description="Signed in">
+              <Avatar email={user.email} avatarUrl={user.avatarUrl} size="lg" />
               <button className="secondary" onClick={onLogout}>
                 Sign out
               </button>
-            </div>
+            </SettingsRow>
             <EmailVerification verified={Boolean(user.emailVerified)} />
             <LinkGoogleAccount linked={Boolean(user.googleLinked)} />
-            <div className="settings-row settings-danger">
-              <div>
-                <strong>Delete account</strong>
-                <p>Permanently removes your Beacon data and access.</p>
-              </div>
+            <SettingsRow
+              title="Delete account"
+              description="Permanently removes your Beacon data and access."
+              tone="danger"
+            >
               <button className="danger" onClick={onDeleteAccount}>
                 Delete account
               </button>
-            </div>
-          </section>
+            </SettingsRow>
+          </div>
         )}
         {selected === 'privacy' && (
-          <section className="settings-section" aria-label="Privacy">
-            <div className="settings-row">
-              <div>
-                <strong>Trust &amp; privacy</strong>
-                <p>Capture, sharing, retention, and account data.</p>
-              </div>
+          <div aria-label="Privacy">
+            <SettingsRow
+              title="Trust & privacy"
+              description="Capture, sharing, retention, and account data."
+            >
               <a className="secondary button-link" href="/trust">
                 View details
               </a>
-            </div>
-          </section>
+            </SettingsRow>
+          </div>
         )}
       </div>
     </div>

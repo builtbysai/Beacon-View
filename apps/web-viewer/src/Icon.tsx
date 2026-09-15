@@ -179,6 +179,22 @@ const shapes = {
     </>
   ),
   record: <circle cx="12" cy="12" r="6" fill="currentColor" stroke="none" />,
+  user: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21c1.2-4 4.4-6 8-6s6.8 2 8 6" />
+    </>
+  ),
+  users: (
+    <>
+      <circle cx="9" cy="8" r="3.4" />
+      <path d="M2.5 20c1-3.4 3.6-5.2 6.5-5.2s5.5 1.8 6.5 5.2" />
+      <path d="M16 4.6a3.4 3.4 0 0 1 0 6.7M19 14.4c2 .6 3.5 2.3 4.2 5.6" />
+    </>
+  ),
+  cloud: (
+    <path d="M7 18a4.5 4.5 0 0 1-.5-8.98A5.5 5.5 0 0 1 17.4 8 4 4 0 0 1 17 18H7Z" />
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof shapes;

@@ -7,6 +7,7 @@ import {
   type AccessEvent,
 } from './access-history';
 import { Icon, type IconName } from './Icon';
+import { SettingsCard } from './SettingsUI';
 
 export function AccessHistory({ currentEmail }: { currentEmail: string }) {
   const pageSize = 6;
@@ -42,14 +43,15 @@ export function AccessHistory({ currentEmail }: { currentEmail: string }) {
   }
 
   return (
-    <section
-      className="activity-history"
-      aria-labelledby="access-history-title"
-    >
-      <div className="settings-subsection-heading">
+    <SettingsCard aria-label="Recent camera activity">
+      <div className="settings-card-header settings-subsection-heading">
         <div>
-          <h4 id="access-history-title">Recent camera activity</h4>
-          <p>Security-relevant changes and live-view attempts.</p>
+          <h3>Recent camera activity</h3>
+          <p>
+            Security-relevant changes and live-view attempts. Up to 50 recent
+            events are shown; network addresses, connection details, and camera
+            media are never included.
+          </p>
         </div>
         {groups.length > 0 && (
           <span className="history-count">
@@ -57,15 +59,19 @@ export function AccessHistory({ currentEmail }: { currentEmail: string }) {
           </span>
         )}
       </div>
-      <p className="notice">
-        Up to 50 recent events are shown for this household. Network addresses,
-        connection details, and camera media are never included.
-      </p>
-      {error && <p role="alert">{error}</p>}
-      {events === null && !error && (
-        <p role="status">Loading camera activity…</p>
+      {error && (
+        <p role="alert" className="settings-card-inline-message">
+          {error}
+        </p>
       )}
-      {events?.length === 0 && <p className="empty">No camera activity yet.</p>}
+      {events === null && !error && (
+        <p role="status" className="settings-card-inline-message">
+          Loading camera activity…
+        </p>
+      )}
+      {events?.length === 0 && (
+        <p className="settings-card-empty">No camera activity yet.</p>
+      )}
       {visibleGroups.length > 0 && (
         <ul className="access-list">
           {visibleGroups.map(({ key, latest, attempts }) => {
@@ -134,6 +140,6 @@ export function AccessHistory({ currentEmail }: { currentEmail: string }) {
           </button>
         </nav>
       )}
-    </section>
+    </SettingsCard>
   );
 }

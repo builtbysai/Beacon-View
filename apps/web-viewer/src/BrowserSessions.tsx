@@ -3,6 +3,7 @@ import { request } from './api';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Icon } from './Icon';
 import { browserOsLabel } from './naming';
+import { SettingsCard } from './SettingsUI';
 
 interface BrowserSession {
   createdAt: string;
@@ -71,18 +72,22 @@ export function BrowserSessions({
   }
 
   return (
-    <section aria-labelledby="browser-sessions-title">
-      <h4 id="browser-sessions-title">Signed-in browsers</h4>
-      <p className="notice">
-        Revoke any browser you do not recognize. Only the browser and operating
-        system are shown, never an IP address or device fingerprint.
-      </p>
-      {error && <p role="alert">{error}</p>}
+    <SettingsCard
+      title="Signed-in browsers"
+      description="Revoke any browser you do not recognize. Only the browser and operating system are shown, never an IP address or device fingerprint."
+    >
+      {error && (
+        <p role="alert" className="settings-card-inline-message">
+          {error}
+        </p>
+      )}
       {sessions === null && !error && (
-        <p role="status">Loading signed-in browsers…</p>
+        <p role="status" className="settings-card-inline-message">
+          Loading signed-in browsers…
+        </p>
       )}
       {sessions?.length === 0 && (
-        <p className="empty">No active browser sessions.</p>
+        <p className="settings-card-empty">No active browser sessions.</p>
       )}
       {sessions && sessions.length > 0 && (
         <ul className="session-list">
@@ -124,6 +129,6 @@ export function BrowserSessions({
           onCancel={() => setConfirmSession(null)}
         />
       )}
-    </section>
+    </SettingsCard>
   );
 }

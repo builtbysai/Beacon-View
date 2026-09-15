@@ -8,6 +8,12 @@ import {
 
 import { request } from './api';
 import type { Camera, HouseholdRole } from './domain';
+import {
+  SettingsCard,
+  SettingsField,
+  SettingsFieldRow,
+  SettingsRow,
+} from './SettingsUI';
 
 interface CameraGrant {
   cameraId: string;
@@ -238,98 +244,107 @@ export function HouseholdSharingSettings({
   }
 
   return (
-    <div className="sharing-settings">
-      <form
-        className="sharing-accept"
-        onSubmit={(event) => void acceptInvitation(event)}
-      >
-        <div>
-          <strong>Join another household</strong>
-          <p>Paste the one-time code sent to your account email.</p>
-        </div>
-        <label>
-          Invitation code
-          <input
-            autoComplete="off"
-            maxLength={512}
-            value={inviteCode}
-            onChange={(event) => setInviteCode(event.target.value)}
-          />
-        </label>
-        <button disabled={busy || !inviteCode.trim()} type="submit">
-          Accept invitation
-        </button>
-      </form>
+    <div className="settings-card-stack">
+      <SettingsCard aria-label="Join another household">
+        <form onSubmit={(event) => void acceptInvitation(event)}>
+          <SettingsFieldRow
+            label="Join another household"
+            description="Paste the one-time code sent to your account email."
+          >
+            <SettingsField label="Invitation code" htmlFor="invite-code" wide>
+              <input
+                id="invite-code"
+                autoComplete="off"
+                maxLength={512}
+                value={inviteCode}
+                onChange={(event) => setInviteCode(event.target.value)}
+              />
+            </SettingsField>
+            <button disabled={busy || !inviteCode.trim()} type="submit">
+              Accept invitation
+            </button>
+          </SettingsFieldRow>
+        </form>
+      </SettingsCard>
 
       {canManage && (
         <>
-          <form
-            className="sharing-invite"
-            onSubmit={(event) => void createInvitation(event)}
-          >
-            <div>
-              <strong>Invite someone</strong>
-              <p>Codes expire and work only for the exact invited email.</p>
-            </div>
-            <label>
-              Email
-              <input name="email" required type="email" maxLength={320} />
-            </label>
-            <label>
-              Access level
-              <select name="role" defaultValue="viewer">
-                {role === 'owner' && <option value="admin">Admin</option>}
-                <option value="viewer">Viewer</option>
-                <option value="guest">Guest</option>
-              </select>
-            </label>
-            <label>
-              Guest duration
-              <select name="expiresInHours" defaultValue="24">
-                <option value="1">1 hour</option>
-                <option value="24">24 hours</option>
-                <option value="72">3 days</option>
-                <option value="168">7 days</option>
-              </select>
-            </label>
-            <button disabled={busy} type="submit">
-              Create invitation
-            </button>
-          </form>
-
-          {createdInvite && (
-            <div className="sharing-code" role="status">
-              <div>
-                <strong>Share this invitation now</strong>
-                <p>
-                  Anyone with the link can accept it and it expires{' '}
-                  {new Date(createdInvite.expiresAt).toLocaleString()}.
-                  Beacon stores only a hash of the code, never the code
-                  itself.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => void copyCreatedInvitationLink()}
+          <SettingsCard aria-label="Invite someone">
+            <form onSubmit={(event) => void createInvitation(event)}>
+              <SettingsFieldRow
+                label="Invite someone"
+                description="Codes expire and work only for the exact invited email."
               >
-                Copy invite link
-              </button>
-              <details className="sharing-code-manual">
-                <summary>Or share the code manually</summary>
-                <code>{createdInvite.code}</code>
-                <button
-                  className="secondary"
-                  type="button"
-                  onClick={() => void copyCreatedInvitation()}
-                >
-                  Copy code
+                <SettingsField label="Email" htmlFor="invite-email" grow>
+                  <input
+                    id="invite-email"
+                    name="email"
+                    required
+                    type="email"
+                    maxLength={320}
+                  />
+                </SettingsField>
+                <SettingsField label="Access level" htmlFor="invite-role">
+                  <select id="invite-role" name="role" defaultValue="viewer">
+                    {role === 'owner' && <option value="admin">Admin</option>}
+                    <option value="viewer">Viewer</option>
+                    <option value="guest">Guest</option>
+                  </select>
+                </SettingsField>
+                <SettingsField label="Guest duration" htmlFor="invite-expires">
+                  <select
+                    id="invite-expires"
+                    name="expiresInHours"
+                    defaultValue="24"
+                  >
+                    <option value="1">1 hour</option>
+                    <option value="24">24 hours</option>
+                    <option value="72">3 days</option>
+                    <option value="168">7 days</option>
+                  </select>
+                </SettingsField>
+                <button disabled={busy} type="submit">
+                  Create invitation
                 </button>
-              </details>
-            </div>
-          )}
+              </SettingsFieldRow>
+            </form>
 
-          <div className="sharing-list" aria-label="Household members">
-            <h4>Members</h4>
+            {createdInvite && (
+              <div className="sharing-code" role="status">
+                <SettingsRow
+                  title="Share this invitation now"
+                  description={
+                    <>
+                      Anyone with the link can accept it and it expires{' '}
+                      {new Date(createdInvite.expiresAt).toLocaleString()}.
+                      Beacon stores only a hash of the code, never the code
+                      itself.
+                    </>
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={() => void copyCreatedInvitationLink()}
+                  >
+                    Copy invite link
+                  </button>
+                </SettingsRow>
+                <details className="sharing-code-manual">
+                  <summary>Or share the code manually</summary>
+                  <code>{createdInvite.code}</code>
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() => void copyCreatedInvitation()}
+                  >
+                    Copy code
+                  </button>
+                </details>
+              </div>
+            )}
+          </SettingsCard>
+
+          <SettingsCard title="Members" aria-label="Household members">
             {sharing?.members.map((member) => (
               <MemberRow
                 key={member.id}
@@ -342,21 +357,24 @@ export function HouseholdSharingSettings({
                 onRevoke={() => revokeMember(member)}
               />
             ))}
-            {sharing?.members.length === 0 && <p>No household members.</p>}
-          </div>
+            {sharing?.members.length === 0 && (
+              <p className="settings-card-empty">No household members.</p>
+            )}
+          </SettingsCard>
 
           {sharing && sharing.invitations.length > 0 && (
-            <div className="sharing-list" aria-label="Pending invitations">
-              <h4>Pending invitations</h4>
+            <SettingsCard
+              title="Pending invitations"
+              aria-label="Pending invitations"
+            >
               {sharing.invitations.map((invitation) => (
-                <div className="sharing-person" key={invitation.id}>
-                  <div>
-                    <strong>{invitation.invitedEmail}</strong>
-                    <p>
-                      {invitation.role} · expires{' '}
-                      {new Date(invitation.expiresAt).toLocaleString()}
-                    </p>
-                  </div>
+                <SettingsRow
+                  key={invitation.id}
+                  title={invitation.invitedEmail}
+                  description={`${invitation.role} · expires ${new Date(
+                    invitation.expiresAt,
+                  ).toLocaleString()}`}
+                >
                   {(role === 'owner' || invitation.role !== 'admin') && (
                     <>
                       <button
@@ -377,9 +395,9 @@ export function HouseholdSharingSettings({
                       </button>
                     </>
                   )}
-                </div>
+                </SettingsRow>
               ))}
-            </div>
+            </SettingsCard>
           )}
         </>
       )}
@@ -423,7 +441,7 @@ function MemberRow({
   }, [member]);
   // Unchecking "View" removes the whole grant entry (including its
   // canListen/canTalk), so remember the last values per camera locally and
-  // restore them on re-check instead of silently resetting to off — the
+  // restore them on re-check instead of silently resetting to off -- the
   // admin shouldn't have to re-configure Listen/Talk just from a stray
   // View toggle within the same edit session.
   const lastKnownPrefs = useRef<
@@ -471,16 +489,26 @@ function MemberRow({
   }
 
   return (
-    <div className="sharing-person">
-      <div>
-        <strong>{member.email}</strong>
-        <p>
-          {member.role} · {member.status}
-          {member.expiresAt
+    <>
+      <SettingsRow
+        title={member.email}
+        description={`${member.role} · ${member.status}${
+          member.expiresAt
             ? ` until ${new Date(member.expiresAt).toLocaleString()}`
-            : ''}
-        </p>
-      </div>
+            : ''
+        }`}
+      >
+        {revocable && (
+          <button
+            className="danger"
+            disabled={busy}
+            onClick={() => void onRevoke()}
+            type="button"
+          >
+            Remove access
+          </button>
+        )}
+      </SettingsRow>
       {editable && (
         <div className="sharing-grants">
           {cameras.map((camera) => {
@@ -565,16 +593,6 @@ function MemberRow({
           </button>
         </div>
       )}
-      {revocable && (
-        <button
-          className="danger"
-          disabled={busy}
-          onClick={() => void onRevoke()}
-          type="button"
-        >
-          Remove access
-        </button>
-      )}
-    </div>
+    </>
   );
 }

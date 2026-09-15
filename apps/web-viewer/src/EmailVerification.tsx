@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { request } from './api';
+import { SettingsRow } from './SettingsUI';
 
 export function EmailVerification({ verified }: { verified: boolean }) {
   const [sending, setSending] = useState(false);
@@ -24,27 +25,27 @@ export function EmailVerification({ verified }: { verified: boolean }) {
 
   if (verified) {
     return (
-      <div className="settings-row">
-        <div>
-          <strong>Email verified</strong>
-          <p>This address can be used to recover your account.</p>
-        </div>
+      <SettingsRow
+        title="Email verified"
+        description="This address can be used to recover your account."
+      >
         <span className="status-badge status-online">Verified</span>
-      </div>
+      </SettingsRow>
     );
   }
 
   return (
-    <div className="settings-row">
-      <div>
-        <strong>Email not verified</strong>
-        <p>
+    <SettingsRow
+      title="Email not verified"
+      description={
+        <>
           {sent
             ? 'Check your inbox for a verification link.'
             : 'Verify this address so it can be used for account recovery.'}
-        </p>
-        {error && <p role="alert">{error}</p>}
-      </div>
+          {error && <span role="alert">{` ${error}`}</span>}
+        </>
+      }
+    >
       <button
         className="secondary"
         disabled={sending || sent}
@@ -53,6 +54,6 @@ export function EmailVerification({ verified }: { verified: boolean }) {
       >
         {sending ? 'Sending…' : sent ? 'Sent' : 'Send verification email'}
       </button>
-    </div>
+    </SettingsRow>
   );
 }

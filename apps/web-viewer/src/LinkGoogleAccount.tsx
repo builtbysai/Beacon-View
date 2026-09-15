@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SettingsRow } from './SettingsUI';
 
 const RESULT_MESSAGES: Record<string, { text: string; ok: boolean }> = {
   conflict: {
@@ -45,31 +46,33 @@ export function LinkGoogleAccount({ linked }: { linked: boolean }) {
 
   if (linked) {
     return (
-      <div className="settings-row">
-        <div>
-          <strong>Google account linked</strong>
-          <p>You can sign in with your password or with Google.</p>
-        </div>
+      <SettingsRow
+        title="Google account linked"
+        description="You can sign in with your password or with Google."
+      >
         <span className="status-badge status-online">Linked</span>
-      </div>
+      </SettingsRow>
     );
   }
 
   return (
-    <div className="settings-row">
-      <div>
-        <strong>Link your Google account</strong>
-        <p>
-          Sign in with either your password or Google afterward. Does not
-          affect Google Drive, which connects separately below.
-        </p>
-        {notice && (
-          <p role={notice.ok ? 'status' : 'alert'}>{notice.text}</p>
-        )}
-      </div>
+    <SettingsRow
+      title="Link your Google account"
+      description={
+        <>
+          Sign in with either your password or Google afterward. Does not affect
+          Google Drive, which connects separately below.
+          {notice && (
+            <span
+              role={notice.ok ? 'status' : 'alert'}
+            >{` ${notice.text}`}</span>
+          )}
+        </>
+      }
+    >
       <a className="secondary button-link" href="/api/auth/google/link">
         Link Google
       </a>
-    </div>
+    </SettingsRow>
   );
 }
