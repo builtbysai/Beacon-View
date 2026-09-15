@@ -1,6 +1,7 @@
 import cookie from '@fastify/cookie';
 import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { registerAccountRecoveryRoutes } from './account-recovery-routes.js';
 import { registerAccountRoutes } from './account-routes.js';
 import { registerActivityRoutes } from './activity-routes.js';
 import { registerAuthenticationRoutes } from './authentication-routes.js';
@@ -78,6 +79,14 @@ export function buildApp(
   registerAccountRoutes(app, {
     auth: sessionAuth,
     householdEvents,
+    signaling,
+    store,
+  });
+  registerAccountRecoveryRoutes(app, {
+    auth: sessionAuth,
+    config,
+    householdEvents,
+    limiter,
     signaling,
     store,
   });

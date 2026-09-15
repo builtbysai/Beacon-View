@@ -19,6 +19,7 @@ export interface UserRecord {
   passwordHash: string | null;
   googleSubject: string | null;
   avatarUrl: string | null;
+  emailVerifiedAt: Date | null;
   householdId: string;
 }
 
@@ -330,7 +331,29 @@ export interface MilestoneStore {
   ): Promise<UserRecord>;
   updateGoogleAvatar(userId: string, avatarUrl: string): Promise<void>;
   findUserByEmail(email: string): Promise<UserRecord | null>;
+  findUserById(userId: string): Promise<UserRecord | null>;
   findUserByGoogleSubject(googleSubject: string): Promise<UserRecord | null>;
+  updatePassword(userId: string, passwordHash: string): Promise<void>;
+  refreshReauthentication(sessionId: string): Promise<void>;
+  revokeAllSessions(userId: string): Promise<string[]>;
+  createEmailVerificationToken(input: {
+    userId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<void>;
+  consumeEmailVerificationToken(
+    tokenHash: string,
+    now: Date,
+  ): Promise<string | null>;
+  createPasswordResetToken(input: {
+    userId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<void>;
+  consumePasswordResetToken(
+    tokenHash: string,
+    now: Date,
+  ): Promise<string | null>;
   createSession(input: {
     userId: string;
     householdId?: string;

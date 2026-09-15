@@ -71,6 +71,14 @@ export class PostgresSessionRepository {
     return result.rows[0] ?? null;
   }
 
+  async refreshReauthentication(id: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE browser_sessions SET reauthenticated_at = now()
+       WHERE id = $1 AND revoked_at IS NULL`,
+      [id],
+    );
+  }
+
   async revoke(id: string): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -139,6 +147,29 @@ export class PostgresSessionRepository {
       [userId, sessionId, householdId, now],
     );
     return (result.rowCount ?? 0) === 1;
+  }
+
+  async revokeAllOwned(userId: string): Promise<string[]> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query<{ id: string }>(
+        `UPDATE browser_sessions SET revoked_at = now()
+         WHERE user_id = $1 AND revoked_at IS NULL
+         RETURNING id`,
+        [userId],
+      );
+      for (const row of result.rows) {
+        await this.notifications?.revokeSession(client, row.id);
+      }
+      await client.query('COMMIT');
+      return result.rows.map((row) => row.id);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async revokeOwned(userId: string, sessionId: string): Promise<boolean> {

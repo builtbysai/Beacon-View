@@ -34,12 +34,19 @@ not considered complete.
 
 ### 3. Account recovery and hardening
 
-- Add verified-email state and single-use hashed verification tokens.
-- Add enumeration-resistant password-reset requests, bounded retries, token
-  expiry/consumption, session revocation after reset, and security alerts.
-- Require recent server-issued reauthentication for deletion, email changes,
-  high-impact membership changes, and credential operations.
-- Run the authentication/CSRF/session/rate-limit review before recording access.
+- [x] Add verified-email state and single-use hashed verification tokens.
+- [x] Add enumeration-resistant password-reset requests, bounded retries, token
+      expiry/consumption, session revocation after reset, and a
+      change-alert email (ADR 0052).
+- [x] Add a `/api/account/reauth` endpoint so the existing 10-minute
+      sensitive-action reauth window (account deletion today) can refresh
+      without a full re-login; still needs wiring into email-change and
+      other future high-impact-membership/credential routes as they're built.
+- [ ] Run the authentication/CSRF/session/rate-limit review before recording
+      access — recording (step 4) shipped ahead of this review; still owed.
+- [ ] Wire verification/reset/reauth into the web UI (belongs with step 6).
+- [ ] Non-silenceable push/in-app security alerts belong with step 1's
+      notification outbox, not this step — email alerts ship here instead.
 
 ### 4. Recording foundation and Google Drive export
 

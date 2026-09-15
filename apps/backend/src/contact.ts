@@ -69,7 +69,7 @@ export async function deliverHouseholdInvitation(
   });
 }
 
-async function deliverResendEmail(
+export async function deliverResendEmail(
   config: ResendConfig,
   message: ResendMessage,
 ): Promise<void> {

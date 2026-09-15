@@ -15,6 +15,7 @@ import { NotificationCipher } from './notification-crypto.js';
 import { GoogleDriveTokenCipher } from './google-drive-crypto.js';
 import { PostgresGoogleDriveRepository } from './postgres-google-drive-repository.js';
 import { PostgresRecordingRepository } from './postgres-recording-repository.js';
+import { PostgresAccountRecoveryRepository } from './postgres-account-recovery-repository.js';
 import type {
   RecordingDeletionClaim,
   RecordingRecord,
@@ -63,6 +64,7 @@ export class PostgresStore implements MilestoneStore {
   private readonly notifications: PostgresNotificationRepository;
   private readonly googleDrive: PostgresGoogleDriveRepository;
   private readonly recordings: PostgresRecordingRepository;
+  private readonly accountRecovery: PostgresAccountRecoveryRepository;
 
   constructor(
     databaseUrl: string,
@@ -86,6 +88,7 @@ export class PostgresStore implements MilestoneStore {
         : null,
     );
     this.recordings = new PostgresRecordingRepository(this.pool);
+    this.accountRecovery = new PostgresAccountRecoveryRepository(this.pool);
     this.auditRepository = new PostgresAuditRepository(this.pool);
     this.accounts = new PostgresAccountRepository(
       this.pool,
@@ -306,6 +309,14 @@ export class PostgresStore implements MilestoneStore {
     return this.accounts.findByEmail(email);
   }
 
+  async findUserById(userId: string): Promise<UserRecord | null> {
+    return this.accounts.findById(userId);
+  }
+
+  async updatePassword(userId: string, passwordHash: string): Promise<void> {
+    await this.accounts.updatePassword(userId, passwordHash);
+  }
+
   async createGoogleAccount(
     email: string,
     googleSubject: string,
@@ -352,6 +363,44 @@ export class PostgresStore implements MilestoneStore {
 
   async revokeSession(id: string): Promise<void> {
     await this.sessions.revoke(id);
+  }
+
+  async refreshReauthentication(sessionId: string): Promise<void> {
+    await this.sessions.refreshReauthentication(sessionId);
+  }
+
+  async revokeAllSessions(userId: string): Promise<string[]> {
+    return this.sessions.revokeAllOwned(userId);
+  }
+
+  async createEmailVerificationToken(input: {
+    userId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<void> {
+    await this.accountRecovery.createEmailVerificationToken(input);
+  }
+
+  async consumeEmailVerificationToken(
+    tokenHash: string,
+    now: Date,
+  ): Promise<string | null> {
+    return this.accountRecovery.consumeEmailVerificationToken(tokenHash, now);
+  }
+
+  async createPasswordResetToken(input: {
+    userId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<void> {
+    await this.accountRecovery.createPasswordResetToken(input);
+  }
+
+  async consumePasswordResetToken(
+    tokenHash: string,
+    now: Date,
+  ): Promise<string | null> {
+    return this.accountRecovery.consumePasswordResetToken(tokenHash, now);
   }
 
   async listBrowserSessions(userId: string): Promise<BrowserSessionRecord[]> {

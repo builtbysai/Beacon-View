@@ -38,11 +38,58 @@ export const users = pgTable(
     passwordHash: text('password_hash'),
     googleSubject: text('google_subject'),
     avatarUrl: text('avatar_url'),
+    emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
     uniqueIndex('users_email_unique').on(table.email),
     uniqueIndex('users_google_subject_unique').on(table.googleSubject),
+  ],
+);
+
+export const emailVerificationTokens = pgTable(
+  'email_verification_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('email_verification_tokens_token_hash_unique').on(
+      table.tokenHash,
+    ),
+    index('email_verification_tokens_user_pending_idx')
+      .on(table.userId, table.expiresAt)
+      .where(sql`${table.consumedAt} is null`),
+  ],
+);
+
+export const passwordResetTokens = pgTable(
+  'password_reset_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('password_reset_tokens_token_hash_unique').on(table.tokenHash),
+    index('password_reset_tokens_user_pending_idx')
+      .on(table.userId, table.expiresAt)
+      .where(sql`${table.consumedAt} is null`),
   ],
 );
 

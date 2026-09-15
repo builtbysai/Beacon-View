@@ -44,6 +44,7 @@ export class PostgresAccountRepository {
       return {
         avatarUrl: null,
         email,
+        emailVerifiedAt: null,
         googleSubject: null,
         householdId,
         id: userId,
@@ -60,12 +61,32 @@ export class PostgresAccountRepository {
   async findByEmail(email: string): Promise<UserRecord | null> {
     const result = await this.pool.query<UserRecord>(
       `SELECT u.id, u.email, u.password_hash AS "passwordHash", u.google_subject AS "googleSubject",
-              u.avatar_url AS "avatarUrl", h.id AS "householdId"
+              u.avatar_url AS "avatarUrl", u.email_verified_at AS "emailVerifiedAt",
+              h.id AS "householdId"
        FROM users u JOIN households h ON h.owner_id = u.id
        WHERE u.email = $1`,
       [email],
     );
     return result.rows[0] ?? null;
+  }
+
+  async findById(userId: string): Promise<UserRecord | null> {
+    const result = await this.pool.query<UserRecord>(
+      `SELECT u.id, u.email, u.password_hash AS "passwordHash", u.google_subject AS "googleSubject",
+              u.avatar_url AS "avatarUrl", u.email_verified_at AS "emailVerifiedAt",
+              h.id AS "householdId"
+       FROM users u JOIN households h ON h.owner_id = u.id
+       WHERE u.id = $1`,
+      [userId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async updatePassword(userId: string, passwordHash: string): Promise<void> {
+    await this.pool.query(`UPDATE users SET password_hash = $2 WHERE id = $1`, [
+      userId,
+      passwordHash,
+    ]);
   }
 
   async createWithGoogle(
@@ -77,8 +98,9 @@ export class PostgresAccountRepository {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const user = await client.query<{ id: string }>(
-        `INSERT INTO users (email, google_subject, avatar_url) VALUES ($1, $2, $3) RETURNING id`,
+      const user = await client.query<{ id: string; emailVerifiedAt: Date }>(
+        `INSERT INTO users (email, google_subject, avatar_url, email_verified_at)
+         VALUES ($1, $2, $3, now()) RETURNING id, email_verified_at AS "emailVerifiedAt"`,
         [email, googleSubject, avatarUrl],
       );
       const userId = user.rows[0]!.id;
@@ -103,6 +125,7 @@ export class PostgresAccountRepository {
       return {
         avatarUrl,
         email,
+        emailVerifiedAt: user.rows[0]!.emailVerifiedAt,
         googleSubject,
         householdId,
         id: userId,
@@ -126,7 +149,8 @@ export class PostgresAccountRepository {
   async findByGoogleSubject(googleSubject: string): Promise<UserRecord | null> {
     const result = await this.pool.query<UserRecord>(
       `SELECT u.id, u.email, u.password_hash AS "passwordHash", u.google_subject AS "googleSubject",
-              u.avatar_url AS "avatarUrl", h.id AS "householdId"
+              u.avatar_url AS "avatarUrl", u.email_verified_at AS "emailVerifiedAt",
+              h.id AS "householdId"
        FROM users u JOIN households h ON h.owner_id = u.id
        WHERE u.google_subject = $1`,
       [googleSubject],
