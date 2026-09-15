@@ -4,7 +4,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import type { AppConfig } from '../src/config.js';
 import { PostgresStore } from '../src/store.js';
-import { hashSecret } from '../src/security.js';
+import { hashPassword, hashSecret } from '../src/security.js';
 import type {
   CameraMotionSettings,
   MotionSettings,
@@ -1695,6 +1695,9 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       url: '/api/auth/login',
     });
     expect(login.statusCode).toBe(200);
+    expect(
+      login.json<{ googleLinked?: boolean }>().googleLinked,
+    ).toBeUndefined();
 
     const again = await app!.inject({
       headers: {
@@ -1706,5 +1709,37 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       url: '/api/account/password/set',
     });
     expect(again.statusCode).toBe(409);
+  });
+
+  it('logs in normally when a stale or forged pending-google-link cookie is present', async () => {
+    await store!.createAccount(
+      'stale-pending-link@example.com',
+      await hashPassword('a genuine password okay'),
+      '127.0.0.1',
+    );
+    const login = await app!.inject({
+      headers: { cookie: 'beacon_pending_google_link=not-a-real-token' },
+      method: 'POST',
+      payload: {
+        email: 'stale-pending-link@example.com',
+        password: 'a genuine password okay',
+      },
+      remoteAddress: '127.0.0.51',
+      url: '/api/auth/login',
+    });
+    expect(login.statusCode).toBe(200);
+    expect(
+      login.json<{ googleLinked?: boolean }>().googleLinked,
+    ).toBeUndefined();
+    const clearedCookies = (
+      Array.isArray(login.headers['set-cookie'])
+        ? login.headers['set-cookie']
+        : [login.headers['set-cookie']]
+    ).filter((value): value is string => typeof value === 'string');
+    expect(
+      clearedCookies.some((value) =>
+        value.startsWith('beacon_pending_google_link=;'),
+      ),
+    ).toBe(true);
   });
 });

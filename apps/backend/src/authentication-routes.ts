@@ -1,5 +1,5 @@
 import { OAuth2Client } from 'google-auth-library';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { deliverEmailVerificationEmail } from './account-recovery-email.js';
@@ -36,6 +36,8 @@ const TEN_MINUTES = 10 * 60 * 1_000;
 const EMAIL_VERIFICATION_TOKEN_TTL = 24 * HOUR;
 const GOOGLE_STATE_COOKIE = 'beacon_google_oauth_state';
 const GOOGLE_DRIVE_STATE_COOKIE = 'beacon_google_drive_state';
+const GOOGLE_INTENT_COOKIE = 'beacon_google_intent';
+const PENDING_GOOGLE_LINK_COOKIE = 'beacon_pending_google_link';
 const driveConnectSchema = z
   .object({ purpose: z.enum(['appdata', 'recordings']).optional() })
   .strict();
@@ -74,6 +76,25 @@ export function registerAuthenticationRoutes(
     string,
     { email: string; expiresAt: number; householdId: string; userId: string }
   >();
+  // Bridges a Google sign-in that turned out to belong to an existing
+  // password account: rather than making the person repeat the whole OAuth
+  // round-trip from Settings after signing in with their password, the
+  // verified Google identity is held here just long enough for the
+  // password login that follows to finish the link automatically.
+  const pendingGoogleLinks = new Map<
+    string,
+    {
+      avatarUrl: string | null;
+      email: string;
+      expiresAt: number;
+      googleSubject: string;
+    }
+  >();
+  function prunePendingGoogleLinks(now: number): void {
+    for (const [key, value] of pendingGoogleLinks) {
+      if (value.expiresAt <= now) pendingGoogleLinks.delete(key);
+    }
+  }
   const googleClient = config.GOOGLE_OAUTH_CLIENT_ID
     ? new OAuth2Client(
         config.GOOGLE_OAUTH_CLIENT_ID,
@@ -182,8 +203,52 @@ export function registerAuthenticationRoutes(
     }
     await recordSignIn(user.id);
     await issueSession(reply, user.id, true, request.headers['user-agent']);
-    return reply.send({ user: { email: user.email, id: user.id } });
+    const googleLinked = await completePendingGoogleLink(request, reply, user);
+    return reply.send({
+      user: { email: user.email, id: user.id },
+      ...(googleLinked ? { googleLinked: true } : {}),
+    });
   });
+
+  // Finishes a Google link that was verified during a failed Google
+  // sign-in attempt (see the callback's linkRequired branch below), now
+  // that the person has proven ownership of the password account by
+  // signing in to it. Never turns a login failure into an error -- linking
+  // is a bonus on top of a successful sign-in, not a precondition for one.
+  async function completePendingGoogleLink(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    user: { email: string; id: string },
+  ): Promise<boolean> {
+    const token = request.cookies[PENDING_GOOGLE_LINK_COOKIE];
+    reply.clearCookie(PENDING_GOOGLE_LINK_COOKIE, { path: '/' });
+    if (!token) return false;
+    const pending = pendingGoogleLinks.get(hashSecret(token));
+    pendingGoogleLinks.delete(hashSecret(token));
+    if (
+      !pending ||
+      pending.expiresAt <= Date.now() ||
+      pending.email !== normalizeEmail(user.email)
+    )
+      return false;
+    const claimedBy = await store.findUserByGoogleSubject(
+      pending.googleSubject,
+    );
+    if (claimedBy && claimedBy.id !== user.id) return false;
+    await store.linkGoogleAccount(
+      user.id,
+      pending.googleSubject,
+      pending.avatarUrl,
+    );
+    await store.audit({
+      eventType: 'google_account_linked',
+      ipAddress: request.ip,
+      metadata: { via: 'login' },
+      success: true,
+      userId: user.id,
+    });
+    return true;
+  }
 
   app.get('/api/auth/google', async (request, reply) => {
     if (!googleClient || !config.GOOGLE_OAUTH_REDIRECT_URI)
@@ -200,6 +265,22 @@ export function registerAuthenticationRoutes(
       sameSite: 'lax',
       secure: config.NODE_ENV === 'production',
     });
+    // Remembers that this sign-in started from "I want a password" (the
+    // register screen's Google button when that email turns out to already
+    // have a Google account) so the callback below can land the person
+    // straight on Settings > Account with Add password already open,
+    // instead of just the home page.
+    if (start.data.intent === 'addPassword') {
+      reply.setCookie(GOOGLE_INTENT_COOKIE, start.data.intent, {
+        httpOnly: true,
+        maxAge: TEN_MINUTES / 1_000,
+        path: '/',
+        sameSite: 'lax',
+        secure: config.NODE_ENV === 'production',
+      });
+    } else {
+      reply.clearCookie(GOOGLE_INTENT_COOKIE, { path: '/' });
+    }
     return reply.redirect(
       googleClient.generateAuthUrl({
         access_type: 'online',
@@ -280,11 +361,14 @@ export function registerAuthenticationRoutes(
       const callback = googleCallbackSchema.safeParse(request.query);
       const state = request.cookies[GOOGLE_STATE_COOKIE];
       const driveState = request.cookies[GOOGLE_DRIVE_STATE_COOKIE];
+      const addPasswordIntent =
+        request.cookies[GOOGLE_INTENT_COOKIE] === 'addPassword';
       const googleClientId = config.GOOGLE_OAUTH_CLIENT_ID;
       const googleRedirectUri = config.GOOGLE_OAUTH_REDIRECT_URI;
       const android = state?.startsWith('android.') === true;
       reply.clearCookie(GOOGLE_STATE_COOKIE, { path: '/' });
       reply.clearCookie(GOOGLE_DRIVE_STATE_COOKIE, { path: '/' });
+      reply.clearCookie(GOOGLE_INTENT_COOKIE, { path: '/' });
       if (
         driveState &&
         (driveState.startsWith('drive.') ||
@@ -502,6 +586,24 @@ export function registerAuthenticationRoutes(
         let user = await store.findUserByGoogleSubject(payload.sub);
         if (!user) {
           if (await store.findUserByEmail(email)) {
+            if (!android) {
+              const linkToken = generateToken();
+              const now = Date.now();
+              prunePendingGoogleLinks(now);
+              pendingGoogleLinks.set(hashSecret(linkToken), {
+                avatarUrl,
+                email,
+                expiresAt: now + TEN_MINUTES,
+                googleSubject: payload.sub,
+              });
+              reply.setCookie(PENDING_GOOGLE_LINK_COOKIE, linkToken, {
+                httpOnly: true,
+                maxAge: TEN_MINUTES / 1_000,
+                path: '/',
+                sameSite: 'lax',
+                secure: config.NODE_ENV === 'production',
+              });
+            }
             return reply.redirect(
               android
                 ? '/auth/mobile#status=linkRequired'
@@ -543,7 +645,9 @@ export function registerAuthenticationRoutes(
         }
         await recordSignIn(user.id);
         await issueSession(reply, user.id, true, request.headers['user-agent']);
-        return reply.redirect('/');
+        return reply.redirect(
+          addPasswordIntent ? '/settings?section=account&addPassword=1' : '/',
+        );
       } catch {
         return reply.redirect(
           android ? '/auth/mobile#status=failed' : '/?googleSignIn=failed',

@@ -1,15 +1,30 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 
 import { ApiError, request } from './api';
 import { SettingsFieldRow, SettingsField, SettingsRow } from './SettingsUI';
 
 export function SetPassword({ onSet }: { onSet: () => void }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(
+    () =>
+      new URLSearchParams(window.location.search).get('addPassword') === '1',
+  );
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const mismatch = confirmPassword.length > 0 && confirmPassword !== password;
+
+  useEffect(() => {
+    const parameters = new URLSearchParams(window.location.search);
+    if (!parameters.has('addPassword')) return;
+    parameters.delete('addPassword');
+    const search = parameters.toString();
+    window.history.replaceState(
+      {},
+      '',
+      `${window.location.pathname}${search ? `?${search}` : ''}`,
+    );
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -149,7 +149,14 @@ export function AuthScreen({
           <Icon name="shield" />
           Private by design. No cloud recordings.
         </p>
-        <a className="google-sign-in" href="/api/auth/google">
+        <a
+          className="google-sign-in"
+          href={
+            mode === 'register'
+              ? '/api/auth/google?intent=addPassword'
+              : '/api/auth/google'
+          }
+        >
           <svg
             width="20"
             height="20"
@@ -179,8 +186,8 @@ export function AuthScreen({
         </a>
         {googleResult === 'linkRequired' && (
           <p role="alert">
-            This email already has a Beacon password account. Sign in below,
-            then link Google from Settings to use either method.
+            This email already has a Beacon password account. Sign in below and
+            we'll link your Google account automatically.
           </p>
         )}
         {googleResult === 'failed' && (

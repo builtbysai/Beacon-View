@@ -19,8 +19,11 @@ it('preserves OAuth collision guidance, password visibility, and registration gu
   const props = { busy: false, error: '', onSubmit: vi.fn(), onMode };
   const view = render(<AuthScreen {...props} mode="login" />);
   expect(screen.getByRole('alert')).toHaveTextContent(
-    'link Google from Settings',
+    "we'll link your Google account automatically",
   );
+  expect(
+    screen.getByRole('link', { name: /Continue with Google/ }),
+  ).toHaveAttribute('href', '/api/auth/google');
   expect(screen.getByLabelText('Password')).toHaveAttribute(
     'autocomplete',
     'current-password',
@@ -38,6 +41,9 @@ it('preserves OAuth collision guidance, password visibility, and registration gu
     'new-password',
   );
   expect(screen.getByText('Use at least 12 characters.')).toBeVisible();
+  expect(
+    screen.getByRole('link', { name: /Continue with Google/ }),
+  ).toHaveAttribute('href', '/api/auth/google?intent=addPassword');
 });
 it('blocks registration submit until the confirm-password field matches', () => {
   const onSubmit = vi.fn((event: FormEvent<HTMLFormElement>) =>

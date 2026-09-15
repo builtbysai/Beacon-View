@@ -91,6 +91,7 @@ export const googleCallbackSchema = z.object({
 });
 export const googleStartSchema = z.object({
   platform: z.literal('android').optional(),
+  intent: z.literal('addPassword').optional(),
 });
 export const mobileGoogleExchangeSchema = z.object({
   code: z.string().min(32).max(512),

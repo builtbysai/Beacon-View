@@ -18,6 +18,18 @@ vi.mock('./api', async () => {
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  window.history.replaceState({}, '', '/');
+});
+
+it('auto-opens and scrubs the URL when arriving with ?addPassword=1', () => {
+  window.history.replaceState(
+    {},
+    '',
+    '/settings?section=account&addPassword=1',
+  );
+  render(<SetPassword onSet={vi.fn()} />);
+  expect(screen.getByLabelText('New password')).toBeVisible();
+  expect(window.location.search).toBe('?section=account');
 });
 
 it('opens the form, blocks a mismatched confirmation, then saves', async () => {

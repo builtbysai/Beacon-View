@@ -382,13 +382,16 @@ export function App() {
     setError('');
     const form = new FormData(event.currentTarget);
     try {
-      await request<{ user: User }>(`/api/auth/${mode}`, {
-        body: JSON.stringify({
-          email: form.get('email'),
-          password: form.get('password'),
-        }),
-        method: 'POST',
-      });
+      const login = await request<{ googleLinked?: boolean; user: User }>(
+        `/api/auth/${mode}`,
+        {
+          body: JSON.stringify({
+            email: form.get('email'),
+            password: form.get('password'),
+          }),
+          method: 'POST',
+        },
+      );
       const result = await request<{
         household: HouseholdSession;
         user: User;
@@ -396,6 +399,12 @@ export function App() {
       await loadCameras();
       setUser(result.user);
       setHousehold(result.household ?? { id: '', role: 'owner' });
+      if (login.googleLinked) {
+        setActivityNotice(
+          'Signed in and linked your Google account -- sign in with either method from now on.',
+        );
+        window.setTimeout(() => setActivityNotice(''), 6_000);
+      }
     } catch (caught) {
       setError(
         caught instanceof Error && caught.message === 'googleAccountExists'
