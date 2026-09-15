@@ -24,7 +24,7 @@ overwrote unrelated, already-deployed production work:
 3. Check what Oracle is actually running before assuming GitHub and
    production agree: `ssh beacon-oracle` (Tailscale-only; public SSH is
    closed, see ADR 0045), then `sudo docker compose --project-name
-   beacon-secureview-cloud ps` and `ls -lt /opt/beacon/releases/ | head`.
+beacon-secureview-cloud ps` and `ls -lt /opt/beacon/releases/ | head`.
 
 ## September 14-15 merge: main is now the production line
 
@@ -63,6 +63,31 @@ now substantially complete on `main`. Steps 1, 3, and 4 all touch files with
 active uncommitted work in that worktree — do not start fresh work there without
 confirming that work is finished, abandoned, or coordinating directly with
 whoever is running it.
+
+## September 15 fix: automated deploy's Tailscale OIDC trust credential
+
+The `Deploy Beacon to Oracle` workflow's `tailscale/github-action` step was
+failing every run with `token exchange failed with status 403` because the
+Tailscale trust credential's configured OIDC **Subject** used the classic
+GitHub Actions format (`repo:builtbysai/Beacon-SecureView:environment:production`),
+while this repo has `use_immutable_subject: true` set (check via `gh api
+repos/builtbysai/Beacon-SecureView/actions/oidc/customization/sub`), so
+GitHub actually issues tokens with org/repo IDs baked in instead:
+`repo:builtbysai@37721651/Beacon-SecureView@1309277283:environment:production`.
+Tailscale's edit-credential page shows exactly this mismatch under "Cannot
+validate subject" — it echoes back the literal subject it received from the
+last token, which is the fastest way to diagnose this class of failure again.
+
+Fixed by updating the trust credential (Tailscale admin console → Settings →
+Trust credentials → the `TV73JXogci...` OIDC credential → Edit) to the
+immutable-ID subject shown above; Client ID and Audience were untouched. This
+is a durable fix, not a one-off: `sub_claim_prefix` is a fixed, persistent
+per-repo GitHub setting (immutable IDs never change even across repo/org
+renames), so every future run against the `production` environment will keep
+emitting this exact subject. It would only break again if someone
+deliberately flips `use_immutable_subject` back to `false` on the repo, or if
+the trust credential itself is deleted/recreated with the old-format subject
+typed in again.
 
 ## September 12 interface-reliability follow-up
 
