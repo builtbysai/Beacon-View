@@ -82,4 +82,4 @@ IP-camera adapters remain future roadmap work.
 
 ---
 
-*Built by [Hans Sai](https://builtbysai.com).*
+_Built by [Hans Sai](https://builtbysai.com)._
