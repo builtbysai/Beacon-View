@@ -80,6 +80,14 @@ function tokenFromEmail(body: string): string {
 describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
   beforeEach(async () => {
     await resetTestDatabase(store!.pool);
+    // Registration now fires a best-effort verification email itself; give
+    // every test a harmless default so that background send never reaches
+    // the real network. Tests that care about delivered mail call
+    // stubResend() afterward, which replaces this with a call-tracking mock.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(null, { status: 200 }))),
+    );
   });
 
   afterEach(() => vi.unstubAllGlobals());
@@ -221,6 +229,32 @@ describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
       'SELECT count(*)::int AS count FROM password_reset_tokens',
     );
     expect(tokens.rows[0]!.count).toBe(0);
+  });
+
+  it('sends a verification email automatically on registration', async () => {
+    const resend = stubResend();
+    const registration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'auto-verify@example.com',
+        password: 'first password value',
+      },
+      // A distinct address so this doesn't share the register rate-limit
+      // bucket with every other registration call in this file (which are
+      // already right at the 5-per-hour limit on the shared default IP).
+      remoteAddress: '127.0.0.90',
+      url: '/api/auth/register',
+    });
+    expect(registration.statusCode).toBe(201);
+    expect(resend.calls).toHaveLength(1);
+    const token = tokenFromEmail(resend.calls[0]!);
+
+    const confirm = await app!.inject({
+      method: 'POST',
+      payload: { token },
+      url: '/api/account/email/verify/confirm',
+    });
+    expect(confirm.statusCode).toBe(204);
   });
 
   it('verifies an email address through an emailed token, idempotently', async () => {

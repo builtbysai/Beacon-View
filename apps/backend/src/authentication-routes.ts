@@ -2,6 +2,7 @@ import { OAuth2Client } from 'google-auth-library';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { deliverEmailVerificationEmail } from './account-recovery-email.js';
 import type { AppConfig } from './config.js';
 import {
   driveProviderEmail,
@@ -32,6 +33,7 @@ import type { MilestoneStore } from './store.js';
 const HOUR = 60 * 60 * 1_000;
 const FIFTEEN_MINUTES = 15 * 60 * 1_000;
 const TEN_MINUTES = 10 * 60 * 1_000;
+const EMAIL_VERIFICATION_TOKEN_TTL = 24 * HOUR;
 const GOOGLE_STATE_COOKIE = 'beacon_google_oauth_state';
 const GOOGLE_DRIVE_STATE_COOKIE = 'beacon_google_drive_state';
 const driveConnectSchema = z
@@ -93,6 +95,32 @@ export function registerAuthenticationRoutes(
       const passwordHash = await hashPassword(parsed.data.password);
       const user = await store.createAccount(email, passwordHash, request.ip);
       await issueSession(reply, user.id, true, request.headers['user-agent']);
+      // Best-effort: the account exists either way, and the user can always
+      // request another verification email from Settings if this one never
+      // lands (e.g. delivery is misconfigured or the address bounces).
+      if (config.RESEND_API_KEY && config.RESEND_FROM) {
+        const verificationToken = generateToken();
+        const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL);
+        await store
+          .createEmailVerificationToken({
+            expiresAt,
+            tokenHash: hashSecret(verificationToken),
+            userId: user.id,
+          })
+          .then(() =>
+            deliverEmailVerificationEmail(config, {
+              expiresAt,
+              to: email,
+              token: verificationToken,
+            }),
+          )
+          .catch((deliveryError: unknown) =>
+            app.log.warn(
+              { err: deliveryError },
+              'registration verification email delivery failed',
+            ),
+          );
+      }
       return reply.code(201).send({ user: { email: user.email, id: user.id } });
     } catch (error) {
       if (

@@ -208,6 +208,35 @@ export function App() {
       .finally(() => setLoading(false));
   }, [loadCameras]);
 
+  // Account state (email verification, Google/Drive links, household role)
+  // can change in another tab -- the verify-email and OAuth-callback pages
+  // are typically opened from an email link or popup, not this tab. Refetch
+  // whenever the user returns to this tab instead of leaving it stale until
+  // a manual reload.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    function resync() {
+      if (document.visibilityState !== 'visible') return;
+      void request<{ household: HouseholdSession; user: User }>('/api/auth/me')
+        .then((result) => {
+          if (cancelled) return;
+          setUser(result.user);
+          setHousehold(result.household ?? { id: '', role: 'owner' });
+        })
+        .catch(() => {
+          /* Transient failure; the next focus or poll resyncs. */
+        });
+    }
+    document.addEventListener('visibilitychange', resync);
+    window.addEventListener('focus', resync);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', resync);
+      window.removeEventListener('focus', resync);
+    };
+  }, [user !== null]);
+
   const handleHouseholdEvent = useCallback(
     (message: HouseholdEvent) => {
       if (
