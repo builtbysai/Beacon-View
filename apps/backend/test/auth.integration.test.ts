@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../src/app.js';
@@ -12,7 +12,12 @@ import type {
 import { resetTestDatabase, testDatabaseUrl } from './test-database.js';
 
 const databaseUrl = testDatabaseUrl();
-const store = databaseUrl ? new PostgresStore(databaseUrl) : null;
+const store = databaseUrl
+  ? new PostgresStore(databaseUrl, {
+      encryptionKey: randomBytes(32).toString('base64url'),
+      fingerprintKey: randomBytes(32).toString('base64url'),
+    })
+  : null;
 const config: AppConfig | null = databaseUrl
   ? {
       DATABASE_URL: databaseUrl,
@@ -289,6 +294,34 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       expect.objectContaining({ id: source.rows[0]!.cameraId }),
     ]);
 
+    const viewer = await store!.findUserByEmail('viewer@example.com');
+    const ownerSession = await store!.pool.query<{ id: string }>(
+      'SELECT id FROM browser_sessions WHERE user_id=$1',
+      [owner!.id],
+    );
+    const viewerSession = await store!.pool.query<{ id: string }>(
+      'SELECT id FROM browser_sessions WHERE user_id=$1',
+      [viewer!.id],
+    );
+    await store!.upsertNotificationSubscription({
+      channel: 'web_push',
+      consentedAt: new Date(),
+      deviceLabel: 'Owner browser',
+      installationId: randomUUID(),
+      providerMaterial: 'owner-provider-material',
+      sessionId: ownerSession.rows[0]!.id,
+      userId: owner!.id,
+    });
+    await store!.upsertNotificationSubscription({
+      channel: 'web_push',
+      consentedAt: new Date(),
+      deviceLabel: 'Viewer browser',
+      installationId: randomUUID(),
+      providerMaterial: 'viewer-provider-material',
+      sessionId: viewerSession.rows[0]!.id,
+      userId: viewer!.id,
+    });
+
     const revoked = await app!.inject({
       headers: {
         cookie: ownerCredentials.cookie,
@@ -305,6 +338,20 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       url: '/api/auth/me',
     });
     expect(afterRevocation.statusCode).toBe(401);
+
+    // One event from accepting the invitation, one from the owner's later
+    // revocation below -- both are the viewer's own membership changing, so
+    // both must target the viewer, never the acting owner.
+    const membershipChangedEvents = await store!.pool.query<{
+      userId: string;
+    }>(
+      `SELECT user_id AS "userId" FROM notification_events
+       WHERE deduplication_key LIKE 'security:household_membership_changed:%'`,
+    );
+    expect(membershipChangedEvents.rows).toEqual([
+      { userId: viewer!.id },
+      { userId: viewer!.id },
+    ]);
   });
 
   it('resends an invitation with a fresh token and revokes the original', async () => {

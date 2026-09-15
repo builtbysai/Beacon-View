@@ -380,7 +380,7 @@ export function registerSharingRoutes(
       .recordSecurityEvent({
         now: new Date(),
         securityEventType: 'household_membership_changed',
-        userId: session.userId,
+        userId: member.userId,
       })
       .catch((error: unknown) =>
         app.log.warn({ err: error }, 'failed to record security event'),
