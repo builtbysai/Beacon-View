@@ -47,22 +47,34 @@ All now-stale/fully-merged branches were deleted on GitHub and locally; only
 it checked out with uncommitted work), and `claude/continue-from-notification-transport-v1`
 remain.
 
-**Still uncommitted at last check**, in a separate Codex worktree, not touched by
-any of the above: an in-progress "user-owned recording" feature (new migration
-`0018_recording_foundation.sql`, `recording-routes.ts`, `postgres-recording-repository.ts`,
-ADR draft "0051-user-owned-recording-scope"), plus in-flight edits to
-`app.ts`, `authentication-routes.ts`, `db/schema.ts`, `drive-routes.ts`,
-`google-drive-client.ts`, `notification-delivery.ts`, `notification-routes.ts`,
-`store.ts`, `store-contract.ts`, and the Android `BeaconApi.kt`/
-`BeaconFirebaseMessagingService.kt`/`NotificationEnrollment.kt`. A local
-`docs/core-feature-completion-plan.md` (also uncommitted) lays out the intended
-execution order: (1) notifications/security events, (2) household sharing
-completion, (3) account recovery/hardening, (4) recording + Drive export, (5)
-integration/operational proof, (6) UI/UX pass, (7) release gate. Sharing (2) is
-now substantially complete on `main`. Steps 1, 3, and 4 all touch files with
-active uncommitted work in that worktree — do not start fresh work there without
-confirming that work is finished, abandoned, or coordinating directly with
-whoever is running it.
+## September 15: recording foundation + FCM token fix ported from the Codex worktree
+
+The uncommitted work described in the previous paragraph (as it stood at the
+September 14-15 merge) was confirmed abandoned by the owner and has now been
+ported onto `main` in two commits: a real Android bug fix (FCM push
+registration was sending the Firebase Installation ID instead of the actual
+messaging token, so device push could never have worked — `onNewToken`/
+`messaging.token` now used throughout, backend accepts `token` with `fid` kept
+only for one rollout cycle), and the full user-owned recording foundation
+(migration 0018, `recording-routes.ts`, `postgres-recording-repository.ts`,
+the `drive.file`-scoped recording OAuth variant in `authentication-routes.ts`/
+`google-drive-client.ts`, ADR 0051, and `docs/core-feature-completion-plan.md`).
+Full repo check (`format:check`, `lint`, `typecheck`, backend `test`, `build`)
+and the Android gradle gates (`compileDebugKotlin`, `testDebugUnitTest`,
+`lintDebug`, `assembleRelease`) all passed before committing.
+
+Per `core-feature-completion-plan.md`'s execution order — (1) notifications/
+security events, (2) household sharing completion, (3) account recovery/
+hardening, (4) recording + Drive export, (5) integration/operational proof,
+(6) UI/UX pass, (7) release gate — this lands step 1's token fix and most of
+step 4's backend contract. Still open: step 1's security-event outbox and
+native/physical FCM acceptance; step 2's remaining inbox/bounce evidence and
+recording grants; step 3 (account recovery/hardening) has no implementation
+yet; step 4 still needs the Android capture/upload client and the web
+recording UI (intentionally deferred to step 6). The stale Codex worktree at
+`~/.codex/worktrees/0235/Beacon-SecureView` still holds the now-superseded
+uncommitted diff this was ported from — do not port it again; it can be
+discarded once confirmed no longer needed.
 
 ## September 15 fix: automated deploy's Tailscale OIDC trust credential
 
