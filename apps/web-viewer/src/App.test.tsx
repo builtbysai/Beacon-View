@@ -19,6 +19,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  window.sessionStorage.clear();
   window.history.replaceState({}, '', '/');
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -209,6 +210,63 @@ describe('App', () => {
     expect(
       screen.queryByRole('button', { name: /Add camera/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it('applies a /join link\'s stashed invitation once signed in, then clears it', async () => {
+    vi.stubGlobal('WebSocket', TestSocket);
+    window.sessionStorage.setItem('beacon_pending_invite', 'invite-token-abc');
+    const fetchMock = vi.fn<
+      (url: string, init?: RequestInit) => Promise<unknown>
+    >().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/household/invitations/accept') {
+        expect(init?.body).toBe(JSON.stringify({ token: 'invite-token-abc' }));
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ householdId: 'household-2' }),
+        });
+      }
+      if (url === '/api/account/household')
+        return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve({}) });
+      if (url === '/api/auth/me')
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              household: { id: 'household-2', role: 'viewer' },
+              user: { id: 'member', email: 'member@example.com' },
+            }),
+        });
+      if (url === '/api/cameras')
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ cameras: [] }),
+        });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ devices: [] }),
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText('You joined the household.')).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/household/invitations/accept',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/account/household',
+      expect.objectContaining({
+        body: JSON.stringify({ householdId: 'household-2' }),
+        method: 'PUT',
+      }),
+    );
+    expect(window.sessionStorage.getItem('beacon_pending_invite')).toBeNull();
   });
 
   it('keeps trust readable when reached with an active household session', async () => {

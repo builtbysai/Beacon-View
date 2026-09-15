@@ -15,6 +15,7 @@ vi.mock('./api', () => ({ request: vi.fn() }));
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  Reflect.deleteProperty(navigator, 'clipboard');
 });
 
 const camera = {
@@ -53,9 +54,22 @@ describe('HouseholdSharingSettings', () => {
     fireEvent.change(screen.getByLabelText('Access level'), {
       target: { value: 'guest' },
     });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Create invitation' }));
 
-    expect(await screen.findByText('one-time-secret-code')).toBeVisible();
+    const copyLinkButton = await screen.findByRole('button', {
+      name: 'Copy invite link',
+    });
+    fireEvent.click(copyLinkButton);
+    expect(writeText).toHaveBeenCalledWith(
+      `${window.location.origin}/join?token=one-time-secret-code`,
+    );
+    fireEvent.click(screen.getByText('Or share the code manually'));
+    expect(screen.getByText('one-time-secret-code')).toBeVisible();
     expect(request).toHaveBeenCalledWith(
       '/api/household/invitations',
       expect.objectContaining({
@@ -99,7 +113,11 @@ describe('HouseholdSharingSettings', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Resend invitation' }));
 
-    expect(await screen.findByText('fresh-one-time-code')).toBeVisible();
+    expect(
+      await screen.findByRole('button', { name: 'Copy invite link' }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByText('Or share the code manually'));
+    expect(screen.getByText('fresh-one-time-code')).toBeVisible();
     expect(
       screen.getByText(/New invitation created for guest@example\.com/),
     ).toBeVisible();

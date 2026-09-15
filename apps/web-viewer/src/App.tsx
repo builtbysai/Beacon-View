@@ -186,6 +186,24 @@ export function App() {
     return cameraResult.cameras;
   }, []);
 
+  // A household invitation link (/join?token=...) can be opened signed out,
+  // so it can't accept on the spot the way pasting a code into Settings
+  // does. Stash the token and fall through to the normal sign-in/register
+  // flow below; a separate effect applies it once a session exists, whether
+  // that's immediately (already signed in) or after registering.
+  useEffect(() => {
+    if (window.location.pathname !== '/join') return;
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (token) {
+      try {
+        window.sessionStorage.setItem('beacon_pending_invite', token);
+      } catch {
+        /* Invitation still works by pasting the code manually. */
+      }
+    }
+    window.history.replaceState({}, '', '/');
+  }, []);
+
   useEffect(() => {
     if (
       window.location.pathname === '/trust' ||
@@ -236,6 +254,54 @@ export function App() {
       window.removeEventListener('focus', resync);
     };
   }, [user !== null]);
+
+  // Applies a /join link's stashed token once a session exists -- either
+  // immediately (already signed in) or right after this same load's sign-in/
+  // register completes, since authenticate() below also triggers a re-render
+  // with a non-null user.
+  useEffect(() => {
+    if (!user) return;
+    let token: string | null;
+    try {
+      token = window.sessionStorage.getItem('beacon_pending_invite');
+    } catch {
+      return;
+    }
+    if (!token) return;
+    try {
+      window.sessionStorage.removeItem('beacon_pending_invite');
+    } catch {
+      /* Not essential; a stale entry just gets overwritten by the next join link. */
+    }
+    void request<{ householdId: string }>(
+      '/api/household/invitations/accept',
+      { body: JSON.stringify({ token }), method: 'POST' },
+    )
+      .then((accepted) =>
+        request('/api/account/household', {
+          body: JSON.stringify({ householdId: accepted.householdId }),
+          method: 'PUT',
+        }),
+      )
+      .then(() =>
+        request<{ household: HouseholdSession; user: User }>('/api/auth/me'),
+      )
+      .then(async (result) => {
+        await loadCameras();
+        setUser(result.user);
+        setHousehold(result.household ?? { id: '', role: 'owner' });
+        setActivityNotice('You joined the household.');
+        window.setTimeout(() => setActivityNotice(''), 6_000);
+      })
+      .catch((caught) => {
+        setActivityNotice(
+          caught instanceof ApiError
+            ? caught.message
+            : 'That invitation could not be accepted.',
+        );
+        window.setTimeout(() => setActivityNotice(''), 6_000);
+      });
+  }, [user, loadCameras]);
 
   const handleHouseholdEvent = useCallback(
     (message: HouseholdEvent) => {

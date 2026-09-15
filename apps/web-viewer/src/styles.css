@@ -3131,6 +3131,20 @@ button > .icon:first-child {
   user-select: all;
 }
 
+.sharing-code-manual {
+  grid-column: 1 / -1;
+}
+
+.sharing-code-manual summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.sharing-code-manual code {
+  display: inline-block;
+  margin: 0.6rem 0.75rem 0.6rem 0;
+}
+
 .sharing-grants {
   grid-column: 1 / -1;
 }

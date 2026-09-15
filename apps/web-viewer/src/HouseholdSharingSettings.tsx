@@ -38,6 +38,10 @@ interface SharingState {
   members: Member[];
 }
 
+function joinLink(token: string): string {
+  return `${window.location.origin}/join?token=${encodeURIComponent(token)}`;
+}
+
 export function HouseholdSharingSettings({
   cameras,
   role,
@@ -219,6 +223,20 @@ export function HouseholdSharingSettings({
     }
   }
 
+  async function copyCreatedInvitationLink() {
+    if (!createdInvite || !navigator.clipboard) {
+      setError('Clipboard access is unavailable. Select and copy the code.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(joinLink(createdInvite.code));
+      setError('');
+      setMessage('Invitation link copied.');
+    } catch {
+      setError('Could not copy the invitation link. Select and copy the code.');
+    }
+  }
+
   return (
     <div className="sharing-settings">
       <form
@@ -282,20 +300,31 @@ export function HouseholdSharingSettings({
           {createdInvite && (
             <div className="sharing-code" role="status">
               <div>
-                <strong>Copy this code now</strong>
+                <strong>Share this invitation now</strong>
                 <p>
-                  Beacon stores only its hash. It expires{' '}
+                  Anyone with the link can accept it and it expires{' '}
                   {new Date(createdInvite.expiresAt).toLocaleString()}.
+                  Beacon stores only a hash of the code, never the code
+                  itself.
                 </p>
               </div>
-              <code>{createdInvite.code}</code>
               <button
-                className="secondary"
                 type="button"
-                onClick={() => void copyCreatedInvitation()}
+                onClick={() => void copyCreatedInvitationLink()}
               >
-                Copy code
+                Copy invite link
               </button>
+              <details className="sharing-code-manual">
+                <summary>Or share the code manually</summary>
+                <code>{createdInvite.code}</code>
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => void copyCreatedInvitation()}
+                >
+                  Copy code
+                </button>
+              </details>
             </div>
           )}
 
