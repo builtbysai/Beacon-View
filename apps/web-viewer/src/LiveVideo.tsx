@@ -294,6 +294,12 @@ export function LiveVideo({
           iceTransportPolicy: message.iceTransportPolicy,
         });
         peerRef.current = peer;
+        // A fresh TalkSession always starts idle, but its constructor never
+        // calls onState -- without this, a reconnect leaves talkState stuck
+        // on whatever the disposed prior session last reported (typically
+        // 'recovering', so the "Microphone off · reconnecting" label would
+        // hang forever even after the connection came back).
+        setTalkState('idle');
         talkSession.current = new TalkSession(
           message.connectionId,
           peer,

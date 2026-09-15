@@ -683,9 +683,6 @@ describe('App', () => {
       });
       await Promise.resolve();
     });
-    fireEvent.click(
-      screen.getByRole('button', { name: /New activity available/ }),
-    );
     expect(await screen.findByText('Kitchen phone')).toBeVisible();
     expect(screen.queryByText('Hallway phone')).not.toBeInTheDocument();
     expect(window.localStorage.getItem('beacon_motion_filters_1:time')).toBe(

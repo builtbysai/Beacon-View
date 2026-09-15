@@ -58,8 +58,6 @@ export function MotionEventList({
   const [busy, setBusy] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [reload, setReload] = useState(0);
-  const [seenRevision, setSeenRevision] = useState(refreshRevision);
   const [cameraFilter, setCameraFilter] = useState(() =>
     savedFilter(`${filterStorageKey}:camera`, 'all'),
   );
@@ -71,12 +69,10 @@ export function MotionEventList({
   const pending = useRef(false);
   const controller = useRef<AbortController | null>(null);
   const query = useRef('');
-  const revision = useRef(refreshRevision);
   const heading = useRef<HTMLHeadingElement | null>(null);
   const status = useRef<HTMLParagraphElement | null>(null);
   const timeFilterRef = useRef<HTMLDivElement>(null);
   useRadioGroupKeyboardNav(timeFilterRef);
-  revision.current = refreshRevision;
 
   useEffect(() => {
     try {
@@ -138,13 +134,18 @@ export function MotionEventList({
     query.current = filters.toString();
     setEvents(null);
     setCursor(null);
-    setSeenRevision(revision.current);
     void fetchPage(false);
     return () => {
       generation.current += 1;
       controller.current?.abort();
     };
-  }, [cameraFilter, timeFilter, reload, clearRevision]);
+    // refreshRevision bumps on every new motion event / history clear (pushed
+    // over the household WebSocket) so the feed refreshes itself instead of
+    // making the viewer notice and click a "new activity" banner; clearRevision
+    // can change in the same push as refreshRevision (motion-history-cleared
+    // bumps both), so it must not be a second, separately-triggered effect or
+    // the two would race into a duplicate fetch.
+  }, [cameraFilter, timeFilter, refreshRevision, clearRevision]);
 
   function requestClearHistory() {
     if (pending.current || clearing) return;
@@ -162,7 +163,6 @@ export function MotionEventList({
       if (active === generation.current) {
         setEvents([]);
         setCursor(null);
-        setSeenRevision(revision.current);
         status.current?.focus();
       }
     } catch {
@@ -242,20 +242,6 @@ export function MotionEventList({
           ))}
         </div>
       </div>
-      {refreshRevision !== seenRevision && (
-        <button
-          type="button"
-          className="activity-toast"
-          disabled={clearing}
-          onClick={() => {
-            heading.current?.focus();
-            setReload((value) => value + 1);
-          }}
-        >
-          <Icon name="activity" />
-          New activity available · Refresh
-        </button>
-      )}
       {error && <p role="alert">{error}</p>}
       {(busy || events) && (
         <p className="activity-status" role="status" ref={status} tabIndex={-1}>

@@ -80,7 +80,7 @@ describe('Activity timeline', () => {
     expect(props.onCamera).toHaveBeenCalledWith('camera-one');
   });
 
-  it('keeps reading position until new activity is explicitly refreshed and resets on remote deletion', async () => {
+  it('automatically refreshes on new activity with no manual step, and resets on remote deletion', async () => {
     const fetch = vi
       .fn<
         (
@@ -95,15 +95,11 @@ describe('Activity timeline', () => {
     const view = render(<MotionEventList {...props} />);
     await screen.findByText('old');
     view.rerender(<MotionEventList {...props} refreshRevision={1} />);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    fireEvent.click(
-      screen.getByRole('button', { name: /New activity available/ }),
-    );
-    expect(
-      screen.getByRole('heading', { name: 'Motion events' }),
-    ).toHaveFocus();
     await screen.findByText('new');
     expect(screen.queryByText('old')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /New activity available/ }),
+    ).not.toBeInTheDocument();
     view.rerender(
       <MotionEventList {...props} refreshRevision={2} clearRevision={1} />,
     );

@@ -297,6 +297,88 @@ describe('LiveVideo', () => {
     unmount();
   });
 
+  it('clears the stale "Microphone off · reconnecting" status once a full reconnect completes', async () => {
+    vi.useFakeTimers();
+    FakeWebSocket.instances = [];
+    FakePeer.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    const track = {
+      enabled: true,
+      readyState: 'live',
+      onended: null,
+      stop: vi.fn(),
+    };
+    const stream = { getTracks: () => [track], getAudioTracks: () => [track] };
+    const getUserMedia = vi.fn().mockResolvedValue(stream);
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    try {
+      render(<LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} />);
+      const socket = FakeWebSocket.instances[0]!;
+      await act(async () => {
+        socket.message({
+          type: 'ready',
+          connectionId: 'connection-a',
+          iceServers: [],
+          iceTransportPolicy: 'all',
+        });
+        await Promise.resolve();
+      });
+      const peer = FakePeer.instances[0]!;
+      await act(async () => {
+        peer.connectionState = 'connected';
+        peer.onconnectionstatechange?.();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Talk' }));
+        await Promise.resolve();
+      });
+      act(() =>
+        socket.message({
+          type: 'talk-state',
+          connectionId: 'connection-a',
+          active: true,
+        }),
+      );
+      expect(screen.getByRole('button', { name: 'Stop talking' })).toBeEnabled();
+
+      // A hard failure (not the in-place 8-second grace) tears the whole
+      // connection down and schedules a full reconnect.
+      act(() => socket.onerror?.());
+      expect(screen.getByLabelText('Talk status')).toHaveTextContent(
+        'Microphone off',
+      );
+
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+        await Promise.resolve();
+      });
+      expect(FakeWebSocket.instances).toHaveLength(2);
+      const reconnectedSocket = FakeWebSocket.instances[1]!;
+      await act(async () => {
+        reconnectedSocket.message({
+          type: 'ready',
+          connectionId: 'connection-b',
+          iceServers: [],
+          iceTransportPolicy: 'all',
+        });
+        await Promise.resolve();
+      });
+      const reconnectedPeer = FakePeer.instances[1]!;
+      await act(async () => {
+        reconnectedPeer.connectionState = 'connected';
+        reconnectedPeer.onconnectionstatechange?.();
+        await Promise.resolve();
+      });
+
+      expect(screen.queryByLabelText('Talk status')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Talk' })).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('allows a transient disconnected state to recover without replacing the session', async () => {
     vi.useFakeTimers();
     FakeWebSocket.instances = [];
