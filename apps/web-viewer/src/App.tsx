@@ -764,20 +764,32 @@ export function App() {
             {activityNotice}
           </p>
         )}
-        {page === 'dashboard' && cameras.length === 0 && (
-          <section className="home-dashboard home-dashboard-empty workspace-wide">
-            <h1 className="home-title" ref={pageHeading} tabIndex={-1}>
-              Add your first camera
-            </h1>
-            <p>Turn a spare phone, tablet, or computer into a camera.</p>
-            <div className="home-hero-actions">
-              <button onClick={() => navigate('camera mode')}>
-                <Icon name="plus" />
-                Add camera
-              </button>
-            </div>
-          </section>
-        )}
+        {page === 'dashboard' &&
+          cameras.length === 0 &&
+          (household?.role === 'owner' || household?.role === 'admin' ? (
+            <section className="home-dashboard home-dashboard-empty workspace-wide">
+              <h1 className="home-title" ref={pageHeading} tabIndex={-1}>
+                Add your first camera
+              </h1>
+              <p>Turn a spare phone, tablet, or computer into a camera.</p>
+              <div className="home-hero-actions">
+                <button onClick={() => navigate('camera mode')}>
+                  <Icon name="plus" />
+                  Add camera
+                </button>
+              </div>
+            </section>
+          ) : (
+            <section className="home-dashboard home-dashboard-empty workspace-wide">
+              <h1 className="home-title" ref={pageHeading} tabIndex={-1}>
+                No cameras shared with you yet
+              </h1>
+              <p>
+                Ask the household owner or an admin to grant you access to a
+                camera from Settings → Household sharing.
+              </p>
+            </section>
+          ))}
         {page === 'dashboard' && cameras.length > 0 && (
           <section className="home-dashboard workspace-wide">
             <div className="home-hero-compact">

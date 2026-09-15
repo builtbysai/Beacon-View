@@ -177,6 +177,40 @@ describe('App', () => {
     expect(document.title).toBe('Cameras · Beacon');
   });
 
+  it('tells a viewer with no camera grants to ask for access, not to add a camera', async () => {
+    vi.stubGlobal('WebSocket', TestSocket);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve(
+              url === '/api/auth/me'
+                ? {
+                    household: { id: 'household-1', role: 'viewer' },
+                    user: { id: 'member', email: 'member@example.com' },
+                  }
+                : url === '/api/cameras'
+                  ? { cameras: [] }
+                  : { devices: [] },
+            ),
+        }),
+      ),
+    );
+    render(<App />);
+    expect(
+      await screen.findByText('No cameras shared with you yet'),
+    ).toBeVisible();
+    expect(
+      screen.getByText(/Ask the household owner or an admin/),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: /Add camera/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it('keeps trust readable when reached with an active household session', async () => {
     vi.stubGlobal('WebSocket', TestSocket);
     vi.stubGlobal(
