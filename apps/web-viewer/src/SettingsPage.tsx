@@ -69,7 +69,7 @@ export function SettingsPage({
   });
 
   return (
-    <div className="settings-workspace wide">
+    <div className="settings-workspace">
       <nav className="settings-nav" aria-label="Settings categories">
         {sections.map((section) => (
           <button

@@ -2654,7 +2654,7 @@ button > .icon:first-child {
   display: grid;
   align-items: start;
   gap: var(--space-5);
-  grid-template-columns: 13rem minmax(0, 44rem);
+  grid-template-columns: 13rem minmax(0, 56rem);
 }
 
 .settings-nav {
@@ -3131,6 +3131,21 @@ button > .icon:first-child {
   user-select: all;
 }
 
+/* These rows carry more distinct fields than the shared 56rem settings
+   content column can seat side-by-side once the window itself is narrower
+   than roughly 1100px (nav column + gap eat into what's left) -- stack them
+   well before that point actually starves, rather than only at the same
+   800px breakpoint where the whole settings-workspace itself collapses. */
+@media (max-width: 1100px) {
+  .sharing-invite,
+  .sharing-accept,
+  .sharing-code,
+  .sharing-person {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+}
+
 .sharing-code-manual {
   grid-column: 1 / -1;
 }
@@ -3182,14 +3197,6 @@ button > .icon:first-child {
   .settings-nav button {
     flex: 0 0 auto;
     white-space: nowrap;
-  }
-
-  .sharing-invite,
-  .sharing-accept,
-  .sharing-code,
-  .sharing-person {
-    grid-template-columns: 1fr;
-    align-items: stretch;
   }
 }
 
