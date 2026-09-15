@@ -1,0 +1,30 @@
+name: Debug OIDC claims
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  print-claims:
+    runs-on: ubuntu-24.04
+    environment:
+      name: production
+    steps:
+      - name: Request and decode an ID token for the Tailscale audience
+        shell: bash
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+          TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
+        run: |
+          resp="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${TS_AUDIENCE}")"
+          jwt="$(echo "$resp" | jq -r .value)"
+          payload="$(echo "$jwt" | cut -d. -f2)"
+          mod=$(( ${#payload} % 4 ))
+          if [ "$mod" -eq 2 ]; then payload="${payload}=="; fi
+          if [ "$mod" -eq 3 ]; then payload="${payload}="; fi
+          echo "$payload" | tr '_-' '/+' | base64 -d 2>/dev/null | jq '{sub, aud, iss}'
