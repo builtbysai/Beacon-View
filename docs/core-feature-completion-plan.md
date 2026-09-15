@@ -27,9 +27,14 @@ not considered complete.
       both revoke every session, which would revoke the very push
       subscription meant to carry the alert; see the ADR's Consequences.
       Security events have no per-device preference row to be silenced with.
-- [ ] Add delivery evidence and operational metrics without logging tokens
-      or media -- still open; no physical/operational evidence collected yet
-      for the new security-event category specifically.
+- [x] Add operational metrics for each delivery sweep: counts of delivered,
+      permanently-failed and retryably-failed deliveries, broken down by
+      channel and by the already-public `safePayload.category` -- never
+      `providerMaterial` or payload content (`notification-job.ts`,
+      `runNotificationSweep`, unit-tested including an explicit assertion
+      that the logged summary never contains the provider token). Still
+      open: physical/operational delivery evidence itself, which this
+      instrumentation is a prerequisite for, not a substitute for.
 
 ### 2. Household and sharing completion
 
