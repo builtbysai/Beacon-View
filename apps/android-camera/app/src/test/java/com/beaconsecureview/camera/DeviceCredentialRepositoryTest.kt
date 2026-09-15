@@ -21,6 +21,19 @@ class DeviceCredentialRepositoryTest {
         assertTrue(retainCredentialAfterHeartbeat(repository, accepted = true))
         assertTrue(repository.read() == "secret")
     }
+
+    @Test
+    fun disconnectClearsCredentialBeforeStoppingCapture() {
+        val repository = MemoryCredentialRepository("secret")
+        var credentialWhenCaptureStopped: String? = "not-called"
+
+        beginLocalDisconnect(repository) {
+            credentialWhenCaptureStopped = repository.read()
+        }
+
+        assertNull(credentialWhenCaptureStopped)
+        assertNull(repository.read())
+    }
 }
 
 private class MemoryCredentialRepository(initial: String?) : DeviceCredentialRepository {

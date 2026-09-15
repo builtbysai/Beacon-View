@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cameraStatus, type CameraAvailability } from './camera-status';
 import { Icon } from './Icon';
+import { useRadioGroupKeyboardNav } from './useRadioGroupKeyboardNav';
 
 type Filter = 'all' | 'ready' | 'privacy' | 'attention';
 const filters = {
@@ -31,6 +32,8 @@ export function CameraBrowser<T extends SearchableCamera>({
     () => new URLSearchParams(window.location.search).get('query') ?? '',
   );
   const [filter, setFilter] = useState<Filter>(filterFromUrl);
+  const filterPillsRef = useRef<HTMLDivElement>(null);
+  useRadioGroupKeyboardNav(filterPillsRef);
   const matches = (camera: T, value: Filter) => {
     const status = cameraStatus(camera);
     return (
@@ -86,6 +89,7 @@ export function CameraBrowser<T extends SearchableCamera>({
             className="filter-pills"
             role="radiogroup"
             aria-label="Camera availability filters"
+            ref={filterPillsRef}
           >
             {(Object.keys(filters) as Filter[]).map((value) => (
               <button

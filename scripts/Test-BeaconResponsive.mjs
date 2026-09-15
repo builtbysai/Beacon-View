@@ -46,6 +46,19 @@ const devices = cameras.map((c) => ({
   batteryPercent: 82,
   batteryCharging: true,
 }));
+devices.push({
+  id: 'pending-phone',
+  name: 'New camera phone',
+  platform: 'android',
+  deviceType: 'phone',
+  online: false,
+  privacyMode: false,
+  revoked: false,
+  enabled: true,
+  lastSeenAt: null,
+  batteryPercent: null,
+  batteryCharging: null,
+});
 const routes = {
   '/api/auth/me': {
     user: { id: 'responsive-qa', email: 'household@example.test' },
@@ -65,13 +78,24 @@ const routes = {
   },
   '/api/access-history': {
     events: [
-      {
-        success: true,
-        deviceName: 'Hallway phone',
-        actorEmail: 'household@example.test',
-        occurredAt: now,
-      },
-    ],
+      'live_view_started',
+      'live_view_rejected',
+      'privacy_enabled',
+      'privacy_disabled',
+      'device_credential_revoked',
+      'camera_source_deleted',
+      'device_deleted',
+      'device_self_removed',
+    ].map((eventType, index) => ({
+      actorEmail: 'household@example.test',
+      cameraName: eventType === 'camera_source_deleted' ? 'Rear camera' : null,
+      deviceName: index > 5 ? 'Old hallway phone' : 'Hallway phone',
+      eventType,
+      occurredAt: new Date(Date.now() - index * 60_000).toISOString(),
+      reason: eventType === 'live_view_rejected' ? 'camera_offline' : null,
+      success: eventType !== 'live_view_rejected',
+      viewerSessionId: null,
+    })),
   },
   '/api/motion-retention': { days: 30 },
   '/api/devices/phone-0/motion-settings': { cameras: [] },
@@ -91,6 +115,22 @@ const routes = {
     nextCursor: null,
   },
   '/api/diagnostics': { devices: [], cameras: [] },
+  '/api/notification-preferences': {
+    preferences: cameras.map((camera, index) => ({
+      deviceId: camera.deviceId,
+      deviceName: camera.deviceName,
+      motionEnabled: index === 0,
+      offlineEnabled: index < 2,
+      quietHours:
+        index === 0
+          ? {
+              start: '22:00',
+              end: '07:00',
+              timeZone: 'America/New_York',
+            }
+          : null,
+    })),
+  },
   '/api/pairing-codes': { code: 'ABCD234567' },
 };
 const sizes = process.env.BEACON_QA_EXTENDED_ONLY
@@ -269,6 +309,9 @@ const report = [];
     await page.locator(selector).first().waitFor();
   }
   for (const [width, height] of sizes) {
+    cameras.forEach((camera, index) => {
+      camera.privacyMode = index === 2;
+    });
     await page.setViewportSize({ width, height });
     signedIn = false;
     await visit('/', '.sign-in-card');
@@ -314,6 +357,23 @@ const report = [];
       await visit(route, selector);
       const routeName = route.split('?')[0].replaceAll('/', '-') || 'home';
       await capture(`${routeName}-${width}`, route === '/' && width >= 1280);
+      if (route === '/contact') {
+        const documentHeight = await page.evaluate(
+          () => document.documentElement.scrollHeight,
+        );
+        assert(
+          documentHeight <= height + 1,
+          `contact-${width}: ordinary contact form causes unnecessary page scrolling (${documentHeight})`,
+        );
+      }
+      if (route === '/settings' && width === 1280) {
+        await page.getByRole('button', { name: 'Next' }).click();
+        await capture('settings-activity-page-2-1280');
+        assert.equal(
+          await page.getByText('Page 2 of 2').textContent(),
+          'Page 2 of 2',
+        );
+      }
       if (
         (route === '/devices/phone-2' || route === '/devices/phone-3') &&
         (width === 320 || width === 1280)
@@ -325,6 +385,7 @@ const report = [];
     if (width <= 760) {
       await visit('/devices/phone-3', '.device-guidance.attention');
       await assertMobileNavigationClear(`mobile-nav-clear-${width}`);
+      await visit('/cameras', '.camera-tile-grid');
       await assertCompactMobileHeaderAction(`mobile-header-action-${width}`);
     }
     cameras.forEach((c) => {
@@ -333,8 +394,29 @@ const report = [];
     await visit('/cameras', '.camera-tile-grid');
     await capture(`cameras-privacy-${width}`);
 
-    await visit('/cameras/camera-0', '.live-surface');
+    cameras[0].privacyMode = false;
+    cameras.push({
+      ...cameras[0],
+      id: 'camera-0-front',
+      name: 'Front',
+      facing: 'front',
+      sourceKey: 'front',
+    });
+    await visit('/cameras/camera-0', '.live-shell');
     await capture(`cameras-camera-0-${width}`, width >= 1280);
+    if (width === 390 || width === 1280) {
+      const livePath = new URL(page.url()).pathname;
+      await page.getByRole('button', { name: 'Camera settings' }).click();
+      await page.getByRole('dialog').waitFor();
+      assert.equal(
+        new URL(page.url()).pathname,
+        livePath,
+        'Live settings must not navigate away from the active stream',
+      );
+      await capture(`live-settings-${width}`, true);
+      await page.getByRole('button', { name: 'Close camera settings' }).click();
+    }
+    cameras.pop();
     cameras.forEach((c, i) => {
       c.privacyMode = i === 2;
     });
@@ -407,7 +489,7 @@ const report = [];
     await page.setViewportSize({ width, height });
     signedIn = true;
     await visit('/camera-mode', '.setup-options');
-    await page.getByRole('button', { name: 'Pair Android device' }).click();
+    await page.getByRole('button', { name: 'Pair Android' }).click();
     await page.getByLabel('Beacon pairing QR code').waitFor();
     await capture(`pair-modal-${width}`);
     const modal = page.getByRole('dialog');
@@ -426,9 +508,7 @@ const report = [];
       'Modal must scroll inside viewport',
     );
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await page
-      .getByRole('button', { name: 'Use this browser as a camera' })
-      .click();
+    await page.getByRole('button', { name: 'Use this browser' }).click();
     await page.getByRole('button', { name: 'Allow and find cameras' }).click();
     await page.getByRole('alert').waitFor();
     await capture(`camera-permission-denied-${width}`);
@@ -440,10 +520,10 @@ const report = [];
     await visit('/cameras', '.camera-tile-grid');
     await capture(`long-camera-names-${width}`);
     await visit('/devices/phone-0', '.device-health');
-    await page.getByText('Device settings', { exact: true }).click();
+    await page.getByText('Advanced', { exact: true }).click();
     await capture(`device-settings-expanded-${width}`);
     for (const [route, selector] of [
-      ['/devices', '.device-list'],
+      ['/cameras', '.pending-device-list'],
       ['/diagnostics', '.workspace'],
       ['/account-deletion', '.contact-layout'],
       ['/auth/mobile', '#mobile-auth-title'],
@@ -460,11 +540,18 @@ const report = [];
   }
   await page.setViewportSize({ width: 1280, height: 500 });
   await visit('/', '.home-dashboard');
+  await page.getByRole('button', { name: 'Collapse sidebar' }).click();
   await page
-    .getByRole('button', { name: 'household@example.test', exact: true })
+    .getByRole('button', {
+      name: 'Open account menu for household@example.test',
+      exact: true,
+    })
     .click();
+  await page
+    .getByRole('menuitem', { name: 'Trust & privacy', exact: true })
+    .waitFor();
   await page.getByRole('menuitem', { name: 'Sign out', exact: true }).focus();
-  await capture('sidebar-short-height');
+  await capture('sidebar-collapsed-account-short-height');
   const signoutBox = await page
     .getByRole('menuitem', { name: 'Sign out', exact: true })
     .boundingBox();

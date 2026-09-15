@@ -92,6 +92,474 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     expect(ownership.rows[0]!.count).toBe(1);
   });
 
+  it('binds sessions to active memberships and switches without deleting the shared household', async () => {
+    const registration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'member@example.com',
+        password: 'correct horse battery staple',
+      },
+      url: '/api/auth/register',
+    });
+    const credentials = sessionCookies(registration.headers);
+    const member = await store!.findUserByEmail('member@example.com');
+    const host = await store!.createAccount(
+      'host@example.com',
+      'test-password-hash',
+      '127.0.0.22',
+    );
+    await store!.pool.query(
+      `INSERT INTO household_members (household_id, user_id, role)
+       VALUES ($1, $2, 'viewer')`,
+      [host.householdId, member!.id],
+    );
+
+    const households = await app!.inject({
+      headers: { cookie: credentials.cookie },
+      method: 'GET',
+      url: '/api/account/households',
+    });
+    expect(households.statusCode).toBe(200);
+    expect(
+      households.json<{ households: { id: string; role: string }[] }>()
+        .households,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: member!.householdId, role: 'owner' }),
+        expect.objectContaining({ id: host.householdId, role: 'viewer' }),
+      ]),
+    );
+
+    const switched = await app!.inject({
+      headers: {
+        cookie: credentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': credentials.csrf,
+      },
+      method: 'PUT',
+      payload: { householdId: host.householdId },
+      url: '/api/account/household',
+    });
+    expect(switched.statusCode).toBe(204);
+
+    const current = await app!.inject({
+      headers: { cookie: credentials.cookie },
+      method: 'GET',
+      url: '/api/auth/me',
+    });
+    expect(current.json()).toMatchObject({
+      household: { id: host.householdId, role: 'viewer' },
+    });
+
+    const deletion = await app!.inject({
+      headers: {
+        cookie: credentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': credentials.csrf,
+      },
+      method: 'DELETE',
+      payload: { confirmation: 'DELETE' },
+      url: '/api/account',
+    });
+    expect(deletion.statusCode).toBe(204);
+    await expect(
+      store!.findUserByEmail('member@example.com'),
+    ).resolves.toBeNull();
+    await expect(
+      store!.findUserByEmail('host@example.com'),
+    ).resolves.not.toBeNull();
+  });
+
+  it('invites a viewer, grants one camera, and revokes access immediately', async () => {
+    const ownerRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'owner@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.40',
+      url: '/api/auth/register',
+    });
+    const ownerCredentials = sessionCookies(ownerRegistration.headers);
+    const owner = await store!.findUserByEmail('owner@example.com');
+    const device = await store!.pool.query<{ id: string }>(
+      `INSERT INTO cameras (household_id, installation_id, name, platform)
+       VALUES ($1,$2,'Hallway phone','android') RETURNING id`,
+      [owner!.householdId, randomUUID()],
+    );
+    const source = await store!.pool.query<{ cameraId: string }>(
+      `INSERT INTO camera_sources (device_id, display_name, source_key, facing)
+       VALUES ($1,'Rear camera','rear','rear') RETURNING public_camera_id AS "cameraId"`,
+      [device.rows[0]!.id],
+    );
+
+    const memberRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'viewer@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.41',
+      url: '/api/auth/register',
+    });
+    const memberCredentials = sessionCookies(memberRegistration.headers);
+
+    const invitation = await app!.inject({
+      headers: {
+        cookie: ownerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': ownerCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { email: 'viewer@example.com', role: 'viewer' },
+      url: '/api/household/invitations',
+    });
+    expect(invitation.statusCode).toBe(201);
+    const inviteToken = invitation.json<{ token: string }>().token;
+    expect(inviteToken).toHaveLength(43);
+    const storedInvitation = await store!.pool.query<{ tokenHash: string }>(
+      'SELECT token_hash AS "tokenHash" FROM household_invitations',
+    );
+    expect(storedInvitation.rows[0]!.tokenHash).not.toBe(inviteToken);
+
+    const accepted = await app!.inject({
+      headers: {
+        cookie: memberCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': memberCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { token: inviteToken },
+      url: '/api/household/invitations/accept',
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json()).toMatchObject({
+      householdId: owner!.householdId,
+      role: 'viewer',
+    });
+
+    const sharing = await app!.inject({
+      headers: { cookie: ownerCredentials.cookie },
+      method: 'GET',
+      url: '/api/household/sharing',
+    });
+    const member = sharing
+      .json<{ members: Array<{ email: string; id: string }> }>()
+      .members.find((item) => item.email === 'viewer@example.com');
+    expect(member).toBeDefined();
+
+    const granted = await app!.inject({
+      headers: {
+        cookie: ownerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': ownerCredentials.csrf,
+      },
+      method: 'PUT',
+      payload: {
+        grants: [
+          {
+            cameraId: source.rows[0]!.cameraId,
+            canListen: true,
+            canTalk: false,
+          },
+        ],
+      },
+      url: `/api/household/members/${member!.id}/grants`,
+    });
+    expect(granted.statusCode).toBe(204);
+
+    const switched = await app!.inject({
+      headers: {
+        cookie: memberCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': memberCredentials.csrf,
+      },
+      method: 'PUT',
+      payload: { householdId: owner!.householdId },
+      url: '/api/account/household',
+    });
+    expect(switched.statusCode).toBe(204);
+    const cameras = await app!.inject({
+      headers: { cookie: memberCredentials.cookie },
+      method: 'GET',
+      url: '/api/cameras',
+    });
+    expect(cameras.statusCode).toBe(200);
+    expect(cameras.json<{ cameras: Array<{ id: string }> }>().cameras).toEqual([
+      expect.objectContaining({ id: source.rows[0]!.cameraId }),
+    ]);
+
+    const revoked = await app!.inject({
+      headers: {
+        cookie: ownerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': ownerCredentials.csrf,
+      },
+      method: 'DELETE',
+      url: `/api/household/members/${member!.id}`,
+    });
+    expect(revoked.statusCode).toBe(204);
+    const afterRevocation = await app!.inject({
+      headers: { cookie: memberCredentials.cookie },
+      method: 'GET',
+      url: '/api/auth/me',
+    });
+    expect(afterRevocation.statusCode).toBe(401);
+  });
+
+  it('resends an invitation with a fresh token and revokes the original', async () => {
+    const ownerRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'resend-owner@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.44',
+      url: '/api/auth/register',
+    });
+    const ownerCredentials = sessionCookies(ownerRegistration.headers);
+
+    const invitation = await app!.inject({
+      headers: {
+        cookie: ownerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': ownerCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { email: 'resend-guest@example.com', role: 'viewer' },
+      url: '/api/household/invitations',
+    });
+    expect(invitation.statusCode).toBe(201);
+    const original = invitation.json<{ id: string; token: string }>();
+
+    const resent = await app!.inject({
+      headers: {
+        cookie: ownerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': ownerCredentials.csrf,
+      },
+      method: 'POST',
+      url: `/api/household/invitations/${original.id}/resend`,
+    });
+    expect(resent.statusCode).toBe(201);
+    const resentInvitation = resent.json<{ id: string; token: string }>();
+    expect(resentInvitation.id).not.toBe(original.id);
+    expect(resentInvitation.token).not.toBe(original.token);
+
+    const guestRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'resend-guest@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.45',
+      url: '/api/auth/register',
+    });
+    const guestCredentials = sessionCookies(guestRegistration.headers);
+
+    const acceptedOriginal = await app!.inject({
+      headers: {
+        cookie: guestCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': guestCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { token: original.token },
+      url: '/api/household/invitations/accept',
+    });
+    expect(acceptedOriginal.statusCode).toBe(400);
+
+    const acceptedResent = await app!.inject({
+      headers: {
+        cookie: guestCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': guestCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { token: resentInvitation.token },
+      url: '/api/household/invitations/accept',
+    });
+    expect(acceptedResent.statusCode).toBe(200);
+    expect(acceptedResent.json()).toMatchObject({ role: 'viewer' });
+  });
+
+  it('blocks a viewer from every household-admin sharing action', async () => {
+    const ownerRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'admin-check-owner@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.46',
+      url: '/api/auth/register',
+    });
+    const ownerCredentials = sessionCookies(ownerRegistration.headers);
+    const owner = await store!.findUserByEmail('admin-check-owner@example.com');
+
+    const invitation = await app!.inject({
+      headers: {
+        cookie: ownerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': ownerCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { email: 'admin-check-viewer@example.com', role: 'viewer' },
+      url: '/api/household/invitations',
+    });
+    expect(invitation.statusCode).toBe(201);
+    const { id: invitationId, token } = invitation.json<{
+      id: string;
+      token: string;
+    }>();
+
+    const viewerRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'admin-check-viewer@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.47',
+      url: '/api/auth/register',
+    });
+    const viewerCredentials = sessionCookies(viewerRegistration.headers);
+    await app!.inject({
+      headers: {
+        cookie: viewerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': viewerCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { token },
+      url: '/api/household/invitations/accept',
+    });
+    await app!.inject({
+      headers: {
+        cookie: viewerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': viewerCredentials.csrf,
+      },
+      method: 'PUT',
+      payload: { householdId: owner!.householdId },
+      url: '/api/account/household',
+    });
+
+    const viewerAuthHeaders = {
+      cookie: viewerCredentials.cookie,
+      origin: config!.WEB_ORIGIN,
+      'x-csrf-token': viewerCredentials.csrf,
+    };
+    const forbidden = await Promise.all([
+      app!.inject({
+        headers: viewerAuthHeaders,
+        method: 'GET',
+        url: '/api/household/sharing',
+      }),
+      app!.inject({
+        headers: viewerAuthHeaders,
+        method: 'POST',
+        payload: { email: 'someone-else@example.com', role: 'viewer' },
+        url: '/api/household/invitations',
+      }),
+      app!.inject({
+        headers: viewerAuthHeaders,
+        method: 'POST',
+        url: `/api/household/invitations/${invitationId}/resend`,
+      }),
+      app!.inject({
+        headers: viewerAuthHeaders,
+        method: 'DELETE',
+        url: `/api/household/invitations/${invitationId}`,
+      }),
+      app!.inject({
+        headers: viewerAuthHeaders,
+        method: 'PUT',
+        payload: { grants: [] },
+        // The admin-role check runs before the memberId is ever looked up,
+        // so a placeholder id is enough to prove this route is unreachable
+        // for a viewer, regardless of whose access it names.
+        url: `/api/household/members/${randomUUID()}/grants`,
+      }),
+      app!.inject({
+        headers: viewerAuthHeaders,
+        method: 'DELETE',
+        url: `/api/household/members/${randomUUID()}`,
+      }),
+    ]);
+    for (const response of forbidden) expect(response.statusCode).toBe(403);
+  });
+
+  it('rejects an expired guest invitation before creating membership', async () => {
+    const ownerRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'guest-owner@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.42',
+      url: '/api/auth/register',
+    });
+    const ownerCredentials = sessionCookies(ownerRegistration.headers);
+
+    const guestRegistration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'expiring-guest@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.43',
+      url: '/api/auth/register',
+    });
+    const guestCredentials = sessionCookies(guestRegistration.headers);
+
+    const invitation = await app!.inject({
+      headers: {
+        cookie: ownerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': ownerCredentials.csrf,
+      },
+      method: 'POST',
+      payload: {
+        email: 'expiring-guest@example.com',
+        expiresInHours: 1,
+        role: 'guest',
+      },
+      url: '/api/household/invitations',
+    });
+    expect(invitation.statusCode).toBe(201);
+    const token = invitation.json<{ token: string }>().token;
+    await store!.pool.query(
+      `UPDATE household_invitations
+       SET expires_at = now() - interval '1 second'`,
+    );
+
+    const accepted = await app!.inject({
+      headers: {
+        cookie: guestCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': guestCredentials.csrf,
+      },
+      method: 'POST',
+      payload: { token },
+      url: '/api/household/invitations/accept',
+    });
+    expect(accepted.statusCode).toBe(400);
+    // Every registration creates its own default household with the new
+    // user as owner (unrelated to sharing), so a bare email lookup here
+    // would always find a row — that's the guest's own household, not the
+    // inviting owner's. Scope to the specific household the invitation was
+    // for to actually verify the expired invitation granted no membership.
+    await expect(
+      store!.pool.query(
+        `SELECT 1 FROM household_members hm
+         JOIN users u ON u.id = hm.user_id
+         JOIN households h ON h.id = hm.household_id
+         JOIN users owner ON owner.id = h.owner_id
+         WHERE u.email = 'expiring-guest@example.com'
+           AND owner.email = 'guest-owner@example.com'`,
+      ),
+    ).resolves.toMatchObject({ rows: [] });
+  });
+
   it('uses generic login errors and revokes a session with CSRF protection', async () => {
     const registration = await app!.inject({
       method: 'POST',
@@ -252,6 +720,7 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
         email: 'owner@example.com',
         password: 'correct horse battery staple',
       },
+      remoteAddress: '127.0.0.42',
       url: '/api/auth/register',
     });
     const credentials = sessionCookies(registration.headers);
@@ -270,6 +739,14 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       success: true,
       userId: identity.rows[0]!.userId,
     });
+    await store!.audit({
+      eventType: 'device_deleted',
+      householdId: identity.rows[0]!.householdId,
+      ipAddress: '192.0.2.45',
+      metadata: { deviceName: 'Old hallway phone' },
+      success: true,
+      userId: identity.rows[0]!.userId,
+    });
 
     const response = await app!.inject({
       headers: { cookie: credentials.cookie },
@@ -281,18 +758,75 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       events: [
         {
           actorEmail: 'owner@example.com',
+          deviceName: 'Old hallway phone',
+          eventType: 'device_deleted',
+          success: true,
+        },
+        {
+          actorEmail: 'owner@example.com',
           eventType: 'live_view_started',
           success: true,
         },
       ],
     });
     expect(response.body).not.toContain('192.0.2.44');
+    expect(response.body).not.toContain('192.0.2.45');
 
     const unauthenticated = await app!.inject({
       method: 'GET',
       url: '/api/access-history',
     });
     expect(unauthenticated.statusCode).toBe(401);
+  });
+
+  it('records a removed camera source with its display names', async () => {
+    const registration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'camera-audit@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.17',
+      url: '/api/auth/register',
+    });
+    const credentials = sessionCookies(registration.headers);
+    const account = await store!.findUserByEmail('camera-audit@example.com');
+    if (!account) throw new Error('Expected registered account');
+    const browser = await store!.registerBrowserDevice({
+      householdId: account.householdId,
+      installationId: randomUUID(),
+      name: 'Office laptop',
+      now: new Date(),
+      sources: [
+        { sourceKey: 'external', facing: 'external', name: 'Desk webcam' },
+      ],
+    });
+
+    const removed = await app!.inject({
+      headers: {
+        cookie: credentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': credentials.csrf,
+      },
+      method: 'DELETE',
+      url: `/api/cameras/${browser.cameras[0]!.publicCameraId}`,
+    });
+    expect(removed.statusCode).toBe(204);
+
+    const history = await app!.inject({
+      headers: { cookie: credentials.cookie },
+      method: 'GET',
+      url: '/api/access-history',
+    });
+    expect(history.json()).toMatchObject({
+      events: [
+        {
+          cameraName: 'Desk webcam',
+          deviceName: 'Office laptop',
+          eventType: 'camera_source_deleted',
+        },
+      ],
+    });
   });
 
   it('enforces Android privacy mode through the authenticated API', async () => {
@@ -390,17 +924,22 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
 
     const removed = await app!.inject({
       headers: { authorization: `Bearer ${deviceCredential}` },
-      method: 'DELETE',
-      url: '/api/device/registration',
+      method: 'POST',
+      payload: {},
+      url: '/api/device/disconnect',
     });
     expect(removed.statusCode).toBe(204);
-    await expect(store!.listDevices(account.householdId)).resolves.toEqual([]);
+    const retainedDevices = await store!.listDevices(account.householdId);
+    expect(retainedDevices).toHaveLength(1);
+    expect(retainedDevices[0]?.publicDeviceId).toBe(device.publicDeviceId);
+    expect(retainedDevices[0]?.revokedAt).toBeInstanceOf(Date);
 
     const nextCode = 'REPAIRAPI1';
     await store!.createPairingCode(
       account.householdId,
       hashSecret(nextCode),
       new Date(Date.now() + 60_000),
+      device.id,
     );
     const repaired = await store!.redeemPairingCode({
       codeHash: hashSecret(nextCode),

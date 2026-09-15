@@ -1,4 +1,4 @@
-name: Deploy web to Oracle
+name: Deploy Beacon to Oracle
 
 on:
   workflow_run:
@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: beacon-web-production
@@ -22,7 +23,7 @@ jobs:
     runs-on: ubuntu-24.04
     environment:
       name: production
-      url: https://beaconapp.duckdns.org/
+      url: https://beacon.builtbysai.com/
     timeout-minutes: 20
     steps:
       - name: Check out the validated commit
@@ -30,6 +31,14 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
+
+      - name: Connect to the private deployment network
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: tag:ci
+          ping: beacon-secureview-oracle
 
       - name: Create a source archive
         shell: bash
@@ -52,27 +61,29 @@ jobs:
       - name: Upload the validated source
         shell: bash
         env:
-          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_HOST: beacon-secureview-oracle
           ORACLE_USER: ${{ secrets.ORACLE_USER }}
           RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: >-
           scp
           -i "$RUNNER_TEMP/beacon-ssh/id_ed25519"
+          -o HostKeyAlias=129.213.128.206
           -o IdentitiesOnly=yes
           -o StrictHostKeyChecking=yes
           -o UserKnownHostsFile="$RUNNER_TEMP/beacon-ssh/known_hosts"
           "beacon-${RELEASE_SHA}.tar.gz"
           "${ORACLE_USER}@${ORACLE_HOST}:/tmp/beacon-${RELEASE_SHA}.tar.gz"
 
-      - name: Deploy only the web service and verify readiness
+      - name: Apply migrations, deploy backend and web, and verify readiness
         shell: bash
         env:
-          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_HOST: beacon-secureview-oracle
           ORACLE_USER: ${{ secrets.ORACLE_USER }}
           RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           ssh \
             -i "$RUNNER_TEMP/beacon-ssh/id_ed25519" \
+            -o HostKeyAlias=129.213.128.206 \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$RUNNER_TEMP/beacon-ssh/known_hosts" \
@@ -83,6 +94,7 @@ jobs:
           archive="/tmp/beacon-${RELEASE_SHA}.tar.gz"
           release_dir="/opt/beacon/releases/web-${RELEASE_SHA}"
           compose_file="${release_dir}/infrastructure/cloud/compose.yaml"
+          env_files=(--env-file /etc/beacon/production.env --env-file /etc/beacon/backup.env)
 
           sudo install -d -m 0755 "$release_dir"
           sudo tar --extract --gzip --file "$archive" --directory "$release_dir"
@@ -90,16 +102,31 @@ jobs:
 
           sudo docker compose \
             --project-name beacon-secureview-cloud \
-            --env-file /etc/beacon/production.env \
+            "${env_files[@]}" \
             --file "$compose_file" \
-            build web
+            build backend migrate web
           sudo docker compose \
             --project-name beacon-secureview-cloud \
-            --env-file /etc/beacon/production.env \
+            "${env_files[@]}" \
             --file "$compose_file" \
-            up -d --no-deps web
+            up -d postgres
+          sudo docker compose \
+            --project-name beacon-secureview-cloud \
+            "${env_files[@]}" \
+            --file "$compose_file" \
+            run --rm backup
+          sudo docker compose \
+            --project-name beacon-secureview-cloud \
+            "${env_files[@]}" \
+            --file "$compose_file" \
+            run --rm migrate
+          sudo docker compose \
+            --project-name beacon-secureview-cloud \
+            "${env_files[@]}" \
+            --file "$compose_file" \
+            up -d --no-deps backend web
 
-          domain="${BEACON_DOMAIN:-beaconapp.duckdns.org}"
+          domain="${BEACON_DOMAIN:-beacon.builtbysai.com}"
           # --retry-all-errors is required here: a freshly (re)started Caddy
           # can briefly reject the TLS handshake (curl exit 35,
           # SSL_ERROR_SYSCALL) before it's done initializing. Plain --retry

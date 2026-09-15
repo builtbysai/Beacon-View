@@ -166,9 +166,13 @@ do not intentionally stop the service. Android and device manufacturers may
 still restrict camera access, networking, or process lifetime under battery
 optimization, thermal pressure, permission changes, or vendor-specific power
 management. The app reports when it is not exempt from battery optimization and
-instructs the user to allow unrestricted battery use. It does not request a
-silent exemption or claim that every manufacturer permits uninterrupted
-screen-off capture.
+links to Android's battery-optimization settings for an explicit user choice. It
+does not request a silent exemption or claim that every manufacturer permits
+uninterrupted screen-off capture. While capture is active, the ongoing
+notification provides **Pause camera**. That action enters the same privacy mode
+as the in-app control and releases capture immediately. Beacon does not offer a
+background **Resume** action because Android's while-in-use permission rules may
+require a visible foreground Activity.
 
 Camera readiness is published only after CameraX confirms that capture bound
 successfully. When Android rejects a background privacy resume under while-in-use

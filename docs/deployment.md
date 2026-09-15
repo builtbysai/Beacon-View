@@ -5,7 +5,7 @@ The ordered release gates and evidence requirements are maintained in
 technical deployment boundary; both documents apply.
 
 The existing Oracle private alpha uses [oracle-cloud-staging.md](oracle-cloud-staging.md).
-The current approved web-only maintenance procedure and validation evidence are in
+The current approved coordinated backend, migration, and web release procedure and validation evidence are in
 [responsive-audit.md](responsive-audit.md). Historical Milestone 3 did not authorize production deployment. The Compose file is for
 loopback-only local development and contains intentionally weak sample
 credentials. Never publish it directly.

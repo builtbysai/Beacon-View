@@ -1,11 +1,11 @@
 import { fileURLToPath } from 'node:url';
 import { config as loadEnvironment } from 'dotenv';
 
-import { buildApp } from './app.js';
+import { buildApp, createPostgresStore } from './app.js';
 import { startAuditRetentionJob } from './audit-retention.js';
 import { parseConfig } from './config.js';
 import { startMotionRetentionJob } from './motion-retention.js';
-import { PostgresStore } from './store.js';
+import { startNotificationJob } from './notification-job.js';
 
 loadEnvironment({
   override: false,
@@ -13,17 +13,19 @@ loadEnvironment({
 });
 
 const config = parseConfig(process.env);
-const store = new PostgresStore(config.DATABASE_URL);
+const store = createPostgresStore(config);
 const app = buildApp(config, store);
 let shuttingDown = false;
 let stopRetentionJob: (() => void) | undefined;
 let stopAuditRetentionJob: (() => void) | undefined;
+let stopNotificationJob: (() => void) | undefined;
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   stopRetentionJob?.();
   stopAuditRetentionJob?.();
+  stopNotificationJob?.();
 
   app.log.info({ signal }, 'Shutdown requested');
   await app.close();
@@ -43,6 +45,7 @@ try {
   await app.listen({ host: config.HOST, port: config.PORT });
   stopRetentionJob = startMotionRetentionJob(store, app.log);
   stopAuditRetentionJob = startAuditRetentionJob(store, app.log);
+  stopNotificationJob = startNotificationJob(store, config, app.log);
 } catch (error) {
   app.log.fatal({ err: error }, 'Backend startup failed');
   process.exitCode = 1;

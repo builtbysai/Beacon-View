@@ -5,6 +5,19 @@ const booleanFromEnvironment = z.preprocess(
   z.boolean(),
 );
 
+const notificationKey = z.string().refine((value) => {
+  try {
+    return Buffer.from(value, 'base64url').length === 32;
+  } catch {
+    return false;
+  }
+}, 'Must be a 32-byte base64url value');
+const optionalNotificationText = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    schema.optional(),
+  );
+
 const environmentSchema = z
   .object({
     NODE_ENV: z
@@ -47,9 +60,24 @@ const environmentSchema = z
     GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
     GOOGLE_OAUTH_REDIRECT_URI: z.string().url().optional(),
+    GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY:
+      optionalNotificationText(notificationKey),
     CONTACT_EMAIL_TO: z.string().email().optional(),
     RESEND_API_KEY: z.string().min(1).optional(),
     RESEND_FROM: z.string().min(3).max(320).optional(),
+    NOTIFICATION_ENCRYPTION_KEY: optionalNotificationText(notificationKey),
+    NOTIFICATION_FINGERPRINT_KEY: optionalNotificationText(notificationKey),
+    FIREBASE_PROJECT_ID: optionalNotificationText(z.string().min(1)),
+    GOOGLE_APPLICATION_CREDENTIALS: optionalNotificationText(z.string().min(1)),
+    WEB_PUSH_VAPID_PUBLIC_KEY: optionalNotificationText(z.string().min(20)),
+    WEB_PUSH_VAPID_PRIVATE_KEY: optionalNotificationText(z.string().min(20)),
+    WEB_PUSH_VAPID_SUBJECT: optionalNotificationText(z.string().url()),
+    NOTIFICATION_OFFLINE_GRACE_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(30)
+      .max(900)
+      .optional(),
   })
   .superRefine((config, context) => {
     const insecureTransport =
@@ -93,6 +121,17 @@ const environmentSchema = z
         path: ['GOOGLE_OAUTH_CLIENT_ID'],
       });
     }
+    if (
+      config.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY &&
+      !googleFields.every(Boolean)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Google Drive token encryption requires the Google OAuth client configuration',
+        path: ['GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY'],
+      });
+    }
     const contactFields = [
       config.CONTACT_EMAIL_TO,
       config.RESEND_API_KEY,
@@ -104,6 +143,61 @@ const environmentSchema = z
         message:
           'CONTACT_EMAIL_TO, RESEND_API_KEY, and RESEND_FROM must be configured together',
         path: ['CONTACT_EMAIL_TO'],
+      });
+    }
+    const notificationKeyFields = [
+      config.NOTIFICATION_ENCRYPTION_KEY,
+      config.NOTIFICATION_FINGERPRINT_KEY,
+    ];
+    const providerConfigured = Boolean(
+      config.FIREBASE_PROJECT_ID ||
+      config.GOOGLE_APPLICATION_CREDENTIALS ||
+      config.WEB_PUSH_VAPID_PUBLIC_KEY ||
+      config.WEB_PUSH_VAPID_PRIVATE_KEY ||
+      config.WEB_PUSH_VAPID_SUBJECT,
+    );
+    if (
+      notificationKeyFields.some(Boolean) &&
+      !notificationKeyFields.every(Boolean)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Both notification encryption and fingerprint keys are required',
+        path: ['NOTIFICATION_ENCRYPTION_KEY'],
+      });
+    }
+    if (providerConfigured && !notificationKeyFields.every(Boolean)) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Notification provider configuration requires both notification keys',
+        path: ['NOTIFICATION_ENCRYPTION_KEY'],
+      });
+    }
+    const fcmFields = [
+      config.FIREBASE_PROJECT_ID,
+      config.GOOGLE_APPLICATION_CREDENTIALS,
+    ];
+    if (fcmFields.some(Boolean) && !fcmFields.every(Boolean)) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Firebase project ID and application credentials path must be configured together',
+        path: ['FIREBASE_PROJECT_ID'],
+      });
+    }
+    const webPushFields = [
+      config.WEB_PUSH_VAPID_PUBLIC_KEY,
+      config.WEB_PUSH_VAPID_PRIVATE_KEY,
+      config.WEB_PUSH_VAPID_SUBJECT,
+    ];
+    if (webPushFields.some(Boolean) && !webPushFields.every(Boolean)) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Web Push public key, private key, and subject must be configured together',
+        path: ['WEB_PUSH_VAPID_PUBLIC_KEY'],
       });
     }
     if (

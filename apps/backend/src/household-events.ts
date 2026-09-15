@@ -115,6 +115,13 @@ export function registerHouseholdEvents(
           socket.close(4003, 'Connection rejected');
           return;
         }
+        // Household events currently contain unfiltered camera and management
+        // state. Keep the channel administrator-only until subscriptions can
+        // enforce per-camera grants without leaking other household activity.
+        if (session.role !== 'owner' && session.role !== 'admin') {
+          socket.close(4003, 'Household administrator access required');
+          return;
+        }
         hub.subscribe(session.householdId, session.id, socket);
         const sessionHash = hashSecret(token!);
         let checking = false;
@@ -124,7 +131,11 @@ export function registerHouseholdEvents(
           void store
             .findSession(sessionHash, new Date())
             .then((current) => {
-              if (!current || current.householdId !== session.householdId) {
+              if (
+                !current ||
+                current.householdId !== session.householdId ||
+                (current.role !== 'owner' && current.role !== 'admin')
+              ) {
                 socket.close(4003, 'Authorization lost');
               }
             })

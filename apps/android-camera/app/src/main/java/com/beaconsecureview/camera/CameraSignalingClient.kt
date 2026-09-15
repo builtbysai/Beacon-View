@@ -27,6 +27,7 @@ interface CameraSignalingListener {
         connectionId: String,
         iceServers: List<SignalingIceServer>,
         relayOnly: Boolean,
+        canListen: Boolean,
     )
 
     fun onAnswer(connectionId: String, sdp: String)
@@ -40,6 +41,8 @@ interface CameraSignalingListener {
     fun onRetryAttempt(attempt: Int)
 
     fun onSourceSwitch(cameraId: String)
+
+    fun onSourcesChanged()
 
     fun onPrivacyMode(enabled: Boolean)
 
@@ -218,7 +221,7 @@ class CameraSignalingClient(
                     }
 
                     override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                        socketEnded(webSocket, generation, code == 4003)
+                        socketEnded(webSocket, generation, code == 4003, reason)
                     }
 
                     override fun onFailure(
@@ -226,7 +229,11 @@ class CameraSignalingClient(
                         throwable: Throwable,
                         response: Response?,
                     ) {
-                        socketEnded(webSocket, generation, response?.code == 401 || response?.code == 403)
+                        socketEnded(
+                            webSocket,
+                            generation,
+                            response?.code == 401 || response?.code == 403,
+                        )
                     }
                 },
             )
@@ -237,6 +244,7 @@ class CameraSignalingClient(
         webSocket: WebSocket,
         generation: Int,
         authorizationLost: Boolean,
+        closeReason: String? = null,
     ) {
         handler.post {
             if (!generations.isCurrent(generation) || socket !== webSocket) return@post
@@ -246,6 +254,10 @@ class CameraSignalingClient(
                 stopped = true
                 cancelRetry()
                 listener.onAuthorizationLost()
+            } else if (closeReason == "camera_removed") {
+                stopped = true
+                cancelRetry()
+                listener.onSourcesChanged()
             } else {
                 scheduleReconnect()
             }
@@ -329,7 +341,12 @@ class CameraSignalingClient(
                 val servers = message.getJSONArray("iceServers").toIceServers()
                 val relayOnly = message.optString("iceTransportPolicy") == "relay"
                 handler.post {
-                    listener.onViewerReady(message.getString("connectionId"), servers, relayOnly)
+                    listener.onViewerReady(
+                        message.getString("connectionId"),
+                        servers,
+                        relayOnly,
+                        message.optBoolean("canListen", true),
+                    )
                 }
             }
             "answer" ->
@@ -360,6 +377,7 @@ class CameraSignalingClient(
                 handler.post {
                     listener.onSourceSwitch(message.getString("cameraId"))
                 }
+            "sources-changed" -> handler.post(listener::onSourcesChanged)
             "privacy-mode" ->
                 handler.post {
                     listener.onPrivacyMode(message.getBoolean("enabled"))

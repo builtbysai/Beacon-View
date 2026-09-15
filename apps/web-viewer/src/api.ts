@@ -1,3 +1,13 @@
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 export function csrfToken(): string {
   return (
     document.cookie
@@ -12,7 +22,11 @@ export async function request<T>(
   options?: RequestInit,
 ): Promise<T> {
   const hasBody = options?.body !== undefined && options.body !== null;
+  const cache =
+    options?.cache ??
+    (!options?.method || options.method === 'GET' ? 'no-store' : null);
   const response = await fetch(path, {
+    ...(cache ? { cache } : {}),
     credentials: 'same-origin',
     ...options,
     headers: {
@@ -27,7 +41,7 @@ export async function request<T>(
     const payload = (await response.json().catch(() => ({}))) as {
       error?: string;
     };
-    throw new Error(payload.error ?? 'Request failed');
+    throw new ApiError(payload.error ?? 'Request failed', response.status);
   }
   return response.status === 204
     ? (undefined as T)

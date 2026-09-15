@@ -85,6 +85,15 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
         val microphoneEnabled = captureActive && hasMicrophonePermission()
+        val pauseIntent =
+            PendingIntent.getService(
+                this,
+                1,
+                Intent(this, CameraForegroundService::class.java)
+                    .setAction(ACTION_SET_PRIVACY)
+                    .putExtra(EXTRA_PRIVACY_ENABLED, true),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
         val notification =
             NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.presence_video_online)
@@ -105,6 +114,15 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                     },
                 )
                 .setContentIntent(pendingIntent)
+                .apply {
+                    if (captureActive) {
+                        addAction(
+                            android.R.drawable.ic_media_pause,
+                            "Pause camera",
+                            pauseIntent,
+                        )
+                    }
+                }
                 .setOngoing(true)
                 .setSilent(true)
                 .build()
@@ -183,6 +201,20 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 synchronized.cameras.map {
                     RegisteredCameraSource(it.id, it.sourceKey, it.name, it.facing)
                 }
+            if (cameras.isEmpty()) {
+                initializing = false
+                selectedCamera = null
+                CameraRuntime.update {
+                    it.copy(
+                        cameraEnabled = false,
+                        cameras = emptyList(),
+                        selectedCameraId = null,
+                        sourceLifecycle = CameraSourceLifecycle.Disabled,
+                        diagnostic = "No camera sources are shared",
+                    )
+                }
+                return@launch
+            }
             val preferred =
                 getSharedPreferences(PREFERENCES, MODE_PRIVATE)
                     .getString(SELECTED_CAMERA_ID, null)
@@ -264,6 +296,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         connectionId: String,
         iceServers: List<SignalingIceServer>,
         relayOnly: Boolean,
+        canListen: Boolean,
     ) {
         val firstViewer = sessions.isEmpty()
         sessions.remove(connectionId)?.close()
@@ -275,6 +308,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 relayOnly,
                 connectionId,
                 requireNotNull(signaling),
+                canListen,
             ) { state ->
                 if (state == StreamingState.Failed) closeViewer(connectionId)
                 updateRuntime(state.name)
@@ -314,6 +348,10 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
 
     override fun onSourceSwitch(cameraId: String) {
         selectCamera(cameraId)
+    }
+
+    override fun onSourcesChanged() {
+        restart(this)
     }
 
     override fun onPrivacyMode(enabled: Boolean) {
@@ -553,6 +591,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         sessions.values.forEach(WebRtcCameraSession::close)
         sessions.clear()
         captureGeneration += 1
+        val generationForSourceSwitch = captureGeneration
         media?.close()
         media = null
         selectedCamera = next
@@ -569,8 +608,19 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 diagnostic = "Switching camera source",
             )
         }
-        if (!CameraRuntime.state.value.privacyMode) startLocalPreview()
-        startSignaling()
+        // CameraX unbinds asynchronously. Give the old provider a short, deterministic
+        // handoff window before binding the new lens; this avoids the intermittent native
+        // crash/reconnect loop seen when front/rear is flipped rapidly.
+        lifecycleScope.launch {
+            delay(250)
+            if (captureGeneration == generationForSourceSwitch &&
+                !CameraRuntime.state.value.privacyMode &&
+                selectedCamera?.id == next.id
+            ) {
+                startLocalPreview()
+                startSignaling()
+            }
+        }
     }
 
     private fun startRuntimeAgain() {

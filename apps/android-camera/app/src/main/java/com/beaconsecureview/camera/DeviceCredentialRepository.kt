@@ -15,3 +15,13 @@ fun retainCredentialAfterHeartbeat(
     if (!accepted) repository.clear()
     return accepted
 }
+
+fun beginLocalDisconnect(
+    repository: DeviceCredentialRepository,
+    stopCapture: () -> Unit,
+) {
+    // Clear first so a sticky foreground service cannot restart with the old
+    // credential while Android is still finishing the stop request.
+    repository.clear()
+    stopCapture()
+}

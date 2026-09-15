@@ -52,10 +52,15 @@ interface DevicePeer {
 }
 
 interface ActiveSession {
+  canListen: boolean;
+  canTalk: boolean;
   cameraId: string;
+  connected: boolean;
   connectionId: string;
   device: WebSocket;
+  householdId?: string | undefined;
   publicCameraId: string;
+  sessionId?: string | undefined;
   startedAt: number;
   timeout: NodeJS.Timeout | null;
   viewer: WebSocket;
@@ -99,6 +104,10 @@ export class SignalingHub {
       publicCameraId: string,
       connected: boolean,
     ) => void = () => undefined,
+    private readonly onViewerState: (
+      householdId: string,
+      publicCameraId: string,
+    ) => void = () => undefined,
   ) {}
 
   connectDevice(
@@ -139,6 +148,9 @@ export class SignalingHub {
     cameraId: string,
     publicCameraId: string,
     socket: WebSocket,
+    canTalk = true,
+    sessionId?: string,
+    canListen = true,
   ): boolean {
     const device = this.#devices.get(cameraId);
     if (!device) {
@@ -147,10 +159,15 @@ export class SignalingHub {
     }
     const connectionId = randomUUID();
     const session: ActiveSession = {
+      canListen,
+      canTalk,
       cameraId,
+      connected: false,
       connectionId,
       device: device.socket,
+      householdId: device.householdId,
       publicCameraId,
+      sessionId,
       startedAt: Date.now(),
       timeout: null,
       viewer: socket,
@@ -169,12 +186,15 @@ export class SignalingHub {
       this.#cleanup(connectionId, socket, 'viewer_disconnected'),
     );
     this.#send(device.socket, {
+      canListen: session.canListen,
       connectionId,
       iceServers: this.createDeviceIceServers(),
       iceTransportPolicy: this.iceTransportPolicy,
       type: 'viewer-ready',
     });
     this.#send(socket, {
+      canListen: session.canListen,
+      canTalk: session.canTalk,
       connectionId,
       iceServers: this.createViewerIceServers(),
       iceTransportPolicy: this.iceTransportPolicy,
@@ -209,7 +229,8 @@ export class SignalingHub {
     connectionIds: string[];
   } {
     const sessions = [...this.#sessions.values()].filter(
-      (session) => session.publicCameraId === publicCameraId,
+      (session) =>
+        session.publicCameraId === publicCameraId && session.connected,
     );
     return {
       connectionIds: sessions.map((session) => session.connectionId),
@@ -241,6 +262,17 @@ export class SignalingHub {
     }
   }
 
+  /** End every live-view negotiation authenticated by one browser session.
+   * This is used for logout, session revocation, and household switching so
+   * authorization loss does not wait for the periodic database check. */
+  disconnectSession(sessionId: string, reasonCode = 'session_revoked'): void {
+    for (const session of [...this.#sessions.values()]) {
+      if (session.sessionId !== sessionId) continue;
+      this.#cleanup(session.connectionId, undefined, reasonCode);
+      session.viewer.close(4001, 'Authorization lost');
+    }
+  }
+
   setPrivacyMode(publicCameraId: string, enabled: boolean): void {
     const device = [...this.#devices.values()].find(
       (candidate) => candidate.publicCameraId === publicCameraId,
@@ -266,6 +298,15 @@ export class SignalingHub {
       cameraId: targetPublicCameraId,
       type: 'switch-source',
     });
+    return true;
+  }
+
+  notifySourcesChanged(siblingCameraIds: string[]): boolean {
+    const sibling = [...this.#devices.values()].find((device) =>
+      siblingCameraIds.includes(device.publicCameraId),
+    );
+    if (!sibling) return false;
+    this.#send(sibling.socket, { type: 'sources-changed' });
     return true;
   }
 
@@ -309,6 +350,15 @@ export class SignalingHub {
         return;
       }
       if (message.type === 'talk-request') {
+        if (!session.canTalk) {
+          this.#send(session.viewer, {
+            active: false,
+            connectionId: session.connectionId,
+            reason: 'not_allowed',
+            type: 'talk-state',
+          });
+          return;
+        }
         const owner = this.#talkOwners.get(session.cameraId);
         const granted = !owner || owner === session.connectionId;
         if (granted)
@@ -334,15 +384,22 @@ export class SignalingHub {
       this.#send(socket, { code: 'invalid_message', type: 'error' });
       return;
     }
-    if (message.type === 'connected' && role === 'device' && session.timeout) {
-      clearTimeout(session.timeout);
-      session.timeout = null;
-      this.onDiagnostic({
-        connectionId: session.connectionId,
-        event: 'connected',
-        publicCameraId: session.publicCameraId,
-        role,
-      });
+    if (message.type === 'connected' && role === 'device') {
+      if (session.timeout) {
+        clearTimeout(session.timeout);
+        session.timeout = null;
+      }
+      if (!session.connected) {
+        session.connected = true;
+        this.onDiagnostic({
+          connectionId: session.connectionId,
+          event: 'connected',
+          publicCameraId: session.publicCameraId,
+          role,
+        });
+        if (session.householdId)
+          this.onViewerState(session.householdId, session.publicCameraId);
+      }
     }
     if (message.type === 'disconnect') {
       this.#cleanup(message.connectionId, socket, 'peer_disconnected');
@@ -375,6 +432,8 @@ export class SignalingHub {
     if (cameraSessions?.size === 0)
       this.#cameraSessions.delete(session.cameraId);
     if (session.timeout) clearTimeout(session.timeout);
+    if (session.connected && session.householdId)
+      this.onViewerState(session.householdId, session.publicCameraId);
     this.onDiagnostic({
       connectionId,
       durationMs: Date.now() - session.startedAt,

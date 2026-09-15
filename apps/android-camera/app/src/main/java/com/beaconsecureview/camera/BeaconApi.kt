@@ -9,7 +9,11 @@ class AuthorizationLostException : IllegalStateException()
 class PairingException(message: String) : IllegalStateException(message)
 
 class BeaconApi(private val baseUrl: String) {
-    data class AccountSession(val token: String, val userId: String)
+    data class AccountSession(
+        val token: String,
+        val userId: String,
+        val email: String? = null,
+    )
 
     data class MonitorCamera(
         val id: String,
@@ -18,6 +22,28 @@ class BeaconApi(private val baseUrl: String) {
         val online: Boolean,
         val privacyMode: Boolean,
         val viewerCount: Int,
+        val deviceId: String = id,
+        val facing: String = "unknown",
+        val available: Boolean = online,
+    )
+
+    data class AccessEvent(
+        val actorEmail: String?,
+        val cameraName: String?,
+        val deviceName: String?,
+        val eventType: String,
+        val occurredAt: String,
+        val success: Boolean,
+        val reason: String?,
+    )
+
+    data class MotionEvent(
+        val id: String,
+        val cameraId: String,
+        val cameraName: String,
+        val deviceName: String,
+        val confidence: Double,
+        val occurredAt: String,
     )
 
     data class CameraSynchronization(
@@ -30,6 +56,14 @@ class BeaconApi(private val baseUrl: String) {
         val sourceKey: String,
         val name: String,
         val facing: String,
+    )
+
+    data class NotificationPreference(
+        val deviceId: String,
+        val deviceName: String,
+        val motionEnabled: Boolean,
+        val offlineEnabled: Boolean,
+        val quietHours: QuietHours?,
     )
     fun register(installationId: String, name: String, pairingCode: String): String {
         val connection = connection("/api/devices/register", "POST")
@@ -73,9 +107,11 @@ class BeaconApi(private val baseUrl: String) {
             )
         }
         val response = JSONObject(body)
+        val user = response.getJSONObject("user")
         return AccountSession(
             token = response.getString("sessionToken"),
-            userId = response.getJSONObject("user").getString("id"),
+            userId = user.getString("id"),
+            email = user.optString("email").takeIf(String::isNotBlank),
         )
     }
 
@@ -89,9 +125,29 @@ class BeaconApi(private val baseUrl: String) {
             throw IllegalStateException("Google sign-in expired. Try again.")
         }
         val response = JSONObject(body)
+        val user = response.getJSONObject("user")
         return AccountSession(
             token = response.getString("sessionToken"),
-            userId = response.getJSONObject("user").getString("id"),
+            userId = user.getString("id"),
+            email = user.optString("email").takeIf(String::isNotBlank),
+        )
+    }
+
+    fun currentAccount(sessionToken: String): AccountSession {
+        val connection = connection("/api/auth/me", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Account details are temporarily unavailable")
+        }
+        val user = JSONObject(body).getJSONObject("user")
+        return AccountSession(
+            token = sessionToken,
+            userId = user.getString("id"),
+            email = user.optString("email").takeIf(String::isNotBlank),
         )
     }
 
@@ -115,9 +171,122 @@ class BeaconApi(private val baseUrl: String) {
                     online = it.getBoolean("online"),
                     privacyMode = it.optBoolean("privacyMode", false),
                     viewerCount = it.optInt("viewerCount", 0),
+                    deviceId = it.getString("deviceId"),
+                    facing = it.optString("facing", "unknown"),
+                    available = it.optString("availability") == "available",
                 )
             }
         }
+    }
+
+    fun activateCamera(sessionToken: String, cameraId: String) {
+        val connection = connection("/api/cameras/$cameraId/activate", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_ACCEPTED) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "Could not switch camera")
+        }
+    }
+
+    fun setDevicePrivacy(sessionToken: String, deviceId: String, enabled: Boolean) {
+        val connection = connection("/api/devices/$deviceId/privacy", "PUT")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use {
+            it.write(JSONObject().put("enabled", enabled).toString().toByteArray(Charsets.UTF_8))
+        }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "Could not change privacy mode")
+        }
+    }
+
+    fun accessHistory(sessionToken: String): List<AccessEvent> {
+        val connection = connection("/api/access-history", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Access history is temporarily unavailable")
+        }
+        val events = JSONObject(body).getJSONArray("events")
+        return (0 until events.length()).map { index ->
+            events.getJSONObject(index).let {
+                AccessEvent(
+                    actorEmail = nullableApiText(it.optString("actorEmail")),
+                    cameraName = nullableApiText(it.optString("cameraName")),
+                    deviceName = nullableApiText(it.optString("deviceName")),
+                    eventType = it.getString("eventType"),
+                    occurredAt = it.getString("occurredAt"),
+                    success = it.getBoolean("success"),
+                    reason = nullableApiText(it.optString("reason")),
+                )
+            }
+        }
+    }
+
+    fun motionEvents(sessionToken: String): List<MotionEvent> {
+        val connection = connection("/api/motion-events?limit=50", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Activity is temporarily unavailable")
+        }
+        val events = JSONObject(body).getJSONArray("events")
+        return (0 until events.length()).map { index ->
+            events.getJSONObject(index).let {
+                MotionEvent(
+                    id = it.getString("id"),
+                    cameraId = it.getString("cameraId"),
+                    cameraName = it.getString("cameraName"),
+                    deviceName = it.getString("deviceName"),
+                    confidence = it.getDouble("confidence"),
+                    occurredAt = it.getString("occurredAt"),
+                )
+            }
+        }
+    }
+
+    fun motionRetention(sessionToken: String): Int {
+        val connection = connection("/api/motion-retention", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Motion history settings are temporarily unavailable")
+        }
+        return JSONObject(body).getInt("days")
+    }
+
+    fun setMotionRetention(sessionToken: String, days: Int): Int {
+        val connection = connection("/api/motion-retention", "PUT")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use {
+            it.write(JSONObject().put("days", days).toString().toByteArray(Charsets.UTF_8))
+        }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Motion history setting could not be saved")
+        }
+        return JSONObject(body).getInt("days")
     }
 
     fun logout(sessionToken: String) {
@@ -128,6 +297,99 @@ class BeaconApi(private val baseUrl: String) {
         if (connection.responseCode !in listOf(HttpURLConnection.HTTP_NO_CONTENT, HttpURLConnection.HTTP_UNAUTHORIZED)) {
             throw IllegalStateException("Unable to sign out")
         }
+    }
+
+    fun deleteAccount(sessionToken: String) {
+        val connection = connection("/api/account", "DELETE")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use {
+            it.write(JSONObject().put("confirmation", "DELETE").toString().toByteArray(Charsets.UTF_8))
+        }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "Your account could not be deleted")
+        }
+    }
+
+    fun registerFcmSubscription(
+        sessionToken: String,
+        installationId: String,
+        firebaseInstallationId: String,
+    ): String {
+        val connection = connection("/api/notification-subscriptions", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use {
+            it.write(
+                JSONObject()
+                    .put("channel", "fcm")
+                    .put("installationId", installationId)
+                    .put("deviceLabel", "Beacon Android monitor")
+                    .put("fid", firebaseInstallationId)
+                    .toString().toByteArray(Charsets.UTF_8),
+            )
+        }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_CREATED) throw IllegalStateException("Notifications are temporarily unavailable")
+        return JSONObject(body).getString("id")
+    }
+
+    fun revokeNotificationSubscription(sessionToken: String, subscriptionId: String) {
+        val connection = connection("/api/notification-subscriptions/$subscriptionId", "DELETE")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        responseBody(connection)
+        if (connection.responseCode !in listOf(HttpURLConnection.HTTP_NO_CONTENT, HttpURLConnection.HTTP_NOT_FOUND)) {
+            if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+            throw IllegalStateException("Notification removal is temporarily unavailable")
+        }
+    }
+
+    fun notificationPreferences(sessionToken: String): List<NotificationPreference> {
+        val connection = connection("/api/notification-preferences", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) throw IllegalStateException("Notification preferences are temporarily unavailable")
+        val preferences = JSONObject(body).getJSONArray("preferences")
+        return (0 until preferences.length()).map { index ->
+            val item = preferences.getJSONObject(index)
+            NotificationPreference(
+                deviceId = item.getString("deviceId"),
+                deviceName = item.getString("deviceName"),
+                motionEnabled = item.getBoolean("motionEnabled"),
+                offlineEnabled = item.getBoolean("offlineEnabled"),
+                quietHours = item.optJSONObject("quietHours")?.let {
+                    QuietHours(it.getString("start"), it.getString("end"), it.getString("timeZone"))
+                },
+            )
+        }
+    }
+
+    fun updateNotificationPreference(sessionToken: String, preference: NotificationPreference): NotificationPreference {
+        val connection = connection("/api/notification-preferences/${preference.deviceId}", "PUT")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val quiet = preference.quietHours?.let {
+            JSONObject().put("start", it.start).put("end", it.end).put("timeZone", it.timeZone)
+        }
+        connection.outputStream.use {
+            it.write(
+                JSONObject().put("motionEnabled", preference.motionEnabled)
+                    .put("offlineEnabled", preference.offlineEnabled).put("quietHours", quiet ?: JSONObject.NULL)
+                    .toString().toByteArray(Charsets.UTF_8),
+            )
+        }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) throw IllegalStateException("Notification preferences could not be saved")
+        val item = JSONObject(body).getJSONObject("preference")
+        return preference.copy(
+            motionEnabled = item.getBoolean("motionEnabled"),
+            offlineEnabled = item.getBoolean("offlineEnabled"),
+        )
     }
 
     fun heartbeat(credential: String, batteryPercent: Int?, batteryCharging: Boolean?): Boolean {
@@ -146,8 +408,9 @@ class BeaconApi(private val baseUrl: String) {
     }
 
     fun removeRegistration(credential: String) {
-        val connection = connection("/api/device/registration", "DELETE")
+        val connection = connection("/api/device/disconnect", "POST")
         connection.setRequestProperty("Authorization", "Bearer $credential")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
         responseBody(connection)
         if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
             throw IllegalStateException("Unable to remove device")
@@ -278,6 +541,9 @@ class BeaconApi(private val baseUrl: String) {
         return stream?.bufferedReader()?.use { it.readText() }.orEmpty()
     }
 }
+
+internal fun nullableApiText(value: String?): String? =
+    value?.trim()?.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
 
 internal fun checkMotionReportResponse(status: Int) {
     when (status) {

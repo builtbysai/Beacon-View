@@ -118,6 +118,87 @@ describe('SignalingHub', () => {
     hub.close();
   });
 
+  it('immediately disconnects only viewers authenticated by a revoked session', () => {
+    const hub = new SignalingHub(
+      () => [],
+      () => [],
+    );
+    const device = socket();
+    const revokedViewer = socket();
+    const remainingViewer = socket();
+    hub.connectDevice('camera-1', 'public-camera-1', device.ws);
+    hub.connectViewer(
+      'camera-1',
+      'public-camera-1',
+      revokedViewer.ws,
+      true,
+      'session-revoked',
+    );
+    hub.connectViewer(
+      'camera-1',
+      'public-camera-1',
+      remainingViewer.ws,
+      true,
+      'session-remaining',
+    );
+
+    hub.disconnectSession('session-revoked');
+
+    expect(revokedViewer.mock.readyState).toBe(3);
+    expect(remainingViewer.mock.readyState).toBe(1);
+    expect(hub.activeSessionCount).toBe(1);
+    expect(device.mock.sent).toContainEqual(
+      expect.objectContaining({
+        code: 'session_revoked',
+        type: 'peer-left',
+      }),
+    );
+    hub.close();
+  });
+
+  it('counts only connected viewers and publishes count changes immediately', () => {
+    const viewerStates: Array<[string, string]> = [];
+    const hub = new SignalingHub(
+      () => [],
+      () => [],
+      30_000,
+      'all',
+      () => undefined,
+      () => undefined,
+      (householdId, cameraId) => viewerStates.push([householdId, cameraId]),
+    );
+    const device = socket();
+    const viewer = socket();
+    hub.connectDevice(
+      'internal-camera',
+      'public-camera',
+      device.ws,
+      'household',
+    );
+    hub.connectViewer('internal-camera', 'public-camera', viewer.ws);
+    const ready = viewer.mock.sent.at(-1) as { connectionId: string };
+
+    expect(hub.cameraStatus('public-camera').viewerCount).toBe(0);
+    device.mock.message({
+      connectionId: ready.connectionId,
+      type: 'connected',
+    });
+    expect(hub.cameraStatus('public-camera')).toMatchObject({
+      connectionIds: [ready.connectionId],
+      viewerCount: 1,
+    });
+    viewer.mock.close();
+    expect(hub.cameraStatus('public-camera')).toMatchObject({
+      connectionIds: [],
+      viewerCount: 0,
+    });
+    expect(viewerStates).toEqual([
+      ['household', 'public-camera'],
+      ['household', 'public-camera'],
+    ]);
+    hub.close();
+  });
+
   it('grants only one talk channel and releases it on disconnect', () => {
     const hub = new SignalingHub(
       () => [],
@@ -157,6 +238,61 @@ describe('SignalingHub', () => {
     expect(second.mock.sent.at(-1)).toMatchObject({
       active: true,
       type: 'talk-state',
+    });
+    hub.close();
+  });
+
+  it('denies talk without a camera talk grant', () => {
+    const hub = new SignalingHub(
+      () => [],
+      () => [],
+    );
+    const device = socket();
+    const viewer = socket();
+    hub.connectDevice('camera', 'public-camera', device.ws);
+    hub.connectViewer('camera', 'public-camera', viewer.ws, false);
+    const ready = viewer.mock.sent.at(-1) as { connectionId: string };
+
+    viewer.mock.message({
+      connectionId: ready.connectionId,
+      type: 'talk-request',
+    });
+
+    expect(viewer.mock.sent.at(-1)).toMatchObject({
+      active: false,
+      reason: 'not_allowed',
+      type: 'talk-state',
+    });
+    expect(device.mock.sent.at(-1)).not.toMatchObject({ type: 'talk-state' });
+    hub.close();
+  });
+
+  it('sends source-enforced listen permission to both peers', () => {
+    const hub = new SignalingHub(
+      () => [],
+      () => [],
+    );
+    const device = socket();
+    const viewer = socket();
+    hub.connectDevice('camera', 'public-camera', device.ws);
+
+    hub.connectViewer(
+      'camera',
+      'public-camera',
+      viewer.ws,
+      false,
+      'viewer-session',
+      false,
+    );
+
+    expect(device.mock.sent.at(-1)).toMatchObject({
+      canListen: false,
+      type: 'viewer-ready',
+    });
+    expect(viewer.mock.sent.at(-1)).toMatchObject({
+      canListen: false,
+      canTalk: false,
+      type: 'ready',
     });
     hub.close();
   });
@@ -253,6 +389,13 @@ describe('SignalingHub', () => {
     hub.connectDevice('sibling', 'public-sibling', siblingDevice.ws);
     hub.connectViewer('first', 'public-first', firstViewer.ws);
     hub.connectViewer('sibling', 'public-sibling', siblingViewer.ws);
+    const siblingReady = siblingViewer.mock.sent.at(-1) as {
+      connectionId: string;
+    };
+    siblingDevice.mock.message({
+      connectionId: siblingReady.connectionId,
+      type: 'connected',
+    });
 
     hub.disconnectCamera('public-first', 'camera_disabled');
 
@@ -288,6 +431,22 @@ describe('SignalingHub', () => {
       type: 'switch-source',
     });
     expect(hub.requestSourceSwitch(['offline'], 'public-front')).toBe(false);
+    hub.close();
+  });
+
+  it('notifies the connected camera device when its source list changes', () => {
+    const hub = new SignalingHub(
+      () => [],
+      () => [],
+    );
+    const device = socket();
+    hub.connectDevice('internal-rear', 'public-rear', device.ws);
+
+    expect(hub.notifySourcesChanged(['public-front', 'public-rear'])).toBe(
+      true,
+    );
+    expect(device.mock.sent.at(-1)).toEqual({ type: 'sources-changed' });
+    expect(hub.notifySourcesChanged(['offline'])).toBe(false);
     hub.close();
   });
 

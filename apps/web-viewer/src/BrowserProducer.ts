@@ -2,6 +2,7 @@ type ProducerState =
   'offline' | 'reconnecting' | 'waiting' | 'streaming' | 'error';
 
 interface ViewerReady {
+  canListen: boolean;
   connectionId: string;
   iceServers: RTCIceServer[];
   iceTransportPolicy: RTCIceTransportPolicy;
@@ -111,6 +112,11 @@ export class BrowserProducer {
       this.#peers.set(message.connectionId, peer);
       for (const track of this.stream.getVideoTracks()) {
         peer.addTrack(track, this.stream);
+      }
+      if (message.canListen) {
+        for (const track of this.stream.getAudioTracks()) {
+          peer.addTrack(track, this.stream);
+        }
       }
       peer.onicecandidate = (event) => {
         if (!event.candidate) return;

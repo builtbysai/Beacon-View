@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { request } from './api';
 import { BrowserProducer } from './BrowserProducer';
 import { Icon } from './Icon';
+import { browserOsLabel, friendlyDeviceLabel } from './naming';
 
 interface RegisteredSource {
   id: string;
@@ -16,14 +17,24 @@ interface VideoInput {
 }
 
 const INSTALLATION_KEY = 'beacon_browser_device_id';
+const CAMERA_NAME_KEY = 'beacon_browser_camera_name';
 
-/** Browser-reported camera labels often carry a raw USB vendor:product id,
- * e.g. "HD Pro Webcam C920 (046d:08e5)" — strip that for what's shown/
- * pre-filled in the UI. The user-editable name field still lets someone
- * override it, and nothing here is fabricated: it's the same label the
- * browser already gave us, just without the debugging suffix. */
-function friendlyDeviceLabel(label: string): string {
-  return label.replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)\s*$/i, '').trim();
+function initialDeviceName(): string {
+  try {
+    const saved = localStorage.getItem(CAMERA_NAME_KEY)?.trim();
+    if (saved) return saved;
+  } catch {
+    // Private browsing or a storage policy can make localStorage unavailable.
+  }
+  return browserOsLabel(navigator.userAgent, 'Beacon browser camera');
+}
+
+function rememberDeviceName(name: string): void {
+  try {
+    localStorage.setItem(CAMERA_NAME_KEY, name);
+  } catch {
+    // A descriptive default still works when storage is unavailable.
+  }
 }
 
 /** The four states a viewer of the broadcast stage's own status line needs
@@ -55,7 +66,7 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
   const [sourceNames, setSourceNames] = useState<Record<string, string>>({});
   const [registered, setRegistered] = useState<RegisteredSource[]>([]);
   const [selectedKey, setSelectedKey] = useState('');
-  const [deviceName, setDeviceName] = useState('This browser');
+  const [deviceName, setDeviceName] = useState(initialDeviceName);
   const [state, setState] = useState('offline');
   const [viewerCount, setViewerCount] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
@@ -129,6 +140,11 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
   async function registerAndStart(requestedKey = selectedKey) {
     const selected = inputs.find((input) => input.deviceId === requestedKey);
     if (!selected) return;
+    const normalizedDeviceName = deviceName.trim();
+    if (!normalizedDeviceName) {
+      setError('Enter a name for this browser camera.');
+      return;
+    }
     setError('');
     try {
       const result = await request<{ cameras: RegisteredSource[] }>(
@@ -136,7 +152,7 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
         {
           body: JSON.stringify({
             installationId: installationId(),
-            name: deviceName,
+            name: normalizedDeviceName,
             sources: inputs.map((input) => ({
               facing: 'external',
               name: sourceNames[input.deviceId] || input.label,
@@ -146,6 +162,8 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
           method: 'POST',
         },
       );
+      setDeviceName(normalizedDeviceName);
+      rememberDeviceName(normalizedDeviceName);
       setRegistered(result.cameras);
       const camera = result.cameras.find(
         (source) => source.sourceKey === `browser:${selected.deviceId}`,

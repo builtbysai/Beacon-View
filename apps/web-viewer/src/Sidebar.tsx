@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from './Avatar';
 import { Brand, Icon, type IconName } from './Icon';
+import { useMenuKeyboardNav } from './useMenuKeyboardNav';
 
 const preferenceKey = 'beacon.sidebar.collapsed.v1';
 
@@ -44,8 +45,14 @@ export function Sidebar({
     left: number;
   } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{
+    bottom: number;
+    left: number;
+    width: number;
+  } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const accountRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   function hideTip() {
     clearTimeout(timer.current);
     setTip(null);
@@ -55,7 +62,12 @@ export function Sidebar({
     timer.current = setTimeout(() => setTip(null), 120);
   }
   function showTip(target: EventTarget) {
-    if (!collapsed || !window.matchMedia('(min-width: 761px)').matches) return;
+    if (
+      !collapsed ||
+      typeof window.matchMedia !== 'function' ||
+      !window.matchMedia('(min-width: 761px)').matches
+    )
+      return;
     const control =
       target instanceof Element
         ? target.closest<HTMLElement>('[data-tooltip]')
@@ -77,7 +89,20 @@ export function Sidebar({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         dismiss();
-        setMenuOpen(false);
+        if (menuOpen) {
+          setMenuOpen(false);
+          accountRef.current?.focus();
+        }
+      }
+      if (
+        event.key.toLowerCase() === 'b' &&
+        (event.ctrlKey || event.metaKey) &&
+        !(event.target instanceof HTMLInputElement) &&
+        !(event.target instanceof HTMLTextAreaElement) &&
+        !(event.target instanceof HTMLSelectElement)
+      ) {
+        event.preventDefault();
+        toggle();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -89,20 +114,40 @@ export function Sidebar({
       window.removeEventListener('resize', dismiss);
       window.removeEventListener('scroll', dismiss, true);
     };
-  }, []);
+  });
   useEffect(() => {
     if (!menuOpen) return;
+    const positionMenu = () => {
+      const rect = accountRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = collapsed ? 224 : Math.max(224, rect.width);
+      setMenuPosition({
+        bottom: Math.max(12, window.innerHeight - rect.bottom),
+        left: collapsed
+          ? Math.min(rect.right + 10, window.innerWidth - width - 12)
+          : Math.min(rect.left, window.innerWidth - width - 12),
+        width,
+      });
+    };
+    positionMenu();
     const dismissOutside = (event: PointerEvent) => {
       if (!(event.target instanceof Node)) return;
       if (
-        accountRef.current &&
-        !accountRef.current.parentElement?.contains(event.target)
+        !accountRef.current?.contains(event.target) &&
+        !menuRef.current?.contains(event.target)
       )
         setMenuOpen(false);
     };
     window.addEventListener('pointerdown', dismissOutside);
-    return () => window.removeEventListener('pointerdown', dismissOutside);
-  }, [menuOpen]);
+    window.addEventListener('resize', positionMenu);
+    window.addEventListener('scroll', positionMenu, true);
+    return () => {
+      window.removeEventListener('pointerdown', dismissOutside);
+      window.removeEventListener('resize', positionMenu);
+      window.removeEventListener('scroll', positionMenu, true);
+    };
+  }, [collapsed, menuOpen]);
+  useMenuKeyboardNav(menuOpen, menuRef, accountRef, () => setMenuOpen(false));
   function toggle() {
     const next = !collapsed;
     setCollapsed(next);
@@ -139,30 +184,34 @@ export function Sidebar({
           <Icon name={collapsed ? 'chevronRight' : 'chevronLeft'} />
         </button>
       </div>
-      <nav aria-label="Primary navigation">
-        {items.map((item) => (
-          <button
-            type="button"
-            key={item.label}
-            className={item.current ? 'nav-active' : 'nav-button'}
-            aria-current={item.current ? 'page' : undefined}
-            aria-label={item.label}
-            data-tooltip={item.label}
-            onClick={() => {
-              hideTip();
-              item.onSelect();
-            }}
-          >
-            <Icon name={item.icon} />
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </nav>
+      <div className="sidebar-content">
+        <span className="sidebar-group-label">Workspace</span>
+        <nav aria-label="Primary navigation">
+          {items.map((item) => (
+            <button
+              type="button"
+              key={item.label}
+              className={item.current ? 'nav-active' : 'nav-button'}
+              aria-current={item.current ? 'page' : undefined}
+              aria-label={item.label}
+              data-tooltip={item.label}
+              onClick={() => {
+                hideTip();
+                item.onSelect();
+              }}
+            >
+              <Icon name={item.icon} />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
       <div className="sidebar-footer">
         <button
           ref={accountRef}
           type="button"
           className="sidebar-account"
+          aria-label={`Open account menu for ${email}`}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           data-tooltip={email}
@@ -172,11 +221,31 @@ export function Sidebar({
           <strong title={email}>{email}</strong>
           <Icon name="chevronRight" className="sidebar-account-chevron" />
         </button>
-        {menuOpen && (
-          <div className="sidebar-account-menu" role="menu">
-            <span className="sidebar-account-menu-email" title={email}>
-              {email}
-            </span>
+      </div>
+      <button
+        className="sidebar-rail"
+        type="button"
+        aria-label="Toggle sidebar from edge"
+        aria-pressed={!collapsed}
+        onClick={toggle}
+      />
+      {menuOpen &&
+        menuPosition &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="sidebar-account-menu"
+            role="menu"
+            style={menuPosition}
+          >
+            <div className="sidebar-account-menu-profile">
+              <Avatar email={email} avatarUrl={avatarUrl} />
+              <span className="sidebar-account-menu-email" title={email}>
+                <small>Signed in as</small>
+                {email}
+              </span>
+            </div>
+            <div className="sidebar-account-menu-separator" />
             <a role="menuitem" href="/trust" onClick={() => setMenuOpen(false)}>
               <Icon name="shield" />
               Trust &amp; privacy
@@ -192,9 +261,9 @@ export function Sidebar({
               <Icon name="logout" />
               Sign out
             </button>
-          </div>
+          </div>,
+          document.body,
         )}
-      </div>
       {tip &&
         createPortal(
           <span

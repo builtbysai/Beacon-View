@@ -53,6 +53,7 @@ export function CameraTile({
   groupedByHost = false,
   onOpen,
   onDevice,
+  onReconnect,
   onRename,
   onDelete,
 }: {
@@ -65,6 +66,7 @@ export function CameraTile({
   groupedByHost?: boolean;
   onOpen: (camera: TileCamera) => void;
   onDevice?: (deviceId: string) => void;
+  onReconnect?: (camera: TileCamera) => void;
   onRename?: (camera: TileCamera, name: string) => void;
   onDelete?: (camera: TileCamera) => void;
 }) {
@@ -73,7 +75,7 @@ export function CameraTile({
   const [renaming, setRenaming] = useState(false);
   const hoverTimer = useRef<number | null>(null);
   const canPreview = state.available && hoverCapable();
-  const hasMenu = Boolean(onDevice || onRename || onDelete);
+  const hasMenu = Boolean(onDevice || onReconnect || onRename || onDelete);
   const primaryName = groupedByHost ? camera.deviceName : camera.name;
 
   useEffect(
@@ -178,6 +180,19 @@ export function CameraTile({
                 >
                   <Icon name="settings" />
                   Camera settings
+                </button>
+              )}
+              {onReconnect && (
+                <button
+                  role="menuitem"
+                  type="button"
+                  onClick={() => {
+                    close();
+                    onReconnect(camera);
+                  }}
+                >
+                  <Icon name="refresh" />
+                  Reconnect camera
                 </button>
               )}
               {onRename && (

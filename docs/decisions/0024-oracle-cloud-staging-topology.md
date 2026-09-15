@@ -10,10 +10,13 @@ signaling service, Coturn, and PostgreSQL as Docker Compose services. Caddy serv
 the viewer and proxies `/api` from one HTTPS/WSS origin. PostgreSQL has no host port.
 
 Open only TCP 80/443, TCP/UDP 3478, and the bounded TCP/UDP TURN relay range.
-Restrict SSH to the owner's current public IP at both OCI and host firewalls. Coturn
-uses a newly generated REST shared secret, a stable public IPv4 address, and the
-configured DNS hostname. Backend migrations remain an explicit release command;
-application startup does not mutate the database schema.
+The original deployment restricted SSH to the owner's current public IP at both
+OCI and host firewalls. ADR 0045 supersedes that administrative-access choice:
+TCP 22 is no longer publicly exposed, and administration uses a private Tailscale
+route with the existing SSH key. Coturn uses a newly generated REST shared secret,
+a stable public IPv4 address, and the configured DNS hostname. Backend migrations
+remain an explicit release command; application startup does not mutate the
+database schema.
 
 Secrets live only in an owner-readable VM environment file, never in Git, image
 layers, application logs, or the local development environment.

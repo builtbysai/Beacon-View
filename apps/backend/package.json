@@ -9,6 +9,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:check": "drizzle-kit check",
+    "notifications:generate-secrets": "node scripts/generate-notification-secrets.mjs",
     "start": "node dist/index.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -23,11 +24,13 @@
     "fastify": "5.12.1",
     "google-auth-library": "11.0.2",
     "pg": "8.22.0",
+    "web-push": "3.6.7",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "26.1.1",
     "@types/pg": "8.20.0",
+    "@types/web-push": "3.6.4",
     "@types/ws": "8.18.1",
     "drizzle-kit": "0.31.10",
     "tsx": "4.21.0",

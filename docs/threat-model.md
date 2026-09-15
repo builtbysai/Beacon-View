@@ -61,6 +61,15 @@ Android, backend, PostgreSQL, and TURN are separate trust zones.
   stale peer replacement, background capture, and orphaned signaling state.
 - Structured diagnostics exclude credentials, SDP, raw candidates, private
   ownership identifiers, and raw exception details.
+- Push identifiers and browser endpoints are encrypted with per-record data keys; a
+  separate keyed fingerprint supports rotation without exposing provider material.
+  Subscriptions are bound to an authenticated session, and delivery rechecks that the
+  session remains active. Logout, session revocation, account deletion, opt-out, and
+  permanent provider invalidation stop sends. Subscription request fields and provider
+  responses are excluded from logs.
+- Push is a hint, never authority. Payloads contain only an opaque event ID, category,
+  and generic route. Fixed client copy excludes camera/household names, email, media,
+  confidence, and access tokens; opening Beacon requires a fresh authorized fetch.
 - Motion reports contain no media or pixel samples. The server binds each report to
   the authenticated device credential and exact camera source, rejects reports while
   privacy mode or the source is disabled, applies a cooldown, and timestamps accepted

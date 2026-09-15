@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 const shapes = {
   chevronLeft: <path d="m15 18-6-6 6-6" />,
@@ -37,6 +37,12 @@ const shapes = {
       <path d="m8 12 3 3 5-6" />
     </>
   ),
+  shieldOff: (
+    <>
+      <path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6Z" />
+      <path d="M4 4 20 20" />
+    </>
+  ),
   lock: (
     <>
       <rect x="5" y="10" width="14" height="11" rx="2" />
@@ -62,6 +68,13 @@ const shapes = {
       <path d="M3 12v-2a4 4 0 0 1 4-4h14" />
       <path d="M7 22 3 18l4-4" />
       <path d="M21 12v2a4 4 0 0 1-4 4H3" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M20 7v5h-5" />
+      <path d="M4 17v-5h5" />
+      <path d="M6.1 9a7 7 0 0 1 11.5-2L20 12M4 12l2.4 5a7 7 0 0 0 11.5-2" />
     </>
   ),
   plus: <path d="M12 4v16M4 12h16" />,
@@ -126,6 +139,18 @@ const shapes = {
       <path d="M5 11a7 7 0 0 0 10.5 6.06M19 11a7 7 0 0 1-1.05 3.7M12 18v3" />
     </>
   ),
+  speaker: (
+    <>
+      <path d="M3 10v4a2 2 0 0 0 2 2h2l4 4V4l-4 4H5a2 2 0 0 0-2 2Z" />
+      <path d="M16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12" />
+    </>
+  ),
+  speakerOff: (
+    <>
+      <path d="m3 3 18 18M10 8 11 7v10l-4-4H5a2 2 0 0 1-2-2V9" />
+      <path d="M16 9a4 4 0 0 1 1 2.5M19 6a8 8 0 0 1 1 6" />
+    </>
+  ),
   maximize: (
     <>
       <path d="M9 3H4v5m11-5h5v5M4 16v5h5m11-5v5h-5" />
@@ -183,95 +208,37 @@ export function Icon({
   );
 }
 
-/**
- * The Beacon "smart lighthouse" camera mark. `useId` namespaces every
- * gradient/filter def so two <Brand> instances can render on one page
- * (the sign-in screen mounts a hero mark and a card mark at once)
- * without one instance's <defs> shadowing the other's.
- */
+/** The Beacon lens-and-signal mark: visible capture at the center, with
+ * symmetric connection waves and a stable base. It stays legible at favicon
+ * size and uses the same geometry as the Android adaptive icon. */
 export function Brand({
   compact = false,
   className = '',
 }: { compact?: boolean; className?: string } = {}) {
-  const uid = useId().replace(/[:]/g, '');
-  const beam = `beacon-beam-${uid}`;
-  const hardware = `beacon-hardware-${uid}`;
-  const lens = `beacon-lens-${uid}`;
-  const glow = `beacon-glow-${uid}`;
-  const shadow = `beacon-shadow-${uid}`;
-
   const mark = (
     <>
-      <defs>
-        <linearGradient id={hardware} x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#7c8ba1" />
-          <stop offset="100%" stopColor="#293548" />
-        </linearGradient>
-        <radialGradient id={lens} cx="35%" cy="30%" r="75%">
-          <stop offset="0%" stopColor="#7dd3fc" />
-          <stop offset="55%" stopColor="#0284c7" />
-          <stop offset="100%" stopColor="#031525" />
-        </radialGradient>
-        <filter id={glow} x="-60%" y="-60%" width="220%" height="220%">
-          <feGaussianBlur stdDeviation="1.1" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-        <filter id={shadow} x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow
-            dx="0"
-            dy="1.5"
-            stdDeviation="1.5"
-            floodOpacity="0.28"
-          />
-        </filter>
-      </defs>
       <path
-        d="M10 38h20"
+        d="M11 11.5C5.5 16.2 5.5 23.8 11 28.5M33 11.5c5.5 4.7 5.5 12.3 0 17"
+        stroke="#38bdf8"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d="M15 15.5c-2.8 2.5-2.8 6.5 0 9M29 15.5c2.8 2.5 2.8 6.5 0 9"
+        stroke="#7dd3fc"
+        strokeWidth="2.3"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <circle cx="22" cy="20" r="9" fill="#0ea5e9" />
+      <circle cx="22" cy="20" r="5.2" fill="#071b31" />
+      <circle cx="22" cy="20" r="2" fill="#e0f2fe" />
+      <path
+        d="M22 29v7M15 38h14"
         stroke="currentColor"
-        strokeOpacity="0.35"
-        strokeWidth="2"
+        strokeWidth="2.8"
         strokeLinecap="round"
-      />
-      <path
-        d="M 27 7 A 6 6 0 0 1 27 17"
-        stroke="#38bdf8"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        fill="none"
-        opacity="0.55"
-      />
-      <path
-        d="M 32 3 A 11 11 0 0 1 32 21"
-        stroke="#38bdf8"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        fill="none"
-        opacity="0.3"
-      />
-      <g filter={`url(#${shadow})`}>
-        <path d="M14 37 L26 37 L23 20 L17 20 Z" fill={`url(#${hardware})`} />
-        <rect x="18" y="17" width="4" height="3" fill="#1e293b" />
-        <rect
-          x="13"
-          y="5"
-          width="14"
-          height="13"
-          rx="4.5"
-          fill={`url(#${hardware})`}
-        />
-      </g>
-      <circle cx="20" cy="11.5" r="4.5" fill="#0f172a" />
-      <circle cx="20" cy="11.5" r="3.5" fill={`url(#${lens})`} />
-      <circle cx="20" cy="11.5" r="1" fill="#bae6fd" filter={`url(#${glow})`} />
-      <circle
-        cx="24"
-        cy="7.5"
-        r="0.8"
-        fill="#f87171"
-        filter={`url(#${glow})`}
       />
     </>
   );
@@ -280,7 +247,7 @@ export function Brand({
     return (
       <svg
         className={`brand-mark ${className}`}
-        viewBox="6 0 30 42"
+        viewBox="0 0 44 44"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         role="img"
@@ -294,24 +261,16 @@ export function Brand({
   return (
     <svg
       className={`brand-lockup ${className}`}
-      viewBox="0 0 232 45"
+      viewBox="0 0 232 44"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
       aria-label="Beacon"
     >
-      <defs>
-        <linearGradient id={beam} x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.22" />
-          <stop offset="12%" stopColor="#0ea5e9" stopOpacity="0.12" />
-          <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d="M20 12 L232 -12 L232 40 Z" fill={`url(#${beam})`} />
       {mark}
       <text
-        x="42"
-        y="30"
+        x="50"
+        y="29"
         fontFamily="Inter, -apple-system, system-ui, sans-serif"
         fontSize="21"
         letterSpacing="-0.4"

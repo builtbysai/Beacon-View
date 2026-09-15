@@ -5,6 +5,22 @@ import { request } from './api';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('API request headers', () => {
+  it('does not reuse cached authenticated reads', async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ configured: true }),
+      ok: true,
+      status: 200,
+    });
+    vi.stubGlobal('fetch', fetch);
+
+    await request('/api/drive/status');
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/drive/status',
+      expect.objectContaining({ cache: 'no-store' }),
+    );
+  });
+
   it('does not label an empty DELETE as JSON', async () => {
     document.cookie = 'beacon_csrf=test-csrf; path=/';
     const fetch = vi.fn().mockResolvedValue({ ok: true, status: 204 });

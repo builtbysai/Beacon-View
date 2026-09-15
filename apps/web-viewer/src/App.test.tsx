@@ -490,9 +490,7 @@ describe('App', () => {
       screen.queryByRole('heading', { name: 'Permanently delete Pixel?' }),
     ).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(
-      screen.getByRole('button', { name: 'Turn privacy on' }),
-    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeVisible();
   });
 
   it('renames and removes a camera from the Cameras grid', async () => {

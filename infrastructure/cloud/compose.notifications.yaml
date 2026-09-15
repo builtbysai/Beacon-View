@@ -1,0 +1,9 @@
+services:
+  backend:
+    volumes:
+      - type: bind
+        source: ${FIREBASE_CREDENTIAL_HOST_PATH:-/etc/beacon/secrets/firebase-fcm-sender.json}
+        target: /run/secrets/firebase-fcm-sender.json
+        read_only: true
+        bind:
+          create_host_path: false
