@@ -43,6 +43,8 @@ describe('HouseholdSharingSettings', () => {
           expiresAt: '2026-09-14T12:00:00.000Z',
           token: 'one-time-secret-code',
         });
+      if (path === '/api/household/guest-links' && !options?.method)
+        return Promise.resolve({ guestLinks: [] });
       return Promise.reject(new Error(`Unexpected request: ${path}`));
     });
     render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
@@ -106,6 +108,8 @@ describe('HouseholdSharingSettings', () => {
           expiresAt: '2026-09-16T12:00:00.000Z',
           token: 'fresh-one-time-code',
         });
+      if (path === '/api/household/guest-links' && !options?.method)
+        return Promise.resolve({ guestLinks: [] });
       return Promise.reject(new Error(`Unexpected request: ${path}`));
     });
     render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
@@ -141,6 +145,8 @@ describe('HouseholdSharingSettings', () => {
         });
       if (path.endsWith('/grants') && options?.method === 'PUT')
         return Promise.resolve(undefined);
+      if (path === '/api/household/guest-links' && !options?.method)
+        return Promise.resolve({ guestLinks: [] });
       return Promise.reject(new Error(`Unexpected request: ${path}`));
     });
     render(<HouseholdSharingSettings cameras={[camera]} role="admin" />);
@@ -180,6 +186,8 @@ describe('HouseholdSharingSettings', () => {
           expiresAt: '2026-09-14T12:00:00.000Z',
           token: 'viewer-invite-code',
         });
+      if (path === '/api/household/guest-links' && !options?.method)
+        return Promise.resolve({ guestLinks: [] });
       return Promise.reject(new Error(`Unexpected request: ${path}`));
     });
     render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
@@ -212,6 +220,58 @@ describe('HouseholdSharingSettings', () => {
     );
   });
 
+  it('creates a guest link scoped to the checked cameras and permissions', async () => {
+    vi.mocked(request).mockImplementation((path, options) => {
+      if (path === '/api/household/sharing')
+        return Promise.resolve({ invitations: [], members: [] });
+      if (path === '/api/household/guest-links' && !options?.method)
+        return Promise.resolve({ guestLinks: [] });
+      if (path === '/api/household/guest-links' && options?.method === 'POST')
+        return Promise.resolve({
+          expiresAt: '2026-09-15T12:00:00.000Z',
+          token: 'guest-link-secret',
+        });
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+    render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
+    await screen.findByText('No active guest links.');
+
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Hallway phone' }),
+    );
+    fireEvent.click(screen.getByLabelText('Let them listen'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create guest link' }));
+
+    await waitFor(() =>
+      expect(request).toHaveBeenCalledWith(
+        '/api/household/guest-links',
+        expect.objectContaining({
+          body: JSON.stringify({
+            cameraIds: [camera.id],
+            canListen: true,
+            canTalk: false,
+            canFlip: false,
+            canPause: false,
+            expiresInHours: 24,
+          }),
+          method: 'POST',
+        }),
+      ),
+    );
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Copy guest link' }),
+    );
+    expect(writeText).toHaveBeenCalledWith(
+      `${window.location.origin}/g/guest-link-secret`,
+    );
+  });
+
   it('only offers permanent removal for an already-revoked member', async () => {
     vi.mocked(request).mockImplementation((path, options) => {
       if (path === '/api/household/sharing')
@@ -230,6 +290,8 @@ describe('HouseholdSharingSettings', () => {
         });
       if (path.endsWith('/permanently') && options?.method === 'DELETE')
         return Promise.resolve(undefined);
+      if (path === '/api/household/guest-links' && !options?.method)
+        return Promise.resolve({ guestLinks: [] });
       return Promise.reject(new Error(`Unexpected request: ${path}`));
     });
     render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
+import { GUEST_LINK_COOKIE } from './guest-routes.js';
 import { hashSecret } from './security.js';
 import type { HouseholdEventHub } from './household-events.js';
 import type { IceServer } from './signaling.js';
@@ -106,6 +107,19 @@ export function registerSignaling(
           ? await store.findSession(hashSecret(sessionToken), new Date())
           : null;
         if (!session) {
+          const guestToken = request.cookies[GUEST_LINK_COOKIE];
+          if (query.data.role === 'viewer' && guestToken) {
+            await connectGuestViewer(
+              hub,
+              store,
+              socket,
+              request,
+              guestToken,
+              publicCameraId,
+              query.data.viewerSessionId,
+            );
+            return;
+          }
           socket.close(4003, 'Connection rejected');
           return;
         }
@@ -235,6 +249,66 @@ function createIceServers(
       username: turn.username,
     },
   ];
+}
+
+// A guest-link viewer connects the same way a signed-in viewer does, just
+// authorized by a token hash instead of a session -- there's no sessionId
+// to key an immediate forced-disconnect on, so a revoked or expired link
+// is caught by monitorAuthorization's periodic re-check instead.
+async function connectGuestViewer(
+  hub: SignalingHub,
+  store: MilestoneStore,
+  socket: import('ws').WebSocket,
+  request: FastifyRequest,
+  guestToken: string,
+  publicCameraId: string,
+  viewerSessionId?: string,
+): Promise<void> {
+  const tokenHash = hashSecret(guestToken);
+  const camera = await store.findGuestAccessibleCamera(
+    tokenHash,
+    publicCameraId,
+    new Date(),
+  );
+  if (!camera) {
+    await store.audit({
+      eventType: 'live_view_rejected',
+      ipAddress: request.ip,
+      metadata: { guest: 'true', reason: 'not_authorized' },
+      success: false,
+      ...(viewerSessionId ? { viewerSessionId } : {}),
+    });
+    socket.close(4003, 'Connection rejected');
+    return;
+  }
+  const admitted = hub.connectViewer(
+    camera.cameraId,
+    camera.publicCameraId,
+    socket,
+    camera.canTalk,
+    undefined,
+    camera.canListen,
+  );
+  if (admitted) {
+    monitorAuthorization(socket, async () =>
+      Boolean(
+        await store.findGuestAccessibleCamera(
+          tokenHash,
+          publicCameraId,
+          new Date(),
+        ),
+      ),
+    );
+  }
+  await store.audit({
+    cameraId: camera.deviceId,
+    eventType: admitted ? 'live_view_started' : 'live_view_rejected',
+    householdId: camera.householdId,
+    ipAddress: request.ip,
+    metadata: admitted ? { guest: 'true' } : { guest: 'true', reason: 'camera_offline' },
+    success: admitted,
+    ...(viewerSessionId ? { viewerSessionId } : {}),
+  });
 }
 
 export function monitorAuthorization(

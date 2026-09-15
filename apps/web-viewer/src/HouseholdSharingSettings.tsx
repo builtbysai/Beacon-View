@@ -46,8 +46,24 @@ interface SharingState {
   members: Member[];
 }
 
+interface GuestLink {
+  cameraIds: string[];
+  canFlip: boolean;
+  canListen: boolean;
+  canPause: boolean;
+  canTalk: boolean;
+  createdAt: string;
+  expiresAt: string;
+  id: string;
+  label: string | null;
+}
+
 function joinLink(token: string): string {
   return `${window.location.origin}/join?token=${encodeURIComponent(token)}`;
+}
+
+function guestViewLink(token: string): string {
+  return `${window.location.origin}/g/${encodeURIComponent(token)}`;
 }
 
 export function HouseholdSharingSettings({
@@ -72,14 +88,23 @@ export function HouseholdSharingSettings({
     code: string;
     expiresAt: string;
   } | null>(null);
+  const [guestLinks, setGuestLinks] = useState<GuestLink[]>([]);
+  const [createdGuestLink, setCreatedGuestLink] = useState<{
+    expiresAt: string;
+    token: string;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
     if (!canManage) return;
-    const result = await request<SharingState>('/api/household/sharing');
+    const [result, links] = await Promise.all([
+      request<SharingState>('/api/household/sharing'),
+      request<{ guestLinks: GuestLink[] }>('/api/household/guest-links'),
+    ]);
     setSharing(result);
+    setGuestLinks(links.guestLinks);
   }, [canManage]);
 
   useEffect(() => {
@@ -255,6 +280,81 @@ export function HouseholdSharingSettings({
       );
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function createGuestLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const cameraIds = data.getAll('cameraIds').map(String);
+    const label = data.get('label');
+    const trimmedLabel = typeof label === 'string' ? label.trim() : '';
+    setBusy(true);
+    setError('');
+    setMessage('');
+    setCreatedGuestLink(null);
+    try {
+      const result = await request<{ expiresAt: string; token: string }>(
+        '/api/household/guest-links',
+        {
+          body: JSON.stringify({
+            cameraIds,
+            canListen: data.get('canListen') === 'on',
+            canTalk: data.get('canTalk') === 'on',
+            canFlip: data.get('canFlip') === 'on',
+            canPause: data.get('canPause') === 'on',
+            expiresInHours: Number(data.get('expiresInHours')),
+            ...(trimmedLabel ? { label: trimmedLabel } : {}),
+          }),
+          method: 'POST',
+        },
+      );
+      setCreatedGuestLink(result);
+      setMessage('Guest link created.');
+      form.reset();
+      await load();
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'Unable to create guest link',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeGuestLink(link: GuestLink) {
+    setBusy(true);
+    setError('');
+    try {
+      await request(`/api/household/guest-links/${link.id}`, {
+        method: 'DELETE',
+      });
+      setMessage(`Guest link ${link.label ?? ''} revoked.`.trim());
+      await load();
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'Unable to revoke guest link',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyCreatedGuestLink() {
+    if (!createdGuestLink || !navigator.clipboard) {
+      setError('Clipboard access is unavailable. Select and copy the link.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(
+        guestViewLink(createdGuestLink.token),
+      );
+      setError('');
+      setMessage('Guest link copied.');
+    } catch {
+      setError('Could not copy the guest link. Select and copy it.');
     }
   }
 
@@ -497,6 +597,107 @@ export function HouseholdSharingSettings({
               ))}
             </SettingsCard>
           )}
+
+          <SettingsCard aria-label="Guest links">
+            <form onSubmit={(event) => void createGuestLink(event)}>
+              <SettingsFieldRow
+                label="Create a guest link"
+                description="Anyone with the link can view the chosen cameras -- no account needed. Revoke it any time."
+              >
+                <SettingsField label="Label (optional)" htmlFor="guest-label">
+                  <input
+                    id="guest-label"
+                    name="label"
+                    maxLength={100}
+                    placeholder="e.g. Grandma"
+                  />
+                </SettingsField>
+                <SettingsField label="Expires after" htmlFor="guest-expires">
+                  <select
+                    id="guest-expires"
+                    name="expiresInHours"
+                    defaultValue="24"
+                  >
+                    <option value="1">1 hour</option>
+                    <option value="24">24 hours</option>
+                    <option value="168">7 days</option>
+                    <option value="720">30 days</option>
+                  </select>
+                </SettingsField>
+                <button disabled={busy || cameras.length === 0} type="submit">
+                  Create guest link
+                </button>
+              </SettingsFieldRow>
+              <SettingsFieldRow
+                label="Cameras"
+                description="Only the cameras checked here are visible through this link."
+              >
+                {cameras.map((camera) => (
+                  <label key={camera.id} className="sharing-permission-toggle">
+                    <input name="cameraIds" type="checkbox" value={camera.id} />
+                    {camera.deviceName || camera.name}
+                  </label>
+                ))}
+              </SettingsFieldRow>
+              <SettingsFieldRow
+                label="What can they do?"
+                description="View access is automatic once a camera is checked above."
+              >
+                <label className="sharing-permission-toggle">
+                  <input id="guest-can-listen" name="canListen" type="checkbox" />
+                  Let them listen
+                </label>
+                <label className="sharing-permission-toggle">
+                  <input id="guest-can-talk" name="canTalk" type="checkbox" />
+                  Let them talk
+                </label>
+              </SettingsFieldRow>
+            </form>
+
+            {createdGuestLink && (
+              <div className="sharing-code" role="status">
+                <SettingsRow
+                  title="Share this guest link now"
+                  description={
+                    <>
+                      Anyone with the link can view it and it expires{' '}
+                      {new Date(createdGuestLink.expiresAt).toLocaleString()}.
+                      It won't be shown again after you leave this page.
+                    </>
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={() => void copyCreatedGuestLink()}
+                  >
+                    Copy guest link
+                  </button>
+                </SettingsRow>
+              </div>
+            )}
+
+            {guestLinks.map((link) => (
+              <SettingsRow
+                key={link.id}
+                title={link.label || 'Guest link'}
+                description={`${link.cameraIds.length} camera${
+                  link.cameraIds.length === 1 ? '' : 's'
+                } · expires ${new Date(link.expiresAt).toLocaleString()}`}
+              >
+                <button
+                  className="danger"
+                  disabled={busy}
+                  onClick={() => void revokeGuestLink(link)}
+                  type="button"
+                >
+                  Revoke link
+                </button>
+              </SettingsRow>
+            ))}
+            {guestLinks.length === 0 && (
+              <p className="settings-card-empty">No active guest links.</p>
+            )}
+          </SettingsCard>
         </>
       )}
 

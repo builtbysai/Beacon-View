@@ -1,6 +1,10 @@
 import type { Pool } from 'pg';
 
 import type {
+  AccessibleCameraRecord,
+  CameraAccess,
+  CameraRecord,
+  GuestLinkRecord,
   HouseholdInvitationRecord,
   HouseholdMemberRecord,
   SessionRecord,
@@ -383,5 +387,172 @@ export class PostgresSharingRepository {
     } finally {
       client.release();
     }
+  }
+
+  async createGuestLink(input: {
+    householdId: string;
+    tokenHash: string;
+    label?: string;
+    canListen: boolean;
+    canTalk: boolean;
+    canFlip: boolean;
+    canPause: boolean;
+    createdByUserId: string;
+    expiresAt: Date;
+    publicCameraIds: string[];
+  }): Promise<string | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const link = await client.query<{ id: string }>(
+        `INSERT INTO guest_links
+         (household_id, token_hash, label, can_listen, can_talk, can_flip, can_pause,
+          created_by_user_id, expires_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [
+          input.householdId,
+          input.tokenHash,
+          input.label ?? null,
+          input.canListen,
+          input.canTalk,
+          input.canFlip,
+          input.canPause,
+          input.createdByUserId,
+          input.expiresAt,
+        ],
+      );
+      const guestLinkId = link.rows[0]!.id;
+      const inserted = await client.query(
+        `INSERT INTO guest_link_cameras (guest_link_id, camera_source_id)
+         SELECT $1, cs.id FROM camera_sources cs
+         JOIN cameras d ON d.id = cs.device_id
+         WHERE cs.public_camera_id = ANY($2::uuid[]) AND d.household_id = $3
+           AND cs.enabled = true AND cs.removed_at IS NULL AND d.revoked_at IS NULL`,
+        [guestLinkId, input.publicCameraIds, input.householdId],
+      );
+      if ((inserted.rowCount ?? 0) !== input.publicCameraIds.length) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      await client.query('COMMIT');
+      return guestLinkId;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listGuestLinks(
+    householdId: string,
+    now: Date,
+  ): Promise<GuestLinkRecord[]> {
+    const result = await this.pool.query<GuestLinkRecord>(
+      `SELECT gl.id, gl.label, gl.can_listen AS "canListen",
+              gl.can_talk AS "canTalk", gl.can_flip AS "canFlip",
+              gl.can_pause AS "canPause", gl.expires_at AS "expiresAt",
+              gl.revoked_at AS "revokedAt", gl.created_at AS "createdAt",
+              array_agg(cs.public_camera_id) AS "cameraIds"
+       FROM guest_links gl
+       JOIN guest_link_cameras glc ON glc.guest_link_id = gl.id
+       JOIN camera_sources cs ON cs.id = glc.camera_source_id
+       WHERE gl.household_id = $1 AND gl.revoked_at IS NULL AND gl.expires_at > $2
+       GROUP BY gl.id
+       ORDER BY gl.created_at DESC, gl.id DESC`,
+      [householdId, now],
+    );
+    return result.rows;
+  }
+
+  async revokeGuestLink(
+    householdId: string,
+    guestLinkId: string,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE guest_links SET revoked_at = now(), updated_at = now()
+       WHERE id = $2 AND household_id = $1 AND revoked_at IS NULL`,
+      [householdId, guestLinkId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async findGuestAccessibleCamera(
+    tokenHash: string,
+    publicCameraId: string,
+    now: Date,
+  ): Promise<CameraAccess | null> {
+    const result = await this.pool.query<CameraAccess>(
+      `SELECT cs.id AS "cameraId", d.id AS "deviceId",
+              d.household_id AS "householdId",
+              cs.public_camera_id AS "publicCameraId",
+              d.public_device_id AS "publicDeviceId",
+              gl.can_listen AS "canListen", gl.can_talk AS "canTalk",
+              gl.can_flip AS "canFlip", gl.can_pause AS "canPause"
+       FROM guest_links gl
+       JOIN guest_link_cameras glc ON glc.guest_link_id = gl.id
+       JOIN camera_sources cs ON cs.id = glc.camera_source_id
+       JOIN cameras d ON d.id = cs.device_id
+       LEFT JOIN device_credentials dc ON dc.camera_id = d.id
+       WHERE gl.token_hash = $1 AND cs.public_camera_id = $2
+         AND gl.revoked_at IS NULL AND gl.expires_at > $3
+         AND cs.enabled = true AND d.revoked_at IS NULL
+         AND d.enabled = true AND d.privacy_mode = false
+         AND cs.removed_at IS NULL
+         AND (d.platform = 'browser' OR dc.revoked_at IS NULL)`,
+      [tokenHash, publicCameraId, now],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async listGuestAccessibleCameras(
+    tokenHash: string,
+    now: Date,
+  ): Promise<{ householdId: string; cameras: AccessibleCameraRecord[] } | null> {
+    const link = await this.pool.query<{
+      householdId: string;
+      canListen: boolean;
+      canTalk: boolean;
+      canFlip: boolean;
+      canPause: boolean;
+    }>(
+      `SELECT household_id AS "householdId", can_listen AS "canListen",
+              can_talk AS "canTalk", can_flip AS "canFlip", can_pause AS "canPause"
+       FROM guest_links
+       WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > $2`,
+      [tokenHash, now],
+    );
+    const found = link.rows[0];
+    if (!found) return null;
+    const cameras = await this.pool.query<CameraRecord>(
+      `SELECT cs.id, cs.device_id AS "deviceId",
+              cs.public_camera_id AS "publicCameraId",
+              d.public_device_id AS "publicDeviceId",
+              d.name AS "deviceName", d.platform,
+              cs.display_name AS name, cs.source_key AS "sourceKey",
+              cs.facing, cs.enabled, d.privacy_mode AS "privacyMode",
+              cs.capabilities,
+              COALESCE(cs.last_seen_at, d.last_seen_at) AS "lastSeenAt",
+              COALESCE(dc.revoked_at, d.revoked_at) AS "credentialRevokedAt",
+              d.paired_by_user_id AS "pairedByUserId"
+       FROM guest_links gl
+       JOIN guest_link_cameras glc ON glc.guest_link_id = gl.id
+       JOIN camera_sources cs ON cs.id = glc.camera_source_id
+       JOIN cameras d ON d.id = cs.device_id
+       LEFT JOIN device_credentials dc ON dc.camera_id = d.id
+       WHERE gl.token_hash = $1 AND cs.removed_at IS NULL
+       ORDER BY d.created_at, cs.created_at`,
+      [tokenHash],
+    );
+    return {
+      householdId: found.householdId,
+      cameras: cameras.rows.map((camera) => ({
+        ...camera,
+        canFlip: found.canFlip,
+        canListen: found.canListen,
+        canPause: found.canPause,
+        canTalk: found.canTalk,
+      })),
+    };
   }
 }

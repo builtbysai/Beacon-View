@@ -10,6 +10,7 @@ import type { AppConfig } from './config.js';
 import { registerDeviceRuntimeRoutes } from './device-runtime-routes.js';
 import { registerDriveRoutes } from './drive-routes.js';
 import { registerEnrollmentRoutes } from './enrollment-routes.js';
+import { registerGuestRoutes } from './guest-routes.js';
 import { RateLimiter } from './rate-limit.js';
 import { registerHouseholdEvents } from './household-events.js';
 import { createSessionAuth } from './session-auth.js';
@@ -131,6 +132,14 @@ export function buildApp(
     store,
   });
   registerSharingRoutes(app, {
+    auth: sessionAuth,
+    config,
+    householdEvents,
+    limiter,
+    signaling,
+    store,
+  });
+  registerGuestRoutes(app, {
     auth: sessionAuth,
     config,
     householdEvents,

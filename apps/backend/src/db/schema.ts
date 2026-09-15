@@ -7,6 +7,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   real,
   text,
   timestamp,
@@ -732,4 +733,50 @@ export const notificationPresenceState = pgTable(
       .notNull()
       .defaultNow(),
   },
+);
+
+// A guest link is the third, distinct kind of household access alongside
+// signed-in viewer/guest roles: no account, no household_members row at
+// all. Anyone holding the (long, random) link token gets read access to
+// exactly the cameras and controls chosen when it was created, until it
+// expires or an admin revokes it -- see guest-routes.ts.
+export const guestLinks = pgTable(
+  'guest_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    label: text('label'),
+    canListen: boolean('can_listen').notNull().default(false),
+    canTalk: boolean('can_talk').notNull().default(false),
+    canFlip: boolean('can_flip').notNull().default(false),
+    canPause: boolean('can_pause').notNull().default(false),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('guest_links_token_hash_unique').on(table.tokenHash),
+    index('guest_links_household_idx').on(table.householdId),
+  ],
+);
+
+export const guestLinkCameras = pgTable(
+  'guest_link_cameras',
+  {
+    guestLinkId: uuid('guest_link_id')
+      .notNull()
+      .references(() => guestLinks.id, { onDelete: 'cascade' }),
+    cameraSourceId: uuid('camera_source_id')
+      .notNull()
+      .references(() => cameraSources.id, { onDelete: 'cascade' }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.guestLinkId, table.cameraSourceId] }),
+  ],
 );

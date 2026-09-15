@@ -49,6 +49,7 @@ import {
   type HouseholdInvitationRecord,
   type HouseholdMemberRecord,
   type GoogleDriveConnectionRecord,
+  type GuestLinkRecord,
   type UserRecord,
 } from './store-contract.js';
 
@@ -528,6 +529,54 @@ export class PostgresStore implements MilestoneStore {
     publicCameraId: string,
   ): Promise<string[] | null> {
     return this.sharing.leaveCamera(householdId, userId, publicCameraId);
+  }
+
+  async createGuestLink(input: {
+    householdId: string;
+    tokenHash: string;
+    label?: string;
+    canListen: boolean;
+    canTalk: boolean;
+    canFlip: boolean;
+    canPause: boolean;
+    createdByUserId: string;
+    expiresAt: Date;
+    publicCameraIds: string[];
+  }): Promise<string | null> {
+    return this.sharing.createGuestLink(input);
+  }
+
+  async listGuestLinks(
+    householdId: string,
+    now: Date,
+  ): Promise<GuestLinkRecord[]> {
+    return this.sharing.listGuestLinks(householdId, now);
+  }
+
+  async revokeGuestLink(
+    householdId: string,
+    guestLinkId: string,
+  ): Promise<boolean> {
+    return this.sharing.revokeGuestLink(householdId, guestLinkId);
+  }
+
+  async findGuestAccessibleCamera(
+    tokenHash: string,
+    publicCameraId: string,
+    now: Date,
+  ): Promise<CameraAccess | null> {
+    return this.sharing.findGuestAccessibleCamera(
+      tokenHash,
+      publicCameraId,
+      now,
+    );
+  }
+
+  async listGuestAccessibleCameras(
+    tokenHash: string,
+    now: Date,
+  ): Promise<{ householdId: string; cameras: AccessibleCameraRecord[] } | null> {
+    return this.sharing.listGuestAccessibleCameras(tokenHash, now);
   }
 
   async revokeBrowserSession(

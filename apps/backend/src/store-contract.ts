@@ -90,6 +90,23 @@ export interface GoogleDriveConnectionRecord {
   updatedAt: Date;
 }
 
+/** A shareable link that grants anonymous, no-account access to specific
+ * cameras -- the third kind of household access alongside signed-in
+ * viewer/guest roles. See guest-routes.ts. */
+export interface GuestLinkRecord {
+  id: string;
+  label: string | null;
+  canListen: boolean;
+  canTalk: boolean;
+  canFlip: boolean;
+  canPause: boolean;
+  cameraIds: string[];
+  expiresAt: Date;
+  revokedAt: Date | null;
+  createdAt: Date;
+}
+
+
 export interface CameraRecord {
   id: string;
   publicCameraId: string;
@@ -470,6 +487,39 @@ export interface MilestoneStore {
     userId: string,
     publicCameraId: string,
   ): Promise<string[] | null>;
+  createGuestLink(input: {
+    householdId: string;
+    tokenHash: string;
+    label?: string;
+    canListen: boolean;
+    canTalk: boolean;
+    canFlip: boolean;
+    canPause: boolean;
+    createdByUserId: string;
+    expiresAt: Date;
+    publicCameraIds: string[];
+  }): Promise<string | null>;
+  listGuestLinks(
+    householdId: string,
+    now: Date,
+  ): Promise<GuestLinkRecord[]>;
+  revokeGuestLink(householdId: string, guestLinkId: string): Promise<boolean>;
+  /** For signaling: does this token grant access to exactly this camera,
+   * and with what controls? Shaped like findAccessibleCamera's result on
+   * purpose -- a guest link authorizes a live view the same way a
+   * session's grant does, just without a user behind it. */
+  findGuestAccessibleCamera(
+    tokenHash: string,
+    publicCameraId: string,
+    now: Date,
+  ): Promise<CameraAccess | null>;
+  /** For the guest's own camera list: every camera the token covers,
+   * presented exactly like listAccessibleCameras so the same
+   * presentCamera() output shape works for both. */
+  listGuestAccessibleCameras(
+    tokenHash: string,
+    now: Date,
+  ): Promise<{ householdId: string; cameras: AccessibleCameraRecord[] } | null>;
   revokeBrowserSession(userId: string, sessionId: string): Promise<boolean>;
   deleteAccount(userId: string): Promise<boolean>;
   audit(input: AuditInput): Promise<void>;

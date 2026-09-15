@@ -16,6 +16,7 @@ import { SplashScreen } from './SplashScreen';
 import { CameraBrowser } from './CameraBrowser';
 import { ContactPage } from './ContactPage';
 import { Diagnostics } from './Diagnostics';
+import { GuestViewPage } from './GuestViewPage';
 import { Brand, Icon } from './Icon';
 import { Sidebar } from './Sidebar';
 import { PendingDeviceRow } from './PendingDeviceRow';
@@ -212,7 +213,8 @@ export function App() {
       window.location.pathname === '/pair' ||
       window.location.pathname === '/auth/mobile' ||
       window.location.pathname === '/account/verify-email' ||
-      window.location.pathname === '/account/reset-password'
+      window.location.pathname === '/account/reset-password' ||
+      window.location.pathname.startsWith('/g/')
     )
       return;
     void request<{ household: HouseholdSession; user: User }>('/api/auth/me')
@@ -746,6 +748,7 @@ export function App() {
     setSelectedCamera(camera);
   }
 
+  if (window.location.pathname.startsWith('/g/')) return <GuestViewPage />;
   if (window.location.pathname === '/pair') return <PairLinkPage />;
   if (window.location.pathname === '/auth/mobile')
     return <MobileAuthReturnPage />;
