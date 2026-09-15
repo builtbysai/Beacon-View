@@ -13,7 +13,11 @@ const subscriptionSchema = z.discriminatedUnion('channel', [
       channel: z.literal('fcm'),
       installationId: z.string().uuid(),
       deviceLabel: z.string().trim().min(1).max(80),
-      fid: z.string().trim().min(10).max(512),
+      // `token` is the FCM registration token required by the HTTP v1 API.
+      // Keep accepting `fid` for one client rollout so existing installations
+      // can re-enrol without an outage; it is stored as the provider token.
+      token: z.string().trim().min(10).max(4096).optional(),
+      fid: z.string().trim().min(10).max(512).optional(),
     })
     .strict(),
   z
@@ -87,7 +91,10 @@ export function registerNotificationRoutes(
       return reply.code(429).send({ error: 'Too many notification changes' });
     }
     const parsed = subscriptionSchema.safeParse(request.body);
-    if (!parsed.success)
+    if (
+      !parsed.success ||
+      (parsed.data.channel === 'fcm' && !parsed.data.token && !parsed.data.fid)
+    )
       return reply
         .code(400)
         .send({ error: 'Invalid notification subscription' });
@@ -106,7 +113,7 @@ export function registerNotificationRoutes(
     }
     const providerMaterial =
       parsed.data.channel === 'fcm'
-        ? parsed.data.fid
+        ? (parsed.data.token ?? parsed.data.fid!)
         : JSON.stringify(parsed.data.subscription);
     const id = await store.upsertNotificationSubscription({
       channel: parsed.data.channel,

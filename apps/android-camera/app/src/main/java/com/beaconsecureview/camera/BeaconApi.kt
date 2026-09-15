@@ -318,7 +318,7 @@ class BeaconApi(private val baseUrl: String) {
     fun registerFcmSubscription(
         sessionToken: String,
         installationId: String,
-        firebaseInstallationId: String,
+        firebaseMessagingToken: String,
     ): String {
         val connection = connection("/api/notification-subscriptions", "POST")
         connection.setRequestProperty("Authorization", "Bearer $sessionToken")
@@ -328,7 +328,7 @@ class BeaconApi(private val baseUrl: String) {
                     .put("channel", "fcm")
                     .put("installationId", installationId)
                     .put("deviceLabel", "Beacon Android monitor")
-                    .put("fid", firebaseInstallationId)
+                    .put("token", firebaseMessagingToken)
                     .toString().toByteArray(Charsets.UTF_8),
             )
         }

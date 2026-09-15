@@ -71,7 +71,7 @@ export class NotificationSender {
           },
           body: JSON.stringify({
             message: {
-              fid: delivery.providerMaterial,
+              token: delivery.providerMaterial,
               data: delivery.safePayload,
               android: {
                 priority: 'high',

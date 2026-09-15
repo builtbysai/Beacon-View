@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 class BeaconFirebaseMessagingService : FirebaseMessagingService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    override fun onRegistered(installationId: String) {
+    override fun onNewToken(firebaseMessagingToken: String) {
         val consent = NotificationConsentStore(this)
         val session = AccountSessionStore(this).read()
         if (!consent.enabled || session == null) return
@@ -35,7 +35,7 @@ class BeaconFirebaseMessagingService : FirebaseMessagingService() {
         scope.launch {
             runCatching {
                 val id = BeaconApi(BuildConfig.BEACON_API_URL)
-                    .registerFcmSubscription(session.token, beaconInstallationId, installationId)
+                    .registerFcmSubscription(session.token, beaconInstallationId, firebaseMessagingToken)
                 consent.enable(id)
             }
         }

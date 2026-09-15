@@ -2,7 +2,6 @@ package com.beaconsecureview.camera
 
 import android.content.Context
 import com.google.android.gms.tasks.Task
-import com.google.firebase.installations.FirebaseInstallations
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -41,13 +40,13 @@ internal suspend fun enableAndroidNotifications(
     messaging.isAutoInitEnabled = true
     try {
         messaging.register().await()
-        val firebaseInstallationId = FirebaseInstallations.getInstance().id.await()
+        val firebaseMessagingToken = messaging.token.await()
         val installationId =
             context.getSharedPreferences("beacon_installation", Context.MODE_PRIVATE)
                 .getString("installation_id", null)
                 ?: throw IllegalStateException("This installation is not ready")
         val subscriptionId =
-            api.registerFcmSubscription(session.token, installationId, firebaseInstallationId)
+            api.registerFcmSubscription(session.token, installationId, firebaseMessagingToken)
         NotificationConsentStore(context).enable(subscriptionId)
         return subscriptionId
     } catch (error: Throwable) {
