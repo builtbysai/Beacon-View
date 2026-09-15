@@ -264,7 +264,9 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
         grants: [
           {
             cameraId: source.rows[0]!.cameraId,
+            canFlip: false,
             canListen: true,
+            canPause: false,
             canTalk: false,
           },
         ],

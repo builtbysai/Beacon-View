@@ -3216,6 +3216,14 @@ button > .icon:first-child {
   gap: 0.35rem;
 }
 
+.sharing-permission-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
 .settings-card-empty,
 .settings-card-inline-message {
   padding: var(--space-4) clamp(1.25rem, 2.5vw, 1.85rem);

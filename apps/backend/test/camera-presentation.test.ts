@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { isCameraOnline, presentCamera } from '../src/camera-presentation.js';
-import type { CameraRecord } from '../src/store.js';
+import type { AccessibleCameraRecord } from '../src/store.js';
 
 const now = new Date('2026-09-11T12:00:00.000Z');
-const camera: CameraRecord = {
+const camera: AccessibleCameraRecord = {
+  canFlip: true,
+  canListen: true,
+  canPause: true,
+  canTalk: true,
   capabilities: { audio: true },
   credentialRevokedAt: null,
   deviceId: 'internal-device',

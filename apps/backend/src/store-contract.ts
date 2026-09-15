@@ -67,6 +67,8 @@ export interface HouseholdMemberRecord {
     cameraName: string;
     canListen: boolean;
     canTalk: boolean;
+    canFlip: boolean;
+    canPause: boolean;
   }>;
 }
 
@@ -76,6 +78,10 @@ export interface HouseholdInvitationRecord {
   role: Exclude<SessionRecord['role'], 'owner'>;
   expiresAt: Date;
   createdAt: Date;
+  defaultCanListen: boolean;
+  defaultCanTalk: boolean;
+  defaultCanFlip: boolean;
+  defaultCanPause: boolean;
 }
 
 export interface GoogleDriveConnectionRecord {
@@ -106,6 +112,16 @@ export interface CameraRecord {
   pairedByUserId: string | null;
 }
 
+/** A CameraRecord as returned by listAccessibleCameras: the viewer's own
+ * grant permissions attached, true across the board for owner/admin. Not
+ * present on the plain listCameras() result, which has no viewer context. */
+export interface AccessibleCameraRecord extends CameraRecord {
+  canListen: boolean;
+  canTalk: boolean;
+  canFlip: boolean;
+  canPause: boolean;
+}
+
 export interface CameraIdentity {
   cameraId: string;
   deviceId: string;
@@ -117,6 +133,8 @@ export interface CameraIdentity {
 export interface CameraAccess extends CameraIdentity {
   canListen: boolean;
   canTalk: boolean;
+  canFlip: boolean;
+  canPause: boolean;
 }
 
 export interface DeviceRecord {
@@ -410,6 +428,10 @@ export interface MilestoneStore {
     tokenHash: string;
     invitedByUserId: string;
     expiresAt: Date;
+    defaultCanListen?: boolean;
+    defaultCanTalk?: boolean;
+    defaultCanFlip?: boolean;
+    defaultCanPause?: boolean;
   }): Promise<string>;
   acceptHouseholdInvitation(input: {
     tokenHash: string;
@@ -427,12 +449,22 @@ export interface MilestoneStore {
   replaceHouseholdMemberGrants(input: {
     householdId: string;
     memberId: string;
-    grants: Array<{ cameraId: string; canListen: boolean; canTalk: boolean }>;
+    grants: Array<{
+      cameraId: string;
+      canListen: boolean;
+      canTalk: boolean;
+      canFlip: boolean;
+      canPause: boolean;
+    }>;
   }): Promise<string[] | null>;
   revokeHouseholdMember(
     householdId: string,
     memberId: string,
   ): Promise<string[] | null>;
+  permanentlyRemoveHouseholdMember(
+    householdId: string,
+    memberId: string,
+  ): Promise<boolean>;
   leaveCamera(
     householdId: string,
     userId: string,
@@ -487,7 +519,7 @@ export interface MilestoneStore {
     householdId: string,
     userId: string,
     role: SessionRecord['role'],
-  ): Promise<CameraRecord[]>;
+  ): Promise<AccessibleCameraRecord[]>;
   listAccessibleDevices(
     householdId: string,
     userId: string,

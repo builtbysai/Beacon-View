@@ -155,6 +155,20 @@
       "when": 1789948800000,
       "tag": "0021_camera_pairing_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790035200000,
+      "tag": "0022_camera_grant_flip_pause",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790121600000,
+      "tag": "0023_invitation_default_grants",
+      "breakpoints": true
     }
   ]
 }

@@ -20,6 +20,8 @@ interface CameraGrant {
   cameraName: string;
   canListen: boolean;
   canTalk: boolean;
+  canFlip: boolean;
+  canPause: boolean;
 }
 
 interface Member {
@@ -51,12 +53,20 @@ function joinLink(token: string): string {
 export function HouseholdSharingSettings({
   cameras,
   role,
+  refreshRevision = 0,
 }: {
   cameras: Camera[];
   role: HouseholdRole;
+  /** Bumped when a household event reports that membership, invitations,
+   * or grants changed elsewhere (another admin's tab, or the invited
+   * person accepting) -- reloads this screen without a manual refresh. */
+  refreshRevision?: number;
 }) {
   const canManage = role === 'owner' || role === 'admin';
   const [sharing, setSharing] = useState<SharingState | null>(null);
+  const [inviteRole, setInviteRole] = useState<'admin' | 'viewer' | 'guest'>(
+    'viewer',
+  );
   const [inviteCode, setInviteCode] = useState('');
   const [createdInvite, setCreatedInvite] = useState<{
     code: string;
@@ -78,12 +88,18 @@ export function HouseholdSharingSettings({
         caught instanceof Error ? caught.message : 'Unable to load sharing',
       ),
     );
-  }, [load]);
+    // refreshRevision is never read in the body -- it's here purely as a
+    // signal to reload when a household event says something changed.
+  }, [load, refreshRevision]);
 
   async function createInvitation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
-    const data = new FormData(event.currentTarget);
+    // React nulls out event.currentTarget once the handler's synchronous
+    // portion finishes, even in React 19 -- capture the form element itself
+    // now so it's still there to reset() after the request resolves.
+    const form = event.currentTarget;
+    const data = new FormData(form);
     const roleValue = data.get('role');
     const invitedRole =
       roleValue === 'admin' || roleValue === 'guest' ? roleValue : 'viewer';
@@ -101,6 +117,14 @@ export function HouseholdSharingSettings({
             ...(invitedRole === 'guest'
               ? { expiresInHours: Number(data.get('expiresInHours')) }
               : {}),
+            ...(invitedRole === 'viewer'
+              ? {
+                  defaultCanListen: data.get('defaultCanListen') === 'on',
+                  defaultCanTalk: data.get('defaultCanTalk') === 'on',
+                  defaultCanFlip: data.get('defaultCanFlip') === 'on',
+                  defaultCanPause: data.get('defaultCanPause') === 'on',
+                }
+              : {}),
           }),
           method: 'POST',
         },
@@ -109,7 +133,8 @@ export function HouseholdSharingSettings({
       setMessage(
         'Invitation created. Share this code through a trusted channel.',
       );
-      event.currentTarget.reset();
+      form.reset();
+      setInviteRole('viewer');
       await load();
     } catch (caught) {
       setError(
@@ -215,6 +240,24 @@ export function HouseholdSharingSettings({
     }
   }
 
+  async function removeMemberPermanently(member: Member) {
+    setBusy(true);
+    setError('');
+    try {
+      await request(`/api/household/members/${member.id}/permanently`, {
+        method: 'DELETE',
+      });
+      setMessage(`${member.email} removed from the household.`);
+      await load();
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'Unable to remove member',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function copyCreatedInvitation() {
     if (!createdInvite || !navigator.clipboard) {
       setError('Clipboard access is unavailable. Select and copy the code.');
@@ -285,28 +328,82 @@ export function HouseholdSharingSettings({
                   />
                 </SettingsField>
                 <SettingsField label="Access level" htmlFor="invite-role">
-                  <select id="invite-role" name="role" defaultValue="viewer">
+                  <select
+                    id="invite-role"
+                    name="role"
+                    value={inviteRole}
+                    onChange={(event) =>
+                      setInviteRole(
+                        event.target.value as 'admin' | 'viewer' | 'guest',
+                      )
+                    }
+                  >
                     {role === 'owner' && <option value="admin">Admin</option>}
                     <option value="viewer">Viewer</option>
                     <option value="guest">Guest</option>
                   </select>
                 </SettingsField>
-                <SettingsField label="Guest duration" htmlFor="invite-expires">
-                  <select
-                    id="invite-expires"
-                    name="expiresInHours"
-                    defaultValue="24"
+                {inviteRole === 'guest' && (
+                  <SettingsField
+                    label="Guest duration"
+                    htmlFor="invite-expires"
                   >
-                    <option value="1">1 hour</option>
-                    <option value="24">24 hours</option>
-                    <option value="72">3 days</option>
-                    <option value="168">7 days</option>
-                  </select>
-                </SettingsField>
+                    <select
+                      id="invite-expires"
+                      name="expiresInHours"
+                      defaultValue="24"
+                    >
+                      <option value="1">1 hour</option>
+                      <option value="24">24 hours</option>
+                      <option value="72">3 days</option>
+                      <option value="168">7 days</option>
+                    </select>
+                  </SettingsField>
+                )}
                 <button disabled={busy} type="submit">
                   Create invitation
                 </button>
               </SettingsFieldRow>
+              {inviteRole === 'viewer' && (
+                <SettingsFieldRow
+                  label="What can they do?"
+                  description="View access is automatic. Everything else starts off -- pick what this viewer gets on every current camera; you can adjust individual cameras afterward in Members."
+                >
+                  <label className="sharing-permission-toggle">
+                    <input
+                      defaultChecked
+                      id="invite-default-listen"
+                      name="defaultCanListen"
+                      type="checkbox"
+                    />
+                    Listen by default
+                  </label>
+                  <label className="sharing-permission-toggle">
+                    <input
+                      id="invite-default-talk"
+                      name="defaultCanTalk"
+                      type="checkbox"
+                    />
+                    Talk by default
+                  </label>
+                  <label className="sharing-permission-toggle">
+                    <input
+                      id="invite-default-flip"
+                      name="defaultCanFlip"
+                      type="checkbox"
+                    />
+                    Flip camera by default
+                  </label>
+                  <label className="sharing-permission-toggle">
+                    <input
+                      id="invite-default-pause"
+                      name="defaultCanPause"
+                      type="checkbox"
+                    />
+                    Pause (privacy) by default
+                  </label>
+                </SettingsFieldRow>
+              )}
             </form>
 
             {createdInvite && (
@@ -355,6 +452,7 @@ export function HouseholdSharingSettings({
                 onChanged={load}
                 onError={setError}
                 onRevoke={() => revokeMember(member)}
+                onRemovePermanently={() => removeMemberPermanently(member)}
               />
             ))}
             {sharing?.members.length === 0 && (
@@ -408,6 +506,11 @@ export function HouseholdSharingSettings({
   );
 }
 
+type GrantPrefs = Pick<
+  CameraGrant,
+  'canListen' | 'canTalk' | 'canFlip' | 'canPause'
+>;
+
 function MemberRow({
   actorRole,
   busy,
@@ -416,6 +519,7 @@ function MemberRow({
   onChanged,
   onError,
   onRevoke,
+  onRemovePermanently,
 }: {
   actorRole: HouseholdRole;
   busy: boolean;
@@ -424,6 +528,7 @@ function MemberRow({
   onChanged: () => Promise<void>;
   onError: (message: string) => void;
   onRevoke: () => Promise<void>;
+  onRemovePermanently: () => Promise<void>;
 }) {
   const [grants, setGrants] = useState(
     Object.fromEntries(member.grants.map((grant) => [grant.cameraId, grant])),
@@ -439,18 +544,21 @@ function MemberRow({
       Object.fromEntries(member.grants.map((grant) => [grant.cameraId, grant])),
     );
   }, [member]);
-  // Unchecking "View" removes the whole grant entry (including its
-  // canListen/canTalk), so remember the last values per camera locally and
+  // Unchecking "View" removes the whole grant entry (including everything
+  // else it carried), so remember the last values per camera locally and
   // restore them on re-check instead of silently resetting to off -- the
-  // admin shouldn't have to re-configure Listen/Talk just from a stray
-  // View toggle within the same edit session.
-  const lastKnownPrefs = useRef<
-    Record<string, { canListen: boolean; canTalk: boolean }>
-  >(
+  // admin shouldn't have to re-configure Listen/Talk/Flip/Pause just from a
+  // stray View toggle within the same edit session.
+  const lastKnownPrefs = useRef<Record<string, GrantPrefs>>(
     Object.fromEntries(
       member.grants.map((grant) => [
         grant.cameraId,
-        { canListen: grant.canListen, canTalk: grant.canTalk },
+        {
+          canListen: grant.canListen,
+          canTalk: grant.canTalk,
+          canFlip: grant.canFlip,
+          canPause: grant.canPause,
+        },
       ]),
     ),
   );
@@ -461,6 +569,20 @@ function MemberRow({
     member.status === 'active' &&
     member.role !== 'owner' &&
     (actorRole === 'owner' || member.role !== 'admin');
+  const removable =
+    member.status === 'revoked' &&
+    member.role !== 'owner' &&
+    (actorRole === 'owner' || member.role !== 'admin');
+
+  function togglePermission(cameraId: string, key: keyof GrantPrefs) {
+    setGrants((current) => ({
+      ...current,
+      [cameraId]: {
+        ...current[cameraId]!,
+        [key]: !current[cameraId]![key],
+      },
+    }));
+  }
 
   async function save() {
     setSaving(true);
@@ -472,6 +594,8 @@ function MemberRow({
             cameraId: grant.cameraId,
             canListen: grant.canListen,
             canTalk: grant.canTalk,
+            canFlip: grant.canFlip,
+            canPause: grant.canPause,
           })),
         }),
         method: 'PUT',
@@ -508,6 +632,16 @@ function MemberRow({
             Remove access
           </button>
         )}
+        {removable && (
+          <button
+            className="danger"
+            disabled={busy}
+            onClick={() => void onRemovePermanently()}
+            type="button"
+          >
+            Remove from list
+          </button>
+        )}
       </SettingsRow>
       {editable && (
         <div className="sharing-grants">
@@ -530,6 +664,8 @@ function MemberRow({
                             cameraName: camera.name,
                             canListen: remembered?.canListen ?? false,
                             canTalk: remembered?.canTalk ?? false,
+                            canFlip: remembered?.canFlip ?? false,
+                            canPause: remembered?.canPause ?? false,
                           };
                         } else {
                           const existing = next[camera.id];
@@ -537,6 +673,8 @@ function MemberRow({
                             lastKnownPrefs.current[camera.id] = {
                               canListen: existing.canListen,
                               canTalk: existing.canTalk,
+                              canFlip: existing.canFlip,
+                              canPause: existing.canPause,
                             };
                           }
                           delete next[camera.id];
@@ -552,15 +690,7 @@ function MemberRow({
                     checked={grant?.canListen ?? false}
                     disabled={!grant}
                     type="checkbox"
-                    onChange={(event) =>
-                      setGrants((current) => ({
-                        ...current,
-                        [camera.id]: {
-                          ...current[camera.id]!,
-                          canListen: event.target.checked,
-                        },
-                      }))
-                    }
+                    onChange={() => togglePermission(camera.id, 'canListen')}
                   />
                   Listen
                 </label>
@@ -569,17 +699,27 @@ function MemberRow({
                     checked={grant?.canTalk ?? false}
                     disabled={!grant}
                     type="checkbox"
-                    onChange={(event) =>
-                      setGrants((current) => ({
-                        ...current,
-                        [camera.id]: {
-                          ...current[camera.id]!,
-                          canTalk: event.target.checked,
-                        },
-                      }))
-                    }
+                    onChange={() => togglePermission(camera.id, 'canTalk')}
                   />
                   Talk
+                </label>
+                <label>
+                  <input
+                    checked={grant?.canFlip ?? false}
+                    disabled={!grant}
+                    type="checkbox"
+                    onChange={() => togglePermission(camera.id, 'canFlip')}
+                  />
+                  Flip
+                </label>
+                <label>
+                  <input
+                    checked={grant?.canPause ?? false}
+                    disabled={!grant}
+                    type="checkbox"
+                    onChange={() => togglePermission(camera.id, 'canPause')}
+                  />
+                  Pause
                 </label>
               </fieldset>
             );

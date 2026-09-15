@@ -243,7 +243,7 @@ export function registerCameraManagementRoutes(
   });
 
   app.put('/api/devices/:deviceId/privacy', async (request, reply) => {
-    const session = await authenticateHouseholdAdminStateChange(request, reply);
+    const session = await authenticateStateChange(request, reply);
     if (!session) return;
     const parameters = deviceParameterSchema.safeParse(request.params);
     const body = privacyModeSchema.safeParse(request.body);
@@ -259,6 +259,27 @@ export function registerCameraManagementRoutes(
       return reply.code(409).send({
         error: 'Privacy mode currently requires an Android camera device',
       });
+    }
+    // Privacy pauses every source on the device at once, so -- unlike flip,
+    // which only ever touches the one source being switched to -- this
+    // needs pause access on at least one of its sources. Fine for the
+    // common single-source device; a multi-source device could let someone
+    // with pause on only one source affect a sibling they can't even see,
+    // but that's a narrower problem than blocking pause outright.
+    if (session.role !== 'owner' && session.role !== 'admin') {
+      const accessibleCameras = await store.listAccessibleCameras(
+        session.householdId,
+        session.userId,
+        session.role,
+      );
+      const canPauseDevice = accessibleCameras.some(
+        (camera) =>
+          camera.publicDeviceId === parameters.data.deviceId && camera.canPause,
+      );
+      if (!canPauseDevice)
+        return reply
+          .code(403)
+          .send({ error: 'You cannot change privacy mode for this camera' });
     }
     const deviceId = await store.setPrivacyMode(
       session.householdId,
@@ -493,7 +514,7 @@ export function registerCameraManagementRoutes(
   });
 
   app.post('/api/cameras/:cameraId/activate', async (request, reply) => {
-    const session = await authenticateHouseholdAdminStateChange(request, reply);
+    const session = await authenticateStateChange(request, reply);
     if (!session) return;
     const parameters = cameraParameterSchema.safeParse(request.params);
     const cameras = await store.listCameras(session.householdId);
@@ -506,6 +527,14 @@ export function registerCameraManagementRoutes(
         )
       : undefined;
     if (!target) return reply.code(404).send({ error: 'Camera not found' });
+    const access = await store.findAccessibleCamera(
+      session.householdId,
+      session.userId,
+      session.role,
+      target.publicCameraId,
+    );
+    if (!access?.canFlip)
+      return reply.code(403).send({ error: 'You cannot switch this camera' });
     const siblings = cameras
       .filter((camera) => camera.publicDeviceId === target.publicDeviceId)
       .map((camera) => camera.publicCameraId);

@@ -29,10 +29,13 @@ export class PostgresSharingRepository {
       cameraName: string;
       canListen: boolean;
       canTalk: boolean;
+      canFlip: boolean;
+      canPause: boolean;
     }>(
       `SELECT cg.member_id AS "memberId", cs.public_camera_id AS "cameraId",
               cs.display_name AS "cameraName", cg.can_listen AS "canListen",
-              cg.can_talk AS "canTalk"
+              cg.can_talk AS "canTalk", cg.can_flip AS "canFlip",
+              cg.can_pause AS "canPause"
        FROM camera_grants cg
        JOIN camera_sources cs ON cs.id = cg.camera_source_id
        WHERE cg.household_id = $1 ORDER BY cs.created_at, cs.id`,
@@ -47,6 +50,8 @@ export class PostgresSharingRepository {
           cameraName: grant.cameraName,
           canListen: grant.canListen,
           canTalk: grant.canTalk,
+          canFlip: grant.canFlip,
+          canPause: grant.canPause,
         })),
     }));
   }
@@ -57,7 +62,9 @@ export class PostgresSharingRepository {
   ): Promise<HouseholdInvitationRecord[]> {
     const result = await this.pool.query<HouseholdInvitationRecord>(
       `SELECT id, invited_email AS "invitedEmail", role, expires_at AS "expiresAt",
-              created_at AS "createdAt"
+              created_at AS "createdAt", default_can_listen AS "defaultCanListen",
+              default_can_talk AS "defaultCanTalk", default_can_flip AS "defaultCanFlip",
+              default_can_pause AS "defaultCanPause"
        FROM household_invitations
        WHERE household_id = $1 AND accepted_at IS NULL AND revoked_at IS NULL
          AND expires_at > $2 ORDER BY created_at DESC, id DESC`,
@@ -73,6 +80,10 @@ export class PostgresSharingRepository {
     tokenHash: string;
     invitedByUserId: string;
     expiresAt: Date;
+    defaultCanListen?: boolean;
+    defaultCanTalk?: boolean;
+    defaultCanFlip?: boolean;
+    defaultCanPause?: boolean;
   }): Promise<string> {
     const client = await this.pool.connect();
     try {
@@ -85,8 +96,9 @@ export class PostgresSharingRepository {
       );
       const result = await client.query<{ id: string }>(
         `INSERT INTO household_invitations
-         (household_id, invited_email, role, token_hash, invited_by_user_id, expires_at)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+         (household_id, invited_email, role, token_hash, invited_by_user_id, expires_at,
+          default_can_listen, default_can_talk, default_can_flip, default_can_pause)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
         [
           input.householdId,
           input.invitedEmail,
@@ -94,6 +106,10 @@ export class PostgresSharingRepository {
           input.tokenHash,
           input.invitedByUserId,
           input.expiresAt,
+          input.defaultCanListen ?? false,
+          input.defaultCanTalk ?? false,
+          input.defaultCanFlip ?? false,
+          input.defaultCanPause ?? false,
         ],
       );
       await client.query('COMMIT');
@@ -120,8 +136,14 @@ export class PostgresSharingRepository {
         householdId: string;
         role: ShareRole;
         expiresAt: Date;
+        defaultCanListen: boolean;
+        defaultCanTalk: boolean;
+        defaultCanFlip: boolean;
+        defaultCanPause: boolean;
       }>(
-        `SELECT id, household_id AS "householdId", role, expires_at AS "expiresAt"
+        `SELECT id, household_id AS "householdId", role, expires_at AS "expiresAt",
+                default_can_listen AS "defaultCanListen", default_can_talk AS "defaultCanTalk",
+                default_can_flip AS "defaultCanFlip", default_can_pause AS "defaultCanPause"
          FROM household_invitations
          WHERE token_hash = $1 AND invited_email = $2 AND accepted_at IS NULL
            AND revoked_at IS NULL AND expires_at > $3 FOR UPDATE`,
@@ -154,18 +176,27 @@ export class PostgresSharingRepository {
       }
       // A viewer is meant to see the whole household by default -- camera
       // access is something an admin *restricts* for them afterward, not
-      // something granted one-by-one before it does anything. Guests stay
-      // opt-in per camera: their access is meant to be narrow and deliberate.
+      // something granted one-by-one before it does anything. Which
+      // controls come with that default view is whatever the inviter chose
+      // when creating the invitation. Guests stay opt-in per camera: their
+      // access is meant to be narrow and deliberate.
       if (pending.role === 'viewer') {
         await client.query(
           `INSERT INTO camera_grants
-           (household_id, member_id, camera_source_id, can_listen, can_talk)
-           SELECT $1, $2, cs.id, false, false FROM camera_sources cs
+           (household_id, member_id, camera_source_id, can_listen, can_talk, can_flip, can_pause)
+           SELECT $1, $2, cs.id, $3, $4, $5, $6 FROM camera_sources cs
            JOIN cameras d ON d.id = cs.device_id
            WHERE d.household_id = $1 AND cs.enabled = true
              AND cs.removed_at IS NULL AND d.revoked_at IS NULL
            ON CONFLICT (member_id, camera_source_id) DO NOTHING`,
-          [pending.householdId, membership.rows[0].id],
+          [
+            pending.householdId,
+            membership.rows[0].id,
+            pending.defaultCanListen,
+            pending.defaultCanTalk,
+            pending.defaultCanFlip,
+            pending.defaultCanPause,
+          ],
         );
       }
       await client.query(
@@ -198,7 +229,13 @@ export class PostgresSharingRepository {
   async replaceGrants(input: {
     householdId: string;
     memberId: string;
-    grants: Array<{ cameraId: string; canListen: boolean; canTalk: boolean }>;
+    grants: Array<{
+      cameraId: string;
+      canListen: boolean;
+      canTalk: boolean;
+      canFlip: boolean;
+      canPause: boolean;
+    }>;
   }): Promise<string[] | null> {
     const client = await this.pool.connect();
     try {
@@ -218,8 +255,8 @@ export class PostgresSharingRepository {
       for (const grant of input.grants) {
         const inserted = await client.query(
           `INSERT INTO camera_grants
-           (household_id, member_id, camera_source_id, can_listen, can_talk)
-           SELECT $1,$2,cs.id,$4,$5 FROM camera_sources cs
+           (household_id, member_id, camera_source_id, can_listen, can_talk, can_flip, can_pause)
+           SELECT $1,$2,cs.id,$4,$5,$6,$7 FROM camera_sources cs
            JOIN cameras d ON d.id=cs.device_id
            WHERE cs.public_camera_id=$3 AND d.household_id=$1
              AND cs.enabled=true AND d.revoked_at IS NULL`,
@@ -229,6 +266,8 @@ export class PostgresSharingRepository {
             grant.cameraId,
             grant.canListen,
             grant.canTalk,
+            grant.canFlip,
+            grant.canPause,
           ],
         );
         if ((inserted.rowCount ?? 0) !== 1) {
@@ -288,6 +327,22 @@ export class PostgresSharingRepository {
     } finally {
       client.release();
     }
+  }
+
+  // Purges an already-revoked member from the list entirely (their grants
+  // cascade-delete with the row). Requires status='revoked' as a safety
+  // gate -- this is a deliberate second step after revokeMember, not a way
+  // to skip straight from active to gone, since there's no undo for it.
+  async permanentlyRemoveMember(
+    householdId: string,
+    memberId: string,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      `DELETE FROM household_members
+       WHERE id=$2 AND household_id=$1 AND role <> 'owner' AND status='revoked'`,
+      [householdId, memberId],
+    );
+    return (result.rowCount ?? 0) > 0;
   }
 
   // A viewer/guest dropping their own access to one camera someone else

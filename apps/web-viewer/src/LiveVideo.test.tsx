@@ -383,6 +383,28 @@ describe('LiveVideo', () => {
     expect(onConnectDriveForRecording).toHaveBeenCalledTimes(1);
   });
 
+  it('hides flip and pause when the grant excludes them, even with siblings and onPrivacy present', () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    render(
+      <LiveVideo
+        camera={{ id: 'rear', name: 'Rear' }}
+        siblingCameras={[
+          { id: 'rear', name: 'Rear' },
+          { id: 'front', name: 'Front' },
+        ]}
+        onPrivacy={() => Promise.resolve()}
+        canFlip={false}
+        canPause={false}
+      />,
+    );
+    expect(
+      screen.queryByRole('button', { name: /Switch camera/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Resume|Pause/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it('hides the recording control for a non-owner viewer', () => {
     vi.stubGlobal('WebSocket', FakeWebSocket);
     render(<LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} />);

@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import type {
+  AccessibleCameraRecord,
   CameraIdentity,
   CameraAccess,
   CameraRecord,
@@ -55,11 +56,25 @@ export class PostgresDeviceRepository {
     householdId: string,
     userId: string,
     role: 'owner' | 'admin' | 'viewer' | 'guest',
-  ): Promise<CameraRecord[]> {
+  ): Promise<AccessibleCameraRecord[]> {
     const cameras = await this.listCameras(householdId);
-    if (role === 'owner' || role === 'admin') return cameras;
-    const grants = await this.pool.query<{ publicCameraId: string }>(
-      `SELECT cs.public_camera_id AS "publicCameraId"
+    if (role === 'owner' || role === 'admin')
+      return cameras.map((camera) => ({
+        ...camera,
+        canFlip: true,
+        canListen: true,
+        canPause: true,
+        canTalk: true,
+      }));
+    const grants = await this.pool.query<{
+      publicCameraId: string;
+      canListen: boolean;
+      canTalk: boolean;
+      canFlip: boolean;
+      canPause: boolean;
+    }>(
+      `SELECT cs.public_camera_id AS "publicCameraId", cg.can_listen AS "canListen",
+              cg.can_talk AS "canTalk", cg.can_flip AS "canFlip", cg.can_pause AS "canPause"
        FROM household_members m
        JOIN camera_grants cg ON cg.member_id = m.id
                             AND cg.household_id = m.household_id
@@ -71,8 +86,22 @@ export class PostgresDeviceRepository {
          AND d.household_id = $1 AND cs.removed_at IS NULL`,
       [householdId, userId],
     );
-    const allowed = new Set(grants.rows.map((grant) => grant.publicCameraId));
-    return cameras.filter((camera) => allowed.has(camera.publicCameraId));
+    const allowed = new Map(
+      grants.rows.map((grant) => [grant.publicCameraId, grant]),
+    );
+    return cameras.flatMap((camera) => {
+      const grant = allowed.get(camera.publicCameraId);
+      if (!grant) return [];
+      return [
+        {
+          ...camera,
+          canFlip: grant.canFlip,
+          canListen: grant.canListen,
+          canPause: grant.canPause,
+          canTalk: grant.canTalk,
+        },
+      ];
+    });
   }
 
   async listAccessibleDevices(
@@ -242,8 +271,8 @@ export class PostgresDeviceRepository {
         if (input.createdByUserId && upserted.rows[0]) {
           await client.query(
             `INSERT INTO camera_grants
-               (household_id, member_id, camera_source_id, can_listen, can_talk)
-             SELECT $1, m.id, $2, true, true
+               (household_id, member_id, camera_source_id, can_listen, can_talk, can_flip, can_pause)
+             SELECT $1, m.id, $2, true, true, true, true
              FROM household_members m
              WHERE m.household_id = $1 AND m.user_id = $3
                AND m.status = 'active' AND m.role = 'viewer'
@@ -476,12 +505,16 @@ export class PostgresDeviceRepository {
               CASE WHEN $3 IN ('owner', 'admin') THEN true
                    ELSE COALESCE(grant_access.can_listen, false) END AS "canListen",
               CASE WHEN $3 IN ('owner', 'admin') THEN true
-                   ELSE COALESCE(grant_access.can_talk, false) END AS "canTalk"
+                   ELSE COALESCE(grant_access.can_talk, false) END AS "canTalk",
+              CASE WHEN $3 IN ('owner', 'admin') THEN true
+                   ELSE COALESCE(grant_access.can_flip, false) END AS "canFlip",
+              CASE WHEN $3 IN ('owner', 'admin') THEN true
+                   ELSE COALESCE(grant_access.can_pause, false) END AS "canPause"
        FROM camera_sources cs
        JOIN cameras d ON d.id = cs.device_id
        LEFT JOIN device_credentials dc ON dc.camera_id = d.id
        LEFT JOIN LATERAL (
-         SELECT cg.can_listen, cg.can_talk
+         SELECT cg.can_listen, cg.can_talk, cg.can_flip, cg.can_pause
          FROM household_members m
          JOIN camera_grants cg ON cg.member_id = m.id
                               AND cg.household_id = m.household_id

@@ -18,6 +18,12 @@ const invitationSchema = z
     email: z.string().trim().toLowerCase().email().max(320),
     expiresInHours: z.number().int().min(1).max(168).optional(),
     role: z.enum(['admin', 'viewer', 'guest']),
+    // Only meaningful for role 'viewer' -- the permissions their default
+    // grant (every current camera) is created with on acceptance.
+    defaultCanListen: z.boolean().optional(),
+    defaultCanTalk: z.boolean().optional(),
+    defaultCanFlip: z.boolean().optional(),
+    defaultCanPause: z.boolean().optional(),
   })
   .strict();
 const invitationParameterSchema = z.object({ invitationId: z.string().uuid() });
@@ -34,6 +40,8 @@ const grantsSchema = z
             cameraId: z.string().uuid(),
             canListen: z.boolean(),
             canTalk: z.boolean(),
+            canFlip: z.boolean(),
+            canPause: z.boolean(),
           })
           .strict(),
       )
@@ -107,6 +115,10 @@ export function registerSharingRoutes(
       Date.now() + (body.data.expiresInHours ?? 48) * HOUR,
     );
     const id = await store.createHouseholdInvitation({
+      defaultCanFlip: body.data.defaultCanFlip ?? false,
+      defaultCanListen: body.data.defaultCanListen ?? false,
+      defaultCanPause: body.data.defaultCanPause ?? false,
+      defaultCanTalk: body.data.defaultCanTalk ?? false,
       expiresAt,
       householdId: session.householdId,
       invitedByUserId: session.userId,
@@ -129,6 +141,9 @@ export function registerSharingRoutes(
           .send({ error: 'Invitation email could not be delivered' });
       }
     }
+    householdEvents.publish(session.householdId, {
+      type: 'household-membership-changed',
+    });
     await store.audit({
       eventType: 'household_invitation_created',
       householdId: session.householdId,
@@ -175,6 +190,10 @@ export function registerSharingRoutes(
       const token = generateToken();
       const expiresAt = new Date(Date.now() + 48 * HOUR);
       const id = await store.createHouseholdInvitation({
+        defaultCanFlip: pending.defaultCanFlip,
+        defaultCanListen: pending.defaultCanListen,
+        defaultCanPause: pending.defaultCanPause,
+        defaultCanTalk: pending.defaultCanTalk,
         expiresAt,
         householdId: session.householdId,
         invitedByUserId: session.userId,
@@ -232,6 +251,12 @@ export function registerSharingRoutes(
     });
     if (!accepted)
       return reply.code(400).send({ error: 'Invitation unavailable' });
+    // Lets an admin's already-open People & access screen drop the now-
+    // accepted invitation from "pending" and pick up the new member
+    // without needing a manual reload.
+    householdEvents.publish(accepted.householdId, {
+      type: 'household-membership-changed',
+    });
     await store.audit({
       eventType: 'household_invitation_accepted',
       householdId: accepted.householdId,
@@ -280,6 +305,9 @@ export function registerSharingRoutes(
       );
       if (!revoked)
         return reply.code(404).send({ error: 'Invitation unavailable' });
+      householdEvents.publish(session.householdId, {
+        type: 'household-membership-changed',
+      });
       await store.audit({
         eventType: 'household_invitation_revoked',
         householdId: session.householdId,
@@ -320,12 +348,18 @@ export function registerSharingRoutes(
     });
     if (!sessionIds)
       return reply.code(404).send({ error: 'Household member unavailable' });
-    closeSessions(
+    // The member's session stays valid -- only which cameras/controls it
+    // can reach changed -- so this refreshes their connections rather than
+    // signing them out.
+    refreshSessions(
       sessionIds,
       householdEvents,
       signaling,
       'Camera grants changed',
     );
+    householdEvents.publish(session.householdId, {
+      type: 'household-membership-changed',
+    });
     await store.audit({
       eventType: 'household_camera_grants_changed',
       householdId: session.householdId,
@@ -363,12 +397,17 @@ export function registerSharingRoutes(
     );
     if (!sessionIds)
       return reply.code(404).send({ error: 'Household member unavailable' });
+    // Unlike the grant/leave routes below, revokeHouseholdMember actually
+    // invalidates these browser_sessions -- this really is a sign-out.
     closeSessions(
       sessionIds,
       householdEvents,
       signaling,
       'Household access revoked',
     );
+    householdEvents.publish(session.householdId, {
+      type: 'household-membership-changed',
+    });
     await store.audit({
       eventType: 'household_member_revoked',
       householdId: session.householdId,
@@ -389,6 +428,56 @@ export function registerSharingRoutes(
     return reply.code(204).send();
   });
 
+  // Second, separate step after the revoke above: permanently drop an
+  // already-revoked member from the list. Kept as its own endpoint rather
+  // than folded into the DELETE above so it can never happen by accident --
+  // it only succeeds once the member is already revoked, and there's no
+  // undo for it.
+  app.delete(
+    '/api/household/members/:memberId/permanently',
+    async (request, reply) => {
+      const session = await auth.authenticateHouseholdAdminStateChange(
+        request,
+        reply,
+      );
+      if (!session) return;
+      const parameters = memberParameterSchema.safeParse(request.params);
+      if (!parameters.success)
+        return reply.code(404).send({ error: 'Household member unavailable' });
+      const member = (
+        await store.listHouseholdMembers(session.householdId)
+      ).find((item) => item.id === parameters.data.memberId);
+      if (
+        !member ||
+        !canAssignRole(
+          { expiresAt: null, role: session.role, status: 'active' },
+          member.role,
+        )
+      )
+        return reply.code(404).send({ error: 'Household member unavailable' });
+      const removed = await store.permanentlyRemoveHouseholdMember(
+        session.householdId,
+        member.id,
+      );
+      if (!removed)
+        return reply.code(409).send({
+          error: 'Revoke this member first before removing them',
+        });
+      householdEvents.publish(session.householdId, {
+        type: 'household-membership-changed',
+      });
+      await store.audit({
+        eventType: 'household_member_removed',
+        householdId: session.householdId,
+        ipAddress: request.ip,
+        metadata: { memberId: member.id, role: member.role },
+        success: true,
+        userId: session.userId,
+      });
+      return reply.code(204).send();
+    },
+  );
+
   // Self-service: a viewer or guest dropping their own access to a camera
   // someone shared with them. This only ever touches the caller's own
   // grant row -- it can't affect the camera itself or anyone else's access
@@ -405,7 +494,8 @@ export function registerSharingRoutes(
       parameters.data.cameraId,
     );
     if (!sessionIds) return reply.code(404).send({ error: 'Camera not found' });
-    closeSessions(
+    // Own choice, own session stays valid -- refresh, don't sign out.
+    refreshSessions(
       sessionIds,
       householdEvents,
       signaling,
@@ -431,6 +521,18 @@ function closeSessions(
 ): void {
   for (const sessionId of sessionIds) {
     householdEvents.closeSession(sessionId, reason);
+    signaling.disconnectSession(sessionId, 'authorization_changed');
+  }
+}
+
+function refreshSessions(
+  sessionIds: string[],
+  householdEvents: HouseholdEventHub,
+  signaling: SignalingHub,
+  reason: string,
+): void {
+  for (const sessionId of sessionIds) {
+    householdEvents.refreshSession(sessionId, reason);
     signaling.disconnectSession(sessionId, 'authorization_changed');
   }
 }

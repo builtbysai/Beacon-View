@@ -76,6 +76,12 @@ async function inviteAndAccept(
   role: 'admin' | 'viewer' | 'guest',
   email: string,
   remoteAddress: string,
+  defaults?: {
+    defaultCanListen?: boolean;
+    defaultCanTalk?: boolean;
+    defaultCanFlip?: boolean;
+    defaultCanPause?: boolean;
+  },
 ): Promise<{ cookie: string; csrf: string; userId: string }> {
   const invite = await app!.inject({
     headers: {
@@ -87,6 +93,7 @@ async function inviteAndAccept(
       email,
       role,
       ...(role === 'guest' ? { expiresInHours: 24 } : {}),
+      ...defaults,
     },
     url: '/api/household/invitations',
   });
@@ -283,7 +290,13 @@ describe.skipIf(!app || !store)(
         method: 'PUT',
         payload: {
           grants: [
-            { cameraId: paired.cameraId, canListen: false, canTalk: false },
+            {
+              cameraId: paired.cameraId,
+              canFlip: false,
+              canListen: false,
+              canPause: false,
+              canTalk: false,
+            },
           ],
         },
         url: `/api/household/members/${memberId}/grants`,
@@ -313,6 +326,175 @@ describe.skipIf(!app || !store)(
       expect(ownerCameras.json<{ cameras: unknown[] }>().cameras).toHaveLength(
         1,
       );
+    });
+
+    it('applies the permissions chosen at invite time to the viewer default grant', async () => {
+      const owner = await registerAndSignIn(
+        'defaults-owner@example.com',
+        '10.0.5.1',
+      );
+      await pairCamera(owner, 'Front porch');
+      const viewer = await inviteAndAccept(
+        owner,
+        'viewer',
+        'defaults-viewer@example.com',
+        '10.0.5.2',
+        { defaultCanFlip: true, defaultCanListen: true, defaultCanTalk: false },
+      );
+
+      const cameraList = await app!.inject({
+        headers: { cookie: viewer.cookie },
+        method: 'GET',
+        url: '/api/cameras',
+      });
+      const [camera] = cameraList.json<{
+        cameras: {
+          canFlip: boolean;
+          canListen: boolean;
+          canPause: boolean;
+          canTalk: boolean;
+        }[];
+      }>().cameras;
+      expect(camera).toMatchObject({
+        canFlip: true,
+        canListen: true,
+        canPause: false,
+        canTalk: false,
+      });
+    });
+
+    it('blocks flip and pause for a viewer without those specific grants, even with view access', async () => {
+      const owner = await registerAndSignIn(
+        'grant-scope-owner@example.com',
+        '10.0.6.1',
+      );
+      const paired = await pairCamera(owner, 'Backyard');
+      // View-only: no listen/talk/flip/pause.
+      const viewer = await inviteAndAccept(
+        owner,
+        'viewer',
+        'grant-scope-viewer@example.com',
+        '10.0.6.2',
+      );
+
+      const flip = await app!.inject({
+        headers: { cookie: viewer.cookie, 'x-csrf-token': viewer.csrf },
+        method: 'POST',
+        url: `/api/cameras/${paired.cameraId}/activate`,
+      });
+      expect(flip.statusCode).toBe(403);
+
+      const membersBefore = await app!.inject({
+        headers: { cookie: owner.cookie },
+        method: 'GET',
+        url: '/api/household/sharing',
+      });
+      const memberId = membersBefore
+        .json<{ members: { id: string; userId: string }[] }>()
+        .members.find((member) => member.userId === viewer.userId)!.id;
+      await app!.inject({
+        headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+        method: 'PUT',
+        payload: {
+          grants: [
+            {
+              cameraId: paired.cameraId,
+              canFlip: true,
+              canListen: false,
+              canPause: false,
+              canTalk: false,
+            },
+          ],
+        },
+        url: `/api/household/members/${memberId}/grants`,
+      });
+
+      // Now granted canFlip: gets past the permission check. The device
+      // isn't actually connected in this test, so the switch itself still
+      // fails, but with 409 (offline), not 403 (forbidden) -- proof the
+      // authorization check passed this time.
+      const retried = await app!.inject({
+        headers: { cookie: viewer.cookie, 'x-csrf-token': viewer.csrf },
+        method: 'POST',
+        url: `/api/cameras/${paired.cameraId}/activate`,
+      });
+      expect(retried.statusCode).toBe(409);
+    });
+
+    it('blocks privacy/pause for a viewer without canPause on that device', async () => {
+      const owner = await registerAndSignIn(
+        'pause-owner@example.com',
+        '10.0.7.1',
+      );
+      const paired = await pairCamera(owner, 'Nursery');
+      const viewer = await inviteAndAccept(
+        owner,
+        'viewer',
+        'pause-viewer@example.com',
+        '10.0.7.2',
+        { defaultCanListen: true },
+      );
+
+      const pause = await app!.inject({
+        headers: { cookie: viewer.cookie, 'x-csrf-token': viewer.csrf },
+        method: 'PUT',
+        payload: { enabled: true },
+        url: `/api/devices/${paired.deviceId}/privacy`,
+      });
+      expect(pause.statusCode).toBe(403);
+    });
+
+    it('only permanently removes a member after they have been revoked', async () => {
+      const owner = await registerAndSignIn(
+        'remove-owner@example.com',
+        '10.0.8.1',
+      );
+      const viewer = await inviteAndAccept(
+        owner,
+        'viewer',
+        'remove-viewer@example.com',
+        '10.0.8.2',
+      );
+      const members = await app!.inject({
+        headers: { cookie: owner.cookie },
+        method: 'GET',
+        url: '/api/household/sharing',
+      });
+      const memberId = members
+        .json<{ members: { id: string; userId: string }[] }>()
+        .members.find((member) => member.userId === viewer.userId)!.id;
+
+      const tooEarly = await app!.inject({
+        headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+        method: 'DELETE',
+        url: `/api/household/members/${memberId}/permanently`,
+      });
+      expect(tooEarly.statusCode).toBe(409);
+
+      const revoked = await app!.inject({
+        headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+        method: 'DELETE',
+        url: `/api/household/members/${memberId}`,
+      });
+      expect(revoked.statusCode).toBe(204);
+
+      const removed = await app!.inject({
+        headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+        method: 'DELETE',
+        url: `/api/household/members/${memberId}/permanently`,
+      });
+      expect(removed.statusCode).toBe(204);
+
+      const after = await app!.inject({
+        headers: { cookie: owner.cookie },
+        method: 'GET',
+        url: '/api/household/sharing',
+      });
+      expect(
+        after
+          .json<{ members: { id: string }[] }>()
+          .members.some((member) => member.id === memberId),
+      ).toBe(false);
     });
   },
 );

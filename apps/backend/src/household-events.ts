@@ -28,6 +28,9 @@ export type HouseholdEvent =
     }
   | {
       type: 'motion-history-cleared';
+    }
+  | {
+      type: 'household-membership-changed';
     };
 
 export class HouseholdEventHub {
@@ -63,10 +66,27 @@ export class HouseholdEventHub {
 
   /** Immediately close the realtime connection(s) for one signed-in browser
    * session, e.g. right after it's revoked. Code 4001 tells the client this
-   * was a deliberate sign-out, not a network hiccup to reconnect from. */
+   * was a deliberate sign-out, not a network hiccup to reconnect from --
+   * only call this where the session token itself is actually invalidated
+   * (revokeMember, account deletion, password reset). For anything that
+   * leaves the session valid but changes what it can see (grants changed,
+   * active household switched), use refreshSession instead so the client
+   * reconnects and refetches without signing the person out from under
+   * themselves. */
   closeSession(sessionId: string, reason = 'Session revoked'): void {
     for (const socket of this.#sessionSockets.get(sessionId) ?? []) {
       socket.close(4001, reason);
+    }
+    this.#sessionSockets.delete(sessionId);
+  }
+
+  /** Closes one session's realtime connection(s) the same way as
+   * closeSession, but with code 4002: the session itself is still valid,
+   * something it depends on just changed, so the client should reconnect
+   * and refetch silently instead of treating this as a sign-out. */
+  refreshSession(sessionId: string, reason = 'Refresh needed'): void {
+    for (const socket of this.#sessionSockets.get(sessionId) ?? []) {
+      socket.close(4002, reason);
     }
     this.#sessionSockets.delete(sessionId);
   }

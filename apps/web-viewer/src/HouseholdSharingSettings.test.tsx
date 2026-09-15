@@ -160,11 +160,90 @@ describe('HouseholdSharingSettings', () => {
                 cameraId: camera.id,
                 canListen: true,
                 canTalk: false,
+                canFlip: false,
+                canPause: false,
               },
             ],
           }),
           method: 'PUT',
         },
+      ),
+    );
+  });
+
+  it('sends the chosen default permissions for a viewer invite', async () => {
+    vi.mocked(request).mockImplementation((path, options) => {
+      if (path === '/api/household/sharing')
+        return Promise.resolve({ invitations: [], members: [] });
+      if (path === '/api/household/invitations' && options?.method === 'POST')
+        return Promise.resolve({
+          expiresAt: '2026-09-14T12:00:00.000Z',
+          token: 'viewer-invite-code',
+        });
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+    render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
+    await screen.findByText('No household members.');
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'viewer@example.com' },
+    });
+    // Access level defaults to Viewer, so the permission picker is already
+    // showing; Listen defaults on, flip this test's picks explicitly.
+    fireEvent.click(screen.getByLabelText('Talk by default'));
+    fireEvent.click(screen.getByLabelText('Flip camera by default'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create invitation' }));
+
+    await waitFor(() =>
+      expect(request).toHaveBeenCalledWith(
+        '/api/household/invitations',
+        expect.objectContaining({
+          body: JSON.stringify({
+            email: 'viewer@example.com',
+            role: 'viewer',
+            defaultCanListen: true,
+            defaultCanTalk: true,
+            defaultCanFlip: true,
+            defaultCanPause: false,
+          }),
+          method: 'POST',
+        }),
+      ),
+    );
+  });
+
+  it('only offers permanent removal for an already-revoked member', async () => {
+    vi.mocked(request).mockImplementation((path, options) => {
+      if (path === '/api/household/sharing')
+        return Promise.resolve({
+          invitations: [],
+          members: [
+            {
+              email: 'gone@example.com',
+              expiresAt: null,
+              grants: [],
+              id: 'b4b0f2d6-df3f-4c2a-9e9b-6e6b6f6e9a10',
+              role: 'viewer',
+              status: 'revoked',
+            },
+          ],
+        });
+      if (path.endsWith('/permanently') && options?.method === 'DELETE')
+        return Promise.resolve(undefined);
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+    render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
+    await screen.findByText('gone@example.com');
+
+    expect(
+      screen.queryByRole('button', { name: 'Remove access' }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from list' }));
+
+    await waitFor(() =>
+      expect(request).toHaveBeenCalledWith(
+        '/api/household/members/b4b0f2d6-df3f-4c2a-9e9b-6e6b6f6e9a10/permanently',
+        { method: 'DELETE' },
       ),
     );
   });

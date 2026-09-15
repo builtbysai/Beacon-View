@@ -11,12 +11,17 @@ interface HouseholdEventOptions {
   enabled: boolean;
   onEvent: (event: HouseholdEvent) => void;
   onSessionEnded: () => void;
+  /** The session is still fully valid -- something it depends on just
+   * changed (camera grants, active household). Refetch and carry on;
+   * this must never sign the person out. */
+  onRefreshNeeded?: () => void;
 }
 
 export function useHouseholdEvents({
   enabled,
   onEvent,
   onSessionEnded,
+  onRefreshNeeded,
 }: HouseholdEventOptions): void {
   useEffect(() => {
     if (!enabled) return;
@@ -42,10 +47,27 @@ export function useHouseholdEvents({
       };
       socket.onclose = (event) => {
         if (!active) return;
-        if (event.code === 4001 || event.code === 4003) {
+        // 4001: the session token itself was actually revoked (password
+        // reset, account deletion, explicitly signed out elsewhere) -- this
+        // is the only close code that should ever sign the person out.
+        if (event.code === 4001) {
           onSessionEnded();
           return;
         }
+        // 4002: the session is still valid, but something it depends on
+        // changed (camera grants, active household) -- refetch and
+        // reconnect right away rather than waiting out the backoff below.
+        if (event.code === 4002) {
+          onRefreshNeeded?.();
+          retry = 0;
+          reconnectTimer = window.setTimeout(connect, 200);
+          return;
+        }
+        // 4003 ("Connection rejected"/"Authorization lost") covers both "not
+        // signed in at all" and "role dropped below admin" -- the latter
+        // leaves the session valid, so this must not sign the person out
+        // either. If this tab's own state hasn't already disabled this
+        // hook (see `enabled` above), just keep retrying with backoff.
         const delay = Math.min(1_000 * 2 ** retry, 15_000);
         retry += 1;
         reconnectTimer = window.setTimeout(connect, delay);
@@ -58,5 +80,5 @@ export function useHouseholdEvents({
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       socket?.close();
     };
-  }, [enabled, onEvent, onSessionEnded]);
+  }, [enabled, onEvent, onSessionEnded, onRefreshNeeded]);
 }

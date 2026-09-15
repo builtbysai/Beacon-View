@@ -29,6 +29,7 @@ import type {
 } from './notification-types.js';
 import {
   type AccessHistoryRecord,
+  type AccessibleCameraRecord,
   type AuditInput,
   type BrowserSessionRecord,
   type CameraIdentity,
@@ -496,7 +497,13 @@ export class PostgresStore implements MilestoneStore {
   async replaceHouseholdMemberGrants(input: {
     householdId: string;
     memberId: string;
-    grants: Array<{ cameraId: string; canListen: boolean; canTalk: boolean }>;
+    grants: Array<{
+      cameraId: string;
+      canListen: boolean;
+      canTalk: boolean;
+      canFlip: boolean;
+      canPause: boolean;
+    }>;
   }): Promise<string[] | null> {
     return this.sharing.replaceGrants(input);
   }
@@ -506,6 +513,13 @@ export class PostgresStore implements MilestoneStore {
     memberId: string,
   ): Promise<string[] | null> {
     return this.sharing.revokeMember(householdId, memberId);
+  }
+
+  async permanentlyRemoveHouseholdMember(
+    householdId: string,
+    memberId: string,
+  ): Promise<boolean> {
+    return this.sharing.permanentlyRemoveMember(householdId, memberId);
   }
 
   async leaveCamera(
@@ -641,7 +655,7 @@ export class PostgresStore implements MilestoneStore {
     householdId: string,
     userId: string,
     role: SessionRecord['role'],
-  ): Promise<CameraRecord[]> {
+  ): Promise<AccessibleCameraRecord[]> {
     return this.devices.listAccessibleCameras(householdId, userId, role);
   }
 

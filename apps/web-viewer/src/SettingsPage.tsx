@@ -20,6 +20,10 @@ type SettingsPageProps = {
   user: User;
   household: HouseholdSession;
   cameras: Camera[];
+  /** Bumped whenever a household event says membership, invitations, or
+   * grants changed elsewhere -- People & access reloads when this changes
+   * instead of only ever reflecting its own actions. */
+  membershipRevision: number;
   onLogout: () => void;
   onDeleteAccount: () => void;
   onCurrentSessionRevoked: (message?: string) => void;
@@ -86,6 +90,7 @@ export function SettingsPage({
   user,
   household,
   cameras,
+  membershipRevision,
   onLogout,
   onDeleteAccount,
   onCurrentSessionRevoked,
@@ -145,7 +150,11 @@ export function SettingsPage({
         )}
         {selected === 'access' && (
           <div aria-label="People and access">
-            <HouseholdSharingSettings cameras={cameras} role={household.role} />
+            <HouseholdSharingSettings
+              cameras={cameras}
+              role={household.role}
+              refreshRevision={membershipRevision}
+            />
           </div>
         )}
         {selected === 'camera' && manager && (

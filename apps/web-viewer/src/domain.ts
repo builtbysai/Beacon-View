@@ -36,6 +36,10 @@ export interface Camera {
   /** A viewer/guest can always drop their own access to a camera someone
    * else shared with them. */
   canLeave?: boolean;
+  canListen?: boolean;
+  canTalk?: boolean;
+  canFlip?: boolean;
+  canPause?: boolean;
 }
 
 export interface Device {

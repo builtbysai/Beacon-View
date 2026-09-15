@@ -83,7 +83,10 @@ export function registerAccountRoutes(
     if (!switched) {
       return reply.code(404).send({ error: 'Household unavailable' });
     }
-    householdEvents.closeSession(session.id, 'Household changed');
+    // The session token itself is still fully valid here -- only its
+    // active household changed -- so this must not read as a sign-out to
+    // the client the way a real revocation does.
+    householdEvents.refreshSession(session.id, 'Household changed');
     signaling.disconnectSession(session.id, 'household_changed');
     return reply.code(204).send();
   });

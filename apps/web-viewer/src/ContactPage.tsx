@@ -17,7 +17,10 @@ export function ContactPage({
     if (busy) return;
     setBusy(true);
     setError('');
-    const form = new FormData(event.currentTarget);
+    // Captured now: React nulls out event.currentTarget once the handler's
+    // synchronous portion finishes, before the request below resolves.
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await request('/api/contact', {
         body: JSON.stringify({
@@ -30,7 +33,7 @@ export function ContactPage({
         method: 'POST',
       });
       setSent(true);
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (caught) {
       setError(
         caught instanceof Error

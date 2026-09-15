@@ -1,4 +1,4 @@
-import type { CameraRecord } from './store.js';
+import type { AccessibleCameraRecord, CameraRecord } from './store.js';
 
 const ONLINE_WINDOW = 90 * 1_000;
 
@@ -43,14 +43,18 @@ export function canLeaveCamera(viewer: CameraViewerContext): boolean {
 }
 
 export function presentCamera(
-  camera: CameraRecord,
+  camera: AccessibleCameraRecord,
   status: CameraConnectionStatus,
   viewer: CameraViewerContext,
 ) {
   return {
     availability: status.producerConnected ? 'available' : 'unavailable',
+    canFlip: camera.canFlip,
     canLeave: canLeaveCamera(viewer),
+    canListen: camera.canListen,
+    canPause: camera.canPause,
     canRemove: canRemoveCamera(camera, viewer),
+    canTalk: camera.canTalk,
     capabilities: camera.capabilities,
     credentialRevoked: camera.credentialRevokedAt !== null,
     deviceId: camera.publicDeviceId,

@@ -196,8 +196,8 @@ export class PostgresPairingRepository {
       if (pairingCode.createdByUserId) {
         await client.query(
           `INSERT INTO camera_grants
-             (household_id, member_id, camera_source_id, can_listen, can_talk)
-           SELECT $1, m.id, $2, true, true
+             (household_id, member_id, camera_source_id, can_listen, can_talk, can_flip, can_pause)
+           SELECT $1, m.id, $2, true, true, true, true
            FROM household_members m
            WHERE m.household_id = $1 AND m.user_id = $3
              AND m.status = 'active' AND m.role = 'viewer'

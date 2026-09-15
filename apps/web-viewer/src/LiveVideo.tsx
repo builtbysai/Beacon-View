@@ -105,6 +105,8 @@ export function LiveVideo({
   canRecord = false,
   recordingReady = true,
   onConnectDriveForRecording,
+  canFlip = true,
+  canPause = true,
 }: {
   enabled?: boolean;
   camera: Camera;
@@ -128,6 +130,11 @@ export function LiveVideo({
    * instead of a button that always fails with a 409 once pressed. */
   recordingReady?: boolean;
   onConnectDriveForRecording?: () => void;
+  /** Whether this camera's grant allows switching between its sibling
+   * sources. Hidden, not disabled, when it doesn't -- same as Listen/Talk. */
+  canFlip?: boolean;
+  /** Whether this camera's grant allows toggling privacy mode. */
+  canPause?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -768,14 +775,16 @@ export function LiveVideo({
                 </span>
               </button>
             )}
-            <CameraFlipButton
-              sources={siblingCameras}
-              activeId={camera.id}
-              busy={switching || privacyBusy || privacyMode}
-              className="video-control"
-              onSwitch={switchCamera}
-            />
-            {onPrivacy && (
+            {canFlip && (
+              <CameraFlipButton
+                sources={siblingCameras}
+                activeId={camera.id}
+                busy={switching || privacyBusy || privacyMode}
+                className="video-control"
+                onSwitch={switchCamera}
+              />
+            )}
+            {onPrivacy && canPause && (
               <button
                 aria-pressed={privacyMode}
                 className={`video-control${privacyMode ? ' is-active' : ''}`}

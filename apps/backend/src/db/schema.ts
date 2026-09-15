@@ -190,6 +190,15 @@ export const householdInvitations = pgTable(
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     acceptedAt: timestamp('accepted_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    // The camera permissions a 'viewer' invite is accepted with, chosen by
+    // whoever created it -- applied to the default grant every current
+    // camera gets at acceptance (see acceptInvitation). Meaningless for
+    // 'admin' (grants don't apply to them) and currently unused for
+    // 'guest' (still opt-in per camera afterward, same as before).
+    defaultCanListen: boolean('default_can_listen').notNull().default(false),
+    defaultCanTalk: boolean('default_can_talk').notNull().default(false),
+    defaultCanFlip: boolean('default_can_flip').notNull().default(false),
+    defaultCanPause: boolean('default_can_pause').notNull().default(false),
     ...timestamps,
   },
   (table) => [
@@ -432,6 +441,10 @@ export const cameraGrants = pgTable(
       .references(() => cameraSources.id, { onDelete: 'cascade' }),
     canListen: boolean('can_listen').notNull().default(false),
     canTalk: boolean('can_talk').notNull().default(false),
+    // View (this row existing) is the only permission every grant implies.
+    // Everything else is opt-in per camera.
+    canFlip: boolean('can_flip').notNull().default(false),
+    canPause: boolean('can_pause').notNull().default(false),
     ...timestamps,
   },
   (table) => [

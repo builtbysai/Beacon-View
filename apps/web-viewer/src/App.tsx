@@ -96,6 +96,7 @@ export function App() {
   const [activityNotice, setActivityNotice] = useState('');
   const [motionEventRevision, setMotionEventRevision] = useState(0);
   const [motionClearRevision, setMotionClearRevision] = useState(0);
+  const [membershipRevision, setMembershipRevision] = useState(0);
   const [driveRecordingReady, setDriveRecordingReady] = useState(false);
   const returnPage = useRef<Page>('cameras');
   const reconnectDeviceId = useRef<string | null>(null);
@@ -360,6 +361,9 @@ export function App() {
           setMotionClearRevision((revision) => revision + 1);
         }
       }
+      if (message.type === 'household-membership-changed') {
+        setMembershipRevision((revision) => revision + 1);
+      }
     },
     [loadCameras, navigate],
   );
@@ -367,11 +371,21 @@ export function App() {
     () => clearLocalSession('You were signed out because this session ended.'),
     [clearLocalSession],
   );
+  const handleRefreshNeeded = useCallback(() => {
+    void loadCameras();
+    void request<{ household: HouseholdSession; user: User }>('/api/auth/me')
+      .then((result) => {
+        setUser(result.user);
+        setHousehold(result.household ?? { id: '', role: 'owner' });
+      })
+      .catch(() => undefined);
+  }, [loadCameras]);
   useHouseholdEvents({
     enabled:
       user !== null &&
       (household?.role === 'owner' || household?.role === 'admin'),
     onEvent: handleHouseholdEvent,
+    onRefreshNeeded: handleRefreshNeeded,
     onSessionEnded: handleSessionEnded,
   });
 
@@ -828,6 +842,8 @@ export function App() {
           onConnectDriveForRecording={() =>
             navigate('settings', '?section=storage')
           }
+          canFlip={selectedCamera.canFlip ?? true}
+          canPause={selectedCamera.canPause ?? true}
         />
         {liveSettingsOpen && liveDevice && (
           <LiveCameraSettingsDialog
@@ -1111,6 +1127,7 @@ export function App() {
             cameras={cameras}
             user={user}
             household={household!}
+            membershipRevision={membershipRevision}
             onLogout={() => void logout()}
             onDeleteAccount={requestDeleteAccount}
             onCurrentSessionRevoked={clearLocalSession}
