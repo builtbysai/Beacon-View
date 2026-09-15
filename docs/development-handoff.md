@@ -1,8 +1,68 @@
 # Beacon SecureView development handoff
 
-Updated September 14, 2026. This is the shortest reliable orientation for a new
+Updated September 15, 2026. This is the shortest reliable orientation for a new
 development session. GitHub is canonical; the maintained local checkout is
 `C:\Dev\Beacon-SecureView`.
+
+## Read this first: check for other active work before developing
+
+**Before planning or editing anything**, run all three of these — skipping
+them previously caused a near-miss where a PR built on a stale `main` almost
+overwrote unrelated, already-deployed production work:
+
+1. `git branch -r` and `git worktree list` — this repository is worked on by
+   both Codex and Claude Code sessions, sometimes concurrently in a second
+   local worktree (historically `~/.codex/worktrees/<id>/Beacon-SecureView`)
+   with its own uncommitted, in-progress work. If you find one, treat its
+   modified files as off-limits — read them if useful for context, never
+   edit, commit, or build conflicting functionality against them without
+   checking with the owner first.
+2. Read this file and [roadmap.md](roadmap.md) on whatever branch is
+   currently checked out in any such worktree, not only on `main` — `main`
+   can be, and has been, several days and many commits behind the branch
+   actually running in production.
+3. Check what Oracle is actually running before assuming GitHub and
+   production agree: `ssh beacon-oracle` (Tailscale-only; public SSH is
+   closed, see ADR 0045), then `sudo docker compose --project-name
+   beacon-secureview-cloud ps` and `ls -lt /opt/beacon/releases/ | head`.
+
+## September 14-15 merge: main is now the production line
+
+`main` had drifted ~4 days and 16+ commits behind `codex/notification-transport-v1`,
+which was the branch actually deployed to Oracle (household sharing, notification
+transport, Google Drive backup foundation, camera reliability fixes, and the
+Tailscale-based private deploy workflow, ADRs 0044-0050). A parallel `codex/
+android-experience-overhaul` branch had independently rebuilt the same backend/
+Android maintainability split with a different implementation; its genuinely new
+fixes (an Android live-view reconnect that froze video, a `session!!` race that
+could crash the Monitor app on session expiry, and several web-viewer bugs) were
+re-applied on top of `codex/notification-transport-v1` instead of merging that
+whole branch, since both had independently built the same refactor.
+
+`codex/notification-transport-v1` (with those fixes, plus a household-invitation
+resend action and negative-authorization test coverage added on top) has now been
+merged into `main` and pushed, restoring `main` as the accurate source of truth.
+All now-stale/fully-merged branches were deleted on GitHub and locally; only
+`main`, `codex/notification-transport-v1` (kept because a Codex worktree still had
+it checked out with uncommitted work), and `claude/continue-from-notification-transport-v1`
+remain.
+
+**Still uncommitted at last check**, in a separate Codex worktree, not touched by
+any of the above: an in-progress "user-owned recording" feature (new migration
+`0018_recording_foundation.sql`, `recording-routes.ts`, `postgres-recording-repository.ts`,
+ADR draft "0051-user-owned-recording-scope"), plus in-flight edits to
+`app.ts`, `authentication-routes.ts`, `db/schema.ts`, `drive-routes.ts`,
+`google-drive-client.ts`, `notification-delivery.ts`, `notification-routes.ts`,
+`store.ts`, `store-contract.ts`, and the Android `BeaconApi.kt`/
+`BeaconFirebaseMessagingService.kt`/`NotificationEnrollment.kt`. A local
+`docs/core-feature-completion-plan.md` (also uncommitted) lays out the intended
+execution order: (1) notifications/security events, (2) household sharing
+completion, (3) account recovery/hardening, (4) recording + Drive export, (5)
+integration/operational proof, (6) UI/UX pass, (7) release gate. Sharing (2) is
+now substantially complete on `main`. Steps 1, 3, and 4 all touch files with
+active uncommitted work in that worktree — do not start fresh work there without
+confirming that work is finished, abandoned, or coordinating directly with
+whoever is running it.
 
 ## September 12 interface-reliability follow-up
 

@@ -189,6 +189,19 @@ sender. Inbox, bounce/complaint handling, physical multi-account acceptance, and
 independent security review remain evidence gates; the migrations, API, and UI are
 now deployed to the private alpha.
 
+An invitation can now be resent (`POST /api/household/invitations/:id/resend`):
+it issues a fresh token/expiry, delivers it, and only revokes the original once
+the replacement is confirmed created and delivered, so a failed delivery never
+leaves the household without a working pending invitation. An automated test now
+proves the authorization boundary directly — a viewer session gets 403 from all
+six admin-only sharing endpoints (list sharing state, create/resend/revoke
+invitation, replace grants, revoke member) — rather than relying only on manual
+review of the `authenticateHouseholdAdmin(StateChange)` checks. Remaining gates
+for this feature are still inbox/bounce evidence, physical multi-account
+acceptance, and independent security review; notification events for the
+invitation lifecycle (create/accept/revoke) are intentionally not yet wired,
+pending the separate in-progress notification-transport work.
+
 ## Decisions requiring the owner
 
 1. Record physical acceptance with access to the Pixel, a second network and audio
