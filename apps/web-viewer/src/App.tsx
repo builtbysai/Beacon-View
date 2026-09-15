@@ -671,6 +671,7 @@ export function App() {
           }}
           siblingCameras={siblings}
           onDevice={() => setLiveSettingsOpen(true)}
+          canRecord={household?.role === 'owner'}
         />
         {liveSettingsOpen && liveDevice && (
           <LiveCameraSettingsDialog

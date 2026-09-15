@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ApiError, request } from './api';
 import { Icon } from './Icon';
 import { CameraFlipButton } from './CameraFlipButton';
 import { InlineRename } from './InlineRename';
@@ -26,6 +27,24 @@ interface Camera {
   id: string;
   name: string;
 }
+
+type RecordingStatus =
+  | 'requested'
+  | 'recording'
+  | 'uploading'
+  | 'available'
+  | 'failed'
+  | 'deleting'
+  | 'deleted';
+interface RecordingProgress {
+  id: string;
+  status: RecordingStatus;
+}
+const RECORDING_IN_PROGRESS: RecordingStatus[] = [
+  'requested',
+  'recording',
+  'uploading',
+];
 
 interface ReadyMessage {
   canListen?: boolean;
@@ -83,6 +102,7 @@ export function LiveVideo({
   siblingCameras = [],
   onRename,
   onDelete,
+  canRecord = false,
 }: {
   enabled?: boolean;
   camera: Camera;
@@ -97,6 +117,10 @@ export function LiveVideo({
   siblingCameras?: Camera[];
   onRename?: (name: string) => void;
   onDelete?: () => void;
+  /** Only the household owner can request recordings (see POST
+   * /api/recordings) -- the control is hidden rather than shown disabled
+   * for everyone else, matching how Listen/Talk grants already work. */
+  canRecord?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -138,6 +162,8 @@ export function LiveVideo({
   const [statsOpen, setStatsOpen] = useState(false);
   const hideControlsTimer = useRef<number | null>(null);
   const [renaming, setRenaming] = useState(false);
+  const [recording, setRecording] = useState<RecordingProgress | null>(null);
+  const [recordingBusy, setRecordingBusy] = useState(false);
   // Matches CameraTile's grouped-by-host convention: the device is the
   // user-facing "camera", so its name leads; the source's own name (e.g.
   // "Rear camera") is secondary and only shown when it actually differs.
@@ -153,6 +179,66 @@ export function LiveVideo({
       3_000,
     );
   }, []);
+
+  const startRecording = useCallback(async () => {
+    if (
+      recordingBusy ||
+      (recording && RECORDING_IN_PROGRESS.includes(recording.status))
+    )
+      return;
+    setRecordingBusy(true);
+    setControlError('');
+    try {
+      const result = await request<{ recording: RecordingProgress }>(
+        '/api/recordings',
+        { body: JSON.stringify({ cameraId: camera.id }), method: 'POST' },
+      );
+      setRecording(result.recording);
+    } catch (error) {
+      setControlError(
+        error instanceof ApiError
+          ? error.message
+          : 'Recording could not be started.',
+      );
+    } finally {
+      setRecordingBusy(false);
+    }
+  }, [camera.id, recording, recordingBusy]);
+
+  // Recording is short-clip and device/browser-driven once requested (see
+  // core-feature-completion-plan.md's recording foundation) -- this just
+  // polls the existing list endpoint for this one recording's lifecycle
+  // rather than owning any of the actual capture/upload.
+  useEffect(() => {
+    if (!recording || !RECORDING_IN_PROGRESS.includes(recording.status))
+      return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void request<{ recordings: RecordingProgress[] }>('/api/recordings')
+        .then((result) => {
+          if (!active) return;
+          const match = result.recordings.find(
+            (item) => item.id === recording.id,
+          );
+          setRecording(match ?? null);
+        })
+        .catch(() => undefined);
+    }, 4_000);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [recording]);
+
+  useEffect(() => {
+    if (
+      !recording ||
+      (recording.status !== 'available' && recording.status !== 'failed')
+    )
+      return;
+    const timer = window.setTimeout(() => setRecording(null), 6_000);
+    return () => window.clearTimeout(timer);
+  }, [recording]);
 
   useEffect(
     () => () => {
@@ -704,6 +790,50 @@ export function LiveVideo({
                     : privacyMode
                       ? 'Resume'
                       : 'Pause'}
+                </span>
+              </button>
+            )}
+            {canRecord && (
+              <button
+                aria-pressed={
+                  !!recording &&
+                  RECORDING_IN_PROGRESS.includes(recording.status)
+                }
+                className={`video-control${
+                  recording && RECORDING_IN_PROGRESS.includes(recording.status)
+                    ? ' is-active'
+                    : ''
+                }`}
+                data-tooltip={
+                  recording?.status === 'failed'
+                    ? 'Recording failed · try again'
+                    : 'Record a short clip'
+                }
+                disabled={
+                  recordingBusy ||
+                  privacyMode ||
+                  status !== 'connected' ||
+                  (!!recording &&
+                    RECORDING_IN_PROGRESS.includes(recording.status))
+                }
+                onClick={() => void startRecording()}
+                type="button"
+              >
+                <Icon name="record" />
+                <span className="visually-hidden">
+                  {recordingBusy
+                    ? 'Starting recording…'
+                    : recording?.status === 'requested'
+                      ? 'Recording requested'
+                      : recording?.status === 'recording'
+                        ? 'Recording'
+                        : recording?.status === 'uploading'
+                          ? 'Uploading recording'
+                          : recording?.status === 'available'
+                            ? 'Recording saved'
+                            : recording?.status === 'failed'
+                              ? 'Recording failed, try again'
+                              : 'Record a short clip'}
                 </span>
               </button>
             )}

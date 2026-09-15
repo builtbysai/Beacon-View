@@ -297,6 +297,76 @@ describe('LiveVideo', () => {
     unmount();
   });
 
+  it('lets the owner start a recording and reflects its lifecycle, but hides the control otherwise', async () => {
+    FakeWebSocket.instances = [];
+    FakePeer.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    const fetchMock = vi.fn<
+      (input: string | URL, init?: RequestInit) => Promise<Response>
+    >((input, init) => {
+      if (String(input) === '/api/recordings' && init?.method === 'POST')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ recording: { id: 'rec-1', status: 'requested' } }),
+            { status: 202 },
+          ),
+        );
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { unmount } = render(
+      <LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} canRecord />,
+    );
+    const socket = FakeWebSocket.instances[0]!;
+    await act(async () => {
+      socket.message({
+        type: 'ready',
+        connectionId: 'connection-a',
+        iceServers: [],
+        iceTransportPolicy: 'all',
+      });
+      await Promise.resolve();
+    });
+    const peer = FakePeer.instances[0]!;
+    await act(async () => {
+      peer.connectionState = 'connected';
+      peer.onconnectionstatechange?.();
+      await Promise.resolve();
+    });
+
+    const recordButton = screen.getByRole('button', {
+      name: 'Record a short clip',
+    });
+    expect(recordButton).toBeEnabled();
+    await act(async () => {
+      fireEvent.click(recordButton);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/recordings',
+      expect.objectContaining({
+        body: JSON.stringify({ cameraId: 'camera' }),
+        method: 'POST',
+      }),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Recording requested' }),
+    ).toBeDisabled();
+    unmount();
+  });
+
+  it('hides the recording control for a non-owner viewer', () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    render(<LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} />);
+    expect(
+      screen.queryByRole('button', { name: /record/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it('clears the stale "Microphone off · reconnecting" status once a full reconnect completes', async () => {
     vi.useFakeTimers();
     FakeWebSocket.instances = [];

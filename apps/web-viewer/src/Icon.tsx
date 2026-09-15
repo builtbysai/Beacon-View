@@ -178,6 +178,7 @@ const shapes = {
       <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
     </>
   ),
+  record: <circle cx="12" cy="12" r="6" fill="currentColor" stroke="none" />,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof shapes;
