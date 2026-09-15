@@ -85,9 +85,26 @@ export function registerAccountRecoveryRoutes(
         tokenHash: hashSecret(token),
         userId: user.id,
       });
-      await deliverPasswordResetEmail(config, { expiresAt, to: email, token });
+      // Never let a delivery failure (e.g. Resend rejecting the recipient)
+      // turn into a 500 here -- that would leak account existence through
+      // the response status, defeating the enumeration resistance this
+      // route exists for. Still logged so a systemic delivery problem is
+      // actually visible to operators instead of silently invisible.
+      await deliverPasswordResetEmail(config, {
+        expiresAt,
+        to: email,
+        token,
+      }).catch((error: unknown) =>
+        app.log.warn({ err: error }, 'password reset email delivery failed'),
+      );
     } else if (user) {
-      await deliverGoogleOnlyPasswordResetEmail(config, email);
+      await deliverGoogleOnlyPasswordResetEmail(config, email).catch(
+        (error: unknown) =>
+          app.log.warn(
+            { err: error },
+            'google-only password reset email delivery failed',
+          ),
+      );
     }
     // Response and audit success both depend only on account existence, not
     // on which branch above ran, so the API never distinguishes a Google-only
@@ -171,11 +188,25 @@ export function registerAccountRecoveryRoutes(
       tokenHash: hashSecret(token),
       userId: session.userId,
     });
-    await deliverEmailVerificationEmail(config, {
-      expiresAt,
-      to: user.email,
-      token,
-    });
+    try {
+      await deliverEmailVerificationEmail(config, {
+        expiresAt,
+        to: user.email,
+        token,
+      });
+    } catch (error) {
+      // Unlike password-reset-request, this endpoint is session-authenticated
+      // -- there is no account to enumerate, so the caller can be told the
+      // send genuinely failed and is worth retrying, rather than a generic
+      // 500 with a raw stack trace.
+      app.log.warn(
+        { err: error },
+        'email verification email delivery failed',
+      );
+      return reply
+        .code(503)
+        .send({ error: 'The verification email could not be sent' });
+    }
     await store.audit({
       eventType: 'email_verification_requested',
       householdId: session.householdId,

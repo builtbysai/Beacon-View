@@ -171,6 +171,18 @@ export class PostgresPairingRepository {
          RETURNING public_camera_id AS "publicCameraId"`,
         [created.id, created.name],
       );
+      // Notifications default to on for a newly paired device -- without
+      // this row, listPreferences/scanNotificationPresence treat the device
+      // as opted out until the owner visits Settings, so a first-time owner
+      // who never opens Settings never gets motion/offline alerts at all.
+      await client.query(
+        `INSERT INTO notification_preferences
+           (user_id, device_id, motion_enabled, offline_enabled)
+         SELECT h.owner_id, $1, true, true
+         FROM households h WHERE h.id = $2
+         ON CONFLICT (user_id, device_id) DO NOTHING`,
+        [created.id, pairingCode.householdId],
+      );
       await client.query(
         `INSERT INTO device_credentials (camera_id, credential_hash)
          VALUES ($1, $2)`,

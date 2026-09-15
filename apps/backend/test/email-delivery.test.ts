@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { deliverHouseholdInvitation } from '../src/contact.js';
+import { deliverHouseholdInvitation, ResendDeliveryError } from '../src/contact.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -40,19 +40,33 @@ describe('household invitation email delivery', () => {
     expect(body.text).not.toContain('household name');
   });
 
-  it('surfaces provider failures to the invitation route', async () => {
+  it('surfaces provider failures to the invitation route, with Resend\'s own reason for diagnosis', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(() => Promise.resolve(new Response(null, { status: 500 }))),
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              message: 'Invalid `to` field.',
+              name: 'validation_error',
+            }),
+            { status: 422 },
+          ),
+        ),
+      ),
     );
 
-    await expect(
-      deliverHouseholdInvitation(config, {
-        expiresAt: new Date('2026-09-14T12:00:00.000Z'),
-        role: 'viewer',
-        token: 'one-time-invitation-code',
-        to: 'viewer@example.com',
-      }),
-    ).rejects.toThrow('Email delivery failed');
+    const attempt = deliverHouseholdInvitation(config, {
+      expiresAt: new Date('2026-09-14T12:00:00.000Z'),
+      role: 'viewer',
+      token: 'one-time-invitation-code',
+      to: 'viewer@example.com',
+    });
+
+    await expect(attempt).rejects.toBeInstanceOf(ResendDeliveryError);
+    await expect(attempt).rejects.toMatchObject({
+      reason: 'validation_error',
+      status: 422,
+    });
   });
 });

@@ -103,6 +103,20 @@ describe.skipIf(!store)('notification transport persistence', () => {
     expect(active.rows[0]!.count).toBe(0);
   });
 
+  it('defaults a newly paired device to motion and offline notifications on, before the owner ever visits Settings', async () => {
+    const { device, owner } = await fixture();
+
+    const preferences = await store!.listNotificationPreferences(owner.id);
+
+    expect(preferences).toEqual([
+      expect.objectContaining({
+        deviceId: device.publicDeviceId,
+        motionEnabled: true,
+        offlineEnabled: true,
+      }),
+    ]);
+  });
+
   it('atomically terminals an invalid delivery and revokes its provider registration', async () => {
     const { device, now, owner, sessionId } = await fixture();
     const subscriptionId = await store!.upsertNotificationSubscription({

@@ -194,6 +194,17 @@ export class PostgresDeviceRepository {
       );
       const created = device.rows[0];
       if (!created) throw new Error('Browser device ownership conflict');
+      // Same default-on notification opt-in as native pairing (see
+      // PostgresPairingRepository.redeem); ON CONFLICT DO NOTHING makes this
+      // safe to run on every upsert, not only a device's first registration.
+      await client.query(
+        `INSERT INTO notification_preferences
+           (user_id, device_id, motion_enabled, offline_enabled)
+         SELECT h.owner_id, $1, true, true
+         FROM households h WHERE h.id = $2
+         ON CONFLICT (user_id, device_id) DO NOTHING`,
+        [created.id, input.householdId],
+      );
       for (const source of input.sources) {
         await client.query(
           `INSERT INTO camera_sources

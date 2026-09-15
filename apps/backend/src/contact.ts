@@ -10,6 +10,19 @@ interface ResendMessage {
   to: string;
 }
 
+/** Carries Resend's own error name/message so a delivery failure is
+ * diagnosable from logs (e.g. an unverified sending domain rejecting the
+ * recipient) without ever including the API key or message content. */
+export class ResendDeliveryError extends Error {
+  constructor(
+    readonly status: number,
+    readonly reason: string,
+  ) {
+    super(`Resend request failed (${status}): ${reason}`);
+    this.name = 'ResendDeliveryError';
+  }
+}
+
 export interface ContactMessage {
   email: string;
   message: string;
@@ -89,5 +102,14 @@ export async function deliverResendEmail(
     },
     method: 'POST',
   });
-  if (!response.ok) throw new Error('Email delivery failed');
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      message?: string;
+      name?: string;
+    } | null;
+    throw new ResendDeliveryError(
+      response.status,
+      body?.name ?? body?.message ?? 'unknown error',
+    );
+  }
 }
