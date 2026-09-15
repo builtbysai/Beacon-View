@@ -32,6 +32,7 @@ import { ResetPasswordPage } from './ResetPasswordPage';
 import { VerifyEmailPage } from './VerifyEmailPage';
 import { groupCamerasByDevice, reconcileLiveCamera } from './camera-selection';
 import type { Camera, Device, HouseholdSession, User } from './domain';
+import { goBack, pushRoute, replaceRoute } from './history-nav';
 import {
   contentWidthClass,
   deviceSettingsIdFromPath,
@@ -74,6 +75,12 @@ export function App() {
     onConfirm: () => void;
   } | null>(null);
   const [page, setPage] = useState<Page>(pageFromPath);
+  // Which Settings tab is showing, mirrored in the URL (?section=...) so
+  // browser back/forward steps through them and a link into a specific
+  // section (e.g. "Connect Drive" from the live view) always lands there.
+  const [settingsSection, setSettingsSection] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get('section'),
+  );
   const [pairingOpen, setPairingOpen] = useState(false);
   const [pairingCode, setPairingCode] = useState('');
   const [pairingBusy, setPairingBusy] = useState(false);
@@ -116,21 +123,18 @@ export function App() {
   useEffect(() => {
     const legacyId = legacyDeviceIdFromPath();
     if (legacyId) {
-      window.history.replaceState(
-        {},
-        '',
-        `/cameras/${encodeURIComponent(legacyId)}/settings`,
-      );
+      replaceRoute(`/cameras/${encodeURIComponent(legacyId)}/settings`);
     }
   }, []);
 
   const navigate = useCallback((next: Page, search?: string) => {
-    window.history.pushState({}, '', `${pagePaths[next]}${search ?? ''}`);
+    pushRoute(`${pagePaths[next]}${search ?? ''}`);
     setPage(next);
     setSelectedDeviceId(null);
     setSelectedCamera(null);
     setLiveSettingsOpen(false);
     setBrowserCameraActive(false);
+    setSettingsSection(new URLSearchParams(search).get('section'));
   }, []);
 
   useEffect(() => {
@@ -145,6 +149,9 @@ export function App() {
               (camera) => camera.id === decodeURIComponent(cameraMatch[1]!),
             ) ?? null)
           : null,
+      );
+      setSettingsSection(
+        new URLSearchParams(window.location.search).get('section'),
       );
     };
     window.addEventListener('popstate', onPopState);
@@ -177,11 +184,7 @@ export function App() {
           ? reconcileLiveCamera(current, cameraResult.cameras)
           : (routeCamera ?? null);
         if (next && next.id !== decodeURIComponent(cameraMatch[1]!)) {
-          window.history.replaceState(
-            {},
-            '',
-            `/cameras/${encodeURIComponent(next.id)}`,
-          );
+          replaceRoute(`/cameras/${encodeURIComponent(next.id)}`);
         }
         return next;
       });
@@ -204,7 +207,7 @@ export function App() {
         /* Invitation still works by pasting the code manually. */
       }
     }
-    window.history.replaceState({}, '', '/');
+    replaceRoute('/');
   }, []);
 
   useEffect(() => {
@@ -605,7 +608,7 @@ export function App() {
       await request(`/api/devices/${device.id}`, { method: 'DELETE' });
       setSelectedDeviceId(null);
       setSelectedCamera(null);
-      window.history.pushState({}, '', '/cameras');
+      pushRoute('/cameras');
       setPage('cameras');
       await loadCameras();
     } catch (caught) {
@@ -686,7 +689,7 @@ export function App() {
       await disableWebNotifications().catch(() => undefined);
       setPairingOpen(false);
       clearLocalSession();
-      window.history.pushState({}, '', '/');
+      pushRoute('/');
       setPage('dashboard');
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 403) {
@@ -728,11 +731,7 @@ export function App() {
   }
 
   function openCameraSettings(deviceId: string, returnCameraId?: string) {
-    window.history.pushState(
-      {},
-      '',
-      `/cameras/${encodeURIComponent(deviceId)}/settings`,
-    );
+    pushRoute(`/cameras/${encodeURIComponent(deviceId)}/settings`);
     setPage('cameras');
     setSelectedDeviceId(deviceId);
     setSelectedCamera(null);
@@ -740,11 +739,7 @@ export function App() {
   }
 
   function openCamera(camera: Camera) {
-    window.history.pushState(
-      {},
-      '',
-      `/cameras/${encodeURIComponent(camera.id)}`,
-    );
+    pushRoute(`/cameras/${encodeURIComponent(camera.id)}`);
     setSelectedCamera(camera);
   }
 
@@ -828,7 +823,7 @@ export function App() {
           }
           deviceName={selectedCamera.deviceName}
           viewerCount={selectedCamera.viewerCount}
-          onBack={() => navigate('cameras')}
+          onBack={() => goBack(() => navigate('cameras'))}
           onSelectCamera={async (cameraId) => {
             const sibling = siblings.find((camera) => camera.id === cameraId);
             if (!sibling) return;
@@ -1042,7 +1037,7 @@ export function App() {
                     openCamera(returnCamera);
                     return;
                   }
-                  window.history.pushState({}, '', '/cameras');
+                  goBack(() => pushRoute('/cameras'));
                 }}
                 onLive={openCamera}
                 onRename={(device, name) => void renameDevice(device, name)}
@@ -1131,6 +1126,11 @@ export function App() {
             user={user}
             household={household!}
             membershipRevision={membershipRevision}
+            requestedSection={settingsSection}
+            onSectionChange={(section) => {
+              pushRoute(`/settings?section=${section}`);
+              setSettingsSection(section);
+            }}
             onLogout={() => void logout()}
             onDeleteAccount={requestDeleteAccount}
             onCurrentSessionRevoked={clearLocalSession}

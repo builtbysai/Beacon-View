@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { IconName } from './Icon';
 
 import { AccessHistory } from './AccessHistory';
@@ -24,6 +23,12 @@ type SettingsPageProps = {
    * grants changed elsewhere -- People & access reloads when this changes
    * instead of only ever reflecting its own actions. */
   membershipRevision: number;
+  /** The section named in the URL (?section=...), owned by App so browser
+   * back/forward and external deep links (e.g. "Connect Drive" from the
+   * live view) both land on the right tab. Falls back to 'household' when
+   * absent or not valid for this viewer's role. */
+  requestedSection: string | null;
+  onSectionChange: (section: SettingsSection) => void;
   onLogout: () => void;
   onDeleteAccount: () => void;
   onCurrentSessionRevoked: (message?: string) => void;
@@ -91,6 +96,8 @@ export function SettingsPage({
   household,
   cameras,
   membershipRevision,
+  requestedSection,
+  onSectionChange,
   onLogout,
   onDeleteAccount,
   onCurrentSessionRevoked,
@@ -107,12 +114,10 @@ export function SettingsPage({
     'account',
     'privacy',
   ];
-  const [selected, setSelected] = useState<SettingsSection>(() => {
-    const requested = new URLSearchParams(window.location.search).get(
-      'section',
-    ) as SettingsSection | null;
-    return requested && sections.includes(requested) ? requested : 'household';
-  });
+  const selected: SettingsSection =
+    requestedSection && sections.includes(requestedSection as SettingsSection)
+      ? (requestedSection as SettingsSection)
+      : 'household';
   const active = sectionInfo[selected];
 
   return (
@@ -123,7 +128,7 @@ export function SettingsPage({
             aria-current={selected === section ? 'page' : undefined}
             className={selected === section ? 'is-active' : ''}
             key={section}
-            onClick={() => setSelected(section)}
+            onClick={() => onSectionChange(section)}
             type="button"
           >
             <Icon name={sectionInfo[section].icon} />

@@ -798,4 +798,127 @@ describe('App', () => {
     );
     expect(await screen.findByText('No activity yet.')).toBeVisible();
   });
+
+  it('returns to Events, not Cameras, when Back is pressed after opening a camera from a motion event', async () => {
+    vi.stubGlobal('WebSocket', TestSocket);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) =>
+        Promise.resolve({
+          json: () =>
+            Promise.resolve(
+              url === '/api/auth/me'
+                ? { user: { email: 'owner@example.com', id: '1' } }
+                : url === '/api/devices'
+                  ? { devices: [] }
+                  : url === '/api/drive/status'
+                    ? { recordingsConnected: false }
+                    : url.startsWith('/api/motion-events')
+                      ? {
+                          events: [
+                            {
+                              cameraId: 'camera-1',
+                              cameraName: 'Rear camera',
+                              confidence: 0.5,
+                              deviceName: 'Hallway phone',
+                              id: 'event-1',
+                              occurredAt: new Date().toISOString(),
+                            },
+                          ],
+                          nextCursor: null,
+                        }
+                      : {
+                          cameras: [
+                            {
+                              credentialRevoked: false,
+                              deviceId: 'phone-1',
+                              deviceName: 'Hallway phone',
+                              enabled: true,
+                              id: 'camera-1',
+                              lastSeenAt: null,
+                              name: 'Rear camera',
+                              online: true,
+                              privacyMode: false,
+                              streaming: false,
+                              viewerCount: 0,
+                            },
+                          ],
+                        },
+            ),
+          ok: true,
+          status: 200,
+        }),
+      ),
+    );
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Activity' }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open camera: Hallway phone, Rear camera',
+      }),
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Hallway phone' }),
+    ).toBeVisible();
+    expect(window.location.pathname).toBe('/cameras/camera-1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Activity' }),
+    ).toBeVisible();
+    expect(await screen.findByText('Motion detected')).toBeVisible();
+    expect(window.location.pathname).toBe('/events');
+  });
+
+  it('tracks the active Settings section in the URL so browser back steps between them', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) =>
+        Promise.resolve({
+          json: () =>
+            Promise.resolve(
+              url === '/api/auth/me'
+                ? { user: { email: 'owner@example.com', id: '1' } }
+                : url === '/api/devices'
+                  ? { devices: [] }
+                  : url === '/api/account/households'
+                    ? { households: [] }
+                    : { cameras: [] },
+            ),
+          ok: true,
+          status: 200,
+        }),
+      ),
+    );
+    render(<App />);
+    await screen.findByText('Add your first camera');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(
+      await screen.findByText('The household this account belongs to.'),
+    ).toBeVisible();
+    expect(window.location.pathname + window.location.search).toBe(
+      '/settings',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    expect(
+      await screen.findByText(
+        'Sign-in methods, verification, and account deletion.',
+      ),
+    ).toBeVisible();
+    expect(window.location.pathname + window.location.search).toBe(
+      '/settings?section=account',
+    );
+
+    window.history.back();
+    expect(
+      await screen.findByText('The household this account belongs to.'),
+    ).toBeVisible();
+    expect(window.location.pathname + window.location.search).toBe(
+      '/settings',
+    );
+  });
 });

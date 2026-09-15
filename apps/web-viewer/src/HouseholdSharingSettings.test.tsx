@@ -115,7 +115,7 @@ describe('HouseholdSharingSettings', () => {
     render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
     await screen.findByText('guest@example.com');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Resend invitation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resend' }));
 
     expect(
       await screen.findByRole('button', { name: 'Copy invite link' }),
@@ -152,6 +152,7 @@ describe('HouseholdSharingSettings', () => {
     render(<HouseholdSharingSettings cameras={[camera]} role="admin" />);
     await screen.findByText('viewer@example.com');
 
+    fireEvent.click(screen.getByText('Camera access'));
     fireEvent.click(screen.getByRole('checkbox', { name: 'View' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Listen' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save camera access' }));
@@ -234,11 +235,12 @@ describe('HouseholdSharingSettings', () => {
       return Promise.reject(new Error(`Unexpected request: ${path}`));
     });
     render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
-    await screen.findByText('No active guest links.');
+    await screen.findByText('No household members.');
 
     fireEvent.click(
-      screen.getByRole('checkbox', { name: 'Hallway phone' }),
+      screen.getByRole('radio', { name: 'Share a guest link' }),
     );
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hallway phone' }));
     fireEvent.click(screen.getByLabelText('Let them listen'));
     fireEvent.click(screen.getByRole('button', { name: 'Create guest link' }));
 
@@ -270,6 +272,80 @@ describe('HouseholdSharingSettings', () => {
     expect(writeText).toHaveBeenCalledWith(
       `${window.location.origin}/g/guest-link-secret`,
     );
+  });
+
+  it('shows only one of the invite/guest-link forms at a time, and keeps the join form collapsed', async () => {
+    vi.mocked(request).mockImplementation((path, options) => {
+      if (path === '/api/household/sharing')
+        return Promise.resolve({ invitations: [], members: [] });
+      if (path === '/api/household/guest-links' && !options?.method)
+        return Promise.resolve({ guestLinks: [] });
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+    render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
+    await screen.findByText('No household members.');
+
+    // The manual join-by-code form starts collapsed -- most people arrive
+    // through a clicked invite link instead, which accepts automatically.
+    expect(screen.queryByLabelText('Invitation code')).not.toBeVisible();
+    fireEvent.click(screen.getByText('Have an invite code?'));
+    expect(screen.getByLabelText('Invitation code')).toBeVisible();
+
+    // Defaults to the invite form; the guest-link form's fields aren't
+    // rendered until its tab is chosen, and vice versa.
+    expect(screen.getByLabelText('Email')).toBeVisible();
+    expect(screen.queryByLabelText('Label (optional)')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Share a guest link' }));
+    expect(screen.getByLabelText('Label (optional)')).toBeVisible();
+    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Invite by email' }));
+    expect(screen.getByLabelText('Email')).toBeVisible();
+    expect(screen.queryByLabelText('Label (optional)')).not.toBeInTheDocument();
+  });
+
+  it('lists pending invitations and active guest links together', async () => {
+    vi.mocked(request).mockImplementation((path, options) => {
+      if (path === '/api/household/sharing')
+        return Promise.resolve({
+          invitations: [
+            {
+              createdAt: '2026-09-13T12:00:00.000Z',
+              expiresAt: '2026-09-15T12:00:00.000Z',
+              id: 'a3f6c8f0-6e8a-4b64-9b3d-9c0b6a2a8f77',
+              invitedEmail: 'viewer@example.com',
+              role: 'viewer',
+            },
+          ],
+          members: [],
+        });
+      if (path === '/api/household/guest-links' && !options?.method)
+        return Promise.resolve({
+          guestLinks: [
+            {
+              cameraIds: [camera.id],
+              canFlip: false,
+              canListen: true,
+              canPause: false,
+              canTalk: false,
+              createdAt: '2026-09-14T12:00:00.000Z',
+              expiresAt: '2026-09-16T12:00:00.000Z',
+              id: 'guest-link-1',
+              label: 'For grandma',
+            },
+          ],
+        });
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+    render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
+
+    expect(
+      await screen.findByText('viewer@example.com'),
+    ).toBeVisible();
+    expect(screen.getByText(/Invitation · viewer · expires/)).toBeVisible();
+    expect(screen.getByText('For grandma')).toBeVisible();
+    expect(screen.getByText(/Guest link · 1 camera · expires/)).toBeVisible();
   });
 
   it('only offers permanent removal for an already-revoked member', async () => {

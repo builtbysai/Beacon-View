@@ -58,6 +58,10 @@ interface GuestLink {
   label: string | null;
 }
 
+type OutstandingShare =
+  | { kind: 'invitation'; data: Invitation }
+  | { kind: 'guestLink'; data: GuestLink };
+
 function joinLink(token: string): string {
   return `${window.location.origin}/join?token=${encodeURIComponent(token)}`;
 }
@@ -80,6 +84,10 @@ export function HouseholdSharingSettings({
 }) {
   const canManage = role === 'owner' || role === 'admin';
   const [sharing, setSharing] = useState<SharingState | null>(null);
+  // Invite-by-email and guest-link creation used to be two separate,
+  // always-visible cards -- merged into one card with a toggle so only one
+  // form (and its fields) is ever on screen at a time.
+  const [addMode, setAddMode] = useState<'invite' | 'guestLink'>('invite');
   const [inviteRole, setInviteRole] = useState<'admin' | 'viewer' | 'guest'>(
     'viewer',
   );
@@ -317,7 +325,9 @@ export function HouseholdSharingSettings({
       await load();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Unable to create guest link',
+        caught instanceof Error
+          ? caught.message
+          : 'Unable to create guest link',
       );
     } finally {
       setBusy(false);
@@ -335,7 +345,9 @@ export function HouseholdSharingSettings({
       await load();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Unable to revoke guest link',
+        caught instanceof Error
+          ? caught.message
+          : 'Unable to revoke guest link',
       );
     } finally {
       setBusy(false);
@@ -386,13 +398,29 @@ export function HouseholdSharingSettings({
     }
   }
 
+  const outstanding: OutstandingShare[] = [
+    ...(sharing?.invitations.map((data): OutstandingShare => ({
+      data,
+      kind: 'invitation',
+    })) ?? []),
+    ...guestLinks.map((data): OutstandingShare => ({
+      data,
+      kind: 'guestLink',
+    })),
+  ].sort(
+    (a, b) =>
+      new Date(b.data.createdAt).getTime() -
+      new Date(a.data.createdAt).getTime(),
+  );
+
   return (
     <div className="settings-card-stack">
-      <SettingsCard aria-label="Join another household">
+      <details className="join-household-disclosure">
+        <summary>Have an invite code?</summary>
         <form onSubmit={(event) => void acceptInvitation(event)}>
           <SettingsFieldRow
             label="Join another household"
-            description="Paste the one-time code sent to your account email."
+            description="Paste the one-time code sent to your account email. Most invitations are accepted automatically from the link itself -- this is only for pasting a code by hand."
           >
             <SettingsField label="Invitation code" htmlFor="invite-code" wide>
               <input
@@ -408,105 +436,197 @@ export function HouseholdSharingSettings({
             </button>
           </SettingsFieldRow>
         </form>
-      </SettingsCard>
+      </details>
 
       {canManage && (
         <>
-          <SettingsCard aria-label="Invite someone">
-            <form onSubmit={(event) => void createInvitation(event)}>
-              <SettingsFieldRow
-                label="Invite someone"
-                description="Codes expire and work only for the exact invited email."
+          <SettingsCard
+            title="Add to your household"
+            aria-label="Add to your household"
+          >
+            <div
+              className="sharing-mode-toggle"
+              role="radiogroup"
+              aria-label="How to add access"
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={addMode === 'invite'}
+                aria-pressed={addMode === 'invite'}
+                onClick={() => setAddMode('invite')}
               >
-                <SettingsField label="Email" htmlFor="invite-email" grow>
-                  <input
-                    id="invite-email"
-                    name="email"
-                    required
-                    type="email"
-                    maxLength={320}
-                  />
-                </SettingsField>
-                <SettingsField label="Access level" htmlFor="invite-role">
-                  <select
-                    id="invite-role"
-                    name="role"
-                    value={inviteRole}
-                    onChange={(event) =>
-                      setInviteRole(
-                        event.target.value as 'admin' | 'viewer' | 'guest',
-                      )
-                    }
-                  >
-                    {role === 'owner' && <option value="admin">Admin</option>}
-                    <option value="viewer">Viewer</option>
-                    <option value="guest">Guest</option>
-                  </select>
-                </SettingsField>
-                {inviteRole === 'guest' && (
-                  <SettingsField
-                    label="Guest duration"
-                    htmlFor="invite-expires"
-                  >
+                Invite by email
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={addMode === 'guestLink'}
+                aria-pressed={addMode === 'guestLink'}
+                onClick={() => setAddMode('guestLink')}
+              >
+                Share a guest link
+              </button>
+            </div>
+
+            {addMode === 'invite' && (
+              <form onSubmit={(event) => void createInvitation(event)}>
+                <SettingsFieldRow description="Codes expire and work only for the exact invited email.">
+                  <SettingsField label="Email" htmlFor="invite-email" grow>
+                    <input
+                      id="invite-email"
+                      name="email"
+                      required
+                      type="email"
+                      maxLength={320}
+                    />
+                  </SettingsField>
+                  <SettingsField label="Access level" htmlFor="invite-role">
                     <select
-                      id="invite-expires"
+                      id="invite-role"
+                      name="role"
+                      value={inviteRole}
+                      onChange={(event) =>
+                        setInviteRole(
+                          event.target.value as 'admin' | 'viewer' | 'guest',
+                        )
+                      }
+                    >
+                      {role === 'owner' && <option value="admin">Admin</option>}
+                      <option value="viewer">Viewer</option>
+                      <option value="guest">Guest</option>
+                    </select>
+                  </SettingsField>
+                  {inviteRole === 'guest' && (
+                    <SettingsField
+                      label="Guest duration"
+                      htmlFor="invite-expires"
+                    >
+                      <select
+                        id="invite-expires"
+                        name="expiresInHours"
+                        defaultValue="24"
+                      >
+                        <option value="1">1 hour</option>
+                        <option value="24">24 hours</option>
+                        <option value="72">3 days</option>
+                        <option value="168">7 days</option>
+                      </select>
+                    </SettingsField>
+                  )}
+                  <button disabled={busy} type="submit">
+                    Create invitation
+                  </button>
+                </SettingsFieldRow>
+                {inviteRole === 'viewer' && (
+                  <SettingsFieldRow
+                    label="What can they do?"
+                    description="View access is automatic. Everything else starts off -- pick what this viewer gets on every current camera; you can adjust individual cameras afterward in Members."
+                  >
+                    <label className="sharing-permission-toggle">
+                      <input
+                        defaultChecked
+                        id="invite-default-listen"
+                        name="defaultCanListen"
+                        type="checkbox"
+                      />
+                      Listen by default
+                    </label>
+                    <label className="sharing-permission-toggle">
+                      <input
+                        id="invite-default-talk"
+                        name="defaultCanTalk"
+                        type="checkbox"
+                      />
+                      Talk by default
+                    </label>
+                    <label className="sharing-permission-toggle">
+                      <input
+                        id="invite-default-flip"
+                        name="defaultCanFlip"
+                        type="checkbox"
+                      />
+                      Flip camera by default
+                    </label>
+                    <label className="sharing-permission-toggle">
+                      <input
+                        id="invite-default-pause"
+                        name="defaultCanPause"
+                        type="checkbox"
+                      />
+                      Pause (privacy) by default
+                    </label>
+                  </SettingsFieldRow>
+                )}
+              </form>
+            )}
+
+            {addMode === 'guestLink' && (
+              <form onSubmit={(event) => void createGuestLink(event)}>
+                <SettingsFieldRow description="Anyone with the link can view the chosen cameras -- no account needed. Revoke it any time.">
+                  <SettingsField label="Label (optional)" htmlFor="guest-label">
+                    <input
+                      id="guest-label"
+                      name="label"
+                      maxLength={100}
+                      placeholder="e.g. Grandma"
+                    />
+                  </SettingsField>
+                  <SettingsField label="Expires after" htmlFor="guest-expires">
+                    <select
+                      id="guest-expires"
                       name="expiresInHours"
                       defaultValue="24"
                     >
                       <option value="1">1 hour</option>
                       <option value="24">24 hours</option>
-                      <option value="72">3 days</option>
                       <option value="168">7 days</option>
+                      <option value="720">30 days</option>
                     </select>
                   </SettingsField>
-                )}
-                <button disabled={busy} type="submit">
-                  Create invitation
-                </button>
-              </SettingsFieldRow>
-              {inviteRole === 'viewer' && (
+                  <button disabled={busy || cameras.length === 0} type="submit">
+                    Create guest link
+                  </button>
+                </SettingsFieldRow>
+                <SettingsFieldRow
+                  label="Cameras"
+                  description="Only the cameras checked here are visible through this link."
+                >
+                  {cameras.map((camera) => (
+                    <label
+                      key={camera.id}
+                      className="sharing-permission-toggle"
+                    >
+                      <input
+                        name="cameraIds"
+                        type="checkbox"
+                        value={camera.id}
+                      />
+                      {camera.deviceName || camera.name}
+                    </label>
+                  ))}
+                </SettingsFieldRow>
                 <SettingsFieldRow
                   label="What can they do?"
-                  description="View access is automatic. Everything else starts off -- pick what this viewer gets on every current camera; you can adjust individual cameras afterward in Members."
+                  description="View access is automatic once a camera is checked above."
                 >
                   <label className="sharing-permission-toggle">
                     <input
-                      defaultChecked
-                      id="invite-default-listen"
-                      name="defaultCanListen"
+                      id="guest-can-listen"
+                      name="canListen"
                       type="checkbox"
                     />
-                    Listen by default
+                    Let them listen
                   </label>
                   <label className="sharing-permission-toggle">
-                    <input
-                      id="invite-default-talk"
-                      name="defaultCanTalk"
-                      type="checkbox"
-                    />
-                    Talk by default
-                  </label>
-                  <label className="sharing-permission-toggle">
-                    <input
-                      id="invite-default-flip"
-                      name="defaultCanFlip"
-                      type="checkbox"
-                    />
-                    Flip camera by default
-                  </label>
-                  <label className="sharing-permission-toggle">
-                    <input
-                      id="invite-default-pause"
-                      name="defaultCanPause"
-                      type="checkbox"
-                    />
-                    Pause (privacy) by default
+                    <input id="guest-can-talk" name="canTalk" type="checkbox" />
+                    Let them talk
                   </label>
                 </SettingsFieldRow>
-              )}
-            </form>
+              </form>
+            )}
 
-            {createdInvite && (
+            {addMode === 'invite' && createdInvite && (
               <div className="sharing-code" role="status">
                 <SettingsRow
                   title="Share this invitation now"
@@ -539,6 +659,28 @@ export function HouseholdSharingSettings({
                 </details>
               </div>
             )}
+
+            {addMode === 'guestLink' && createdGuestLink && (
+              <div className="sharing-code" role="status">
+                <SettingsRow
+                  title="Share this guest link now"
+                  description={
+                    <>
+                      Anyone with the link can view it and it expires{' '}
+                      {new Date(createdGuestLink.expiresAt).toLocaleString()}.
+                      It won't be shown again after you leave this page.
+                    </>
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={() => void copyCreatedGuestLink()}
+                  >
+                    Copy guest link
+                  </button>
+                </SettingsRow>
+              </div>
+            )}
           </SettingsCard>
 
           <SettingsCard title="Members" aria-label="Household members">
@@ -560,144 +702,64 @@ export function HouseholdSharingSettings({
             )}
           </SettingsCard>
 
-          {sharing && sharing.invitations.length > 0 && (
+          {outstanding.length > 0 && (
             <SettingsCard
-              title="Pending invitations"
-              aria-label="Pending invitations"
+              title="Pending invitations & guest links"
+              aria-label="Pending invitations and guest links"
             >
-              {sharing.invitations.map((invitation) => (
-                <SettingsRow
-                  key={invitation.id}
-                  title={invitation.invitedEmail}
-                  description={`${invitation.role} · expires ${new Date(
-                    invitation.expiresAt,
-                  ).toLocaleString()}`}
-                >
-                  {(role === 'owner' || invitation.role !== 'admin') && (
-                    <>
-                      <button
-                        className="secondary"
-                        disabled={busy}
-                        onClick={() => void resendInvitation(invitation)}
-                        type="button"
-                      >
-                        Resend invitation
-                      </button>
-                      <button
-                        className="danger"
-                        disabled={busy}
-                        onClick={() => void revokeInvitation(invitation)}
-                        type="button"
-                      >
-                        Revoke invitation
-                      </button>
-                    </>
-                  )}
-                </SettingsRow>
-              ))}
+              {outstanding.map((item) =>
+                item.kind === 'invitation' ? (
+                  <SettingsRow
+                    key={`invitation-${item.data.id}`}
+                    title={item.data.invitedEmail}
+                    description={`Invitation · ${item.data.role} · expires ${new Date(
+                      item.data.expiresAt,
+                    ).toLocaleString()}`}
+                  >
+                    {(role === 'owner' || item.data.role !== 'admin') && (
+                      <>
+                        <button
+                          className="secondary"
+                          disabled={busy}
+                          onClick={() => void resendInvitation(item.data)}
+                          type="button"
+                        >
+                          Resend
+                        </button>
+                        <button
+                          className="danger"
+                          disabled={busy}
+                          onClick={() => void revokeInvitation(item.data)}
+                          type="button"
+                        >
+                          Revoke
+                        </button>
+                      </>
+                    )}
+                  </SettingsRow>
+                ) : (
+                  <SettingsRow
+                    key={`guest-link-${item.data.id}`}
+                    title={item.data.label || 'Guest link'}
+                    description={`Guest link · ${item.data.cameraIds.length} camera${
+                      item.data.cameraIds.length === 1 ? '' : 's'
+                    } · expires ${new Date(
+                      item.data.expiresAt,
+                    ).toLocaleString()}`}
+                  >
+                    <button
+                      className="danger"
+                      disabled={busy}
+                      onClick={() => void revokeGuestLink(item.data)}
+                      type="button"
+                    >
+                      Revoke
+                    </button>
+                  </SettingsRow>
+                ),
+              )}
             </SettingsCard>
           )}
-
-          <SettingsCard aria-label="Guest links">
-            <form onSubmit={(event) => void createGuestLink(event)}>
-              <SettingsFieldRow
-                label="Create a guest link"
-                description="Anyone with the link can view the chosen cameras -- no account needed. Revoke it any time."
-              >
-                <SettingsField label="Label (optional)" htmlFor="guest-label">
-                  <input
-                    id="guest-label"
-                    name="label"
-                    maxLength={100}
-                    placeholder="e.g. Grandma"
-                  />
-                </SettingsField>
-                <SettingsField label="Expires after" htmlFor="guest-expires">
-                  <select
-                    id="guest-expires"
-                    name="expiresInHours"
-                    defaultValue="24"
-                  >
-                    <option value="1">1 hour</option>
-                    <option value="24">24 hours</option>
-                    <option value="168">7 days</option>
-                    <option value="720">30 days</option>
-                  </select>
-                </SettingsField>
-                <button disabled={busy || cameras.length === 0} type="submit">
-                  Create guest link
-                </button>
-              </SettingsFieldRow>
-              <SettingsFieldRow
-                label="Cameras"
-                description="Only the cameras checked here are visible through this link."
-              >
-                {cameras.map((camera) => (
-                  <label key={camera.id} className="sharing-permission-toggle">
-                    <input name="cameraIds" type="checkbox" value={camera.id} />
-                    {camera.deviceName || camera.name}
-                  </label>
-                ))}
-              </SettingsFieldRow>
-              <SettingsFieldRow
-                label="What can they do?"
-                description="View access is automatic once a camera is checked above."
-              >
-                <label className="sharing-permission-toggle">
-                  <input id="guest-can-listen" name="canListen" type="checkbox" />
-                  Let them listen
-                </label>
-                <label className="sharing-permission-toggle">
-                  <input id="guest-can-talk" name="canTalk" type="checkbox" />
-                  Let them talk
-                </label>
-              </SettingsFieldRow>
-            </form>
-
-            {createdGuestLink && (
-              <div className="sharing-code" role="status">
-                <SettingsRow
-                  title="Share this guest link now"
-                  description={
-                    <>
-                      Anyone with the link can view it and it expires{' '}
-                      {new Date(createdGuestLink.expiresAt).toLocaleString()}.
-                      It won't be shown again after you leave this page.
-                    </>
-                  }
-                >
-                  <button
-                    type="button"
-                    onClick={() => void copyCreatedGuestLink()}
-                  >
-                    Copy guest link
-                  </button>
-                </SettingsRow>
-              </div>
-            )}
-
-            {guestLinks.map((link) => (
-              <SettingsRow
-                key={link.id}
-                title={link.label || 'Guest link'}
-                description={`${link.cameraIds.length} camera${
-                  link.cameraIds.length === 1 ? '' : 's'
-                } · expires ${new Date(link.expiresAt).toLocaleString()}`}
-              >
-                <button
-                  className="danger"
-                  disabled={busy}
-                  onClick={() => void revokeGuestLink(link)}
-                  type="button"
-                >
-                  Revoke link
-                </button>
-              </SettingsRow>
-            ))}
-            {guestLinks.length === 0 && (
-              <p className="settings-card-empty">No active guest links.</p>
-            )}
-          </SettingsCard>
         </>
       )}
 
@@ -813,6 +875,8 @@ function MemberRow({
     }
   }
 
+  const grantedCameraCount = Object.keys(grants).length;
+
   return (
     <>
       <SettingsRow
@@ -821,7 +885,7 @@ function MemberRow({
           member.expiresAt
             ? ` until ${new Date(member.expiresAt).toLocaleString()}`
             : ''
-        }`}
+        }${editable ? ` · ${grantedCameraCount} camera${grantedCameraCount === 1 ? '' : 's'}` : ''}`}
       >
         {revocable && (
           <button
@@ -845,94 +909,98 @@ function MemberRow({
         )}
       </SettingsRow>
       {editable && (
-        <div className="sharing-grants">
-          {cameras.map((camera) => {
-            const grant = grants[camera.id];
-            return (
-              <fieldset key={camera.id}>
-                <legend>{camera.deviceName || camera.name}</legend>
-                <label>
-                  <input
-                    checked={Boolean(grant)}
-                    type="checkbox"
-                    onChange={(event) =>
-                      setGrants((current) => {
-                        const next = { ...current };
-                        if (event.target.checked) {
-                          const remembered = lastKnownPrefs.current[camera.id];
-                          next[camera.id] = {
-                            cameraId: camera.id,
-                            cameraName: camera.name,
-                            canListen: remembered?.canListen ?? false,
-                            canTalk: remembered?.canTalk ?? false,
-                            canFlip: remembered?.canFlip ?? false,
-                            canPause: remembered?.canPause ?? false,
-                          };
-                        } else {
-                          const existing = next[camera.id];
-                          if (existing) {
-                            lastKnownPrefs.current[camera.id] = {
-                              canListen: existing.canListen,
-                              canTalk: existing.canTalk,
-                              canFlip: existing.canFlip,
-                              canPause: existing.canPause,
+        <details className="sharing-grants-disclosure">
+          <summary>Camera access</summary>
+          <div className="sharing-grants">
+            {cameras.map((camera) => {
+              const grant = grants[camera.id];
+              return (
+                <fieldset key={camera.id}>
+                  <legend>{camera.deviceName || camera.name}</legend>
+                  <label>
+                    <input
+                      checked={Boolean(grant)}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setGrants((current) => {
+                          const next = { ...current };
+                          if (event.target.checked) {
+                            const remembered =
+                              lastKnownPrefs.current[camera.id];
+                            next[camera.id] = {
+                              cameraId: camera.id,
+                              cameraName: camera.name,
+                              canListen: remembered?.canListen ?? false,
+                              canTalk: remembered?.canTalk ?? false,
+                              canFlip: remembered?.canFlip ?? false,
+                              canPause: remembered?.canPause ?? false,
                             };
+                          } else {
+                            const existing = next[camera.id];
+                            if (existing) {
+                              lastKnownPrefs.current[camera.id] = {
+                                canListen: existing.canListen,
+                                canTalk: existing.canTalk,
+                                canFlip: existing.canFlip,
+                                canPause: existing.canPause,
+                              };
+                            }
+                            delete next[camera.id];
                           }
-                          delete next[camera.id];
-                        }
-                        return next;
-                      })
-                    }
-                  />
-                  View
-                </label>
-                <label>
-                  <input
-                    checked={grant?.canListen ?? false}
-                    disabled={!grant}
-                    type="checkbox"
-                    onChange={() => togglePermission(camera.id, 'canListen')}
-                  />
-                  Listen
-                </label>
-                <label>
-                  <input
-                    checked={grant?.canTalk ?? false}
-                    disabled={!grant}
-                    type="checkbox"
-                    onChange={() => togglePermission(camera.id, 'canTalk')}
-                  />
-                  Talk
-                </label>
-                <label>
-                  <input
-                    checked={grant?.canFlip ?? false}
-                    disabled={!grant}
-                    type="checkbox"
-                    onChange={() => togglePermission(camera.id, 'canFlip')}
-                  />
-                  Flip
-                </label>
-                <label>
-                  <input
-                    checked={grant?.canPause ?? false}
-                    disabled={!grant}
-                    type="checkbox"
-                    onChange={() => togglePermission(camera.id, 'canPause')}
-                  />
-                  Pause
-                </label>
-              </fieldset>
-            );
-          })}
-          <button
-            disabled={busy || saving}
-            onClick={() => void save()}
-            type="button"
-          >
-            {saving ? 'Saving…' : 'Save camera access'}
-          </button>
-        </div>
+                          return next;
+                        })
+                      }
+                    />
+                    View
+                  </label>
+                  <label>
+                    <input
+                      checked={grant?.canListen ?? false}
+                      disabled={!grant}
+                      type="checkbox"
+                      onChange={() => togglePermission(camera.id, 'canListen')}
+                    />
+                    Listen
+                  </label>
+                  <label>
+                    <input
+                      checked={grant?.canTalk ?? false}
+                      disabled={!grant}
+                      type="checkbox"
+                      onChange={() => togglePermission(camera.id, 'canTalk')}
+                    />
+                    Talk
+                  </label>
+                  <label>
+                    <input
+                      checked={grant?.canFlip ?? false}
+                      disabled={!grant}
+                      type="checkbox"
+                      onChange={() => togglePermission(camera.id, 'canFlip')}
+                    />
+                    Flip
+                  </label>
+                  <label>
+                    <input
+                      checked={grant?.canPause ?? false}
+                      disabled={!grant}
+                      type="checkbox"
+                      onChange={() => togglePermission(camera.id, 'canPause')}
+                    />
+                    Pause
+                  </label>
+                </fieldset>
+              );
+            })}
+            <button
+              disabled={busy || saving}
+              onClick={() => void save()}
+              type="button"
+            >
+              {saving ? 'Saving…' : 'Save camera access'}
+            </button>
+          </div>
+        </details>
       )}
     </>
   );

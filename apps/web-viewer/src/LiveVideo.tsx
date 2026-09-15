@@ -608,7 +608,7 @@ export function LiveVideo({
         {!compact && (
           <div className="video-top-scrim">
             <button
-              aria-label="Back to cameras"
+              aria-label="Back"
               className="video-back"
               onClick={onBack}
               type="button"

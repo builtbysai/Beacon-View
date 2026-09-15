@@ -3224,6 +3224,57 @@ button > .icon:first-child {
   color: var(--text-secondary);
 }
 
+.sharing-mode-toggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0 clamp(1.25rem, 2.5vw, 1.85rem) var(--space-4);
+}
+
+.sharing-mode-toggle button {
+  padding: 0.5rem 0.95rem;
+  border-color: var(--border);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 650;
+  background: var(--surface);
+}
+
+.sharing-mode-toggle button[aria-checked='true'] {
+  color: var(--accent-emphasis);
+  border-color: var(--accent);
+  background: var(--action-soft-bg);
+}
+
+.join-household-disclosure {
+  padding: var(--space-4) clamp(1.25rem, 2.5vw, 1.85rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.join-household-disclosure summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-weight: 650;
+}
+
+.join-household-disclosure form {
+  margin-top: var(--space-4);
+}
+
+.sharing-grants-disclosure {
+  border-top: 1px solid var(--border);
+}
+
+.sharing-grants-disclosure summary {
+  padding: var(--space-3) clamp(1.25rem, 2.5vw, 1.85rem);
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
 .settings-card-empty,
 .settings-card-inline-message {
   padding: var(--space-4) clamp(1.25rem, 2.5vw, 1.85rem);
