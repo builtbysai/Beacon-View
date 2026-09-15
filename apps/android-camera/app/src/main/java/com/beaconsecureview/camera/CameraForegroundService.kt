@@ -608,11 +608,12 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 diagnostic = "Switching camera source",
             )
         }
-        // CameraX unbinds asynchronously. Give the old provider a short, deterministic
-        // handoff window before binding the new lens; this avoids the intermittent native
-        // crash/reconnect loop seen when front/rear is flipped rapidly.
+        // CameraX unbinds asynchronously and there is no callback to await the old
+        // lens's Camera2 session actually closing on the HAL -- only a best-effort
+        // handoff delay. 250ms wasn't consistently enough on real hardware; 500ms
+        // plus CameraXVideoCapturer's own bounded bind-retry covers the remainder.
         lifecycleScope.launch {
-            delay(250)
+            delay(500)
             if (captureGeneration == generationForSourceSwitch &&
                 !CameraRuntime.state.value.privacyMode &&
                 selectedCamera?.id == next.id

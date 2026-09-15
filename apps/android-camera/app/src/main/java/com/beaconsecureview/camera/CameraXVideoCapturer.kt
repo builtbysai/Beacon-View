@@ -1,6 +1,7 @@
 package com.beaconsecureview.camera
 
 import android.content.Context
+import android.os.Handler
 import android.os.Looper
 import android.util.Size
 import androidx.camera.core.CameraSelector
@@ -50,7 +51,18 @@ class CameraXVideoCapturer(
         observer = capturerObserver
     }
 
-    override fun startCapture(width: Int, height: Int, framerate: Int) {
+    override fun startCapture(width: Int, height: Int, framerate: Int) =
+        attemptBind(width, height, framerate, attempt = 0)
+
+    // A prior lens's Camera2 session close (from ProcessCameraProvider.unbindAll()
+    // during a flip) completes asynchronously on the camera HAL -- there is no
+    // callback to await, only a best-effort handoff delay upstream in
+    // CameraForegroundService.selectCamera(). On some devices, especially under
+    // thermal load, that window still isn't enough and bindToLifecycle throws
+    // (e.g. CAMERA_IN_USE) instead of the crash this used to surface as. One
+    // bounded retry after a short backoff resolves that without giving up on
+    // the flip outright.
+    private fun attemptBind(width: Int, height: Int, framerate: Int, attempt: Int) {
         if (disposed.get()) return
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener(
@@ -93,6 +105,13 @@ class CameraXVideoCapturer(
                     )
                     observer?.onCapturerStarted(true)
                 }.onFailure {
+                    if (attempt < MAX_BIND_ATTEMPTS && !disposed.get()) {
+                        Handler(Looper.getMainLooper()).postDelayed(
+                            { attemptBind(width, height, framerate, attempt + 1) },
+                            BIND_RETRY_DELAY_MS * (attempt + 1),
+                        )
+                        return@onFailure
+                    }
                     observer?.onCapturerStarted(false)
                     if (captureStartReported.compareAndSet(false, true)) {
                         onCaptureStarted(false)
@@ -218,5 +237,10 @@ class CameraXVideoCapturer(
                 )
             }
         }
+    }
+
+    private companion object {
+        const val MAX_BIND_ATTEMPTS = 2
+        const val BIND_RETRY_DELAY_MS = 300L
     }
 }
