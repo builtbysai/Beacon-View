@@ -213,9 +213,19 @@ six admin-only sharing endpoints (list sharing state, create/resend/revoke
 invitation, replace grants, revoke member) — rather than relying only on manual
 review of the `authenticateHouseholdAdmin(StateChange)` checks. Remaining gates
 for this feature are still inbox/bounce evidence, physical multi-account
-acceptance, and independent security review; notification events for the
-invitation lifecycle (create/accept/revoke) are intentionally not yet wired,
-pending the separate in-progress notification-transport work.
+acceptance, and independent security review.
+
+September 15 follow-up: accepting an invitation and being removed from a
+household now both fire the ADR 0053 `household_membership_changed` security
+event (notification-transport work landed September 14). Invitation
+create/resend/revoke stay email-only, since a pending invitation targets an
+`invitedEmail` with no confirmed Beacon session to alert. A real targeting bug
+was found and fixed in the same pass: member removal recorded the event
+against the *admin* who removed them instead of the removed member, so the
+one account whose access actually changed never received the alert. A live
+PostgreSQL 18 integration assertion proves both paths target the affected
+member and was confirmed to fail against the prior code before the fix landed;
+the full 168-test backend suite passes.
 
 ## Decisions requiring the owner
 

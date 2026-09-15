@@ -39,7 +39,12 @@ not considered complete.
   Listen/Talk, camera settings, and device pairing.
 - Close active sessions and sockets immediately after membership, grant, or guest
   expiry changes.
-- Add notification events for invitations, acceptance, removal, and revocation.
+- [x] Add notification events for acceptance and removal (ADR 0053's
+      `household_membership_changed` security event); invitation
+      create/resend/revoke stay email-only since a pending invitation has no
+      confirmed session to alert. Fixed a targeting bug where member removal
+      alerted the acting admin instead of the removed member -- see
+      [roadmap.md](roadmap.md)'s September 15 sharing-foundation update.
 
 ### 3. Account recovery and hardening
 
