@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { HouseholdEventHub } from './household-events.js';
 import {
@@ -16,6 +16,7 @@ import {
   DEVICE_REGISTRATION_RATE_LIMITED,
   type MilestoneStore,
 } from './store.js';
+import type { SessionRecord } from './store-contract.js';
 
 const HOUR = 60 * 60 * 1_000;
 const FIFTEEN_MINUTES = 15 * 60 * 1_000;
@@ -34,10 +35,31 @@ export function registerEnrollmentRoutes(
   dependencies: EnrollmentRouteDependencies,
 ): void {
   const { auth, householdEvents, limiter, signaling, store } = dependencies;
-  const { authenticateHouseholdAdminStateChange } = auth;
+  const { authenticateHouseholdAdminStateChange, authenticateStateChange } =
+    auth;
+
+  // Pairing a camera is open to any active household member, not just an
+  // admin -- a viewer who adds their own device should not need to ask an
+  // admin to do it for them. A guest's access is meant to stay narrow and
+  // temporary, so guests are the one role still excluded here.
+  async function authenticateHouseholdMemberStateChange(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<SessionRecord | null> {
+    const session = await authenticateStateChange(request, reply);
+    if (!session) return null;
+    if (session.role === 'guest') {
+      reply.code(403).send({ error: 'Household member access required' });
+      return null;
+    }
+    return session;
+  }
 
   app.post('/api/pairing-codes', async (request, reply) => {
-    const session = await authenticateHouseholdAdminStateChange(request, reply);
+    const session = await authenticateHouseholdMemberStateChange(
+      request,
+      reply,
+    );
     if (!session) return;
     if (!limiter.take(`pairing-create:${session.userId}`, 10, HOUR)) {
       return reply.code(429).send({ error: 'Too many requests' });
@@ -48,6 +70,8 @@ export function registerEnrollmentRoutes(
       session.householdId,
       hashSecret(code),
       expiresAt,
+      undefined,
+      session.userId,
     );
     await store.audit({
       eventType: 'pairing_code_created',
@@ -78,7 +102,7 @@ export function registerEnrollmentRoutes(
   });
 
   app.post('/api/devices/:deviceId/pairing-code', async (request, reply) => {
-    const session = await authenticateHouseholdAdminStateChange(request, reply);
+    const session = await authenticateStateChange(request, reply);
     if (!session) return;
     const parameters = deviceParameterSchema.safeParse(request.params);
     if (!parameters.success) {
@@ -90,6 +114,14 @@ export function registerEnrollmentRoutes(
         candidate.platform === 'android',
     );
     if (!device) return reply.code(404).send({ error: 'Camera not found' });
+    const canReconnect =
+      session.role === 'owner' ||
+      session.role === 'admin' ||
+      device.pairedByUserId === session.userId;
+    if (!canReconnect)
+      return reply
+        .code(403)
+        .send({ error: 'Household administrator access required' });
     if (!limiter.take(`pairing-reconnect:${session.userId}`, 10, HOUR)) {
       return reply.code(429).send({ error: 'Too many requests' });
     }
@@ -183,13 +215,17 @@ export function registerEnrollmentRoutes(
   });
 
   app.post('/api/browser-devices', async (request, reply) => {
-    const session = await authenticateHouseholdAdminStateChange(request, reply);
+    const session = await authenticateHouseholdMemberStateChange(
+      request,
+      reply,
+    );
     if (!session) return;
     const parsed = browserDeviceSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Invalid browser camera details' });
     }
     const result = await store.registerBrowserDevice({
+      createdByUserId: session.userId,
       householdId: session.householdId,
       installationId: parsed.data.installationId,
       name: parsed.data.name,

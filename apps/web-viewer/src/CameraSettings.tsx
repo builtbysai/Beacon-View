@@ -16,10 +16,12 @@ export function CameraSettings({
   onBack,
   onLive,
   onDelete,
+  onLeave,
   onPrivacy,
   onRename,
   onCameraRename,
   onCameraDelete,
+  onCameraLeave,
   onSwitchSource,
   onReconnect,
 }: {
@@ -28,10 +30,15 @@ export function CameraSettings({
   onBack: () => void;
   onLive: (camera: Camera) => void;
   onDelete: (device: Device) => void;
+  /** Drops the viewer's own access to every source on this device that was
+   * shared with them; offered only when they can't remove the device
+   * outright (see `device.canRemove`). */
+  onLeave?: (device: Device) => void;
   onPrivacy: (device: Device) => void;
   onRename: (device: Device, name: string) => void;
   onCameraRename: (camera: Camera, name: string) => void;
   onCameraDelete: (camera: Camera) => void;
+  onCameraLeave?: (camera: Camera) => void;
   onSwitchSource: (camera: Camera) => void;
   onReconnect?: (device: Device) => void;
 }) {
@@ -252,6 +259,7 @@ export function CameraSettings({
                   : {})}
                 onRename={onCameraRename}
                 onDelete={onCameraDelete}
+                {...(onCameraLeave ? { onLeave: onCameraLeave } : {})}
               />
             ))}
           </div>
@@ -270,15 +278,34 @@ export function CameraSettings({
                 ? 'Active'
                 : 'Disabled'}
           </p>
-          <div className="heading-actions">
-            <button className="danger" onClick={() => onDelete(device)}>
-              Remove camera
-            </button>
-          </div>
-          <p className="notice">
-            Removing this camera disconnects every source paired to it. You can
-            pair the device again later.
-          </p>
+          {device.canRemove && (
+            <>
+              <div className="heading-actions">
+                <button className="danger" onClick={() => onDelete(device)}>
+                  Remove camera
+                </button>
+              </div>
+              <p className="notice">
+                Removing this camera disconnects every source paired to it. You
+                can pair the device again later.
+              </p>
+            </>
+          )}
+          {!device.canRemove &&
+            onLeave &&
+            cameras.some((camera) => camera.canLeave) && (
+              <>
+                <div className="heading-actions">
+                  <button className="danger" onClick={() => onLeave(device)}>
+                    Leave this camera
+                  </button>
+                </div>
+                <p className="notice">
+                  You will stop seeing this camera. It stays paired and visible
+                  to the rest of the household.
+                </p>
+              </>
+            )}
         </div>
       </details>
       {device.platform === 'android' && !device.revoked && (

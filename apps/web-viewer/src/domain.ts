@@ -31,6 +31,11 @@ export interface Camera {
   availability?: string;
   privacyMode?: boolean;
   sourceKey?: string;
+  /** Owner/admin, or whoever personally paired this camera. */
+  canRemove?: boolean;
+  /** A viewer/guest can always drop their own access to a camera someone
+   * else shared with them. */
+  canLeave?: boolean;
 }
 
 export interface Device {
@@ -48,4 +53,5 @@ export interface Device {
   batteryCharging?: boolean | null;
   healthReportedAt?: string | null;
   capabilities?: Record<string, boolean | number | string>;
+  canRemove?: boolean;
 }

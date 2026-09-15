@@ -14,6 +14,8 @@ export interface TileCamera extends CameraAvailability {
   platform: 'android' | 'browser';
   viewerCount: number;
   lastSeenAt: string | null;
+  canRemove?: boolean;
+  canLeave?: boolean;
 }
 
 function hoverCapable(): boolean {
@@ -56,6 +58,7 @@ export function CameraTile({
   onReconnect,
   onRename,
   onDelete,
+  onLeave,
 }: {
   camera: TileCamera;
   highlighted?: boolean;
@@ -68,14 +71,26 @@ export function CameraTile({
   onDevice?: (deviceId: string) => void;
   onReconnect?: (camera: TileCamera) => void;
   onRename?: (camera: TileCamera, name: string) => void;
+  /** Only rendered when this camera's own `canRemove` says the viewer
+   * paired it themselves (or is an owner/admin) -- otherwise a click would
+   * just dead-end in a 403 from the backend. */
   onDelete?: (camera: TileCamera) => void;
+  /** Drops the viewer's own access to a camera someone else shared with
+   * them; only rendered when `canLeave` is true and `canRemove` isn't
+   * (removing already covers "make this camera go away for me and then
+   * some" for whoever paired it). */
+  onLeave?: (camera: TileCamera) => void;
 }) {
   const state = cameraStatus(camera);
   const [previewing, setPreviewing] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const hoverTimer = useRef<number | null>(null);
   const canPreview = state.available && hoverCapable();
-  const hasMenu = Boolean(onDevice || onReconnect || onRename || onDelete);
+  const showRemove = Boolean(onDelete && camera.canRemove);
+  const showLeave = Boolean(onLeave && camera.canLeave && !camera.canRemove);
+  const hasMenu = Boolean(
+    onDevice || onReconnect || onRename || showRemove || showLeave,
+  );
   const primaryName = groupedByHost ? camera.deviceName : camera.name;
 
   useEffect(
@@ -208,18 +223,32 @@ export function CameraTile({
                   Rename
                 </button>
               )}
-              {onDelete && (
+              {showRemove && (
                 <button
                   role="menuitem"
                   type="button"
                   className="camera-tile-menu-danger"
                   onClick={() => {
                     close();
-                    onDelete(camera);
+                    onDelete!(camera);
                   }}
                 >
                   <Icon name="trash" />
                   Remove camera
+                </button>
+              )}
+              {showLeave && (
+                <button
+                  role="menuitem"
+                  type="button"
+                  className="camera-tile-menu-danger"
+                  onClick={() => {
+                    close();
+                    onLeave!(camera);
+                  }}
+                >
+                  <Icon name="eyeOff" />
+                  Leave this camera
                 </button>
               )}
             </>

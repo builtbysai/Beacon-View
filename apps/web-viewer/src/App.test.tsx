@@ -212,44 +212,50 @@ describe('App', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('applies a /join link\'s stashed invitation once signed in, then clears it', async () => {
+  it("applies a /join link's stashed invitation once signed in, then clears it", async () => {
     vi.stubGlobal('WebSocket', TestSocket);
     window.sessionStorage.setItem('beacon_pending_invite', 'invite-token-abc');
-    const fetchMock = vi.fn<
-      (url: string, init?: RequestInit) => Promise<unknown>
-    >().mockImplementation((url: string, init?: RequestInit) => {
-      if (url === '/api/household/invitations/accept') {
-        expect(init?.body).toBe(JSON.stringify({ token: 'invite-token-abc' }));
+    const fetchMock = vi
+      .fn<(url: string, init?: RequestInit) => Promise<unknown>>()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        if (url === '/api/household/invitations/accept') {
+          expect(init?.body).toBe(
+            JSON.stringify({ token: 'invite-token-abc' }),
+          );
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ householdId: 'household-2' }),
+          });
+        }
+        if (url === '/api/account/household')
+          return Promise.resolve({
+            ok: true,
+            status: 204,
+            json: () => Promise.resolve({}),
+          });
+        if (url === '/api/auth/me')
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                household: { id: 'household-2', role: 'viewer' },
+                user: { id: 'member', email: 'member@example.com' },
+              }),
+          });
+        if (url === '/api/cameras')
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ cameras: [] }),
+          });
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ householdId: 'household-2' }),
+          json: () => Promise.resolve({ devices: [] }),
         });
-      }
-      if (url === '/api/account/household')
-        return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve({}) });
-      if (url === '/api/auth/me')
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () =>
-            Promise.resolve({
-              household: { id: 'household-2', role: 'viewer' },
-              user: { id: 'member', email: 'member@example.com' },
-            }),
-        });
-      if (url === '/api/cameras')
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve({ cameras: [] }),
-        });
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ devices: [] }),
       });
-    });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<App />);
@@ -491,6 +497,7 @@ describe('App', () => {
           Promise.resolve({
             cameras: [
               {
+                canRemove: true,
                 credentialRevoked: false,
                 deviceId: 'device-1',
                 deviceName: 'Pixel',
@@ -516,6 +523,7 @@ describe('App', () => {
               {
                 batteryCharging: true,
                 batteryPercent: 82,
+                canRemove: true,
                 deviceType: 'phone',
                 enabled: true,
                 id: 'device-1',
@@ -589,6 +597,7 @@ describe('App', () => {
     vi.stubGlobal('WebSocket', TestSocket);
     let cameras = [
       {
+        canRemove: true,
         credentialRevoked: false,
         deviceId: 'device-1',
         deviceName: 'Pixel',
@@ -605,6 +614,7 @@ describe('App', () => {
     ];
     let devices = [
       {
+        canRemove: true,
         deviceType: 'phone',
         enabled: true,
         id: 'device-1',

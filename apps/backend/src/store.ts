@@ -508,6 +508,14 @@ export class PostgresStore implements MilestoneStore {
     return this.sharing.revokeMember(householdId, memberId);
   }
 
+  async leaveCamera(
+    householdId: string,
+    userId: string,
+    publicCameraId: string,
+  ): Promise<string[] | null> {
+    return this.sharing.leaveCamera(householdId, userId, publicCameraId);
+  }
+
   async revokeBrowserSession(
     userId: string,
     sessionId: string,
@@ -592,12 +600,14 @@ export class PostgresStore implements MilestoneStore {
     codeHash: string,
     expiresAt: Date,
     targetDeviceId?: string,
+    createdByUserId?: string,
   ): Promise<string> {
     return this.pairing.createCode(
       householdId,
       codeHash,
       expiresAt,
       targetDeviceId,
+      createdByUserId,
     );
   }
 
@@ -657,6 +667,7 @@ export class PostgresStore implements MilestoneStore {
     name: string;
     sources: CameraSourceInput[];
     now: Date;
+    createdByUserId?: string;
   }): Promise<{ device: DeviceRecord; cameras: CameraRecord[] }> {
     return this.devices.registerBrowser(input);
   }

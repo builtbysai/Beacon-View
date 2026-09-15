@@ -99,6 +99,11 @@ export interface CameraRecord {
   lastSeenAt: Date | null;
   credentialRevokedAt: Date | null;
   capabilities: Record<string, boolean | number | string>;
+  /** Whoever created the pairing code this camera's device redeemed, or
+   * registered it directly (browser cameras). Null for cameras paired
+   * before this was tracked, or whose pairer's account was later deleted --
+   * either way, only an owner/admin can remove a camera with no pairer. */
+  pairedByUserId: string | null;
 }
 
 export interface CameraIdentity {
@@ -129,6 +134,7 @@ export interface DeviceRecord {
   batteryCharging: boolean | null;
   healthReportedAt: Date | null;
   capabilities: Record<string, boolean | number | string>;
+  pairedByUserId: string | null;
 }
 
 export interface CameraSourceInput {
@@ -427,6 +433,11 @@ export interface MilestoneStore {
     householdId: string,
     memberId: string,
   ): Promise<string[] | null>;
+  leaveCamera(
+    householdId: string,
+    userId: string,
+    publicCameraId: string,
+  ): Promise<string[] | null>;
   revokeBrowserSession(userId: string, sessionId: string): Promise<boolean>;
   deleteAccount(userId: string): Promise<boolean>;
   audit(input: AuditInput): Promise<void>;
@@ -456,6 +467,7 @@ export interface MilestoneStore {
     codeHash: string,
     expiresAt: Date,
     targetDeviceId?: string,
+    createdByUserId?: string,
   ): Promise<string>;
   revokePairingCode(
     householdId: string,
@@ -492,6 +504,7 @@ export interface MilestoneStore {
     name: string;
     sources: CameraSourceInput[];
     now: Date;
+    createdByUserId?: string;
   }): Promise<{ device: DeviceRecord; cameras: CameraRecord[] }>;
   updateDevice(
     householdId: string,

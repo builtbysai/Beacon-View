@@ -176,6 +176,13 @@ export function LiveVideo({
   // "Rear camera") is secondary and only shown when it actually differs.
   const primaryName = deviceName || camera.name;
   const overlay = liveOverlay(status, videoReady, switching, retryDisplay);
+  // The backend's viewerCount includes this very session once its own
+  // WebRTC connection is up, so "watching now" needs to subtract it back
+  // out -- otherwise watching alone always misreports as "1 viewer".
+  const othersWatching = Math.max(
+    0,
+    viewerCount - (status === 'connected' ? 1 : 0),
+  );
 
   const wakeControls = useCallback(() => {
     setControlsVisible(true);
@@ -690,79 +697,77 @@ export function LiveVideo({
             aria-label="Live view controls"
             className={`video-controls${controlsVisible ? ' is-visible' : ''}`}
           >
-            <button
-              aria-pressed={listening}
-              className="video-control"
-              data-tooltip={
-                listening ? 'Mute camera audio' : 'Listen to camera'
-              }
-              disabled={!permissions.canListen}
-              onClick={() => {
-                const next = !listening;
-                const current = ++playbackGeneration.current;
-                setControlError('');
-                setListening(next);
-                if (videoRef.current) {
-                  const video = videoRef.current;
-                  video.muted = !next;
-                  if (next)
-                    void Promise.resolve(video.play()).catch(() => {
-                      if (current !== playbackGeneration.current) return;
-                      video.muted = true;
-                      setListening(false);
-                      setControlError(
-                        'Sound could not start. Choose Listen to try again, and check your browser sound settings.',
-                      );
-                    });
+            {permissions.canListen && (
+              <button
+                aria-pressed={listening}
+                className="video-control"
+                data-tooltip={
+                  listening ? 'Mute camera audio' : 'Listen to camera'
                 }
-              }}
-              type="button"
-            >
-              <Icon name={listening ? 'speaker' : 'speakerOff'} />
-              <span className="visually-hidden">
-                {!permissions.canListen
-                  ? 'Listen unavailable'
-                  : listening
-                    ? 'Mute'
-                    : 'Listen'}
-              </span>
-            </button>
-            <button
-              aria-pressed={talkState === 'speaking'}
-              className={`video-control${talkState === 'speaking' ? ' is-active' : ''}`}
-              data-tooltip={
-                talkState === 'speaking'
-                  ? 'Stop talking'
-                  : 'Talk through camera'
-              }
-              disabled={
-                !permissions.canTalk ||
-                switching ||
-                privacyBusy ||
-                privacyMode ||
-                (status !== 'connected' &&
-                  !['permission', 'connecting', 'speaking'].includes(talkState))
-              }
-              onClick={() => {
-                if (
-                  ['permission', 'connecting', 'speaking'].includes(talkState)
-                )
-                  talkSession.current?.stop();
-                else void talkSession.current?.start();
-              }}
-              type="button"
-            >
-              <Icon name={talkState === 'speaking' ? 'micOff' : 'mic'} />
-              <span className="visually-hidden">
-                {talkState === 'speaking'
-                  ? 'Stop talking'
-                  : !permissions.canTalk
-                    ? 'Talk unavailable'
+                onClick={() => {
+                  const next = !listening;
+                  const current = ++playbackGeneration.current;
+                  setControlError('');
+                  setListening(next);
+                  if (videoRef.current) {
+                    const video = videoRef.current;
+                    video.muted = !next;
+                    if (next)
+                      void Promise.resolve(video.play()).catch(() => {
+                        if (current !== playbackGeneration.current) return;
+                        video.muted = true;
+                        setListening(false);
+                        setControlError(
+                          'Sound could not start. Choose Listen to try again, and check your browser sound settings.',
+                        );
+                      });
+                  }
+                }}
+                type="button"
+              >
+                <Icon name={listening ? 'speaker' : 'speakerOff'} />
+                <span className="visually-hidden">
+                  {listening ? 'Mute' : 'Listen'}
+                </span>
+              </button>
+            )}
+            {permissions.canTalk && (
+              <button
+                aria-pressed={talkState === 'speaking'}
+                className={`video-control${talkState === 'speaking' ? ' is-active' : ''}`}
+                data-tooltip={
+                  talkState === 'speaking'
+                    ? 'Stop talking'
+                    : 'Talk through camera'
+                }
+                disabled={
+                  switching ||
+                  privacyBusy ||
+                  privacyMode ||
+                  (status !== 'connected' &&
+                    !['permission', 'connecting', 'speaking'].includes(
+                      talkState,
+                    ))
+                }
+                onClick={() => {
+                  if (
+                    ['permission', 'connecting', 'speaking'].includes(talkState)
+                  )
+                    talkSession.current?.stop();
+                  else void talkSession.current?.start();
+                }}
+                type="button"
+              >
+                <Icon name={talkState === 'speaking' ? 'micOff' : 'mic'} />
+                <span className="visually-hidden">
+                  {talkState === 'speaking'
+                    ? 'Stop talking'
                     : talkState === 'permission' || talkState === 'connecting'
                       ? 'Cancel talk'
                       : 'Talk'}
-              </span>
-            </button>
+                </span>
+              </button>
+            )}
             <CameraFlipButton
               sources={siblingCameras}
               activeId={camera.id}
@@ -890,11 +895,11 @@ export function LiveVideo({
             </button>
           </div>
         )}
-        {!compact && (quality || viewerCount > 0) && (
+        {!compact && (quality || othersWatching > 0) && (
           <button
             aria-expanded={statsOpen}
-            aria-label={`Stream info: ${viewerCount} ${
-              viewerCount === 1 ? 'viewer' : 'viewers'
+            aria-label={`Stream info: ${othersWatching} other ${
+              othersWatching === 1 ? 'viewer' : 'viewers'
             }${quality ? `, ${quality.path}` : ''}`}
             className={`video-stats-toggle${
               controlsVisible || statsOpen ? ' is-visible' : ''
@@ -903,7 +908,7 @@ export function LiveVideo({
             type="button"
           >
             <Icon name="eye" />
-            {viewerCount}
+            {othersWatching}
             {quality && (
               <>
                 <Icon name="signal" />
@@ -916,12 +921,20 @@ export function LiveVideo({
           <div className="video-stats-panel">
             <div className="viewer-roster" aria-label="Active viewers">
               <strong>
-                {viewerCount === 0 ? 'No one else is watching' : 'Watching now'}
+                {othersWatching === 0
+                  ? 'No one else is watching'
+                  : 'Watching now'}
               </strong>
-              {Array.from({ length: viewerCount }, (_, index) => (
+              {status === 'connected' && (
+                <span>
+                  <Icon name="eye" />
+                  You
+                </span>
+              )}
+              {Array.from({ length: othersWatching }, (_, index) => (
                 <span key={index}>
                   <Icon name="eye" />
-                  {index === 0 ? 'You' : `Household viewer ${index}`}
+                  {`Household viewer ${index + 1}`}
                 </span>
               ))}
               <small>Viewer names stay private in this live view.</small>

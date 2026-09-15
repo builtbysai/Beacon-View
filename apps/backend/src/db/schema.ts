@@ -278,6 +278,14 @@ export const cameras = pgTable(
     healthReportedAt: timestamp('health_reported_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    // Whoever created the pairing code this device redeemed (or registered
+    // the browser camera directly). Null for devices paired before this
+    // column existed, and for a pairer whose account was later deleted --
+    // either way, that just means only an owner/admin can remove it, same
+    // as before this existed.
+    pairedByUserId: uuid('paired_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     ...timestamps,
   },
   (table) => [
@@ -471,6 +479,9 @@ export const pairingCodes = pgTable(
     consumedAt: timestamp('consumed_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     cameraId: uuid('camera_id').references(() => cameras.id, {
+      onDelete: 'set null',
+    }),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),
     createdAt: timestamp('created_at', { withTimezone: true })

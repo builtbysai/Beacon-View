@@ -20,7 +20,8 @@ export class PostgresDeviceRepository {
               cs.facing, cs.enabled, d.privacy_mode AS "privacyMode",
               cs.capabilities,
               COALESCE(cs.last_seen_at, d.last_seen_at) AS "lastSeenAt",
-              COALESCE(dc.revoked_at, d.revoked_at) AS "credentialRevokedAt"
+              COALESCE(dc.revoked_at, d.revoked_at) AS "credentialRevokedAt",
+              d.paired_by_user_id AS "pairedByUserId"
        FROM camera_sources cs
        JOIN cameras d ON d.id = cs.device_id
        LEFT JOIN device_credentials dc ON dc.camera_id = d.id
@@ -40,7 +41,7 @@ export class PostgresDeviceRepository {
               d.software_version AS "softwareVersion", d.enabled,
               d.privacy_mode AS "privacyMode", d.battery_percent AS "batteryPercent",
               d.battery_charging AS "batteryCharging", d.health_reported_at AS "healthReportedAt",
-              d.capabilities
+              d.capabilities, d.paired_by_user_id AS "pairedByUserId"
        FROM cameras d
        LEFT JOIN device_credentials dc ON dc.camera_id = d.id
        WHERE d.household_id = $1
@@ -171,6 +172,7 @@ export class PostgresDeviceRepository {
     name: string;
     sources: CameraSourceInput[];
     now: Date;
+    createdByUserId?: string;
   }): Promise<{ device: DeviceRecord; cameras: CameraRecord[] }> {
     const client = await this.pool.connect();
     try {
@@ -178,8 +180,8 @@ export class PostgresDeviceRepository {
       const device = await client.query<DeviceRecord>(
         `INSERT INTO cameras
            (household_id, installation_id, name, platform, device_type,
-            last_seen_at, updated_at)
-         VALUES ($1, $2, $3, 'browser', 'browser', $4, $4)
+            last_seen_at, updated_at, paired_by_user_id)
+         VALUES ($1, $2, $3, 'browser', 'browser', $4, $4, $5)
          ON CONFLICT (installation_id) DO UPDATE SET
            name = EXCLUDED.name, last_seen_at = EXCLUDED.last_seen_at,
            updated_at = EXCLUDED.updated_at
@@ -189,8 +191,14 @@ export class PostgresDeviceRepository {
                    device_type AS "deviceType", last_seen_at AS "lastSeenAt",
                    revoked_at AS "revokedAt",
                    software_version AS "softwareVersion", enabled,
-                   capabilities`,
-        [input.householdId, input.installationId, input.name, input.now],
+                   capabilities, paired_by_user_id AS "pairedByUserId"`,
+        [
+          input.householdId,
+          input.installationId,
+          input.name,
+          input.now,
+          input.createdByUserId ?? null,
+        ],
       );
       const created = device.rows[0];
       if (!created) throw new Error('Browser device ownership conflict');
@@ -206,7 +214,7 @@ export class PostgresDeviceRepository {
         [created.id, input.householdId],
       );
       for (const source of input.sources) {
-        await client.query(
+        const upserted = await client.query<{ id: string }>(
           `INSERT INTO camera_sources
              (device_id, display_name, source_key, facing, capabilities,
               last_seen_at, updated_at)
@@ -217,7 +225,8 @@ export class PostgresDeviceRepository {
              capabilities = EXCLUDED.capabilities,
              last_seen_at = EXCLUDED.last_seen_at,
              updated_at = EXCLUDED.updated_at
-           WHERE camera_sources.removed_at IS NULL`,
+           WHERE camera_sources.removed_at IS NULL
+           RETURNING id`,
           [
             created.id,
             source.name,
@@ -227,6 +236,21 @@ export class PostgresDeviceRepository {
             input.now,
           ],
         );
+        // Mirrors PostgresPairingRepository.redeem: a viewer who registers
+        // their own browser camera gets full access to it immediately, not
+        // just after an admin visits Members and grants it back to them.
+        if (input.createdByUserId && upserted.rows[0]) {
+          await client.query(
+            `INSERT INTO camera_grants
+               (household_id, member_id, camera_source_id, can_listen, can_talk)
+             SELECT $1, m.id, $2, true, true
+             FROM household_members m
+             WHERE m.household_id = $1 AND m.user_id = $3
+               AND m.status = 'active' AND m.role = 'viewer'
+             ON CONFLICT (member_id, camera_source_id) DO NOTHING`,
+            [input.householdId, upserted.rows[0].id, input.createdByUserId],
+          );
+        }
       }
       await client.query('COMMIT');
       return {

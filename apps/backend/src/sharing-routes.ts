@@ -5,6 +5,7 @@ import { canAssignRole } from './household-authorization.js';
 import { deliverHouseholdInvitation } from './contact.js';
 import type { AppConfig } from './config.js';
 import type { HouseholdEventHub } from './household-events.js';
+import { cameraParameterSchema } from './http-schemas.js';
 import type { RateLimiter } from './rate-limit.js';
 import { generateToken, hashSecret, normalizeEmail } from './security.js';
 import type { SessionAuth } from './session-auth.js';
@@ -385,6 +386,39 @@ export function registerSharingRoutes(
       .catch((error: unknown) =>
         app.log.warn({ err: error }, 'failed to record security event'),
       );
+    return reply.code(204).send();
+  });
+
+  // Self-service: a viewer or guest dropping their own access to a camera
+  // someone shared with them. This only ever touches the caller's own
+  // grant row -- it can't affect the camera itself or anyone else's access
+  // to it, so unlike the routes above it needs no admin check at all.
+  app.delete('/api/account/cameras/:cameraId', async (request, reply) => {
+    const session = await auth.authenticateStateChange(request, reply);
+    if (!session) return;
+    const parameters = cameraParameterSchema.safeParse(request.params);
+    if (!parameters.success)
+      return reply.code(404).send({ error: 'Camera not found' });
+    const sessionIds = await store.leaveCamera(
+      session.householdId,
+      session.userId,
+      parameters.data.cameraId,
+    );
+    if (!sessionIds) return reply.code(404).send({ error: 'Camera not found' });
+    closeSessions(
+      sessionIds,
+      householdEvents,
+      signaling,
+      'Camera access changed',
+    );
+    await store.audit({
+      eventType: 'camera_access_left',
+      householdId: session.householdId,
+      ipAddress: request.ip,
+      metadata: { cameraId: parameters.data.cameraId },
+      success: true,
+      userId: session.userId,
+    });
     return reply.code(204).send();
   });
 }

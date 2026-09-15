@@ -601,6 +601,52 @@ export function App() {
     }
   }
 
+  async function leaveCamera(camera: Camera) {
+    try {
+      setError('');
+      await request(`/api/account/cameras/${camera.id}`, { method: 'DELETE' });
+      await loadCameras();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'This camera could not be removed from your view.',
+      );
+    }
+  }
+
+  function requestLeaveCamera(camera: Camera) {
+    setPendingConfirm({
+      title: `Leave ${camera.name}?`,
+      description:
+        'You will stop seeing this camera. It stays paired and visible to the rest of the household.',
+      confirmLabel: 'Leave camera',
+      onConfirm: () => {
+        setPendingConfirm(null);
+        void leaveCamera(camera);
+      },
+    });
+  }
+
+  /** A grid tile represents the whole host device, so leaving it leaves
+   * every source on that device the viewer currently has access to, not
+   * just whichever one happens to be active. */
+  function requestLeaveHostCamera(camera: Camera) {
+    const siblings = cameras.filter(
+      (item) => item.deviceId === camera.deviceId && item.canLeave,
+    );
+    setPendingConfirm({
+      title: `Leave ${camera.deviceName}?`,
+      description:
+        'You will stop seeing this camera. It stays paired and visible to the rest of the household.',
+      confirmLabel: 'Leave camera',
+      onConfirm: () => {
+        setPendingConfirm(null);
+        void Promise.all(siblings.map((item) => leaveCamera(item)));
+      },
+    });
+  }
+
   function requestDeleteAccount() {
     setPendingConfirm({
       title: 'Sorry to see you go',
@@ -938,6 +984,7 @@ export function App() {
                     : {})}
                   onRename={(item, name) => renameHostCamera(item, name)}
                   onDelete={(item) => requestDeleteHostCamera(item)}
+                  onLeave={(item) => requestLeaveHostCamera(item)}
                 />
               ))}
             </div>
@@ -981,10 +1028,16 @@ export function App() {
                 onLive={openCamera}
                 onRename={(device, name) => void renameDevice(device, name)}
                 onDelete={(device) => requestDeleteDevice(device)}
+                onLeave={(device) =>
+                  requestLeaveHostCamera(
+                    cameras.find((camera) => camera.deviceId === device.id)!,
+                  )
+                }
                 onCameraRename={(camera, name) =>
                   void renameCamera(camera, name)
                 }
                 onCameraDelete={(camera) => requestDeleteCamera(camera)}
+                onCameraLeave={(camera) => requestLeaveCamera(camera)}
                 onPrivacy={(device) => void setPrivacy(device)}
                 onSwitchSource={(camera) => void switchSource(camera)}
                 onReconnect={(device) => openPairing(device.id)}
@@ -1030,6 +1083,7 @@ export function App() {
                             renameHostCamera(item, name)
                           }
                           onDelete={(item) => requestDeleteHostCamera(item)}
+                          onLeave={(item) => requestLeaveHostCamera(item)}
                         />
                       ))}
                     </div>

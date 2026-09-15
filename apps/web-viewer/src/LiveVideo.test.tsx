@@ -207,7 +207,7 @@ describe('LiveVideo', () => {
     expect(screen.queryByText('How this view works')).not.toBeInTheDocument();
   });
 
-  it('disables Listen and Talk when the camera grant excludes audio', async () => {
+  it('hides Listen and Talk entirely when the camera grant excludes audio', async () => {
     FakeWebSocket.instances = [];
     FakePeer.instances = [];
     vi.stubGlobal('WebSocket', FakeWebSocket);
@@ -227,11 +227,14 @@ describe('LiveVideo', () => {
     });
 
     expect(
-      screen.getByRole('button', { name: 'Listen unavailable' }),
-    ).toBeDisabled();
+      screen.queryByRole('button', { name: 'Listen' }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Talk unavailable' }),
-    ).toBeDisabled();
+      screen.queryByRole('button', { name: 'Mute' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Talk' }),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps the same video connection for Talk and stops capture immediately on transport failure', async () => {
@@ -386,6 +389,72 @@ describe('LiveVideo', () => {
     expect(
       screen.queryByRole('button', { name: /record/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it('excludes this session itself from the "watching now" viewer count', async () => {
+    FakeWebSocket.instances = [];
+    FakePeer.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    render(
+      <LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} viewerCount={1} />,
+    );
+
+    const socket = FakeWebSocket.instances[0]!;
+    await act(async () => {
+      socket.message({
+        type: 'ready',
+        connectionId: 'connection-a',
+        iceServers: [],
+        iceTransportPolicy: 'all',
+      });
+      await Promise.resolve();
+    });
+    const peer = FakePeer.instances[0]!;
+    await act(async () => {
+      peer.connectionState = 'connected';
+      peer.onconnectionstatechange?.();
+      await Promise.resolve();
+    });
+
+    // Now connected: the backend's count of 1 is just this session, so
+    // "others watching" is 0 -- the badge should stay hidden, not show 1.
+    expect(
+      screen.queryByRole('button', { name: /Stream info/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the count of other viewers once someone besides this session is watching', async () => {
+    FakeWebSocket.instances = [];
+    FakePeer.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    render(
+      <LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} viewerCount={2} />,
+    );
+    const socket = FakeWebSocket.instances[0]!;
+    await act(async () => {
+      socket.message({
+        type: 'ready',
+        connectionId: 'connection-a',
+        iceServers: [],
+        iceTransportPolicy: 'all',
+      });
+      await Promise.resolve();
+    });
+    const peer = FakePeer.instances[0]!;
+    await act(async () => {
+      peer.connectionState = 'connected';
+      peer.onconnectionstatechange?.();
+      await Promise.resolve();
+    });
+
+    const statsToggle = screen.getByRole('button', { name: /Stream info/ });
+    expect(statsToggle).toHaveAccessibleName('Stream info: 1 other viewer');
+    fireEvent.click(statsToggle);
+    expect(screen.getByText('Watching now')).toBeVisible();
+    expect(screen.getByText('You')).toBeVisible();
+    expect(screen.getByText('Household viewer 1')).toBeVisible();
   });
 
   it('clears the stale "Microphone off · reconnecting" status once a full reconnect completes', async () => {

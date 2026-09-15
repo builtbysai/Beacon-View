@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
-import { presentCamera } from './camera-presentation.js';
+import { canRemoveCamera, presentCamera } from './camera-presentation.js';
 import type { HouseholdEventHub } from './household-events.js';
 import {
   cameraParameterSchema,
@@ -25,7 +25,11 @@ export function registerCameraManagementRoutes(
   dependencies: CameraManagementRouteDependencies,
 ): void {
   const { auth, householdEvents, signaling, store } = dependencies;
-  const { authenticate, authenticateHouseholdAdminStateChange } = auth;
+  const {
+    authenticate,
+    authenticateHouseholdAdminStateChange,
+    authenticateStateChange,
+  } = auth;
 
   app.get('/api/cameras', async (request, reply) => {
     const session = await authenticate(request, reply);
@@ -37,7 +41,10 @@ export function registerCameraManagementRoutes(
     );
     return {
       cameras: cameras.map((camera) =>
-        presentCamera(camera, signaling.cameraStatus(camera.publicCameraId)),
+        presentCamera(camera, signaling.cameraStatus(camera.publicCameraId), {
+          role: session.role,
+          userId: session.userId,
+        }),
       ),
     };
   });
@@ -68,6 +75,10 @@ export function registerCameraManagementRoutes(
         const revoked = device.revokedAt !== null;
         return {
           deviceType: device.deviceType,
+          canRemove:
+            session.role === 'owner' ||
+            session.role === 'admin' ||
+            device.pairedByUserId === session.userId,
           capabilities: device.capabilities,
           batteryPercent: device.batteryPercent,
           batteryCharging: device.batteryCharging,
@@ -121,7 +132,10 @@ export function registerCameraManagementRoutes(
     const childCameras = cameras
       .filter((camera) => camera.publicDeviceId === device.publicDeviceId)
       .map((camera) =>
-        presentCamera(camera, signaling.cameraStatus(camera.publicCameraId)),
+        presentCamera(camera, signaling.cameraStatus(camera.publicCameraId), {
+          role: session.role,
+          userId: session.userId,
+        }),
       );
     return {
       cameras: childCameras,
@@ -130,6 +144,10 @@ export function registerCameraManagementRoutes(
           (total, camera) => total + camera.viewerCount,
           0,
         ),
+        canRemove:
+          session.role === 'owner' ||
+          session.role === 'admin' ||
+          device.pairedByUserId === session.userId,
         capabilities: {
           maxSimultaneousSources: 1,
           simultaneousCapture: false,
@@ -184,6 +202,7 @@ export function registerCameraManagementRoutes(
       camera: presentCamera(
         camera,
         signaling.cameraStatus(camera.publicCameraId),
+        { role: session.role, userId: session.userId },
       ),
     };
   });
@@ -333,7 +352,7 @@ export function registerCameraManagementRoutes(
   });
 
   app.delete('/api/devices/:deviceId', async (request, reply) => {
-    const session = await authenticateHouseholdAdminStateChange(request, reply);
+    const session = await authenticateStateChange(request, reply);
     if (!session) return;
     const parameters = deviceParameterSchema.safeParse(request.params);
     if (!parameters.success) {
@@ -342,6 +361,11 @@ export function registerCameraManagementRoutes(
     const device = (await store.listDevices(session.householdId)).find(
       (candidate) => candidate.publicDeviceId === parameters.data.deviceId,
     );
+    if (!device) return reply.code(404).send({ error: 'Device not found' });
+    if (!canRemoveCamera(device, session))
+      return reply
+        .code(403)
+        .send({ error: 'You can only remove a camera you paired' });
     const cameras = (await store.listCameras(session.householdId)).filter(
       (camera) => camera.publicDeviceId === parameters.data.deviceId,
     );
@@ -359,7 +383,7 @@ export function registerCameraManagementRoutes(
       ipAddress: request.ip,
       success: true,
       userId: session.userId,
-      ...(device ? { metadata: { deviceName: device.name } } : {}),
+      metadata: { deviceName: device.name },
     });
     householdEvents.publish(session.householdId, {
       type: 'device-management-changed',
@@ -377,7 +401,7 @@ export function registerCameraManagementRoutes(
   });
 
   app.delete('/api/cameras/:cameraId', async (request, reply) => {
-    const session = await authenticateHouseholdAdminStateChange(request, reply);
+    const session = await authenticateStateChange(request, reply);
     if (!session) return;
     const parameters = cameraParameterSchema.safeParse(request.params);
     const camera = parameters.success
@@ -385,9 +409,14 @@ export function registerCameraManagementRoutes(
           (candidate) => candidate.publicCameraId === parameters.data.cameraId,
         )
       : undefined;
+    if (!parameters.success || !camera) {
+      return reply.code(404).send({ error: 'Camera not found' });
+    }
+    if (!canRemoveCamera(camera, session))
+      return reply
+        .code(403)
+        .send({ error: 'You can only remove a camera you paired' });
     if (
-      !parameters.success ||
-      !camera ||
       !(await store.deleteCamera(session.householdId, parameters.data.cameraId))
     ) {
       return reply.code(404).send({ error: 'Camera not found' });

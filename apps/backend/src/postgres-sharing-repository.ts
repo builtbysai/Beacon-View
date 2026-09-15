@@ -132,7 +132,7 @@ export class PostgresSharingRepository {
         await client.query('ROLLBACK');
         return null;
       }
-      const membership = await client.query(
+      const membership = await client.query<{ id: string }>(
         `INSERT INTO household_members
          (household_id, user_id, role, status, expires_at, revoked_at, joined_at, updated_at)
          VALUES ($1,$2,$3,'active',$4,NULL,$5,$5)
@@ -165,7 +165,7 @@ export class PostgresSharingRepository {
            WHERE d.household_id = $1 AND cs.enabled = true
              AND cs.removed_at IS NULL AND d.revoked_at IS NULL
            ON CONFLICT (member_id, camera_source_id) DO NOTHING`,
-          [pending.householdId, membership.rows[0]!.id],
+          [pending.householdId, membership.rows[0].id],
         );
       }
       await client.query(
@@ -280,6 +280,46 @@ export class PostgresSharingRepository {
           [sessions.rows.map((session) => session.id)],
         );
       }
+      await client.query('COMMIT');
+      return sessions.rows.map((session) => session.id);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // A viewer/guest dropping their own access to one camera someone else
+  // shared with them -- unlike revokeMember, the household membership
+  // itself is untouched, so only that one grant goes away, not their whole
+  // access to the household or its other cameras.
+  async leaveCamera(
+    householdId: string,
+    userId: string,
+    publicCameraId: string,
+  ): Promise<string[] | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const deleted = await client.query(
+        `DELETE FROM camera_grants cg
+         USING household_members m, camera_sources cs
+         WHERE cg.member_id = m.id AND cg.camera_source_id = cs.id
+           AND m.household_id = $1 AND m.user_id = $2 AND m.status = 'active'
+           AND cs.public_camera_id = $3
+         RETURNING cg.id`,
+        [householdId, userId, publicCameraId],
+      );
+      if (deleted.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const sessions = await client.query<{ id: string }>(
+        `SELECT id FROM browser_sessions
+         WHERE user_id = $1 AND household_id = $2 AND revoked_at IS NULL`,
+        [userId, householdId],
+      );
       await client.query('COMMIT');
       return sessions.rows.map((session) => session.id);
     } catch (error) {

@@ -25,11 +25,18 @@ export class PostgresPairingRepository {
     codeHash: string,
     expiresAt: Date,
     targetDeviceId?: string,
+    createdByUserId?: string,
   ): Promise<string> {
     const result = await this.pool.query<{ id: string }>(
-      `INSERT INTO pairing_codes (household_id, code_hash, expires_at, camera_id)
-       VALUES ($1, $2, $3, $4) RETURNING id`,
-      [householdId, codeHash, expiresAt, targetDeviceId ?? null],
+      `INSERT INTO pairing_codes (household_id, code_hash, expires_at, camera_id, created_by_user_id)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [
+        householdId,
+        codeHash,
+        expiresAt,
+        targetDeviceId ?? null,
+        createdByUserId ?? null,
+      ],
     );
     return result.rows[0]!.id;
   }
@@ -58,8 +65,10 @@ export class PostgresPairingRepository {
         id: string;
         householdId: string;
         targetDeviceId: string | null;
+        createdByUserId: string | null;
       }>(
-        `SELECT id, household_id AS "householdId", camera_id AS "targetDeviceId"
+        `SELECT id, household_id AS "householdId", camera_id AS "targetDeviceId",
+                created_by_user_id AS "createdByUserId"
          FROM pairing_codes
          WHERE code_hash = $1 AND expires_at > $2 AND consumed_at IS NULL
            AND revoked_at IS NULL FOR UPDATE`,
@@ -158,19 +167,48 @@ export class PostgresPairingRepository {
         publicDeviceId: string;
         name: string;
       }>(
-        `INSERT INTO cameras (household_id, installation_id, name)
-         VALUES ($1, $2, $3)
+        `INSERT INTO cameras (household_id, installation_id, name, paired_by_user_id)
+         VALUES ($1, $2, $3, $4)
          RETURNING id, public_device_id AS "publicDeviceId", name`,
-        [pairingCode.householdId, input.installationId, input.name],
+        [
+          pairingCode.householdId,
+          input.installationId,
+          input.name,
+          pairingCode.createdByUserId,
+        ],
       );
       const created = device.rows[0]!;
-      const defaultCamera = await client.query<{ publicCameraId: string }>(
+      const defaultCamera = await client.query<{
+        id: string;
+        publicCameraId: string;
+      }>(
         `INSERT INTO camera_sources
            (device_id, display_name, source_key, facing)
          VALUES ($1, $2, 'legacy-default', 'rear')
-         RETURNING public_camera_id AS "publicCameraId"`,
+         RETURNING id, public_camera_id AS "publicCameraId"`,
         [created.id, created.name],
       );
+      // A viewer who pairs their own camera gets full access to it
+      // immediately -- they set it up, so waiting on an admin to grant it
+      // back to them would make "pair your own camera" pointless. Owner and
+      // admin already see everything regardless of grants; guests can't
+      // reach this code path at all (pairing requires viewer or higher).
+      if (pairingCode.createdByUserId) {
+        await client.query(
+          `INSERT INTO camera_grants
+             (household_id, member_id, camera_source_id, can_listen, can_talk)
+           SELECT $1, m.id, $2, true, true
+           FROM household_members m
+           WHERE m.household_id = $1 AND m.user_id = $3
+             AND m.status = 'active' AND m.role = 'viewer'
+           ON CONFLICT (member_id, camera_source_id) DO NOTHING`,
+          [
+            pairingCode.householdId,
+            defaultCamera.rows[0]!.id,
+            pairingCode.createdByUserId,
+          ],
+        );
+      }
       // Notifications default to on for a newly paired device -- without
       // this row, listPreferences/scanNotificationPresence treat the device
       // as opted out until the owner visits Settings, so a first-time owner
