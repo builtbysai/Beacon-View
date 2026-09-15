@@ -185,6 +185,31 @@ internal fun MonitorHome(
             else message = "Notifications were not allowed. You can change this in Android settings."
         }
     val monitorScrollState = rememberScrollState()
+    val navigationPreferences =
+        remember(context) { context.getSharedPreferences("beacon_navigation", Context.MODE_PRIVATE) }
+
+    // Camera and microphone are only ever relevant once this phone is paired
+    // as a camera (MainActivity already sequences those right after pairing);
+    // a pure monitor/viewer session never touches either. Notifications are
+    // the one permission the monitor role actually needs, so ask for it once
+    // right at sign-in instead of leaving it undiscovered until someone
+    // happens to open Settings and flips the switch themselves.
+    LaunchedEffect(session?.userId) {
+        val active = session ?: return@LaunchedEffect
+        val key = "monitor_notification_permission_asked:${active.userId}"
+        if (navigationPreferences.getBoolean(key, false)) return@LaunchedEffect
+        navigationPreferences.edit().putBoolean(key, true).apply()
+        if (notificationConsent) return@LaunchedEffect
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            alertPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            enableNotifications()
+        }
+    }
 
     LaunchedEffect(inboundGoogleAuthCode) {
         val code = inboundGoogleAuthCode ?: return@LaunchedEffect
