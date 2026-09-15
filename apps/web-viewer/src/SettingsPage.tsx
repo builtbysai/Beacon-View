@@ -7,6 +7,7 @@ import { EmailVerification } from './EmailVerification';
 import { GoogleDriveSettings } from './GoogleDriveSettings';
 import { HouseholdSharingSettings } from './HouseholdSharingSettings';
 import { HouseholdSwitcher } from './HouseholdSwitcher';
+import { LinkGoogleAccount } from './LinkGoogleAccount';
 import { MotionRetentionSettings } from './MotionRetentionSettings';
 import { NotificationSettings } from './NotificationSettings';
 import type { Camera, HouseholdSession, User } from './domain';
@@ -144,6 +145,7 @@ export function SettingsPage({
               </button>
             </div>
             <EmailVerification verified={Boolean(user.emailVerified)} />
+            <LinkGoogleAccount linked={Boolean(user.googleLinked)} />
             <div className="settings-row settings-danger">
               <div>
                 <strong>Delete account</strong>

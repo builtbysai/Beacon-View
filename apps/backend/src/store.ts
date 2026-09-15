@@ -354,6 +354,14 @@ export class PostgresStore implements MilestoneStore {
     await this.accounts.updateGoogleAvatar(userId, avatarUrl);
   }
 
+  async linkGoogleAccount(
+    userId: string,
+    googleSubject: string,
+    avatarUrl: string | null,
+  ): Promise<void> {
+    await this.accounts.linkGoogleAccount(userId, googleSubject, avatarUrl);
+  }
+
   async findUserByGoogleSubject(
     googleSubject: string,
   ): Promise<UserRecord | null> {

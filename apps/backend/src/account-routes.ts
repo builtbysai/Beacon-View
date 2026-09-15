@@ -38,6 +38,7 @@ export function registerAccountRoutes(
         avatarUrl: session.avatarUrl,
         email: session.email,
         emailVerified: Boolean(user?.emailVerifiedAt),
+        googleLinked: Boolean(user?.googleSubject),
         id: session.userId,
       },
       household: {

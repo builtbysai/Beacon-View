@@ -146,6 +146,23 @@ export class PostgresAccountRepository {
     );
   }
 
+  /** Attaches a Google identity to an existing (typically password) account
+   * so it can be used as an additional sign-in method. The unique index on
+   * google_subject rejects this with 23505 if another account already
+   * claimed that subject -- callers translate that into a user-facing
+   * conflict rather than a generic 500. */
+  async linkGoogleAccount(
+    userId: string,
+    googleSubject: string,
+    avatarUrl: string | null,
+  ): Promise<void> {
+    await this.pool.query(
+      `UPDATE users SET google_subject = $2, avatar_url = COALESCE($3, avatar_url)
+       WHERE id = $1`,
+      [userId, googleSubject, avatarUrl],
+    );
+  }
+
   async findByGoogleSubject(googleSubject: string): Promise<UserRecord | null> {
     const result = await this.pool.query<UserRecord>(
       `SELECT u.id, u.email, u.password_hash AS "passwordHash", u.google_subject AS "googleSubject",

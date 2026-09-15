@@ -201,6 +201,33 @@ export function registerAuthenticationRoutes(
     );
   });
 
+  app.get('/api/auth/google/link', async (request, reply) => {
+    const session = await auth.authenticate(request, reply);
+    if (!session) return;
+    if (!googleClient || !config.GOOGLE_OAUTH_REDIRECT_URI)
+      return reply.code(503).send({ error: 'Google sign-in is unavailable' });
+    const state = `link.${generateToken()}`;
+    reply.setCookie(GOOGLE_STATE_COOKIE, state, {
+      httpOnly: true,
+      maxAge: TEN_MINUTES / 1_000,
+      path: '/',
+      sameSite: 'lax',
+      secure: config.NODE_ENV === 'production',
+    });
+    return reply.redirect(
+      googleClient.generateAuthUrl({
+        access_type: 'online',
+        // Google account chooser must offer every account on the device,
+        // even one already open elsewhere, so linking never silently
+        // reuses whatever session happens to be active.
+        prompt: 'select_account',
+        redirect_uri: config.GOOGLE_OAUTH_REDIRECT_URI,
+        scope: ['openid', 'email', 'profile'],
+        state,
+      }),
+    );
+  });
+
   app.get('/api/drive/connect', async (request, reply) => {
     const session = await auth.authenticate(request, reply);
     if (!session) return;
@@ -349,6 +376,80 @@ export function registerAuthenticationRoutes(
             'google drive connection failed',
           );
           return reply.redirect('/settings?section=storage&drive=failed');
+        }
+      }
+      if (state?.startsWith('link.')) {
+        const callbackError = (request.query as { error?: unknown }).error;
+        const callbackState = (request.query as { state?: unknown }).state;
+        if (
+          callbackError === 'access_denied' &&
+          typeof callbackState === 'string' &&
+          secretsEqual(state, callbackState)
+        ) {
+          return reply.redirect('/settings?section=account&googleLink=denied');
+        }
+        const session = await auth.authenticate(request, reply);
+        if (
+          !session ||
+          !googleClient ||
+          !googleClientId ||
+          !googleRedirectUri ||
+          !callback.success ||
+          !secretsEqual(state, callback.data.state)
+        ) {
+          return reply.redirect('/settings?section=account&googleLink=failed');
+        }
+        try {
+          const token = await googleClient.getToken({
+            code: callback.data.code,
+            redirect_uri: googleRedirectUri,
+          });
+          if (!token.tokens.id_token)
+            return reply.redirect(
+              '/settings?section=account&googleLink=failed',
+            );
+          const ticket = await googleClient.verifyIdToken({
+            audience: googleClientId,
+            idToken: token.tokens.id_token,
+          });
+          const payload = ticket.getPayload();
+          if (
+            !payload?.sub ||
+            !payload.email ||
+            payload.email_verified !== true
+          )
+            return reply.redirect(
+              '/settings?section=account&googleLink=failed',
+            );
+          // Requiring the linked Google account's own verified email to
+          // match this account's email keeps the link unambiguous -- this
+          // is about letting one person sign in with either credential, not
+          // attaching an unrelated Google identity that could confuse which
+          // address security/recovery mail goes to.
+          if (normalizeEmail(payload.email) !== normalizeEmail(session.email))
+            return reply.redirect(
+              '/settings?section=account&googleLink=emailMismatch',
+            );
+          const claimedBy = await store.findUserByGoogleSubject(payload.sub);
+          if (claimedBy && claimedBy.id !== session.userId)
+            return reply.redirect(
+              '/settings?section=account&googleLink=conflict',
+            );
+          await store.linkGoogleAccount(
+            session.userId,
+            payload.sub,
+            payload.picture ?? null,
+          );
+          await store.audit({
+            eventType: 'google_account_linked',
+            householdId: session.householdId,
+            ipAddress: request.ip,
+            success: true,
+            userId: session.userId,
+          });
+          return reply.redirect('/settings?section=account&googleLink=success');
+        } catch {
+          return reply.redirect('/settings?section=account&googleLink=failed');
         }
       }
       if (

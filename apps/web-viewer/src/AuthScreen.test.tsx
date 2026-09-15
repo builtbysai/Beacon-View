@@ -18,7 +18,7 @@ it('preserves OAuth collision guidance, password visibility, and registration gu
   const props = { busy: false, error: '', onSubmit: vi.fn(), onMode };
   const view = render(<AuthScreen {...props} mode="login" />);
   expect(screen.getByRole('alert')).toHaveTextContent(
-    'Google account linking is not yet available',
+    'link Google from Settings',
   );
   expect(screen.getByLabelText('Password')).toHaveAttribute(
     'autocomplete',

@@ -173,8 +173,8 @@ export function AuthScreen({
         </a>
         {googleResult === 'linkRequired' && (
           <p role="alert">
-            This email already has a Beacon password account. Google account
-            linking is not yet available; sign in below.
+            This email already has a Beacon password account. Sign in below,
+            then link Google from Settings to use either method.
           </p>
         )}
         {googleResult === 'failed' && (

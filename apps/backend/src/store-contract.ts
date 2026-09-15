@@ -340,6 +340,11 @@ export interface MilestoneStore {
     avatarUrl?: string | null,
   ): Promise<UserRecord>;
   updateGoogleAvatar(userId: string, avatarUrl: string): Promise<void>;
+  linkGoogleAccount(
+    userId: string,
+    googleSubject: string,
+    avatarUrl: string | null,
+  ): Promise<void>;
   findUserByEmail(email: string): Promise<UserRecord | null>;
   findUserById(userId: string): Promise<UserRecord | null>;
   findUserByGoogleSubject(googleSubject: string): Promise<UserRecord | null>;

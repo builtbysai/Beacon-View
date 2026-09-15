@@ -345,4 +345,48 @@ describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
     });
     expect(response.statusCode).toBe(409);
   });
+
+  it('links a Google identity to a password account, but never to two accounts at once', async () => {
+    // Distinct addresses: every other /api/auth/register call in this file
+    // already shares the default IP's 5-per-hour register rate-limit bucket.
+    await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'link-owner@example.com',
+        password: 'first password value',
+      },
+      remoteAddress: '127.0.0.91',
+      url: '/api/auth/register',
+    });
+    const owner = await store!.findUserByEmail('link-owner@example.com');
+    await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'link-other@example.com',
+        password: 'first password value',
+      },
+      remoteAddress: '127.0.0.92',
+      url: '/api/auth/register',
+    });
+    const other = await store!.findUserByEmail('link-other@example.com');
+
+    await store!.linkGoogleAccount(
+      owner!.id,
+      'google-subject-shared',
+      'https://example.com/avatar.png',
+    );
+    const linked = await store!.findUserByGoogleSubject(
+      'google-subject-shared',
+    );
+    expect(linked?.id).toBe(owner!.id);
+    expect(linked?.avatarUrl).toBe('https://example.com/avatar.png');
+
+    await expect(
+      store!.linkGoogleAccount(other!.id, 'google-subject-shared', null),
+    ).rejects.toMatchObject({ code: '23505' });
+    // The failed attempt must not have disturbed the original link.
+    expect(
+      (await store!.findUserByGoogleSubject('google-subject-shared'))?.id,
+    ).toBe(owner!.id);
+  });
 });

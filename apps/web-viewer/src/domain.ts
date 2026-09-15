@@ -3,6 +3,7 @@ export interface User {
   email: string;
   avatarUrl?: string | null;
   emailVerified?: boolean;
+  googleLinked?: boolean;
 }
 
 export type HouseholdRole = 'owner' | 'admin' | 'viewer' | 'guest';
