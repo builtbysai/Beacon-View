@@ -32,10 +32,12 @@ export function registerAccountRoutes(
   app.get('/api/auth/me', async (request, reply) => {
     const session = await auth.authenticate(request, reply);
     if (!session) return;
+    const user = await store.findUserById(session.userId);
     return {
       user: {
         avatarUrl: session.avatarUrl,
         email: session.email,
+        emailVerified: Boolean(user?.emailVerifiedAt),
         id: session.userId,
       },
       household: {

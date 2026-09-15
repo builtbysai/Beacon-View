@@ -318,7 +318,7 @@ const report = [];
     await capture(`auth-${width}`, true);
     await assertAuthCardFits(`auth-card-fit-${width}`);
     await page.getByRole('button', { name: 'Forgot password?' }).click();
-    await page.getByRole('status').waitFor();
+    await page.getByPlaceholder('Enter your account email').waitFor();
     const recoveryDocumentHeight = await page.evaluate(
       () => document.documentElement.scrollHeight,
     );

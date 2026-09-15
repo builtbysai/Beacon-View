@@ -1,8 +1,15 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AuthScreen } from './AuthScreen';
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   window.history.replaceState({}, '', '/');
 });
 it('preserves OAuth collision guidance, password visibility, and registration guidance', () => {
@@ -29,11 +36,15 @@ it('preserves OAuth collision guidance, password visibility, and registration gu
     'autocomplete',
     'new-password',
   );
-  expect(
-    screen.getByText(/Password-reset emails are not available yet/),
-  ).toBeVisible();
+  expect(screen.getByText('Use at least 12 characters.')).toBeVisible();
 });
-it('offers an honest password recovery path without claiming reset delivery', () => {
+it('requests a password reset without revealing whether the email exists', async () => {
+  const fetchMock = vi.fn().mockResolvedValue({
+    json: () => Promise.resolve({ requested: true }),
+    ok: true,
+    status: 202,
+  });
+  vi.stubGlobal('fetch', fetchMock);
   render(
     <AuthScreen
       busy={false}
@@ -44,11 +55,20 @@ it('offers an honest password recovery path without claiming reset delivery', ()
     />,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
-  expect(screen.getByRole('status')).toHaveTextContent(
-    'Reset email is not available',
+  fireEvent.change(screen.getByPlaceholderText('Enter your account email'), {
+    target: { value: 'someone@example.com' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Send reset link' }));
+  await waitFor(() =>
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/auth/password-reset/request',
+      expect.objectContaining({
+        body: JSON.stringify({ email: 'someone@example.com' }),
+        method: 'POST',
+      }),
+    ),
   );
-  expect(screen.getByRole('link', { name: 'contact support' })).toHaveAttribute(
-    'href',
-    '/contact',
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'If an account exists for that email, check your inbox',
   );
 });

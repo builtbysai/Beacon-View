@@ -27,6 +27,8 @@ import {
   PairLinkPage,
   PublicTrustPage,
 } from './PublicPages';
+import { ResetPasswordPage } from './ResetPasswordPage';
+import { VerifyEmailPage } from './VerifyEmailPage';
 import { groupCamerasByDevice, reconcileLiveCamera } from './camera-selection';
 import type { Camera, Device, HouseholdSession, User } from './domain';
 import {
@@ -188,7 +190,9 @@ export function App() {
     if (
       window.location.pathname === '/trust' ||
       window.location.pathname === '/pair' ||
-      window.location.pathname === '/auth/mobile'
+      window.location.pathname === '/auth/mobile' ||
+      window.location.pathname === '/account/verify-email' ||
+      window.location.pathname === '/account/reset-password'
     )
       return;
     void request<{ household: HouseholdSession; user: User }>('/api/auth/me')
@@ -550,6 +554,10 @@ export function App() {
   if (window.location.pathname === '/pair') return <PairLinkPage />;
   if (window.location.pathname === '/auth/mobile')
     return <MobileAuthReturnPage />;
+  if (window.location.pathname === '/account/verify-email')
+    return <VerifyEmailPage />;
+  if (window.location.pathname === '/account/reset-password')
+    return <ResetPasswordPage />;
   if (page === 'trust')
     return (
       <PublicTrustPage

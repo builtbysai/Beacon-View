@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { AccessHistory } from './AccessHistory';
 import { Avatar } from './Avatar';
 import { BrowserSessions } from './BrowserSessions';
+import { EmailVerification } from './EmailVerification';
 import { GoogleDriveSettings } from './GoogleDriveSettings';
 import { HouseholdSharingSettings } from './HouseholdSharingSettings';
 import { HouseholdSwitcher } from './HouseholdSwitcher';
@@ -142,6 +143,7 @@ export function SettingsPage({
                 Sign out
               </button>
             </div>
+            <EmailVerification verified={Boolean(user.emailVerified)} />
             <div className="settings-row settings-danger">
               <div>
                 <strong>Delete account</strong>

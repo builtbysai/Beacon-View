@@ -1,5 +1,64 @@
 import { useState, type FormEvent } from 'react';
+import { request } from './api';
 import { Brand, Icon } from './Icon';
+
+function PasswordResetRequest() {
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const email =
+      (new FormData(event.currentTarget).get('email') as string | null) ?? '';
+    setBusy(true);
+    try {
+      await request<void>('/api/auth/password-reset/request', {
+        body: JSON.stringify({ email }),
+        method: 'POST',
+      });
+    } catch {
+      // Deliberately silent: the response never reveals whether the
+      // request failed because the endpoint is unavailable or because
+      // nothing went wrong at all -- either way the message below is
+      // the same, so the account's existence is never distinguishable.
+    } finally {
+      setBusy(false);
+      setSent(true);
+    }
+  }
+
+  if (sent)
+    return (
+      <p className="recovery-note" role="status">
+        If an account exists for that email, check your inbox for a reset link.
+      </p>
+    );
+
+  return (
+    <form
+      className="recovery-note recovery-form"
+      onSubmit={(event) => void onSubmit(event)}
+      aria-label="Request a password reset"
+    >
+      <label className="visually-hidden" htmlFor="recovery-email">
+        Email
+      </label>
+      <input
+        id="recovery-email"
+        name="email"
+        type="email"
+        autoComplete="email"
+        placeholder="Enter your account email"
+        required
+        disabled={busy}
+      />
+      <button className="secondary" type="submit" disabled={busy}>
+        {busy ? 'Sending…' : 'Send reset link'}
+      </button>
+    </form>
+  );
+}
 
 export function AuthScreen({
   mode,
@@ -173,8 +232,7 @@ export function AuthScreen({
           </div>
           {mode === 'register' && (
             <p className="notice" id="password-guidance">
-              Use at least 12 characters. Password-reset emails are not
-              available yet; Google is recommended.
+              Use at least 12 characters.
             </p>
           )}
           {error && <p role="alert">{error}</p>}
@@ -213,12 +271,7 @@ export function AuthScreen({
                 : 'Use an existing account'}
             </button>
           </div>
-          {showRecovery && (
-            <p className="recovery-note" role="status">
-              Reset email is not available in the private alpha. Try Google or{' '}
-              <a href="/contact">contact support</a>.
-            </p>
-          )}
+          {showRecovery && <PasswordResetRequest />}
         </form>
         <p className="sign-in-disclosure">
           <Icon name="shield" />
