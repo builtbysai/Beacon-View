@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -175,7 +176,14 @@ internal fun MonitorHome(
             result.onSuccess {
                 notificationConsent = true
                 message = "Notifications are on. Lock-screen details stay private."
-            }.onFailure { message = it.message ?: "Notifications could not be enabled" }
+            }.onFailure {
+                // Unlike api.* failures (whose .message is our own backend's
+                // error string), this comes from the Firebase Messaging SDK
+                // directly -- its exception text is meant for logs, not
+                // users, and has surfaced raw internal detail in practice.
+                Log.w("BeaconLifecycle", "event=notification_enable_failed", it)
+                message = "Notifications could not be enabled. Try again from Settings."
+            }
             notificationBusy = false
         }
     }
