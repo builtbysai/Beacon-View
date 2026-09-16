@@ -1,6 +1,6 @@
 # Beacon SecureView development handoff
 
-Updated September 15, 2026. This is the shortest reliable orientation for a new
+Updated September 16, 2026. This is the shortest reliable orientation for a new
 development session. GitHub is canonical; the maintained local checkout is
 `C:\Dev\Beacon-SecureView`.
 
@@ -25,6 +25,144 @@ overwrote unrelated, already-deployed production work:
    production agree: `ssh beacon-oracle` (Tailscale-only; public SSH is
    closed, see ADR 0045), then `sudo docker compose --project-name
 beacon-secureview-cloud ps` and `ls -lt /opt/beacon/releases/ | head`.
+
+## September 16: recording actually captures/uploads now (owner-scoped ask to Codex below)
+
+The owner's ask that started this: "fix the recording and cloud recording. test
+it and make sure it works", then, when asked whether to close the gap on
+browser and/or Android: "Both browser side and android side. Any camera can
+capture based of motion or other settings. The browser/viewer can also
+manually capture. Both devices should be able to capture and upload." Commit
+`314ff37` on `main` (built on top of `bce74c5`, see below) delivers that.
+
+**What was actually broken.** Recording had never worked for the owner despite
+earlier attempts. Root cause: `POST /api/recordings`'s audit-log call passed
+`camera.cameraId` (the camera-*source* id) into `store.audit({ cameraId })`,
+which is FK'd to `cameras.id` (the *device* id) — every single recording
+request crashed with a 500 from the `audit_events_camera_id_fkey` violation,
+before any capture logic could ever run. Fixed in `bce74c5` (one line: use
+`camera.deviceId`). The rest of the HTTP lifecycle (`request` →
+`upload-session` → `complete` → list/delete, plus the device-credential
+variants) already worked correctly once that crash was gone — confirmed by a
+new 10-case integration suite,
+`apps/backend/test/recording-routes.integration.test.ts`.
+
+Separately, and more importantly: **nothing on either platform had ever
+actually captured or uploaded a clip.** The request/status state machine and
+the Drive resumable-upload plumbing (`initiateDriveRecordingUpload`,
+`finalizeRecordingUpload` / `verifyDriveRecordingFile`) existed from the
+September 15 port (ADR 0051) but had no caller. `314ff37` closes that end to
+end on both platforms:
+
+- **Browser, manual (both viewer and browser-camera modes).** New
+  `apps/web-viewer/src/recording-capture.ts` (`ClipRecorder` around
+  `MediaRecorder`, `uploadClipToDrive` doing the raw `PUT` to the Drive
+  session URL) and `useClipRecorder.ts` (request → capture → upload →
+  complete orchestration hook, with elapsed-timer display and a
+  `MAX_CLIP_DURATION_MS` auto-stop). Wired into `LiveVideo.tsx`'s existing
+  record button and into a new record control in `BrowserCameraMode.tsx`
+  (owner-gated). Fully tested (jsdom has neither `MediaStream` nor
+  `MediaRecorder` as globals — tests stub both; production code guards
+  `instanceof MediaStream` behind `typeof MediaStream !== 'undefined'` so it
+  can't throw in that environment).
+- **Backend, motion-triggered auto-record.** New per-camera-source
+  `motion_record_enabled` column (`recordOnMotion` in the API), server-
+  authoritative: the device never decides for itself, it just acts on a
+  `recordingId` the server hands back in the motion-event report response
+  when eligible (setting on, owner's Drive connection has the recording
+  scope, no recording already in flight for that camera source) — see
+  `Store.createMotionTriggeredRecording` in `store.ts` and the
+  `POST /api/device/cameras/:cameraId/motion-events` handler in
+  `device-runtime-routes.ts`. This piggybacks on the existing motion-report
+  round trip rather than adding a new server→device signaling channel. New
+  "Record a short clip when motion is detected" checkbox in
+  `MotionSettingsPanel.tsx` — this UI control was *missing* on first pass
+  (schema/API shipped with no way to turn it on) and was caught by a
+  read-only verification subagent, then added.
+- **Android, capture + auto-record.** `CameraXVideoCapturer.kt` gained an
+  optional third concurrent CameraX use case (`VideoCapture<Recorder>`,
+  `QualitySelector.fromOrderedList([SD, HD], ...)`). Binding is tried with
+  all three use cases first; on **any** failure it unbinds and rebinds with
+  just the original two (`preview`, `imageAnalysis`) — reusing this
+  codebase's own proven lens-flip unbind/rebind pattern, so hardware that
+  can't support the extra stream never regresses live view. New
+  `MotionClipUpload.kt` (streaming SHA-256, raw `HttpURLConnection` PUT to
+  the Drive session URL). `CameraForegroundService.kt` acts on the
+  `recordingId` the motion-event response returns and drives the
+  upload/complete calls. `google-services`/Gradle: added
+  `androidx.camera:camera-video:1.4.2`.
+
+**Validated:** backend (`tsc -b`, `eslint`, `prettier --check`, 200/200 tests,
+`build`), web-viewer (`typecheck`, `eslint`, 168/168 tests, `build`), Android
+(`compileDebugKotlin`, `testDebugUnitTest`, `lintDebug`, `assembleRelease` —
+all green). **Not validated:** the Android capture path has never run on
+physical hardware. It builds and passes every automated gate available in
+this environment, but the 3-stream CameraX bind and the `Recorder`
+encoder/muxer are unverified in practice — needs the owner's Pixel
+(`34171JEHN07672`, preserve app data). Also still open, deliberately not done
+this pass: ADR 0051 calls for the camera to encrypt a clip before upload;
+neither the browser nor Android implementation does that yet — clips upload
+as plain `video/webm`/whatever `MediaRecorder`/`Recorder` produces. Flag this
+before treating recording as release-ready.
+
+**Deployed to production same session.** `314ff37` is live at
+`https://beacon.builtbysai.com` (`DEPLOYED_COMMIT` updated). See the next
+section — the deploy surfaced a real bug worth independent investigation.
+
+### Ask for Codex: bug-hunt why `drizzle-kit migrate` silently no-ops
+
+This bit twice in one session, local **and** production, and the root cause
+was never found — only worked around. Sequence on production, exactly
+reproducing what had already happened locally a few hours earlier: migration
+`0025_motion_record_enabled.sql` (`ALTER TABLE "camera_sources" ADD COLUMN
+"motion_record_enabled" boolean DEFAULT false NOT NULL;`, generated cleanly
+via `drizzle-kit generate --name motion_record_enabled` against a valid
+snapshot chain) was applied via
+`docker compose ... run --rm migrate`, which printed:
+
+```
+[⣷] applying migrations...[✓] migrations applied successfully!
+```
+
+— and the row for migration id 25 (correct sha256 hash of the file) was
+genuinely present in `drizzle.__drizzle_migrations` afterward. But the column
+did not exist: `SELECT column_name FROM information_schema.columns WHERE
+table_name='camera_sources' AND column_name='motion_record_enabled'` came back
+empty, confirmed by direct `psql`. I.e. drizzle-kit marked the migration as
+applied *without the DDL ever running against the database* — no error, no
+partial-apply warning, nothing in the tool's own output to suggest anything
+was wrong. Both times, the workaround was the same: run the `ALTER TABLE`
+statement by hand (the tracking row already existed, so just the DDL, nothing
+else needed touching).
+
+This is a serious trust problem for the migration tool specifically, not a
+one-off typo: `db:migrate` reporting success is the only signal this project's
+deploy procedure currently checks before moving on to rebuilding/restarting
+the app containers. If a future migration's silent no-op leaves a column or
+table missing that new code actually reads/writes on the hot path (unlike
+this one, whose column had a safe default and no reader until the same
+deploy's app code shipped), that's an outage, not a shrug.
+
+Please dig into why. Starting points, none confirmed:
+
+- Is `drizzle-kit`'s CLI actually executing the SQL file's statements inside a
+  transaction/connection that then gets rolled back or discarded silently
+  (e.g. a driver/pool mismatch between what `drizzle.config.ts` configures
+  and what the `migrate` runner actually connects to)?
+- Version pinned in `apps/backend/package.json` — is this a known upstream
+  issue for that specific `drizzle-kit`/`drizzle-orm` version pair? Check
+  their changelog/issue tracker.
+- Does it reproduce reliably with a minimal single-statement migration against
+  a clean local Postgres, or does it need the specific history/size of this
+  project's migration chain to trigger?
+- `docs/development-handoff.md`'s September 10 entry already flagged a
+  related-but-distinct drizzle quirk (`drizzle/meta/` has no intermediate
+  snapshot JSON in *some* history, so a bare `generate` recreates every
+  table) — confirm whether that's the same root cause resurfacing
+  differently, or a separate issue.
+- Whatever you find, the fix should make a bad apply loud (fail the command,
+  or add a post-apply verification step the deploy procedure actually
+  checks), not just patch this one instance quietly.
 
 ## September 14-15 merge: main is now the production line
 
@@ -253,6 +391,69 @@ this doc short. Known follow-ups not done in that pass:
   intentionally unsupported. Existing native installations need a canonical-domain
   build.
 - Deployment details and rollback boundaries: [github-web-deployment.md](github-web-deployment.md)
+
+**In practice, every deploy this year — including September 16's — has been
+done manually over SSH, not through the GitHub Actions workflow above** (that
+workflow's merge/first-run status has been "still awaits" for a while; verify
+current status with `gh workflow view "Deploy Beacon to Oracle"` rather than
+assuming). Access is `ssh beacon-oracle` (Tailscale-only; public SSH is
+closed, ADR 0045). The manual procedure, run from the repo root on whatever
+commit is being shipped:
+
+```bash
+# 1. Package and ship the exact commit
+git archive HEAD -o /tmp/beacon-deploy-<shorthash>.tar.gz --prefix=web-<full-hash>/
+scp /tmp/beacon-deploy-<shorthash>.tar.gz beacon-oracle:/tmp/
+
+# 2. On the VM: back up, extract, verify, swap in
+ssh beacon-oracle
+sudo cp -r /opt/beacon/app /opt/beacon/app.bak-$(date +%s)   # cheap undo
+mkdir -p /opt/beacon/releases/web-<full-hash>
+tar -xzf /tmp/beacon-deploy-<shorthash>.tar.gz -C /opt/beacon/releases/web-<full-hash> --strip-components=1
+# spot-check a file you know changed is actually in the extracted tree, then:
+sudo rsync -a --delete /opt/beacon/releases/web-<full-hash>/ /opt/beacon/app/
+
+# 3. Schema changes FIRST, before touching backend/web images
+cd /opt/beacon/app
+sudo docker compose -f infrastructure/cloud/compose.yaml build migrate
+sudo docker compose --env-file /etc/beacon/production.env \
+  -f infrastructure/cloud/compose.yaml run --rm migrate
+# then VERIFY — do not trust "[✓] migrations applied successfully!" alone, see
+# the drizzle-kit ask above. e.g.:
+sudo docker compose --env-file /etc/beacon/production.env \
+  -f infrastructure/cloud/compose.yaml exec -T postgres \
+  psql -U beacon -d beacon_secureview -tAc \
+  "SELECT column_name FROM information_schema.columns WHERE table_name='<table>' AND column_name='<new_column>'"
+# empty result with exit 0 means it silently did NOT apply -- run the ALTER
+# TABLE by hand (the tracking row in drizzle.__drizzle_migrations will
+# already exist and does not need touching, just the DDL itself)
+
+# 4. Build and restart the app containers
+sudo docker compose -f infrastructure/cloud/compose.yaml build backend web
+sudo docker compose --env-file /etc/beacon/production.env \
+  -f infrastructure/cloud/compose.yaml up -d --no-deps backend web
+
+# 5. Verify
+curl -sfk https://beacon.builtbysai.com/health
+curl -sfk https://beacon.builtbysai.com/ready
+curl -sfk https://beacon.builtbysai.com/ | grep -oE 'assets/index-[A-Za-z0-9]+\.(css|js)'
+# compare against your local `pnpm --filter @beacon/web-viewer build` output hashes
+sudo docker logs beacon-secureview-cloud-backend-1 --tail 50   # clean startup, no errors
+
+# 6. Record it, clean up
+echo <full-hash> | sudo tee /opt/beacon/app/DEPLOYED_COMMIT
+rm -f /tmp/beacon-deploy-<shorthash>.tar.gz          # local and on beacon-oracle
+```
+
+Postgres credentials aren't env vars in your own shell — `sudo grep -E
+'^POSTGRES_(USER|DB)=' /etc/beacon/production.env` on the VM if you need them
+for an ad hoc `psql` (as above); passing `--env-file` to `docker compose exec`
+does **not** forward those vars into the running container's shell the way it
+does for `run`, so `$POSTGRES_USER` expansion inside `exec` fails silently —
+use the literal values instead. This is exactly the kind of direct
+production-DB write that should get explicit sign-off before running, not
+just because it's good practice — the environment's own tooling will refuse
+it without confirmation.
 
 The repository does not contain production credentials. Keep application secrets
 on the VM in `/etc/beacon/production.env`; GitHub's `production` environment contains

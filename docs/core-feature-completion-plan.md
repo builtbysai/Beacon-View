@@ -1,6 +1,6 @@
 # Core feature completion plan
 
-Updated September 14, 2026. This plan is the execution order for completing the
+Updated September 16, 2026. This plan is the execution order for completing the
 backend and device contracts before the UI/UX and release-documentation pass.
 
 ## Definition of done for the core
@@ -78,17 +78,38 @@ not considered complete.
 
 ### 4. Recording foundation and Google Drive export
 
-- Add explicit recording consent and a short-clip lifecycle (requested,
-  recording, uploaded, failed, deleted) with retention and deletion semantics.
-- Start with explicit user-triggered or motion-triggered short clips; no hidden or
-  continuous recording.
-- Store only metadata and opaque provider IDs in Beacon. Media must be encrypted
-  before leaving the camera and must not be persisted by Beacon.
-- Use a separate Google OAuth grant with the least-privileged `drive.file` scope
-  for user-visible recording files. The existing `drive.appdata` connection is
-  for Beacon metadata/settings and cannot be used as a recordings library.
-- Implement resumable upload, listing, playback authorization, deletion, retry,
-  quota/full-disk handling, and provider-disconnect recovery.
+- [x] Add explicit recording consent and a short-clip lifecycle (requested,
+      recording, uploaded, failed, deleted) with retention and deletion
+      semantics. (Backend contract shipped September 15; the state machine's
+      `recording` state is never actually set — the server jumps
+      `requested` → `uploading` directly — noted as a real but harmless
+      naming/observability gap, not fixed this pass.)
+- [x] Start with explicit user-triggered or motion-triggered short clips; no
+      hidden or continuous recording. User-triggered capture ships on both
+      web (viewer and browser-camera modes) and Android; motion-triggered
+      capture is server-authoritative (a new per-camera `recordOnMotion`
+      setting gates whether the motion-event response hands the device a
+      `recordingId` to act on) and ships on both platforms. September 16,
+      commit `314ff37` — see
+      [development-handoff.md](development-handoff.md)'s September 16 entry
+      for the full breakdown and what's still unverified.
+- [ ] Store only metadata and opaque provider IDs in Beacon (done — media
+      never transits Beacon's server). Media must be encrypted before
+      leaving the camera and must not be persisted by Beacon: the
+      "must not be persisted by Beacon" half holds; **the "encrypted before
+      leaving the camera" half does not yet** — neither the browser nor the
+      Android capture path encrypts a clip before the resumable upload PUT to
+      Drive. This is a real deviation from ADR 0051's stated scope, not an
+      oversight to silently close — flag before calling recording
+      release-ready.
+- [x] Use a separate Google OAuth grant with the least-privileged
+      `drive.file` scope for user-visible recording files, kept separate
+      from the existing `drive.appdata` connection.
+- [x] Implement resumable upload, listing, deletion, and Drive-verification-
+      mismatch handling (`finalizeRecordingUpload` calls
+      `verifyDriveRecordingFile` before trusting the client's completion
+      claim). Playback authorization, retry UX, quota/full-disk handling, and
+      provider-disconnect recovery are not separately exercised yet.
 
 ### 5. Integration and operational proof
 
