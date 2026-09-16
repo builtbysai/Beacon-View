@@ -4,6 +4,8 @@ import { request } from './api';
 import { BrowserProducer } from './BrowserProducer';
 import { Icon } from './Icon';
 import { browserOsLabel, friendlyDeviceLabel } from './naming';
+import { formatClipTimer } from './recording-capture';
+import { useClipRecorder } from './useClipRecorder';
 
 interface RegisteredSource {
   id: string;
@@ -57,7 +59,15 @@ function installationId(): string {
   return created;
 }
 
-export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
+export function BrowserCameraMode({
+  onBack,
+  canRecord = false,
+}: {
+  onBack: () => void;
+  /** Only the household owner can request recordings (see POST
+   * /api/recordings) -- matches the same live-viewer gate in LiveVideo. */
+  canRecord?: boolean;
+}) {
   const previewRef = useRef<HTMLVideoElement>(null);
   const producerRef = useRef<BrowserProducer | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -74,6 +84,8 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
   const [backgrounded, setBackgrounded] = useState(document.hidden);
   const [wakeLockEnabled, setWakeLockEnabled] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
+  const clip = useClipRecorder(activeCameraId ?? '');
 
   // The preview <video> element lives in different branches of the returned
   // JSX (setup card vs. full-bleed broadcast stage) and gets remounted when
@@ -182,6 +194,7 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
       });
       for (const track of stream.getVideoTracks()) track.contentHint = 'motion';
       streamRef.current = stream;
+      setActiveCameraId(camera.id);
       if (previewRef.current) previewRef.current.srcObject = stream;
       producerRef.current = new BrowserProducer(
         camera.id,
@@ -214,12 +227,32 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
     producerRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    setActiveCameraId(null);
     if (previewRef.current) previewRef.current.srcObject = null;
     setState('offline');
     setViewerCount(0);
     void wakeLockRef.current?.release();
     wakeLockRef.current = null;
   }
+
+  function startRecording() {
+    if (!streamRef.current) return;
+    setError('');
+    clip.start(streamRef.current);
+  }
+
+  // Clears a finished clip's status back to the plain record control a few
+  // seconds after it lands, matching the live viewer's own record button.
+  useEffect(() => {
+    if (clip.state.status !== 'available' && clip.state.status !== 'failed')
+      return;
+    const timer = window.setTimeout(() => clip.reset(), 6_000);
+    return () => window.clearTimeout(timer);
+  }, [clip, clip.state.status]);
+
+  useEffect(() => {
+    if (clip.state.error) setError(clip.state.error);
+  }, [clip.state.error]);
 
   async function acquireWakeLock() {
     const manager = (
@@ -314,6 +347,47 @@ export function BrowserCameraMode({ onBack }: { onBack: () => void }) {
             {broadcastStatusLabel(state, viewerCount)}
           </span>
           <div className="broadcast-top-actions">
+            {canRecord && clip.supported && activeCameraId && (
+              <button
+                aria-pressed={clip.state.status === 'recording'}
+                className={`broadcast-icon-button${
+                  clip.state.status === 'recording' ? ' is-active' : ''
+                }`}
+                data-tooltip={
+                  clip.state.status === 'recording'
+                    ? `Recording… ${formatClipTimer(clip.state.elapsedMs)} · tap to stop`
+                    : clip.state.status === 'failed'
+                      ? 'Recording failed · try again'
+                      : 'Record a short clip'
+                }
+                disabled={
+                  clip.state.status === 'starting' ||
+                  clip.state.status === 'uploading' ||
+                  clip.state.status === 'available'
+                }
+                onClick={
+                  clip.state.status === 'recording'
+                    ? clip.stop
+                    : startRecording
+                }
+                type="button"
+              >
+                <Icon name="record" />
+                <span className="visually-hidden">
+                  {clip.state.status === 'starting'
+                    ? 'Starting recording…'
+                    : clip.state.status === 'recording'
+                      ? `Recording, ${formatClipTimer(clip.state.elapsedMs)} elapsed. Tap to stop.`
+                      : clip.state.status === 'uploading'
+                        ? 'Uploading recording'
+                        : clip.state.status === 'available'
+                          ? 'Recording saved'
+                          : clip.state.status === 'failed'
+                            ? 'Recording failed, try again'
+                            : 'Record a short clip'}
+                </span>
+              </button>
+            )}
             <button
               aria-expanded={settingsOpen}
               aria-label="Camera settings"

@@ -11,6 +11,14 @@ import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.FallbackStrategy
+import androidx.camera.video.FileOutputOptions
+import androidx.camera.video.Quality
+import androidx.camera.video.QualitySelector
+import androidx.camera.video.Recorder
+import androidx.camera.video.Recording
+import androidx.camera.video.VideoCapture
+import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
@@ -19,6 +27,7 @@ import org.webrtc.JavaI420Buffer
 import org.webrtc.SurfaceTextureHelper
 import org.webrtc.VideoCapturer
 import org.webrtc.VideoFrame
+import java.io.File
 import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -42,6 +51,19 @@ class CameraXVideoCapturer(
     private val disposed = AtomicBoolean(false)
     private val captureStartReported = AtomicBoolean(false)
     private val motionDetector = ConfiguredMotionDetector()
+    @Volatile
+    private var recorder: Recorder? = null
+    private var activeRecording: Recording? = null
+    private val recordingHandler = Handler(Looper.getMainLooper())
+    private var recordingTimeout: Runnable? = null
+
+    /** False either before capture starts or on any device whose camera HAL
+     * doesn't support the extra concurrent stream Recorder needs alongside
+     * the live preview and analysis streams this class already binds --
+     * on-device clip recording just silently stays unavailable there, the
+     * same as it would if the motion-triggering setting were off. */
+    val clipRecordingAvailable: Boolean
+        get() = recorder != null
 
     override fun initialize(
         surfaceTextureHelper: SurfaceTextureHelper?,
@@ -97,12 +119,47 @@ class CameraXVideoCapturer(
                             }
                     analysis = imageAnalysis
                     cameraProvider.unbindAll()
-                    cameraProvider.bindToLifecycle(
-                        lifecycleOwner,
-                        cameraSelector,
-                        preview,
-                        imageAnalysis,
-                    )
+                    // Clip recording rides as a 3rd concurrent use case
+                    // alongside the live preview/analysis streams this
+                    // class already binds -- bound once, up front, staying
+                    // idle (no file, no encoder work) until a motion report
+                    // actually starts a recording. Not every camera HAL
+                    // guarantees a 3rd concurrent stream, so a device that
+                    // can't bind it here just never gets clip recording;
+                    // the live preview/analysis pair it falls back to is
+                    // exactly what this method always bound before.
+                    val recorderCandidate =
+                        Recorder.Builder()
+                            .setQualitySelector(
+                                QualitySelector.fromOrderedList(
+                                    listOf(Quality.SD, Quality.HD),
+                                    FallbackStrategy.lowerQualityOrHigherThan(Quality.SD),
+                                ),
+                            )
+                            .build()
+                    val videoCapture = VideoCapture.withOutput(recorderCandidate)
+                    val boundWithRecorder =
+                        runCatching {
+                            cameraProvider.bindToLifecycle(
+                                lifecycleOwner,
+                                cameraSelector,
+                                preview,
+                                imageAnalysis,
+                                videoCapture,
+                            )
+                        }
+                    if (boundWithRecorder.isSuccess) {
+                        recorder = recorderCandidate
+                    } else {
+                        recorder = null
+                        cameraProvider.unbindAll()
+                        cameraProvider.bindToLifecycle(
+                            lifecycleOwner,
+                            cameraSelector,
+                            preview,
+                            imageAnalysis,
+                        )
+                    }
                     observer?.onCapturerStarted(true)
                 }.onFailure {
                     if (attempt < MAX_BIND_ATTEMPTS && !disposed.get()) {
@@ -123,6 +180,8 @@ class CameraXVideoCapturer(
     }
 
     override fun stopCapture() {
+        stopClipRecording()
+        recorder = null
         val stopped = CountDownLatch(1)
         val stop = Runnable {
             analysis?.clearAnalyzer()
@@ -148,6 +207,65 @@ class CameraXVideoCapturer(
     }
 
     override fun isScreencast(): Boolean = false
+
+    /** Starts recording a local clip to `outputFile`, auto-stopping after
+     * `maxDurationMs` if `stopClipRecording` isn't called first. Returns
+     * false immediately (without touching the file) when this device never
+     * bound the extra recording stream, or a clip is already in progress --
+     * either way, `onFinalized` never fires. Otherwise it fires exactly
+     * once, with `success=false` on any encoder/storage failure. A failed
+     * or skipped clip never affects the live capture this class also
+     * drives -- that's the entire point of keeping Recorder a 3rd,
+     * independent use case rather than something the live pipeline itself
+     * depends on. */
+    fun startClipRecording(
+        outputFile: File,
+        maxDurationMs: Long,
+        audioEnabled: Boolean,
+        onFinalized: (durationMs: Long, success: Boolean) -> Unit,
+    ): Boolean {
+        val activeRecorder = recorder ?: return false
+        if (activeRecording != null) return false
+        val pending =
+            runCatching {
+                activeRecorder.prepareRecording(context, FileOutputOptions.Builder(outputFile).build())
+            }.getOrNull() ?: return false
+        val withAudio =
+            if (audioEnabled) {
+                try {
+                    pending.withAudioEnabled()
+                } catch (denied: SecurityException) {
+                    pending
+                }
+            } else {
+                pending
+            }
+        val recording =
+            runCatching {
+                withAudio.start(ContextCompat.getMainExecutor(context)) { event ->
+                    if (event is VideoRecordEvent.Finalize) {
+                        recordingTimeout?.let { recordingHandler.removeCallbacks(it) }
+                        recordingTimeout = null
+                        activeRecording = null
+                        onFinalized(
+                            TimeUnit.NANOSECONDS.toMillis(event.recordingStats.recordedDurationNanos),
+                            !event.hasError(),
+                        )
+                    }
+                }
+            }.getOrNull() ?: return false
+        activeRecording = recording
+        val timeout = Runnable { stopClipRecording() }
+        recordingTimeout = timeout
+        recordingHandler.postDelayed(timeout, maxDurationMs)
+        return true
+    }
+
+    fun stopClipRecording() {
+        recordingTimeout?.let { recordingHandler.removeCallbacks(it) }
+        recordingTimeout = null
+        activeRecording?.stop()
+    }
 
     private fun publish(image: ImageProxy, framerate: Int) {
         try {

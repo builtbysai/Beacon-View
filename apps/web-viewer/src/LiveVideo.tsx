@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, request } from './api';
 import { Icon } from './Icon';
 import { CameraFlipButton } from './CameraFlipButton';
 import { InlineRename } from './InlineRename';
@@ -15,6 +14,8 @@ import {
   type PreviousInboundBytes,
   type StreamQuality,
 } from './live-video-quality';
+import { formatClipTimer } from './recording-capture';
+import { useClipRecorder } from './useClipRecorder';
 
 import {
   type ConnectionFailure,
@@ -27,24 +28,6 @@ interface Camera {
   id: string;
   name: string;
 }
-
-type RecordingStatus =
-  | 'requested'
-  | 'recording'
-  | 'uploading'
-  | 'available'
-  | 'failed'
-  | 'deleting'
-  | 'deleted';
-interface RecordingProgress {
-  id: string;
-  status: RecordingStatus;
-}
-const RECORDING_IN_PROGRESS: RecordingStatus[] = [
-  'requested',
-  'recording',
-  'uploading',
-];
 
 interface ReadyMessage {
   canListen?: boolean;
@@ -176,8 +159,7 @@ export function LiveVideo({
   const [statsOpen, setStatsOpen] = useState(false);
   const hideControlsTimer = useRef<number | null>(null);
   const [renaming, setRenaming] = useState(false);
-  const [recording, setRecording] = useState<RecordingProgress | null>(null);
-  const [recordingBusy, setRecordingBusy] = useState(false);
+  const clip = useClipRecorder(camera.id);
   // Matches CameraTile's grouped-by-host convention: the device is the
   // user-facing "camera", so its name leads; the source's own name (e.g.
   // "Rear camera") is secondary and only shown when it actually differs.
@@ -201,64 +183,31 @@ export function LiveVideo({
     );
   }, []);
 
-  const startRecording = useCallback(async () => {
-    if (
-      recordingBusy ||
-      (recording && RECORDING_IN_PROGRESS.includes(recording.status))
-    )
+  const startRecording = useCallback(() => {
+    const stream = videoRef.current?.srcObject;
+    const isMediaStream =
+      typeof MediaStream !== 'undefined' && stream instanceof MediaStream;
+    if (!isMediaStream) {
+      setControlError('Recording is not available yet -- still connecting.');
       return;
-    setRecordingBusy(true);
-    setControlError('');
-    try {
-      const result = await request<{ recording: RecordingProgress }>(
-        '/api/recordings',
-        { body: JSON.stringify({ cameraId: camera.id }), method: 'POST' },
-      );
-      setRecording(result.recording);
-    } catch (error) {
-      setControlError(
-        error instanceof ApiError
-          ? error.message
-          : 'Recording could not be started.',
-      );
-    } finally {
-      setRecordingBusy(false);
     }
-  }, [camera.id, recording, recordingBusy]);
-
-  // Recording is short-clip and device/browser-driven once requested (see
-  // core-feature-completion-plan.md's recording foundation) -- this just
-  // polls the existing list endpoint for this one recording's lifecycle
-  // rather than owning any of the actual capture/upload.
-  useEffect(() => {
-    if (!recording || !RECORDING_IN_PROGRESS.includes(recording.status)) return;
-    let active = true;
-    const timer = window.setTimeout(() => {
-      void request<{ recordings: RecordingProgress[] }>('/api/recordings')
-        .then((result) => {
-          if (!active) return;
-          const match = result.recordings.find(
-            (item) => item.id === recording.id,
-          );
-          setRecording(match ?? null);
-        })
-        .catch(() => undefined);
-    }, 4_000);
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [recording]);
+    setControlError('');
+    clip.start(stream);
+  }, [clip]);
 
   useEffect(() => {
-    if (
-      !recording ||
-      (recording.status !== 'available' && recording.status !== 'failed')
-    )
+    if (clip.state.error) setControlError(clip.state.error);
+  }, [clip.state.error]);
+
+  // Clears a finished clip's status back to the plain "Record a short
+  // clip" control a few seconds after it lands, the same pause the old
+  // request-and-poll version gave someone to read "Recording saved".
+  useEffect(() => {
+    if (clip.state.status !== 'available' && clip.state.status !== 'failed')
       return;
-    const timer = window.setTimeout(() => setRecording(null), 6_000);
+    const timer = window.setTimeout(() => clip.reset(), 6_000);
     return () => window.clearTimeout(timer);
-  }, [recording]);
+  }, [clip, clip.state.status]);
 
   useEffect(
     () => () => {
@@ -826,47 +775,44 @@ export function LiveVideo({
                 </span>
               </button>
             )}
-            {canRecord && recordingReady && (
+            {canRecord && recordingReady && clip.supported && (
               <button
-                aria-pressed={
-                  !!recording &&
-                  RECORDING_IN_PROGRESS.includes(recording.status)
-                }
+                aria-pressed={clip.state.status === 'recording'}
                 className={`video-control${
-                  recording && RECORDING_IN_PROGRESS.includes(recording.status)
-                    ? ' is-active'
-                    : ''
+                  clip.state.status === 'recording' ? ' is-active' : ''
                 }`}
                 data-tooltip={
-                  recording?.status === 'failed'
-                    ? 'Recording failed · try again'
-                    : 'Record a short clip'
+                  clip.state.status === 'recording'
+                    ? `Recording… ${formatClipTimer(clip.state.elapsedMs)} · tap to stop`
+                    : clip.state.status === 'failed'
+                      ? 'Recording failed · try again'
+                      : 'Record a short clip'
                 }
                 disabled={
-                  recordingBusy ||
                   privacyMode ||
                   status !== 'connected' ||
-                  (!!recording &&
-                    RECORDING_IN_PROGRESS.includes(recording.status))
+                  clip.state.status === 'starting' ||
+                  clip.state.status === 'uploading' ||
+                  clip.state.status === 'available'
                 }
-                onClick={() => void startRecording()}
+                onClick={
+                  clip.state.status === 'recording' ? clip.stop : startRecording
+                }
                 type="button"
               >
                 <Icon name="record" />
                 <span className="visually-hidden">
-                  {recordingBusy
+                  {clip.state.status === 'starting'
                     ? 'Starting recording…'
-                    : recording?.status === 'requested'
-                      ? 'Recording requested'
-                      : recording?.status === 'recording'
-                        ? 'Recording'
-                        : recording?.status === 'uploading'
-                          ? 'Uploading recording'
-                          : recording?.status === 'available'
-                            ? 'Recording saved'
-                            : recording?.status === 'failed'
-                              ? 'Recording failed, try again'
-                              : 'Record a short clip'}
+                    : clip.state.status === 'recording'
+                      ? `Recording, ${formatClipTimer(clip.state.elapsedMs)} elapsed. Tap to stop.`
+                      : clip.state.status === 'uploading'
+                        ? 'Uploading recording'
+                        : clip.state.status === 'available'
+                          ? 'Recording saved'
+                          : clip.state.status === 'failed'
+                            ? 'Recording failed, try again'
+                            : 'Record a short clip'}
                 </span>
               </button>
             )}

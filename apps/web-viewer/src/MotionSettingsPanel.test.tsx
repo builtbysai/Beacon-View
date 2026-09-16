@@ -18,6 +18,7 @@ afterEach(() => {
 const rear = {
   cameraId: 'rear-camera',
   enabled: true,
+  recordOnMotion: false,
   sensitivity: 'medium' as const,
   cooldownSeconds: 30 as const,
   quietHours: null,
@@ -25,6 +26,7 @@ const rear = {
 const front = {
   cameraId: 'front-camera',
   enabled: true,
+  recordOnMotion: false,
   sensitivity: 'low' as const,
   cooldownSeconds: 60 as const,
   quietHours: null,
@@ -88,6 +90,7 @@ describe('MotionSettingsPanel', () => {
       method: 'PUT',
       body: JSON.stringify({
         enabled: false,
+        recordOnMotion: false,
         sensitivity: 'high',
         cooldownSeconds: 120,
         quietHours: null,
@@ -97,6 +100,57 @@ describe('MotionSettingsPanel', () => {
         'x-csrf-token': 'test-csrf',
       },
     });
+  });
+
+  it('lets the owner turn on recording for motion events on a camera', async () => {
+    document.cookie = 'beacon_csrf=test-csrf; path=/';
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(response({ cameras: [rear] }))
+      .mockResolvedValueOnce(
+        response({ settings: { ...rear, recordOnMotion: true } }),
+      );
+    vi.stubGlobal('fetch', fetch);
+    render(<MotionSettingsPanel deviceId="phone-1" cameras={cameras} />);
+    fireEvent.click(screen.getByText('Motion settings'));
+    await screen.findByRole('form', { name: 'Camera motion settings' });
+
+    const recordToggle = screen.getByLabelText(
+      'Record a short clip when motion is detected',
+    );
+    expect(recordToggle).not.toBeChecked();
+    fireEvent.click(recordToggle);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save motion settings' }),
+    );
+
+    await screen.findByText(
+      'Saved. Your phone applies the settings on its next connection check.',
+    );
+    expect(fetch.mock.calls[1]![1]).toMatchObject({
+      body: JSON.stringify({
+        enabled: true,
+        recordOnMotion: true,
+        sensitivity: 'medium',
+        cooldownSeconds: 30,
+        quietHours: null,
+      }),
+    });
+  });
+
+  it('disables recording-on-motion along with the rest while detection is off', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({ cameras: [{ ...rear, enabled: false }] }),
+      );
+    vi.stubGlobal('fetch', fetch);
+    render(<MotionSettingsPanel deviceId="phone-1" cameras={cameras} />);
+    fireEvent.click(screen.getByText('Motion settings'));
+    await screen.findByRole('form', { name: 'Camera motion settings' });
+    expect(
+      screen.getByLabelText('Record a short clip when motion is detected'),
+    ).toBeDisabled();
   });
 
   it('keeps edits after a failed save and lets the owner retry', async () => {

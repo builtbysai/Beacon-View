@@ -131,7 +131,20 @@ export function registerDeviceRuntimeRoutes(
         cameraId: parameters.data.cameraId,
         type: 'motion-event-created',
       });
-      return reply.code(201).send({ created: true });
+      // Best-effort: a missed auto-recording (Drive not connected, or one
+      // already in flight for this camera) never fails the motion report
+      // itself -- the event is already committed above either way.
+      const recording = result.recordOnMotion
+        ? await store.createMotionTriggeredRecording({
+            cameraSourceId: result.cameraSourceId,
+            householdId: result.householdId,
+            ownerId: result.ownerId,
+          })
+        : null;
+      return reply.code(201).send({
+        created: true,
+        ...(recording ? { recordingId: recording.recordingId } : {}),
+      });
     },
   );
 

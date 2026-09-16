@@ -873,6 +873,7 @@ describe('App', () => {
   });
 
   it('tracks the active Settings section in the URL so browser back steps between them', async () => {
+    vi.stubGlobal('WebSocket', TestSocket);
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((url: string) =>

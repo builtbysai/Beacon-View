@@ -61,6 +61,12 @@ export function isQuietHoursActive(quietHours: QuietHours, now: Date): boolean {
 export const motionSettingsSchema = z
   .object({
     enabled: z.boolean(),
+    // Starts a short recording for every motion event this camera reports,
+    // subject to the same enabled/sensitivity/cooldown/quiet-hours gating
+    // above -- never a separate trigger. Requires the household owner to
+    // have Google Drive connected with the recording scope; silently
+    // skipped (not an error) when they don't.
+    recordOnMotion: z.boolean(),
     sensitivity: z.enum(['low', 'medium', 'high']),
     cooldownSeconds: z.union([
       z.literal(30),

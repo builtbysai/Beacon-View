@@ -517,4 +517,127 @@ describe.skipIf(!app || !store)('recording routes', () => {
 
     device.close();
   });
+
+  it('auto-starts a recording on motion when enabled, and tells the reporting device its id', async () => {
+    const owner = await registerAndSignIn(
+      'motion-record@example.com',
+      '10.2.0.9',
+    );
+    const camera = await pairCamera(owner, 'Driveway');
+    await connectDrive(owner.userId);
+
+    await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'PUT',
+      payload: {
+        cooldownSeconds: 30,
+        enabled: true,
+        quietHours: null,
+        recordOnMotion: true,
+        sensitivity: 'medium',
+      },
+      url: `/api/cameras/${camera.cameraId}/motion-settings`,
+    });
+
+    const reported = await app!.inject({
+      headers: { Authorization: `Bearer ${camera.credential}` },
+      method: 'POST',
+      payload: { confidence: 0.8 },
+      url: `/api/device/cameras/${camera.cameraId}/motion-events`,
+    });
+    expect(reported.statusCode).toBe(201);
+    const { recordingId } = reported.json<{ recordingId?: string }>();
+    expect(recordingId).toBeTruthy();
+
+    const listed = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: '/api/recordings',
+    });
+    expect(
+      listed.json<{ recordings: { status: string }[] }>().recordings,
+    ).toEqual([expect.objectContaining({ status: 'requested' })]);
+  });
+
+  it('does not auto-start a recording on motion when the setting is off', async () => {
+    const owner = await registerAndSignIn(
+      'motion-no-record@example.com',
+      '10.2.0.10',
+    );
+    const camera = await pairCamera(owner, 'Hallway');
+    await connectDrive(owner.userId);
+
+    const reported = await app!.inject({
+      headers: { Authorization: `Bearer ${camera.credential}` },
+      method: 'POST',
+      payload: { confidence: 0.6 },
+      url: `/api/device/cameras/${camera.cameraId}/motion-events`,
+    });
+    expect(reported.statusCode).toBe(201);
+    expect(
+      reported.json<{ recordingId?: string }>().recordingId,
+    ).toBeUndefined();
+
+    const listed = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: '/api/recordings',
+    });
+    expect(listed.json<{ recordings: unknown[] }>().recordings).toHaveLength(0);
+  });
+
+  // Exercised at the store level rather than through two real motion-event
+  // HTTP calls: the schema's minimum cooldown is a real 30 seconds, so a
+  // second report from the same source can't be made to land inside this
+  // test without faking timers around a real Postgres connection.
+  it('createMotionTriggeredRecording requires Drive connected and refuses to stack a second recording', async () => {
+    const owner = await registerAndSignIn(
+      'motion-gap@example.com',
+      '10.2.0.11',
+    );
+    const camera = await pairCamera(owner, 'Side yard');
+    const user = await store!.findUserByEmail('motion-gap@example.com');
+    const accessible = await store!.findAccessibleCamera(
+      user!.householdId,
+      owner.userId,
+      'owner',
+      camera.cameraId,
+    );
+
+    expect(
+      await store!.createMotionTriggeredRecording({
+        cameraSourceId: accessible!.cameraId,
+        householdId: user!.householdId,
+        ownerId: owner.userId,
+      }),
+    ).toBeNull();
+
+    await connectDrive(owner.userId);
+    const created = await store!.createMotionTriggeredRecording({
+      cameraSourceId: accessible!.cameraId,
+      householdId: user!.householdId,
+      ownerId: owner.userId,
+    });
+    expect(created).not.toBeNull();
+
+    // Same camera source, still "requested" -- a second attempt (the same
+    // path the next motion report past cooldown would take) must not stack
+    // a duplicate recording on top of it.
+    expect(
+      await store!.createMotionTriggeredRecording({
+        cameraSourceId: accessible!.cameraId,
+        householdId: user!.householdId,
+        ownerId: owner.userId,
+      }),
+    ).toBeNull();
+
+    const listed = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: '/api/recordings',
+    });
+    expect(listed.json<{ recordings: { id: string }[] }>().recordings).toEqual([
+      expect.objectContaining({ id: created!.recordingId }),
+    ]);
+  });
 });

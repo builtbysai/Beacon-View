@@ -4,6 +4,7 @@ import { request } from './api';
 interface MotionSettings {
   cameraId: string;
   enabled: boolean;
+  recordOnMotion: boolean;
   sensitivity: 'low' | 'medium' | 'high';
   cooldownSeconds: 30 | 60 | 120 | 300;
   quietHours: { start: string; end: string; timeZone: string } | null;
@@ -185,6 +186,22 @@ export function MotionSettingsPanel({
               <p className="notice">
                 Higher sensitivity may also detect lighting changes and shadows.
                 It does not identify people or objects.
+              </p>
+              <label className="motion-enabled">
+                <input
+                  type="checkbox"
+                  checked={active.recordOnMotion}
+                  disabled={busy || !active.enabled}
+                  onChange={(event) =>
+                    change({ recordOnMotion: event.target.checked })
+                  }
+                />
+                Record a short clip when motion is detected
+              </label>
+              <p className="notice">
+                Requires Google Drive connected with cloud recording turned
+                on in Settings → Cloud storage. Stops immediately in privacy
+                mode.
               </p>
               <label>
                 Time between events

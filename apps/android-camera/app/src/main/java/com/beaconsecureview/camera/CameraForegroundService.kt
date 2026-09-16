@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.webrtc.IceCandidate
+import java.io.File
 
 object CameraRuntime {
     private val mutableState = MutableStateFlow(CameraRuntimeState())
@@ -542,15 +543,75 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     private fun reportMotion(generation: Int, cameraId: String, confidence: Float) {
         if (generation != captureGeneration || CameraRuntime.state.value.privacyMode) return
         lifecycleScope.launch(Dispatchers.IO) {
-            runCatching { api.reportMotion(credential, cameraId, confidence) }
-                .onFailure { error ->
-                    if (error is AuthorizationLostException) {
-                        withContext(Dispatchers.Main) { requirePairing() }
+            val recordingId =
+                runCatching { api.reportMotion(credential, cameraId, confidence) }
+                    .onFailure { error ->
+                        if (error is AuthorizationLostException) {
+                            withContext(Dispatchers.Main) { requirePairing() }
+                        } else {
+                            Log.w(LOG_TAG, "event=motion_report_failed")
+                        }
+                    }
+                    .getOrNull()
+            if (recordingId != null) {
+                withContext(Dispatchers.Main) { startMotionRecording(generation, recordingId) }
+            }
+        }
+    }
+
+    /** Best-effort: the recording stays in Beacon's "requested" state
+     * forever (the same as if this had never been called) when this device
+     * can't record a clip right now -- never a crash, never an interruption
+     * to the live capture this service also drives for any viewer already
+     * watching. */
+    private fun startMotionRecording(generation: Int, recordingId: String) {
+        if (generation != captureGeneration) return
+        val activeMedia = media ?: return
+        val outputFile = File(cacheDir, "beacon-clip-$recordingId.mp4")
+        val started =
+            activeMedia.startClipRecording(
+                outputFile,
+                MOTION_CLIP_MAX_DURATION_MS,
+                shouldCaptureAudio(hasMicrophonePermission()),
+            ) { durationMs, success ->
+                lifecycleScope.launch(Dispatchers.IO) {
+                    if (generation != captureGeneration) {
+                        outputFile.delete()
+                        return@launch
+                    }
+                    if (success) {
+                        uploadMotionClip(recordingId, outputFile, durationMs)
                     } else {
-                        Log.w(LOG_TAG, "event=motion_report_failed")
+                        outputFile.delete()
+                        Log.w(LOG_TAG, "event=motion_clip_capture_failed")
                     }
                 }
+            }
+        if (!started) outputFile.delete()
+    }
+
+    private suspend fun uploadMotionClip(recordingId: String, file: File, durationMs: Long) {
+        runCatching {
+            val checksum = sha256Hex(file)
+            val uploadUrl =
+                api.beginRecordingUpload(
+                    credential,
+                    recordingId,
+                    file.length(),
+                    checksum,
+                    durationMs.coerceIn(1_000, 600_000),
+                    "video/mp4",
+                )
+            val providerFileId = uploadClipToDrive(uploadUrl, file, "video/mp4")
+            api.completeRecording(credential, recordingId, providerFileId)
+            Log.i(LOG_TAG, "event=motion_clip_uploaded")
+        }.onFailure { error ->
+            Log.w(LOG_TAG, "event=motion_clip_upload_failed")
+            if (error is AuthorizationLostException) {
+                withContext(Dispatchers.Main) { requirePairing() }
+            }
         }
+        file.delete()
     }
 
     private fun handleCaptureStart(generation: Int, started: Boolean) {
@@ -695,6 +756,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         private const val SELECTED_CAMERA_ID = "selected_camera_id"
         private const val PENDING_PRIVACY_PAUSE = "pending_privacy_pause"
         private const val LOG_TAG = "BeaconLifecycle"
+        private const val MOTION_CLIP_MAX_DURATION_MS = 20_000L
 
         fun start(context: Context) {
             androidx.core.content.ContextCompat.startForegroundService(

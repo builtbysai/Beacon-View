@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.camera.view.PreviewView
 import androidx.camera.core.CameraSelector
 import androidx.lifecycle.LifecycleOwner
+import java.io.File
 import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
@@ -75,6 +76,17 @@ class CameraMediaSource(
         // visible local preview and avoids a cold CameraX start whenever an authorized viewer joins.
         capturer.startCapture(640, 480, 24)
     }
+
+    /** See CameraXVideoCapturer.startClipRecording -- forwards to the same
+     * capturer already driving this source's live preview/analysis, whose
+     * 3rd concurrent Recorder use case may or may not be available on this
+     * device's camera HAL. */
+    fun startClipRecording(
+        outputFile: File,
+        maxDurationMs: Long,
+        audioEnabled: Boolean,
+        onFinalized: (durationMs: Long, success: Boolean) -> Unit,
+    ): Boolean = capturer.startClipRecording(outputFile, maxDurationMs, audioEnabled, onFinalized)
 
     @Synchronized
     fun acquire() {

@@ -500,6 +500,7 @@ class BeaconApi(private val baseUrl: String) {
                 ?: throw IllegalStateException("Unsupported motion sensitivity")
             item.getString("cameraId") to MotionSettings(
                 enabled = item.getBoolean("enabled"),
+                recordOnMotion = item.optBoolean("recordOnMotion", false),
                 sensitivity = sensitivity,
                 cooldownSeconds = item.getInt("cooldownSeconds"),
                 quietHours = item.optJSONObject("quietHours")?.let { quiet ->
@@ -513,7 +514,12 @@ class BeaconApi(private val baseUrl: String) {
         }
     }
 
-    fun reportMotion(credential: String, cameraId: String, confidence: Float) {
+    /** Returns the id of a recording the backend started for this motion
+     * report -- see core-feature-completion-plan.md's recording foundation
+     * -- or null when this report didn't trigger one (recording-on-motion is
+     * off, Drive isn't connected, or one is already in flight). Never an
+     * error: the motion event itself is already committed either way. */
+    fun reportMotion(credential: String, cameraId: String, confidence: Float): String? {
         val connection = connection("/api/device/cameras/$cameraId/motion-events", "POST")
         connection.setRequestProperty("Authorization", "Bearer $credential")
         connection.outputStream.use {
@@ -522,8 +528,68 @@ class BeaconApi(private val baseUrl: String) {
                     .toByteArray(Charsets.UTF_8),
             )
         }
-        responseBody(connection)
+        val body = responseBody(connection)
         checkMotionReportResponse(connection.responseCode)
+        if (connection.responseCode != HttpURLConnection.HTTP_CREATED) return null
+        return runCatching { JSONObject(body).optString("recordingId") }
+            .getOrNull()
+            ?.takeIf { it.isNotEmpty() }
+    }
+
+    /** Opens the Drive upload session for a motion-triggered recording using
+     * this camera's own device credential -- no browser session involved,
+     * matching the device-initiated path core-feature-completion-plan.md's
+     * recording foundation was built for. Mirrors the web viewer's own
+     * upload-session call against /api/recordings/:id/upload-session. */
+    fun beginRecordingUpload(
+        credential: String,
+        recordingId: String,
+        byteSize: Long,
+        checksumSha256: String,
+        durationMs: Long,
+        mimeType: String,
+    ): String {
+        val connection = connection("/api/device/recordings/$recordingId/upload-session", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $credential")
+        connection.outputStream.use {
+            it.write(
+                JSONObject()
+                    .put("byteSize", byteSize)
+                    .put("checksumSha256", checksumSha256)
+                    .put("durationMs", durationMs)
+                    .put("mimeType", mimeType)
+                    .toString()
+                    .toByteArray(Charsets.UTF_8),
+            )
+        }
+        val body = responseBody(connection)
+        if (connection.responseCode in listOf(HttpURLConnection.HTTP_UNAUTHORIZED, HttpURLConnection.HTTP_FORBIDDEN)) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_CREATED) {
+            throw IllegalStateException("Recording upload session unavailable")
+        }
+        return JSONObject(body).getString("uploadUrl")
+    }
+
+    /** Tells Beacon the clip finished uploading directly to Drive, so it can
+     * verify the file and mark the recording available. */
+    fun completeRecording(credential: String, recordingId: String, providerFileId: String) {
+        val connection = connection("/api/device/recordings/$recordingId/complete", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $credential")
+        connection.outputStream.use {
+            it.write(
+                JSONObject().put("providerFileId", providerFileId).toString()
+                    .toByteArray(Charsets.UTF_8),
+            )
+        }
+        responseBody(connection)
+        if (connection.responseCode in listOf(HttpURLConnection.HTTP_UNAUTHORIZED, HttpURLConnection.HTTP_FORBIDDEN)) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            throw IllegalStateException("Recording could not be completed")
+        }
     }
 
     private fun connection(path: String, method: String): HttpURLConnection =

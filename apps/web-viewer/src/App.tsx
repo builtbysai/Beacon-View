@@ -868,7 +868,12 @@ export function App() {
   }
 
   if (page === 'camera mode' && browserCameraActive) {
-    return <BrowserCameraMode onBack={() => setBrowserCameraActive(false)} />;
+    return (
+      <BrowserCameraMode
+        canRecord={household?.role === 'owner'}
+        onBack={() => setBrowserCameraActive(false)}
+      />
+    );
   }
 
   const streamingCount = cameras.filter(

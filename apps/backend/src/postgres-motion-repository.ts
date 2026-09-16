@@ -114,6 +114,7 @@ export class PostgresMotionRepository {
   ): Promise<CameraMotionSettings[]> {
     const result = await this.pool.query<CameraMotionSettings>(
       `SELECT cs.public_camera_id AS "cameraId", cs.motion_enabled AS enabled,
+              cs.motion_record_enabled AS "recordOnMotion",
               cs.motion_sensitivity AS sensitivity, cs.motion_cooldown_seconds AS "cooldownSeconds",
               CASE WHEN cs.motion_quiet_hours_start_minute IS NULL THEN NULL ELSE jsonb_build_object('start', lpad((cs.motion_quiet_hours_start_minute / 60)::text, 2, '0') || ':' || lpad((cs.motion_quiet_hours_start_minute % 60)::text, 2, '0'), 'end', lpad((cs.motion_quiet_hours_end_minute / 60)::text, 2, '0') || ':' || lpad((cs.motion_quiet_hours_end_minute % 60)::text, 2, '0'), 'timeZone', cs.motion_quiet_hours_time_zone) END AS "quietHours"
        FROM camera_sources cs JOIN cameras d ON d.id = cs.device_id
@@ -132,20 +133,23 @@ export class PostgresMotionRepository {
     settings: MotionSettings,
   ): Promise<CameraMotionSettings | null> {
     const result = await this.pool.query<CameraMotionSettings>(
-      `UPDATE camera_sources cs SET motion_enabled = $3, motion_sensitivity = $4,
-              motion_cooldown_seconds = $5, motion_quiet_hours_start_minute = $6,
-              motion_quiet_hours_end_minute = $7, motion_quiet_hours_time_zone = $8, updated_at = now()
+      `UPDATE camera_sources cs SET motion_enabled = $3, motion_record_enabled = $4,
+              motion_sensitivity = $5, motion_cooldown_seconds = $6,
+              motion_quiet_hours_start_minute = $7, motion_quiet_hours_end_minute = $8,
+              motion_quiet_hours_time_zone = $9, updated_at = now()
        FROM cameras d WHERE cs.device_id = d.id AND d.household_id = $1
          AND cs.public_camera_id = $2 AND d.platform = 'android'
          AND cs.removed_at IS NULL AND d.revoked_at IS NULL
          AND EXISTS (SELECT 1 FROM device_credentials dc WHERE dc.camera_id = d.id AND dc.revoked_at IS NULL)
        RETURNING cs.public_camera_id AS "cameraId", cs.motion_enabled AS enabled,
+                 cs.motion_record_enabled AS "recordOnMotion",
                  cs.motion_sensitivity AS sensitivity, cs.motion_cooldown_seconds AS "cooldownSeconds",
                  CASE WHEN cs.motion_quiet_hours_start_minute IS NULL THEN NULL ELSE jsonb_build_object('start', lpad((cs.motion_quiet_hours_start_minute / 60)::text, 2, '0') || ':' || lpad((cs.motion_quiet_hours_start_minute % 60)::text, 2, '0'), 'end', lpad((cs.motion_quiet_hours_end_minute / 60)::text, 2, '0') || ':' || lpad((cs.motion_quiet_hours_end_minute % 60)::text, 2, '0'), 'timeZone', cs.motion_quiet_hours_time_zone) END AS "quietHours"`,
       [
         householdId,
         publicCameraId,
         settings.enabled,
+        settings.recordOnMotion,
         settings.sensitivity,
         settings.cooldownSeconds,
         settings.quietHours
@@ -163,7 +167,13 @@ export class PostgresMotionRepository {
     publicCameraId: string;
     confidence: number;
     now: Date;
-  }): Promise<{ created: boolean; householdId: string } | null> {
+  }): Promise<{
+    created: boolean;
+    householdId: string;
+    cameraSourceId: string;
+    ownerId: string;
+    recordOnMotion: boolean;
+  } | null> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
@@ -191,12 +201,14 @@ export class PostgresMotionRepository {
       const source = await client.query<{
         id: string;
         motionEnabled: boolean;
+        recordOnMotion: boolean;
         cooldownSeconds: number;
         quietHoursStartMinute: number | null;
         quietHoursEndMinute: number | null;
         quietHoursTimeZone: string | null;
       }>(
         `SELECT cs.id, cs.motion_enabled AS "motionEnabled",
+                cs.motion_record_enabled AS "recordOnMotion",
                 cs.motion_cooldown_seconds AS "cooldownSeconds",
                 cs.motion_quiet_hours_start_minute AS "quietHoursStartMinute",
                 cs.motion_quiet_hours_end_minute AS "quietHoursEndMinute",
@@ -213,11 +225,17 @@ export class PostgresMotionRepository {
         await client.query('ROLLBACK');
         return null;
       }
-      if (!source.rows[0]!.motionEnabled) {
-        await client.query('COMMIT');
-        return { created: false, householdId: device.householdId };
-      }
       const sourceSettings = source.rows[0]!;
+      if (!sourceSettings.motionEnabled) {
+        await client.query('COMMIT');
+        return {
+          cameraSourceId: sourceId,
+          created: false,
+          householdId: device.householdId,
+          ownerId: device.userId,
+          recordOnMotion: false,
+        };
+      }
       if (
         sourceSettings.quietHoursStartMinute !== null &&
         isQuietHoursActive(
@@ -230,7 +248,13 @@ export class PostgresMotionRepository {
         )
       ) {
         await client.query('COMMIT');
-        return { created: false, householdId: device.householdId };
+        return {
+          cameraSourceId: sourceId,
+          created: false,
+          householdId: device.householdId,
+          ownerId: device.userId,
+          recordOnMotion: false,
+        };
       }
       const inserted = await client.query<{ id: string }>(
         `INSERT INTO motion_events (camera_source_id, confidence, occurred_at)
@@ -242,7 +266,7 @@ export class PostgresMotionRepository {
           sourceId,
           input.confidence.toFixed(4),
           input.now,
-          source.rows[0]!.cooldownSeconds,
+          sourceSettings.cooldownSeconds,
         ],
       );
       const motionEventId = inserted.rows[0]?.id;
@@ -255,10 +279,14 @@ export class PostgresMotionRepository {
           userId: device.userId,
         });
       }
+      const created = (inserted.rowCount ?? 0) === 1;
       await client.query('COMMIT');
       return {
-        created: (inserted.rowCount ?? 0) === 1,
+        cameraSourceId: sourceId,
+        created,
         householdId: device.householdId,
+        ownerId: device.userId,
+        recordOnMotion: created && sourceSettings.recordOnMotion,
       };
     } catch (error) {
       await client.query('ROLLBACK');

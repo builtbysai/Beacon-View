@@ -328,6 +328,13 @@ export const cameraSources = pgTable(
     displayName: text('display_name').notNull(),
     sourceKey: text('source_key').notNull(),
     motionEnabled: boolean('motion_enabled').notNull().default(true),
+    // Auto-starts a short recording when this source reports motion --
+    // subject to the same enabled/sensitivity/cooldown/quiet-hours gating
+    // that already decides whether the motion event itself is created, so
+    // it never fires more often than motion detection already does.
+    motionRecordEnabled: boolean('motion_record_enabled')
+      .notNull()
+      .default(false),
     motionSensitivity: text('motion_sensitivity').notNull().default('medium'),
     motionCooldownSeconds: integer('motion_cooldown_seconds')
       .notNull()

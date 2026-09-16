@@ -13,6 +13,7 @@ import { PostgresNotificationRepository } from './postgres-notification-reposito
 import { PostgresSharingRepository } from './postgres-sharing-repository.js';
 import { NotificationCipher } from './notification-crypto.js';
 import { GoogleDriveTokenCipher } from './google-drive-crypto.js';
+import { GOOGLE_DRIVE_RECORDING_SCOPE } from './google-drive-client.js';
 import { PostgresGoogleDriveRepository } from './postgres-google-drive-repository.js';
 import { PostgresRecordingRepository } from './postgres-recording-repository.js';
 import { PostgresAccountRecoveryRepository } from './postgres-account-recovery-repository.js';
@@ -139,6 +140,32 @@ export class PostgresStore implements MilestoneStore {
     cameraSourceIds: string[],
   ): Promise<RecordingRecord[]> {
     return this.recordings.listForCameraSources(householdId, cameraSourceIds);
+  }
+
+  async createMotionTriggeredRecording(input: {
+    cameraSourceId: string;
+    householdId: string;
+    ownerId: string;
+  }): Promise<{ recordingId: string } | null> {
+    const drive = await this.googleDrive.get(input.ownerId);
+    if (
+      !drive ||
+      !drive.scopes.split(/\s+/u).includes(GOOGLE_DRIVE_RECORDING_SCOPE)
+    )
+      return null;
+    const active = await this.recordings.listForCameraSources(
+      input.householdId,
+      [input.cameraSourceId],
+    );
+    const inProgress = new Set(['requested', 'recording', 'uploading']);
+    if (active.some((recording) => inProgress.has(recording.status)))
+      return null;
+    const recording = await this.recordings.createRequested({
+      cameraSourceId: input.cameraSourceId,
+      householdId: input.householdId,
+      userId: input.ownerId,
+    });
+    return recording ? { recordingId: recording.id } : null;
   }
 
   async deleteRecording(
@@ -575,7 +602,10 @@ export class PostgresStore implements MilestoneStore {
   async listGuestAccessibleCameras(
     tokenHash: string,
     now: Date,
-  ): Promise<{ householdId: string; cameras: AccessibleCameraRecord[] } | null> {
+  ): Promise<{
+    householdId: string;
+    cameras: AccessibleCameraRecord[];
+  } | null> {
     return this.sharing.listGuestAccessibleCameras(tokenHash, now);
   }
 
@@ -654,7 +684,13 @@ export class PostgresStore implements MilestoneStore {
     publicCameraId: string;
     confidence: number;
     now: Date;
-  }): Promise<{ created: boolean; householdId: string } | null> {
+  }): Promise<{
+    created: boolean;
+    householdId: string;
+    cameraSourceId: string;
+    ownerId: string;
+    recordOnMotion: boolean;
+  } | null> {
     return this.motion.createMotionEvent(input);
   }
 

@@ -20,6 +20,44 @@ class CameraSocket {
   send() {}
 }
 
+class FakeMediaRecorder {
+  static supportedTypes = new Set<string>();
+  static instances: FakeMediaRecorder[] = [];
+  static isTypeSupported(type: string): boolean {
+    return FakeMediaRecorder.supportedTypes.has(type);
+  }
+
+  mimeType: string;
+  #listeners = new Map<string, ((event: unknown) => void)[]>();
+
+  constructor(
+    readonly stream: MediaStream,
+    options: { mimeType: string },
+  ) {
+    this.mimeType = options.mimeType;
+    FakeMediaRecorder.instances.push(this);
+  }
+
+  addEventListener(type: string, listener: (event: unknown) => void): void {
+    const list = this.#listeners.get(type) ?? [];
+    list.push(listener);
+    this.#listeners.set(type, list);
+  }
+
+  #emit(type: string, event: unknown): void {
+    for (const listener of this.#listeners.get(type) ?? []) listener(event);
+  }
+
+  start(): void {}
+
+  stop(): void {
+    this.#emit('dataavailable', {
+      data: new Blob(['clip-bytes'], { type: this.mimeType }),
+    });
+    this.#emit('stop', {});
+  }
+}
+
 afterEach(() => {
   cleanup();
   localStorage.clear();
@@ -223,5 +261,165 @@ describe('BrowserCameraMode', () => {
       await screen.findByRole('button', { name: 'Start camera' }),
     ).toBeVisible();
     expect(stop).toHaveBeenCalled();
+  });
+
+  it('lets the owner capture and upload a clip of its own broadcast stream', async () => {
+    FakeMediaRecorder.instances = [];
+    FakeMediaRecorder.supportedTypes = new Set(['video/webm']);
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    const stream = {
+      getTracks: () => [{ stop: vi.fn() }],
+      getVideoTracks: () => [{ id: 'track', contentHint: '' }],
+    } as unknown as MediaStream;
+    Object.defineProperty(window, 'isSecureContext', {
+      configurable: true,
+      value: true,
+    });
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: vi.fn().mockResolvedValue([
+          {
+            deviceId: 'built-in',
+            kind: 'videoinput',
+            label: 'Built-in webcam',
+          },
+        ]),
+        getUserMedia: vi.fn().mockResolvedValue(stream),
+      },
+    });
+    const fetchMock = vi.fn<
+      (input: string | URL, init?: RequestInit) => Promise<Response>
+    >((input, init) => {
+      const url = String(input);
+      if (url === '/api/browser-devices')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              cameras: [
+                {
+                  id: 'camera-one',
+                  name: 'Built-in webcam',
+                  sourceKey: 'browser:built-in',
+                },
+              ],
+            }),
+            { status: 201 },
+          ),
+        );
+      if (url === '/api/recordings' && init?.method === 'POST')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ recording: { id: 'rec-1', status: 'requested' } }),
+            { status: 202 },
+          ),
+        );
+      if (url === '/api/recordings/rec-1/upload-session')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ uploadUrl: 'https://drive.example/upload' }),
+            { status: 201 },
+          ),
+        );
+      if (url === 'https://drive.example/upload')
+        return Promise.resolve(
+          new Response(JSON.stringify({ id: 'drive-file-1' }), {
+            status: 200,
+          }),
+        );
+      if (url === '/api/recordings/rec-1/complete')
+        return Promise.resolve(new Response(null, { status: 204 }));
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('WebSocket', CameraSocket);
+
+    render(<BrowserCameraMode canRecord onBack={() => undefined} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Allow and find cameras' }),
+    );
+    await screen.findByText('Built-in webcam');
+    fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
+    await screen.findByText('Camera Mode ready');
+
+    const recordButton = screen.getByRole('button', {
+      name: 'Record a short clip',
+    });
+    await waitFor(() => expect(recordButton).toBeEnabled());
+    fireEvent.click(recordButton);
+
+    const activeButton = await screen.findByRole('button', {
+      name: /Recording,/,
+    });
+    expect(activeButton).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(activeButton);
+    FakeMediaRecorder.instances[0]!.stop();
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Recording saved' }),
+      ).toBeDisabled(),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/recordings/rec-1/complete',
+      expect.objectContaining({
+        body: JSON.stringify({ providerFileId: 'drive-file-1' }),
+        method: 'POST',
+      }),
+    );
+  });
+
+  it('hides the record control for anyone who is not the household owner', async () => {
+    const stream = {
+      getTracks: () => [{ stop: vi.fn() }],
+      getVideoTracks: () => [{ id: 'track', contentHint: '' }],
+    } as unknown as MediaStream;
+    Object.defineProperty(window, 'isSecureContext', {
+      configurable: true,
+      value: true,
+    });
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: vi.fn().mockResolvedValue([
+          {
+            deviceId: 'built-in',
+            kind: 'videoinput',
+            label: 'Built-in webcam',
+          },
+        ]),
+        getUserMedia: vi.fn().mockResolvedValue(stream),
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            cameras: [
+              {
+                id: 'camera-one',
+                name: 'Built-in webcam',
+                sourceKey: 'browser:built-in',
+              },
+            ],
+          }),
+        ok: true,
+        status: 201,
+      }),
+    );
+    vi.stubGlobal('WebSocket', CameraSocket);
+
+    render(<BrowserCameraMode onBack={() => undefined} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Allow and find cameras' }),
+    );
+    await screen.findByText('Built-in webcam');
+    fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
+    await screen.findByText('Camera Mode ready');
+
+    expect(
+      screen.queryByRole('button', { name: 'Record a short clip' }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -106,7 +106,6 @@ export interface GuestLinkRecord {
   createdAt: Date;
 }
 
-
 export interface CameraRecord {
   id: string;
   publicCameraId: string;
@@ -499,10 +498,7 @@ export interface MilestoneStore {
     expiresAt: Date;
     publicCameraIds: string[];
   }): Promise<string | null>;
-  listGuestLinks(
-    householdId: string,
-    now: Date,
-  ): Promise<GuestLinkRecord[]>;
+  listGuestLinks(householdId: string, now: Date): Promise<GuestLinkRecord[]>;
   revokeGuestLink(householdId: string, guestLinkId: string): Promise<boolean>;
   /** For signaling: does this token grant access to exactly this camera,
    * and with what controls? Shaped like findAccessibleCamera's result on
@@ -543,7 +539,23 @@ export interface MilestoneStore {
     publicCameraId: string;
     confidence: number;
     now: Date;
-  }): Promise<{ created: boolean; householdId: string } | null>;
+  }): Promise<{
+    created: boolean;
+    householdId: string;
+    cameraSourceId: string;
+    ownerId: string;
+    recordOnMotion: boolean;
+  } | null>;
+  /** Best-effort: starts a recording for a motion-triggered camera, when the
+   * household owner has Drive's recording scope connected and this camera
+   * doesn't already have one in flight. Returns null (never throws) when
+   * either isn't true -- a missed auto-recording is not a motion-reporting
+   * failure. */
+  createMotionTriggeredRecording(input: {
+    cameraSourceId: string;
+    householdId: string;
+    ownerId: string;
+  }): Promise<{ recordingId: string } | null>;
   createPairingCode(
     householdId: string,
     codeHash: string,

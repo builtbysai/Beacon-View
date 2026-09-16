@@ -737,7 +737,7 @@ internal fun MonitorHome(
                     }
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("Privacy", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        BeaconTrustLine("No cloud recordings. Camera and microphone use stays visible on the camera device.")
+                        BeaconTrustLine("Cloud recording is off unless you turn it on for a camera. Camera and microphone use always stays visible on the camera device.")
                     }
                     Text("Recent camera access", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     if (!accessHistoryLoaded) Text("Loading access history…")

@@ -1822,6 +1822,43 @@ button > .icon:first-child {
   margin: 0;
 }
 
+.broadcast-icon-button.is-active {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: rgb(239 68 68 / 18%);
+}
+
+.broadcast-icon-button[data-tooltip] {
+  position: relative;
+}
+
+.broadcast-icon-button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.55rem);
+  z-index: 20;
+  padding: 0.38rem 0.55rem;
+  border-radius: 0.45rem;
+  background: rgba(3, 11, 23, 0.94);
+  color: white;
+  font-size: 0.75rem;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(0.2rem);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.broadcast-icon-button[data-tooltip]:hover::after,
+.broadcast-icon-button[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .broadcast-warning {
   position: absolute;
   top: 4.75rem;

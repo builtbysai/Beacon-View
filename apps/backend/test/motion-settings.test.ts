@@ -11,6 +11,7 @@ describe('motion settings validation', () => {
       expect(
         motionSettingsSchema.safeParse({
           enabled: false,
+          recordOnMotion: false,
           sensitivity: 'medium',
           cooldownSeconds,
           quietHours: null,
@@ -21,19 +22,28 @@ describe('motion settings validation', () => {
   it.each([
     {
       enabled: 'false',
+      recordOnMotion: false,
       sensitivity: 'high',
       cooldownSeconds: 30,
       quietHours: null,
     },
     {
       enabled: true,
+      recordOnMotion: false,
       sensitivity: 'extreme',
       cooldownSeconds: 30,
       quietHours: null,
     },
-    { enabled: true, sensitivity: 'low', cooldownSeconds: 0, quietHours: null },
     {
       enabled: true,
+      recordOnMotion: false,
+      sensitivity: 'low',
+      cooldownSeconds: 0,
+      quietHours: null,
+    },
+    {
+      enabled: true,
+      recordOnMotion: false,
       sensitivity: 'low',
       cooldownSeconds: 30,
       quietHours: null,
@@ -41,6 +51,7 @@ describe('motion settings validation', () => {
     },
     {
       enabled: true,
+      recordOnMotion: false,
       sensitivity: 'low',
       cooldownSeconds: 31,
       quietHours: null,
@@ -50,7 +61,12 @@ describe('motion settings validation', () => {
   });
 
   it('requires a complete canonical quiet-hours interval and handles midnight', () => {
-    const base = { enabled: true, sensitivity: 'low', cooldownSeconds: 30 };
+    const base = {
+      enabled: true,
+      recordOnMotion: false,
+      sensitivity: 'low',
+      cooldownSeconds: 30,
+    };
     expect(
       motionSettingsSchema.safeParse({
         ...base,

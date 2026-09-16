@@ -1168,6 +1168,7 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     const url = `/api/cameras/${device.publicCameraId}/motion-settings`;
     const settings: MotionSettings = {
       enabled: false,
+      recordOnMotion: false,
       sensitivity: 'high',
       cooldownSeconds: 120,
       quietHours: null,

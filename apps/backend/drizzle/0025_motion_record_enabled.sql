@@ -1,0 +1,1 @@
+ALTER TABLE "camera_sources" ADD COLUMN "motion_record_enabled" boolean DEFAULT false NOT NULL;

@@ -12,6 +12,11 @@ enum class MotionSensitivity(val wireValue: String, val threshold: Int, val chan
 
 data class MotionSettings(
     val enabled: Boolean = true,
+    // Server-decided: the backend tells the device a recordingId to capture
+    // and upload only when this is on, Drive is connected, and no recording
+    // is already in flight for the camera. The device doesn't act on this
+    // field itself, only on the response it produces.
+    val recordOnMotion: Boolean = false,
     val sensitivity: MotionSensitivity = MotionSensitivity.Medium,
     val cooldownSeconds: Int = 30,
     val quietHours: QuietHours? = null,

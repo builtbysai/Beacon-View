@@ -28,10 +28,51 @@ class FakeWebSocket {
   }
 }
 
+class FakeMediaStream {}
+
+class FakeMediaRecorder {
+  static supportedTypes = new Set<string>();
+  static instances: FakeMediaRecorder[] = [];
+  static isTypeSupported(type: string): boolean {
+    return FakeMediaRecorder.supportedTypes.has(type);
+  }
+
+  mimeType: string;
+  #listeners = new Map<string, ((event: unknown) => void)[]>();
+
+  constructor(
+    readonly stream: MediaStream,
+    options: { mimeType: string },
+  ) {
+    this.mimeType = options.mimeType;
+    FakeMediaRecorder.instances.push(this);
+  }
+
+  addEventListener(type: string, listener: (event: unknown) => void): void {
+    const list = this.#listeners.get(type) ?? [];
+    list.push(listener);
+    this.#listeners.set(type, list);
+  }
+
+  #emit(type: string, event: unknown): void {
+    for (const listener of this.#listeners.get(type) ?? []) listener(event);
+  }
+
+  start(): void {}
+
+  stop(): void {
+    this.#emit('dataavailable', {
+      data: new Blob(['clip-bytes'], { type: this.mimeType }),
+    });
+    this.#emit('stop', {});
+  }
+}
+
 class FakePeer {
   static instances: FakePeer[] = [];
   connectionState = 'new';
   onconnectionstatechange: (() => void) | null = null;
+  ontrack: ((event: RTCTrackEvent) => void) | null = null;
   sender = { replaceTrack: vi.fn().mockResolvedValue(undefined) };
   transceiver = {
     receiver: { track: { kind: 'audio' } },
@@ -300,21 +341,41 @@ describe('LiveVideo', () => {
     unmount();
   });
 
-  it('lets the owner start a recording and reflects its lifecycle, but hides the control otherwise', async () => {
+  it('lets the owner capture a short clip and upload it straight to Drive, but hides the control otherwise', async () => {
     FakeWebSocket.instances = [];
     FakePeer.instances = [];
+    FakeMediaRecorder.instances = [];
+    FakeMediaRecorder.supportedTypes = new Set(['video/webm']);
     vi.stubGlobal('WebSocket', FakeWebSocket);
     vi.stubGlobal('RTCPeerConnection', FakePeer);
+    vi.stubGlobal('MediaStream', FakeMediaStream);
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
     const fetchMock = vi.fn<
       (input: string | URL, init?: RequestInit) => Promise<Response>
     >((input, init) => {
-      if (String(input) === '/api/recordings' && init?.method === 'POST')
+      const url = String(input);
+      if (url === '/api/recordings' && init?.method === 'POST')
         return Promise.resolve(
           new Response(
             JSON.stringify({ recording: { id: 'rec-1', status: 'requested' } }),
             { status: 202 },
           ),
         );
+      if (url === '/api/recordings/rec-1/upload-session')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ uploadUrl: 'https://drive.example/upload' }),
+            { status: 201 },
+          ),
+        );
+      if (url === 'https://drive.example/upload')
+        return Promise.resolve(
+          new Response(JSON.stringify({ id: 'drive-file-1' }), {
+            status: 200,
+          }),
+        );
+      if (url === '/api/recordings/rec-1/complete')
+        return Promise.resolve(new Response(null, { status: 204 }));
       return Promise.resolve(new Response('{}', { status: 200 }));
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -336,6 +397,10 @@ describe('LiveVideo', () => {
     await act(async () => {
       peer.connectionState = 'connected';
       peer.onconnectionstatechange?.();
+      peer.ontrack?.({
+        receiver: {},
+        streams: [new FakeMediaStream()],
+      } as unknown as RTCTrackEvent);
       await Promise.resolve();
     });
 
@@ -356,8 +421,39 @@ describe('LiveVideo', () => {
         method: 'POST',
       }),
     );
+    const activeButton = screen.getByRole('button', { name: /Recording,/ });
+    expect(activeButton).toBeEnabled();
+    expect(activeButton).toHaveAttribute('aria-pressed', 'true');
+
+    // Stop: the same button now finishes the capture and drives it through
+    // upload-session, the direct-to-Drive PUT, and complete.
+    await act(async () => {
+      fireEvent.click(activeButton);
+      const recorder = FakeMediaRecorder.instances[0]!;
+      recorder.stop();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/recordings/rec-1/upload-session',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://drive.example/upload',
+      expect.objectContaining({ method: 'PUT' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/recordings/rec-1/complete',
+      expect.objectContaining({
+        body: JSON.stringify({ providerFileId: 'drive-file-1' }),
+        method: 'POST',
+      }),
+    );
     expect(
-      screen.getByRole('button', { name: 'Recording requested' }),
+      screen.getByRole('button', { name: 'Recording saved' }),
     ).toBeDisabled();
     unmount();
   });
