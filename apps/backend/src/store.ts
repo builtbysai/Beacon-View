@@ -48,6 +48,8 @@ import {
   type RetentionPurgeRecord,
   type SessionRecord,
   type HouseholdAccessRecord,
+  type HouseholdActivityOptions,
+  type HouseholdActivityPage,
   type HouseholdInvitationRecord,
   type HouseholdMemberRecord,
   type GoogleDriveConnectionRecord,
@@ -634,6 +636,13 @@ export class PostgresStore implements MilestoneStore {
     options?: AccessHistoryOptions,
   ): Promise<AccessHistoryPage> {
     return this.auditRepository.listAccessHistory(householdId, options);
+  }
+
+  async listHouseholdActivity(
+    householdId: string,
+    options?: HouseholdActivityOptions,
+  ): Promise<HouseholdActivityPage> {
+    return this.auditRepository.listHouseholdActivity(householdId, options);
   }
 
   async listMotionEvents(
