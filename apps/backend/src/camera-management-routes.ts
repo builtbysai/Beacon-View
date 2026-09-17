@@ -337,6 +337,20 @@ export function registerCameraManagementRoutes(
     ) {
       return reply.code(404).send({ error: 'Camera not found' });
     }
+    await store.audit({
+      eventType: 'camera_updated',
+      householdId: session.householdId,
+      ipAddress: request.ip,
+      metadata: {
+        cameraId: parameters.data.cameraId,
+        ...(body.data.name !== undefined ? { name: body.data.name } : {}),
+        ...(body.data.enabled !== undefined
+          ? { enabled: String(body.data.enabled) }
+          : {}),
+      },
+      success: true,
+      userId: session.userId,
+    });
     householdEvents.publish(session.householdId, {
       cameraId: parameters.data.cameraId,
       type: 'camera-presence-changed',
