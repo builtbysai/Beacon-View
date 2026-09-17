@@ -3,6 +3,9 @@ import type {
   AccessHistoryOptions,
   AccessHistoryPage,
   AuditInput,
+  HouseholdActivityOptions,
+  HouseholdActivityPage,
+  HOUSEHOLD_ACTIVITY_EVENT_TYPES,
 } from './store-contract.js';
 
 const ACCESS_HISTORY_EVENT_TYPES = [
@@ -53,6 +56,40 @@ export class PostgresAuditRepository {
       [now],
     );
     return result.rowCount ?? 0;
+  }
+
+  async listHouseholdActivity(
+    householdId: string,
+    options: HouseholdActivityOptions = {},
+  ): Promise<HouseholdActivityPage> {
+    const limit = Math.min(Math.max(1, options.limit ?? 20), 50);
+    const offset = Math.max(0, options.offset ?? 0);
+    const requestedTypes =
+      options.eventTypes?.length ? options.eventTypes : HOUSEHOLD_ACTIVITY_EVENT_TYPES;
+    const [rows, count] = await Promise.all([
+      this.pool.query<HouseholdActivityPage['events'][number]>(
+        `SELECT ae.id, u.email AS "actorEmail",
+                COALESCE(d.name, ae.metadata ->> 'deviceName') AS "deviceName",
+                ae.event_type AS "eventType", ae.occurred_at AS "occurredAt",
+                ae.success, ae.metadata
+         FROM audit_events ae
+         LEFT JOIN users u ON u.id = ae.user_id
+         LEFT JOIN cameras d ON d.id = ae.camera_id
+         WHERE ae.household_id = $1
+           AND ae.event_type = ANY($2::text[])
+         ORDER BY ae.occurred_at DESC, ae.id DESC
+         LIMIT $3 OFFSET $4`,
+        [householdId, requestedTypes, limit, offset],
+      ),
+      this.pool.query<{ count: string }>(
+        `SELECT count(*)::text AS count
+         FROM audit_events ae
+         WHERE ae.household_id = $1
+           AND ae.event_type = ANY($2::text[])`,
+        [householdId, requestedTypes],
+      ),
+    ]);
+    return { events: rows.rows, total: Number(count.rows[0]!.count) };
   }
 
   async listAccessHistory(
