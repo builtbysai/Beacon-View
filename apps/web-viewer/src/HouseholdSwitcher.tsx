@@ -14,19 +14,21 @@ function roleLabel(role: HouseholdRole): string {
   return role[0]!.toUpperCase() + role.slice(1);
 }
 
-/** One identity row: which household, who owns it (inferred from the
- * "owner" role in the same access list -- the backend doesn't expose a
- * separate ownerEmail field), and the viewer's own role. Switching only
- * renders when the account actually has more than one household to move
- * between. */
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('') || 'H';
+}
+
 export function HouseholdSwitcher({
   currentHouseholdId,
   memberCount,
   cameraCount,
 }: {
   currentHouseholdId: string;
-  /** Real counts from data already loaded by the caller -- this component
-   * doesn't fetch its own metrics just to fill a stat card. */
   memberCount: number | null;
   cameraCount: number;
 }) {
@@ -54,53 +56,79 @@ export function HouseholdSwitcher({
   }, []);
 
   const current = households.find((item) => item.id === currentHouseholdId);
+  const name = current?.name ?? 'Household';
+  const role = current ? roleLabel(current.role) : '…';
+  const isOwner = current?.role === 'owner';
 
   return (
-    <div className="household-identity">
-      <div className="household-identity-main">
-        <strong>{current?.name ?? 'Household'}</strong>
-        <span>You are {current ? roleLabel(current.role) : '…'}</span>
+    <div className="household-card">
+      <div className="household-card-hero">
+        <div className="household-avatar" aria-hidden="true">
+          {initials(name)}
+        </div>
+        <div className="household-card-copy">
+          <strong>{name}</strong>
+          <div className="household-ownerline">
+            <span className="pill pill-on">
+              {isOwner ? 'Your household' : 'Shared household'}
+            </span>
+            <span>You are {role}</span>
+          </div>
+        </div>
+        {households.length > 1 && (
+          <label className="household-switch">
+            <span className="visually-hidden">Switch household</span>
+            <select
+              aria-label="Switch household"
+              disabled={busy}
+              value={currentHouseholdId}
+              onChange={(event) => {
+                const householdId = event.target.value;
+                setBusy(true);
+                setError('');
+                void request('/api/account/household', {
+                  body: JSON.stringify({ householdId }),
+                  method: 'PUT',
+                })
+                  .then(() => window.location.assign('/'))
+                  .catch((caught) => {
+                    setBusy(false);
+                    setError(
+                      caught instanceof Error
+                        ? caught.message
+                        : 'Unable to switch households',
+                    );
+                  });
+              }}
+            >
+              {households.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name} · {item.role}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
-      {households.length > 1 && (
-        <label className="household-switch">
-          <span className="visually-hidden">Switch household</span>
-          <select
-            aria-label="Switch household"
-            disabled={busy}
-            value={currentHouseholdId}
-            onChange={(event) => {
-              const householdId = event.target.value;
-              setBusy(true);
-              setError('');
-              void request('/api/account/household', {
-                body: JSON.stringify({ householdId }),
-                method: 'PUT',
-              })
-                .then(() => window.location.assign('/'))
-                .catch((caught) => {
-                  setBusy(false);
-                  setError(
-                    caught instanceof Error
-                      ? caught.message
-                      : 'Unable to switch households',
-                  );
-                });
-            }}
-          >
-            {households.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name} · {item.role}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      <p className="household-identity-counts">
-        {memberCount !== null
-          ? `${memberCount} ${memberCount === 1 ? 'person' : 'people'} · `
-          : ''}
-        {cameraCount} {cameraCount === 1 ? 'camera' : 'cameras'}
-      </p>
+
+      <div className="household-metrics" aria-label="Household summary">
+        <div className="household-metric">
+          <span>People</span>
+          <strong>{memberCount ?? '—'}</strong>
+          <small>{memberCount === null ? 'Loading membership' : 'In this household'}</small>
+        </div>
+        <div className="household-metric">
+          <span>Cameras</span>
+          <strong>{cameraCount}</strong>
+          <small>Available here</small>
+        </div>
+        <div className="household-metric">
+          <span>Your role</span>
+          <strong>{role}</strong>
+          <small>{isOwner ? 'Full household access' : 'Based on your membership'}</small>
+        </div>
+      </div>
+
       {error && (
         <p role="alert" className="settings-card-inline-message">
           {error}
