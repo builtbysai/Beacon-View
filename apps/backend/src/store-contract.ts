@@ -239,6 +239,8 @@ export const HOUSEHOLD_ACTIVITY_EVENT_TYPES = [
   'device_self_removed',
   'device_self_disconnected',
   'device_updated',
+  'device_offline',
+  'device_recovered',
   'camera_updated',
   'household_invitation_created',
   'household_invitation_resent',
@@ -598,6 +600,13 @@ export interface MilestoneStore {
     householdId: string,
     options?: HouseholdActivityOptions,
   ): Promise<HouseholdActivityPage>;
+  scanDevicePresenceActivity(now: Date, offlineAfterMs: number): Promise<number>;
+  recordDeviceRecoveredIfOffline(input: {
+    cameraId: string;
+    householdId: string;
+    publicDeviceId: string;
+    now: Date;
+  }): Promise<boolean>;
   listMotionEvents(
     householdId: string,
     options?: MotionEventOptions,
