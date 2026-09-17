@@ -230,6 +230,10 @@ export interface AccessHistoryPage {
 
 export const HOUSEHOLD_ACTIVITY_EVENT_TYPES = [
   'camera_source_deleted',
+  'camera_source_added',
+  'camera_source_updated',
+  'device_paired',
+  'device_reconnected',
   'device_credential_revoked',
   'device_deleted',
   'device_self_removed',
