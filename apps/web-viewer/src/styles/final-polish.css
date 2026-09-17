@@ -1,0 +1,252 @@
+/* Final forward-only polish for the recovered Beacon UI. Keep this file
+   intentionally narrow: responsive settings/activity controls and modal
+   stability only. */
+
+/* The app scrolls inside .main-content, not the document. Reserve its
+   scrollbar gutter so opening a modal never nudges the workspace sideways. */
+.main-content {
+  scrollbar-gutter: stable;
+}
+
+/* SETTINGS --------------------------------------------------------- */
+/* Sections should read as one continuous settings document, not isolated
+   islands separated by large blank bands. */
+.settings-sections {
+  gap: 0 !important;
+}
+
+.settings-section {
+  margin: 0 !important;
+  padding: 24px 0 !important;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.settings-section:first-child {
+  padding-top: 0 !important;
+}
+
+.settings-section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0 !important;
+}
+
+/* The autosave state is feedback, not navigation. Keep it out of document
+   flow so Saving/Saved never changes the jump-nav height or shifts content. */
+.settings-autosave {
+  position: fixed !important;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 80;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  min-height: 0 !important;
+  pointer-events: none;
+}
+
+.settings-autosave > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: auto;
+}
+
+.settings-autosave .is-saved {
+  color: var(--status-success);
+}
+
+.settings-autosave .is-error {
+  color: var(--status-error);
+}
+
+/* Make the browser-notification state clearly read as a state and remain
+   visually stable when Off becomes On. */
+.notification-channel-action .pill {
+  min-width: 36px;
+  justify-content: center;
+  text-align: center;
+}
+
+.notification-channel-action .pill-on {
+  background: color-mix(in srgb, var(--status-success) 12%, var(--bg-surface));
+  color: var(--status-success);
+}
+
+/* Compact the jump nav progressively. On phones it becomes an icon rail;
+   link text remains in the accessibility tree because it is only visually
+   suppressed by font sizing. */
+@media (max-width: 720px) {
+  .settings-jump {
+    gap: 6px !important;
+    padding-block: 8px !important;
+  }
+
+  .settings-jump-item {
+    min-height: 36px !important;
+    padding: 0 10px !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .settings-jump {
+    align-items: center;
+    padding-inline: 12px !important;
+  }
+
+  .settings-jump-item {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    padding: 0 !important;
+    justify-content: center;
+    font-size: 0 !important;
+    border-radius: 50% !important;
+  }
+
+  .settings-jump-item svg {
+    display: block !important;
+    width: 17px;
+    height: 17px;
+  }
+
+  .settings-section {
+    padding: 20px 0 !important;
+  }
+}
+
+/* ACTIVITY --------------------------------------------------------- */
+/* Keep event-type filters as a single, swipeable control row instead of a
+   wrapping wall of pills. */
+.activity-v3-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  gap: 6px;
+  padding-bottom: 10px;
+}
+
+.activity-v3-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.activity-v3-chip {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+@media (max-width: 680px) {
+  .activity-v3-chips {
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+
+  .activity-v3-chip {
+    height: 32px;
+    padding-inline: 10px;
+    font-size: 12px;
+  }
+
+  .activity-v3-chip .n {
+    margin-left: 4px;
+  }
+}
+
+@media (max-width: 430px) {
+  .activity-v3-chip {
+    height: 30px;
+    padding-inline: 9px;
+    font-size: 11px;
+  }
+}
+
+/* MODALS ----------------------------------------------------------- */
+/* Shared modal geometry: opening/closing should feel like an overlay, never
+   like a route/layout change. */
+.modal-backdrop {
+  width: 100dvw !important;
+  height: 100dvh !important;
+  padding: clamp(14px, 3vw, 28px) !important;
+  box-sizing: border-box;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.modal-backdrop[open] {
+  animation: beacon-modal-backdrop-in 140ms ease-out;
+}
+
+.modal-backdrop::backdrop {
+  animation: beacon-modal-shade-in 140ms ease-out;
+}
+
+.confirm-modal,
+.live-camera-settings,
+.favorites-editor,
+.security-activity-dialog,
+.pair-modal {
+  max-width: min(100%, 560px);
+  max-height: min(86dvh, 720px);
+  overflow: auto;
+  transform-origin: center;
+  animation: beacon-modal-panel-in 160ms cubic-bezier(.2,.8,.2,1);
+}
+
+@keyframes beacon-modal-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes beacon-modal-shade-in {
+  from { background-color: rgba(0,0,0,0); }
+  to { background-color: rgba(0,0,0,.5); }
+}
+
+@keyframes beacon-modal-panel-in {
+  from { opacity: 0; transform: translateY(6px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 620px) {
+  .modal-backdrop {
+    align-items: flex-end !important;
+    padding: 10px !important;
+  }
+
+  .confirm-modal,
+  .live-camera-settings,
+  .favorites-editor,
+  .security-activity-dialog,
+  .pair-modal {
+    width: 100%;
+    max-width: none;
+    max-height: min(88dvh, 760px);
+    border-radius: 16px;
+    padding: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop[open],
+  .modal-backdrop::backdrop,
+  .confirm-modal,
+  .live-camera-settings,
+  .favorites-editor,
+  .security-activity-dialog,
+  .pair-modal {
+    animation: none !important;
+  }
+}
