@@ -38,7 +38,7 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <main className="shell trust-shell pair-link-shell">
+    <main className="trust-shell">
       <section className="trust-page" aria-labelledby="reset-password-title">
         <a className="trust-brand" href="/" aria-label="Beacon home">
           <Brand />
@@ -51,7 +51,7 @@ export function ResetPasswordPage() {
               Password reset links expire after one hour and can only be used
               once. Request a new one from the sign-in page.
             </p>
-            <a className="secondary button-link" href="/">
+            <a className="btn-secondary w-full" href="/">
               Return to Beacon
             </a>
           </>
@@ -62,39 +62,45 @@ export function ResetPasswordPage() {
               Every other browser session was signed out. Sign in again with
               your new password.
             </p>
-            <a className="secondary button-link" href="/">
+            <a className="btn-secondary w-full" href="/">
               Sign in
             </a>
           </>
         ) : (
           <>
             <h1 id="reset-password-title">Choose a new password.</h1>
-            <form onSubmit={(event) => void onSubmit(event)}>
-              <label htmlFor="reset-password">New password</label>
-              <input
-                id="reset-password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                placeholder="Enter a new password"
-                minLength={12}
-                required
-                disabled={busy}
-              />
-              <label htmlFor="reset-password-confirm">Confirm password</label>
-              <input
-                id="reset-password-confirm"
-                name="confirmation"
-                type="password"
-                autoComplete="new-password"
-                placeholder="Re-enter the new password"
-                minLength={12}
-                required
-                disabled={busy}
-              />
-              {error && <p role="alert">{error}</p>}
-              <button className="password-submit" type="submit" disabled={busy}>
-                {busy ? 'Updating…' : 'Update password'}
+            <form onSubmit={(event) => void onSubmit(event)} className="flex-col gap-4">
+              <div className="form-group">
+                <label className="form-label" htmlFor="reset-password">New password</label>
+                <input
+                  id="reset-password"
+                  name="password"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Enter a new password"
+                  minLength={12}
+                  required
+                  disabled={busy}
+                  className="input-field"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="reset-password-confirm">Confirm password</label>
+                <input
+                  id="reset-password-confirm"
+                  name="confirmation"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Re-enter the new password"
+                  minLength={12}
+                  required
+                  disabled={busy}
+                  className="input-field"
+                />
+              </div>
+              {error && <p className="auth-alert" role="alert">{error}</p>}
+              <button className="btn-primary w-full mt-4" type="submit" disabled={busy}>
+                {busy ? 'Updating...' : 'Update password'}
               </button>
             </form>
           </>

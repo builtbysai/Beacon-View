@@ -1,0 +1,152 @@
+.notification-channel-action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.pill-on {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: var(--status-success);
+}
+
+.pill-warn {
+  background-color: rgba(217, 119, 6, 0.15);
+  color: var(--status-warning);
+}
+
+.notification-empty {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-lg);
+  margin-top: var(--space-4);
+}
+
+.notification-empty p {
+  margin: 0;
+}
+
+/* Desktop: a compact table. Camera identity in its own column, one switch
+   per preference -- not a card per camera. */
+.notification-table {
+  margin-top: var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.notification-table-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background-color: var(--bg-surface-hover);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.notification-table-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-default);
+  background-color: var(--bg-surface);
+}
+
+.notification-table-name {
+  align-self: center;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-table-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.notification-table-cell .switch-input {
+  align-self: center;
+}
+
+.notification-table-label {
+  display: none;
+}
+
+.notification-quiet-hours {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.notification-quiet-hours input[type='time'] {
+  height: 30px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.notification-quiet-hours span[aria-hidden] {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.notification-reveal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* Tablet/mobile: rows become compact per-camera groups instead of a table. */
+@media (max-width: 860px) {
+  .notification-table-head {
+    display: none;
+  }
+  .notification-table-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+  .notification-table-cell {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .notification-table-cell .switch-input {
+    align-self: auto;
+  }
+  .notification-table-label {
+    display: inline;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .notification-table-quiet {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 680px) {
+  .settings-row:has(.notification-channel-action) {
+    align-items: flex-start;
+  }
+}

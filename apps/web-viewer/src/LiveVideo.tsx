@@ -23,6 +23,7 @@ import {
   RetryGeneration,
   retryDelay,
 } from './reconnect';
+import './LiveVideo.css';
 
 interface Camera {
   id: string;

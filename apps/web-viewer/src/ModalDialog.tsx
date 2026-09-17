@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import './ModalDialog.css';
 
 export function ModalDialog({
   children,

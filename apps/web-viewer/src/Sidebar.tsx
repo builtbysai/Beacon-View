@@ -1,10 +1,76 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from './Avatar';
 import { Brand, Icon, type IconName } from './Icon';
 import { useMenuKeyboardNav } from './useMenuKeyboardNav';
+import './Sidebar.css';
 
-const preferenceKey = 'beacon.sidebar.collapsed.v1';
+type SidebarContextType = {
+  state: 'expanded' | 'collapsed';
+  toggleSidebar: () => void;
+  isMobile: boolean;
+  mobileOpen: boolean;
+  setMobileOpen: (open: boolean) => void;
+};
+
+const SidebarContext = createContext<SidebarContextType | null>(null);
+
+export function useSidebar() {
+  const context = useContext(SidebarContext);
+  if (!context) throw new Error('useSidebar must be used within a SidebarProvider.');
+  return context;
+}
+
+export function SidebarProvider({ children }: { children: React.ReactNode }) {
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [state, setState] = useState<'expanded' | 'collapsed'>(() => {
+    try {
+      const stored = localStorage.getItem('beacon.sidebar.state');
+      if (stored === 'collapsed') return 'collapsed';
+    } catch {}
+    return 'expanded';
+  });
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const toggleSidebar = () => {
+    if (isMobile) {
+      setMobileOpen((prev) => !prev);
+    } else {
+      const next = state === 'expanded' ? 'collapsed' : 'expanded';
+      setState(next);
+      try {
+        localStorage.setItem('beacon.sidebar.state', next);
+      } catch {}
+    }
+  };
+
+  return (
+    <SidebarContext.Provider value={{ state, toggleSidebar, isMobile, mobileOpen, setMobileOpen }}>
+      {children}
+    </SidebarContext.Provider>
+  );
+}
+
+export function SidebarTrigger({ className = '' }: { className?: string }) {
+  const { toggleSidebar } = useSidebar();
+  return (
+    <button 
+      type="button"
+      className={`sidebar-trigger ${className}`} 
+      onClick={toggleSidebar}
+      aria-label="Toggle Sidebar"
+    >
+      <Icon name="list" />
+    </button>
+  );
+}
 
 export function Sidebar({
   email,
@@ -22,37 +88,44 @@ export function Sidebar({
   }[];
   onLogout: () => void;
 }) {
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      const stored = localStorage.getItem(preferenceKey);
-      if (stored !== null) return stored === 'true';
-    } catch {
-      /* No storage available — fall through to the width-based default. */
-    }
-    // No explicit preference yet: default to the compact icon rail at
-    // tablet-portrait widths, where a full labeled sidebar costs too much
-    // content width, and to the full sidebar everywhere wider. The user's
-    // own choice (above) always overrides this default once they make one.
-    return (
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(min-width: 761px) and (max-width: 1024px)').matches
-    );
-  });
-  const [tip, setTip] = useState<{
-    label: string;
-    top: number;
-    left: number;
-  } | null>(null);
+  const { state, toggleSidebar, isMobile, mobileOpen, setMobileOpen } = useSidebar();
+  
   const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPosition, setMenuPosition] = useState<{
-    bottom: number;
-    left: number;
-    width: number;
-  } | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [menuPosition, setMenuPosition] = useState<{ bottom: number; left: number; width?: number } | null>(null);
+  
   const accountRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const [tip, setTip] = useState<{ label: string; top: number; left: number } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const [theme, setTheme] = useState<'system'|'light'|'dark'>(() => {
+    try {
+      return (localStorage.getItem('beacon.theme') as ('system'|'light'|'dark')) || 'system';
+    } catch {
+      return 'system';
+    }
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'system') {
+      root.removeAttribute('data-theme');
+    } else {
+      root.setAttribute('data-theme', theme);
+    }
+    try {
+      localStorage.setItem('beacon.theme', theme);
+    } catch {}
+  }, [theme]);
+
+  useEffect(() => {
+    if (isMobile && mobileOpen) {
+      setMobileOpen(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.find(i => i.current)?.label, isMobile]);
+
   function hideTip() {
     clearTimeout(timer.current);
     setTip(null);
@@ -62,36 +135,28 @@ export function Sidebar({
     timer.current = setTimeout(() => setTip(null), 120);
   }
   function showTip(target: EventTarget) {
-    if (
-      !collapsed ||
-      typeof window.matchMedia !== 'function' ||
-      !window.matchMedia('(min-width: 761px)').matches
-    )
-      return;
-    const control =
-      target instanceof Element
-        ? target.closest<HTMLElement>('[data-tooltip]')
-        : null;
+    if (state !== 'collapsed' || isMobile) return;
+    const control = target instanceof Element ? target.closest<HTMLElement>('[data-tooltip]') : null;
     if (!control) return;
     clearTimeout(timer.current);
     const rect = control.getBoundingClientRect();
     setTip({
       label: control.dataset.tooltip!,
-      top: Math.max(4, Math.min(rect.top, window.innerHeight - 48)),
+      top: Math.max(4, Math.min(rect.top + rect.height/2 - 12, window.innerHeight - 30)),
       left: rect.right + 8,
     });
   }
+
   useEffect(() => {
-    const dismiss = () => {
-      clearTimeout(timer.current);
-      setTip(null);
-    };
+    const dismiss = () => { clearTimeout(timer.current); setTip(null); };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         dismiss();
         if (menuOpen) {
           setMenuOpen(false);
           accountRef.current?.focus();
+        } else if (isMobile && mobileOpen) {
+          setMobileOpen(false);
         }
       }
       if (
@@ -102,181 +167,203 @@ export function Sidebar({
         !(event.target instanceof HTMLSelectElement)
       ) {
         event.preventDefault();
-        toggle();
+        toggleSidebar();
       }
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', dismiss);
-    window.addEventListener('scroll', dismiss, true);
     return () => {
-      clearTimeout(timer.current);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', dismiss);
-      window.removeEventListener('scroll', dismiss, true);
     };
-  });
+  }, [menuOpen, mobileOpen, isMobile, toggleSidebar]);
+
   useEffect(() => {
     if (!menuOpen) return;
     const positionMenu = () => {
       const rect = accountRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const width = collapsed ? 224 : Math.max(224, rect.width);
-      setMenuPosition({
-        bottom: Math.max(12, window.innerHeight - rect.bottom),
-        left: collapsed
-          ? Math.min(rect.right + 10, window.innerWidth - width - 12)
-          : Math.min(rect.left, window.innerWidth - width - 12),
-        width,
-      });
+      if (isMobile) {
+        setMenuPosition({
+          bottom: Math.max(16, window.innerHeight - rect.bottom + 8),
+          left: 16,
+          width: window.innerWidth - 32,
+        });
+      } else {
+        setMenuPosition({
+          bottom: Math.max(16, window.innerHeight - rect.bottom),
+          left: rect.right + 12,
+        });
+      }
     };
     positionMenu();
     const dismissOutside = (event: PointerEvent) => {
       if (!(event.target instanceof Node)) return;
-      if (
-        !accountRef.current?.contains(event.target) &&
-        !menuRef.current?.contains(event.target)
-      )
+      if (!accountRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) {
         setMenuOpen(false);
+      }
     };
     window.addEventListener('pointerdown', dismissOutside);
     window.addEventListener('resize', positionMenu);
-    window.addEventListener('scroll', positionMenu, true);
     return () => {
       window.removeEventListener('pointerdown', dismissOutside);
       window.removeEventListener('resize', positionMenu);
-      window.removeEventListener('scroll', positionMenu, true);
     };
-  }, [collapsed, menuOpen]);
+  }, [menuOpen, isMobile]);
+
   useMenuKeyboardNav(menuOpen, menuRef, accountRef, () => setMenuOpen(false));
-  function toggle() {
-    const next = !collapsed;
-    setCollapsed(next);
-    hideTip();
-    try {
-      localStorage.setItem(preferenceKey, String(next));
-    } catch {
-      /* Navigation remains usable if browser storage is unavailable. */
-    }
-  }
+
   return (
-    <aside
-      id="beacon-sidebar"
-      className="sidebar"
-      data-collapsed={collapsed}
-      onFocus={(event) => showTip(event.target)}
-      onBlur={deferHideTip}
-      onPointerOver={(event) => showTip(event.target)}
-      onPointerLeave={deferHideTip}
-    >
-      <div className="sidebar-header">
-        <a className="sidebar-brand" href="/" aria-label="Beacon home">
-          <Brand compact={collapsed} />
-        </a>
-        <button
-          className="sidebar-toggle"
-          type="button"
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-expanded={!collapsed}
-          aria-controls="beacon-sidebar"
-          data-tooltip={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          onClick={toggle}
-        >
-          <Icon name={collapsed ? 'chevronRight' : 'chevronLeft'} />
-        </button>
-      </div>
-      <div className="sidebar-content">
-        <span className="sidebar-group-label">Workspace</span>
-        <nav aria-label="Primary navigation">
-          {items.map((item) => (
-            <button
-              type="button"
-              key={item.label}
-              className={item.current ? 'nav-active' : 'nav-button'}
-              aria-current={item.current ? 'page' : undefined}
-              aria-label={item.label}
-              data-tooltip={item.label}
-              onClick={() => {
-                hideTip();
-                item.onSelect();
-              }}
-            >
-              <Icon name={item.icon} />
-              <span>{item.label}</span>
+    <>
+      {isMobile && mobileOpen && (
+        <div className="sidebar-overlay" onClick={() => setMobileOpen(false)} aria-hidden="true" />
+      )}
+      <aside 
+        className="sidebar" 
+        data-state={isMobile ? (mobileOpen ? 'expanded' : 'closed') : state}
+        aria-label="Primary navigation"
+        onFocus={(event) => showTip(event.target)}
+        onBlur={deferHideTip}
+        onPointerOver={(event) => showTip(event.target)}
+        onPointerLeave={deferHideTip}
+      >
+        <div className="sidebar-header">
+          <a className="sidebar-brand" href="/" aria-label="Beacon home">
+            {state === 'collapsed' && !isMobile ? (
+              <Brand compact />
+            ) : (
+              <Brand />
+            )}
+          </a>
+          {isMobile && (
+            <button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label="Close menu">
+              <Icon name="plus" />
             </button>
-          ))}
-        </nav>
-      </div>
-      <div className="sidebar-footer">
-        <button
-          ref={accountRef}
-          type="button"
-          className="sidebar-account"
-          aria-label={`Open account menu for ${email}`}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          data-tooltip={email}
-          onClick={() => setMenuOpen((open) => !open)}
-        >
-          <Avatar email={email} avatarUrl={avatarUrl} />
-          <strong title={email}>{email}</strong>
-          <Icon name="chevronRight" className="sidebar-account-chevron" />
-        </button>
-      </div>
-      <button
-        className="sidebar-rail"
-        type="button"
-        aria-label="Toggle sidebar from edge"
-        aria-pressed={!collapsed}
-        onClick={toggle}
-      />
-      {menuOpen &&
-        menuPosition &&
-        createPortal(
-          <div
-            ref={menuRef}
-            className="sidebar-account-menu"
-            role="menu"
-            style={menuPosition}
+          )}
+        </div>
+        
+        <div className="sidebar-content">
+          <nav aria-label="Main menu">
+            {items.map((item) => (
+              <button
+                type="button"
+                key={item.label}
+                className={item.current ? 'nav-active' : 'nav-button'}
+                aria-current={item.current ? 'page' : undefined}
+                aria-label={item.label}
+                data-tooltip={item.label}
+                onClick={() => {
+                  hideTip();
+                  item.onSelect();
+                }}
+              >
+                <Icon name={item.icon} />
+                <span className="nav-label">{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        <div className="sidebar-footer">
+          <button
+            ref={accountRef}
+            type="button"
+            className="account-button"
+            aria-label={`Open account menu for ${email}`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            data-tooltip={email}
+            onClick={() => {
+              hideTip();
+              setMenuOpen((o) => !o);
+            }}
           >
-            <div className="sidebar-account-menu-profile">
-              <Avatar email={email} avatarUrl={avatarUrl} />
-              <span className="sidebar-account-menu-email" title={email}>
-                <small>Signed in as</small>
-                {email}
-              </span>
+            <Avatar email={email} avatarUrl={avatarUrl} size="md" className="account-avatar" />
+            <div className="account-details">
+              <span className="account-email" title={email}>{email}</span>
             </div>
-            <div className="sidebar-account-menu-separator" />
-            <a role="menuitem" href="/trust" onClick={() => setMenuOpen(false)}>
+            <Icon name="chevronRight" className="account-chevron" />
+          </button>
+        </div>
+        {!isMobile && (
+          <button
+            type="button"
+            className="sidebar-rail"
+            aria-label="Toggle Sidebar"
+            title="Toggle Sidebar"
+            onClick={toggleSidebar}
+          />
+        )}
+      </aside>
+
+      {menuOpen && menuPosition && createPortal(
+        <div ref={menuRef} className="account-menu" role="menu" style={menuPosition}>
+          <div className="account-menu-header">
+            <Avatar email={email} avatarUrl={avatarUrl} size="md" />
+            <div className="account-details-full">
+              <span className="account-email" title={email}>{email}</span>
+              <span className="account-label">Signed in</span>
+            </div>
+          </div>
+          
+          <div className="account-menu-item theme-section" role="none">
+            <div className="theme-label">Theme</div>
+            <div className="theme-toggle-group" role="group" aria-label="Theme preference">
+              <button 
+                type="button" 
+                className="theme-toggle-btn" 
+                aria-pressed={theme === 'light'} 
+                onClick={() => setTheme('light')}
+              >
+                <Icon name="sun" /> Light
+              </button>
+              <button 
+                type="button" 
+                className="theme-toggle-btn" 
+                aria-pressed={theme === 'system'} 
+                onClick={() => setTheme('system')}
+              >
+                <Icon name="browser" /> System
+              </button>
+              <button 
+                type="button" 
+                className="theme-toggle-btn" 
+                aria-pressed={theme === 'dark'} 
+                onClick={() => setTheme('dark')}
+              >
+                <Icon name="moon" /> Dark
+              </button>
+            </div>
+          </div>
+          
+          <a className="account-menu-item" role="menuitem" href="/trust" onClick={() => setMenuOpen(false)}>
+            <div className="account-menu-item-left">
               <Icon name="shield" />
-              Trust &amp; privacy
-            </a>
-            <button
-              role="menuitem"
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                onLogout();
-              }}
-            >
-              <Icon name="logout" />
-              Sign out
-            </button>
-          </div>,
-          document.body,
-        )}
-      {tip &&
-        createPortal(
-          <span
-            className="sidebar-tooltip"
-            role="tooltip"
-            style={{ top: tip.top, left: tip.left }}
-            onPointerEnter={() => clearTimeout(timer.current)}
-            onPointerLeave={deferHideTip}
+              <span>Trust & privacy</span>
+            </div>
+          </a>
+          
+          <button
+            className="account-menu-item account-menu-logout"
+            role="menuitem"
+            type="button"
+            onClick={() => { setMenuOpen(false); onLogout(); }}
           >
-            {tip.label}
-          </span>,
-          document.body,
-        )}
-    </aside>
+            <div className="account-menu-item-left">
+              <Icon name="logout" />
+              <span>Sign out</span>
+            </div>
+          </button>
+        </div>,
+        document.body
+      )}
+
+      {tip && createPortal(
+        <span className="sidebar-tooltip" role="tooltip" style={{ top: tip.top, left: tip.left }}>
+          {tip.label}
+        </span>,
+        document.body
+      )}
+    </>
   );
 }

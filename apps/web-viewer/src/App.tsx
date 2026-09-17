@@ -1,3 +1,4 @@
+import './App.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ApiError, request } from './api';
@@ -18,7 +19,7 @@ import { ContactPage } from './ContactPage';
 import { Diagnostics } from './Diagnostics';
 import { GuestViewPage } from './GuestViewPage';
 import { Brand, Icon } from './Icon';
-import { Sidebar } from './Sidebar';
+import { Sidebar, SidebarProvider, SidebarTrigger } from './Sidebar';
 import { PendingDeviceRow } from './PendingDeviceRow';
 import { AddCameraPage } from './AddCameraPage';
 import { PairingDialog } from './PairingDialog';
@@ -49,6 +50,10 @@ import {
   type HouseholdEvent,
 } from './use-household-events';
 import { disableWebNotifications } from './NotificationSettings';
+import { FavoriteCameraCard } from './FavoriteCameraCard';
+import { FavoritesEditor } from './FavoritesEditor';
+import { LatestActivityPreview } from './LatestActivityPreview';
+import { loadFavoriteDeviceIds, saveFavoriteDeviceIds } from './favorites';
 
 const SPLASH_SEEN_KEY = 'beacon.splash.seen.v1';
 
@@ -68,6 +73,7 @@ export function App() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [authBusy, setAuthBusy] = useState(false);
   const [error, setError] = useState('');
+  const [pendingConfirmBusy, setPendingConfirmBusy] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string;
     description: string;
@@ -106,6 +112,12 @@ export function App() {
   const [motionClearRevision, setMotionClearRevision] = useState(0);
   const [membershipRevision, setMembershipRevision] = useState(0);
   const [driveRecordingReady, setDriveRecordingReady] = useState(false);
+  // `null` means "no saved preference yet" -- Home falls back to a default
+  // selection rather than showing zero favorites. See favorites.ts.
+  const [favoriteDeviceIds, setFavoriteDeviceIds] = useState<string[] | null>(
+    null,
+  );
+  const [favoritesEditorOpen, setFavoritesEditorOpen] = useState(false);
   const returnPage = useRef<Page>('cameras');
   const reconnectDeviceId = useRef<string | null>(null);
   const pageHeading = useRef<HTMLHeadingElement>(null);
@@ -116,6 +128,10 @@ export function App() {
     if (priorPage.current !== page) pageHeading.current?.focus();
     priorPage.current = page;
   }, [page]);
+
+  useEffect(() => {
+    if (household) setFavoriteDeviceIds(loadFavoriteDeviceIds(household.id));
+  }, [household]);
 
   // Devices was removed as a user-facing destination; redirect a bookmarked
   // or shared /devices/:id link to its camera-centric equivalent instead of
@@ -559,14 +575,19 @@ export function App() {
         ? ` ${camera.viewerCount} active viewer session(s) will be terminated.`
         : '';
     setPendingConfirm({
-      title: `Permanently delete ${camera.name}?`,
-      description: `This camera will be removed.${warning} The device must add it again.`,
-      confirmLabel: 'Delete camera',
-      onConfirm: () => {
-        setPendingConfirm(null);
-        void deleteCamera(camera);
-      },
-    });
+        title: `Remove ${camera.name}?`,
+        description: 'This removes the camera from Beacon and disconnects its pairing. To use this device again, you\'ll need to pair it again.',
+        confirmLabel: 'Remove camera',
+        onConfirm: async () => {
+          setPendingConfirmBusy(true);
+          try {
+            await deleteCamera(camera);
+          } finally {
+            setPendingConfirmBusy(false);
+            setPendingConfirm(null);
+          }
+        },
+      });
   }
 
   async function deleteCamera(camera: Camera) {
@@ -592,14 +613,20 @@ export function App() {
         ? ` ${viewerCount} active viewer session(s) will be terminated.`
         : '';
     setPendingConfirm({
-      title: `Permanently delete ${device.name}?`,
-      description: `Every camera paired to it will be removed.${warning} The device must be paired again.`,
-      confirmLabel: 'Delete device',
-      onConfirm: () => {
-        setPendingConfirm(null);
-        void deleteDevice(device);
-      },
-    });
+        title: `Remove ${device.name}?`,
+        description: 'This removes the camera from Beacon and disconnects its pairing. To use this device again, you\'ll need to pair it again.',
+        confirmLabel: 'Remove camera',
+        onConfirm: async () => {
+          setPendingConfirmBusy(true);
+          try {
+            await deleteDevice(device);
+            // provide restrained success feedback (e.g. toast could be added here, but App.tsx might just clear modal)
+          } finally {
+            setPendingConfirmBusy(false);
+            setPendingConfirm(null);
+          }
+        },
+      });
   }
 
   async function deleteDevice(device: Device) {
@@ -743,6 +770,19 @@ export function App() {
     setSelectedCamera(camera);
   }
 
+  /** `defaultIds` is the set Home is showing right now (its computed
+   * fallback when nothing is saved yet, or the saved list once there is
+   * one) -- toggling edits from what's actually on screen. */
+  function toggleFavorite(deviceId: string, defaultIds: string[]) {
+    if (!household) return;
+    const base = favoriteDeviceIds ?? defaultIds;
+    const next = base.includes(deviceId)
+      ? base.filter((id) => id !== deviceId)
+      : [...base, deviceId];
+    saveFavoriteDeviceIds(household.id, next);
+    setFavoriteDeviceIds(next);
+  }
+
   if (window.location.pathname.startsWith('/g/')) return <GuestViewPage />;
   if (window.location.pathname === '/pair') return <PairLinkPage />;
   if (window.location.pathname === '/auth/mobile')
@@ -854,11 +894,12 @@ export function App() {
             onSwitch={(camera) => switchSource(camera)}
           />
         )}
-        {pendingConfirm && (
+                {pendingConfirm && (
           <ConfirmDialog
             title={pendingConfirm.title}
             description={pendingConfirm.description}
             confirmLabel={pendingConfirm.confirmLabel}
+            busy={pendingConfirmBusy}
             onConfirm={pendingConfirm.onConfirm}
             onCancel={() => setPendingConfirm(null)}
           />
@@ -867,26 +908,8 @@ export function App() {
     );
   }
 
-  if (page === 'camera mode' && browserCameraActive) {
-    return (
-      <BrowserCameraMode
-        canRecord={household?.role === 'owner'}
-        onBack={() => setBrowserCameraActive(false)}
-      />
-    );
-  }
+  
 
-  const streamingCount = cameras.filter(
-    (camera) => cameraStatus(camera).label === 'Live',
-  ).length;
-  const privacyCount = cameras.filter(
-    (camera) => cameraStatus(camera).label === 'Privacy on',
-  ).length;
-  const attentionCount = cameras.filter(
-    (camera) =>
-      !cameraStatus(camera).available &&
-      cameraStatus(camera).label !== 'Privacy on',
-  ).length;
   // One physical host (phone, tablet, or computer) is one user-facing
   // Camera, even when it has multiple lenses/sources registered. The
   // backend keeps cameras and devices distinct; this is purely a frontend
@@ -895,12 +918,18 @@ export function App() {
   const pendingDevices = devices.filter(
     (device) => !cameras.some((camera) => camera.deviceId === device.id),
   );
+  // The header and body share one page-container primitive, so they must
+  // resolve to the same width tier -- computed once and reused by both.
+  const pageWidthClass = selectedDeviceId
+    ? 'workspace-medium'
+    : contentWidthClass(page);
   return (
-    <div className="app-shell">
-      <a className="skip-link" href="#main-content">
-        Skip to content
-      </a>
-      <Sidebar
+    <SidebarProvider>
+      <div className="app-shell">
+        <a className="skip-link" href="#main-content">
+          Skip to content
+        </a>
+        <Sidebar
         email={user.email}
         avatarUrl={user.avatarUrl}
         onLogout={() => void logout()}
@@ -913,116 +942,305 @@ export function App() {
           }),
         )}
       />
-      <main className="workspace" id="main-content" tabIndex={-1}>
-        {page !== 'dashboard' && (
-          <header
-            className={`page-heading ${selectedDeviceId ? 'workspace-medium' : contentWidthClass(page)}`}
-          >
-            <h2 ref={pageHeading} tabIndex={-1}>
-              {pageLabels[page]}
-            </h2>
-            {pagesWithAddCamera.has(page) && !selectedDeviceId && (
-              <button
-                className="add-camera-button"
-                aria-label="Add camera"
-                onClick={() => navigate('camera mode')}
-              >
-                <Icon name="plus" />
-                <span>Add camera</span>
-              </button>
-            )}
-          </header>
-        )}
-        {error && <p role="alert">{error}</p>}
-        {activityNotice && (
-          <p className="activity-toast" role="status">
-            <Icon name="camera" />
-            {activityNotice}
-          </p>
-        )}
-        {page === 'dashboard' &&
-          cameras.length === 0 &&
-          (household?.role === 'owner' || household?.role === 'admin' ? (
-            <section className="home-dashboard home-dashboard-empty workspace-wide">
-              <h1 className="home-title" ref={pageHeading} tabIndex={-1}>
-                Add your first camera
-              </h1>
-              <p>Turn a spare phone, tablet, or computer into a camera.</p>
-              <div className="home-hero-actions">
-                <button onClick={() => navigate('camera mode')}>
-                  <Icon name="plus" />
-                  Add camera
-                </button>
+              <main className="main-content" id="main-content" tabIndex={-1}>
+          <header className="app-topbar">
+            <div className={`page-content-inner page-header-row ${pageWidthClass}`}>
+              <div className="app-topbar-left">
+                <SidebarTrigger />
+                <div className="mobile-brand-header">
+                  <span className="mark"><Icon name="camera" /></span> Beacon
+                </div>
+                <div className="app-topbar-title">
+                  <h1 ref={pageHeading} tabIndex={-1} className="page-title">{pageLabels[page]}</h1>
+                </div>
               </div>
-            </section>
-          ) : (
-            <section className="home-dashboard home-dashboard-empty workspace-wide">
-              <h1 className="home-title" ref={pageHeading} tabIndex={-1}>
-                No cameras shared with you yet
-              </h1>
-              <p>
-                Ask the household owner or an admin to grant you access to a
-                camera from Settings → Household sharing.
+              <div className="app-topbar-actions">
+                {pagesWithAddCamera.has(page) &&
+                  !selectedDeviceId &&
+                  household?.role !== 'viewer' &&
+                  household?.role !== 'guest' && (
+                    <button className="btn primary" onClick={() => navigate('camera mode')}>
+                      <Icon name="plus" />
+                      <span>Add camera</span>
+                    </button>
+                  )}
+              </div>
+            </div>
+          </header>
+          
+          <div className={`page-content-inner page-body ${pageWidthClass}`}>
+            {error && <p role="alert" style={{ color: 'var(--status-error)' }}>{error}</p>}
+            {activityNotice && (
+              <p className="activity-toast" role="status">
+                <Icon name="camera" />
+                {activityNotice}
               </p>
-            </section>
-          ))}
-        {page === 'dashboard' && cameras.length > 0 && (
-          <section className="home-dashboard workspace-wide">
-            <div className="home-hero-compact">
-              <h1 className="home-title" ref={pageHeading} tabIndex={-1}>
-                {attentionCount > 0
-                  ? 'A camera needs your attention'
-                  : streamingCount > 0
-                    ? 'Live viewing is active'
-                    : privacyCount === cameras.length
-                      ? 'Your cameras are paused'
-                      : 'Your cameras are ready'}
-              </h1>
-              <button
-                className="secondary"
-                onClick={() => navigate('camera mode')}
-              >
-                <Icon name="plus" />
-                Add camera
-              </button>
-            </div>
-            <div className="camera-tile-grid">
-              {hostCameras.map((camera) => (
-                <CameraTile
-                  key={camera.deviceId}
-                  camera={camera}
-                  groupedByHost
-                  highlighted={highlightedCameraId === camera.id}
-                  onOpen={openCamera}
-                  onDevice={openCameraSettings}
-                  {...(cameraNeedsPairing(camera)
-                    ? {
-                        onReconnect: (item: Camera) =>
-                          openPairing(item.deviceId),
-                      }
-                    : {})}
-                  onRename={(item, name) => renameHostCamera(item, name)}
-                  onDelete={(item) => requestDeleteHostCamera(item)}
-                  onLeave={(item) => requestLeaveHostCamera(item)}
-                />
-              ))}
-            </div>
-            {pendingDevices.length > 0 && (
-              <ul className="pending-device-list">
-                {pendingDevices.map((device) => (
-                  <PendingDeviceRow
-                    key={device.id}
-                    device={device}
-                    onOpen={() => openCameraSettings(device.id)}
-                  />
-                ))}
-              </ul>
             )}
-          </section>
-        )}
-        {page === 'cameras' &&
+
+            {page === 'dashboard' && cameras.length === 0 && (
+              household?.role === 'owner' || household?.role === 'admin' ? (
+                <section className="dash-empty">
+                  <h1>Add your first device</h1>
+                  <p>Turn a spare phone, tablet, or computer into a camera.</p>
+                  <button className="btn primary" onClick={() => navigate('camera mode')}>
+                    <Icon name="plus" />
+                    Add device
+                  </button>
+                </section>
+              ) : (
+                <section className="dash-empty">
+                  <h1>No cameras shared with you yet</h1>
+                  <p>Ask the household owner or an admin to grant you access to a camera from Settings &rarr; Household sharing.</p>
+                </section>
+              )
+            )}
+
+            {page === 'dashboard' && cameras.length > 0 && (() => {
+              const FAVORITES_DEFAULT = 4;
+              const attentionCameras = hostCameras.filter((camera) => {
+                const state = cameraStatus(camera);
+                return state.tone !== 'privacy' && !state.available;
+              });
+              const attentionCount = attentionCameras.length;
+              const attentionCamera = attentionCameras[0];
+              const privacyCameras = hostCameras.filter(
+                (camera) => cameraStatus(camera).tone === 'privacy',
+              );
+              const readyCount = hostCameras.filter(
+                (camera) => cameraStatus(camera).available,
+              ).length;
+
+              const defaultFavoriteIds = hostCameras
+                .slice(0, FAVORITES_DEFAULT)
+                .map((camera) => camera.deviceId);
+              const effectiveFavoriteIds =
+                favoriteDeviceIds ?? defaultFavoriteIds;
+              const favoriteCameras = effectiveFavoriteIds
+                .map((deviceId) =>
+                  hostCameras.find((camera) => camera.deviceId === deviceId),
+                )
+                .filter((camera): camera is Camera => Boolean(camera));
+
+              const hour = new Date().getHours();
+              const greeting =
+                hour < 5 || hour >= 18
+                  ? 'Good evening'
+                  : hour < 12
+                    ? 'Good morning'
+                    : 'Good afternoon';
+
+              let subtitle = `${readyCount} of ${hostCameras.length} camera${
+                hostCameras.length === 1 ? '' : 's'
+              } ${hostCameras.length === 1 ? 'is' : 'are'} ready to view.`;
+              if (attentionCount === 0 && privacyCameras.length > 0) {
+                subtitle += ` ${privacyCameras.length} ${
+                  privacyCameras.length === 1 ? 'has' : 'have'
+                } privacy on.`;
+              }
+
+              let attentionTitle = `${attentionCount} cameras need attention`;
+              let attentionDesc =
+                'Multiple cameras are offline or need to be reconnected.';
+              if (attentionCount === 1) {
+                attentionTitle = `${attentionCamera!.deviceName} needs attention`;
+                attentionDesc = cameraNeedsPairing(attentionCamera!)
+                  ? 'Camera needs to be paired.'
+                  : 'Camera is offline. Reconnect it to restore live viewing.';
+              } else if (attentionCount > 1 && attentionCount <= 4) {
+                const offlineNames = attentionCameras
+                  .filter((camera) => !cameraNeedsPairing(camera))
+                  .map((camera) => camera.deviceName);
+                const pairingNames = attentionCameras
+                  .filter((camera) => cameraNeedsPairing(camera))
+                  .map((camera) => camera.deviceName);
+                const parts: string[] = [];
+                if (offlineNames.length > 0) {
+                  parts.push(
+                    offlineNames.length === 1
+                      ? `${offlineNames[0]} is offline`
+                      : offlineNames.length === 2
+                        ? `${offlineNames.join(' and ')} are offline`
+                        : `${offlineNames.slice(0, -1).join(', ')} and ${offlineNames[offlineNames.length - 1]} are offline`,
+                  );
+                }
+                if (pairingNames.length > 0) {
+                  parts.push(
+                    pairingNames.length === 1
+                      ? `${pairingNames[0]} needs pairing`
+                      : pairingNames.length === 2
+                        ? `${pairingNames.join(' and ')} need pairing`
+                        : `${pairingNames.slice(0, -1).join(', ')} and ${pairingNames[pairingNames.length - 1]} need pairing`,
+                  );
+                }
+                attentionDesc = parts.join('. ') + '.';
+              }
+
+              return (
+                <div className="home-dashboard">
+                  <div className="home-welcome">
+                    <h2>{greeting}</h2>
+                    <p>{subtitle}</p>
+                  </div>
+
+                  {attentionCount > 0 && (
+                    <section className="home-statusbar">
+                      <div className="home-status-icon">
+                        <Icon name="alert" />
+                      </div>
+                      <div className="home-status-copy">
+                        <strong>{attentionTitle}</strong>
+                        <span>{attentionDesc}</span>
+                      </div>
+                      {privacyCameras.length > 0 && (
+                        <span className="pill">
+                          {privacyCameras.length} privacy on
+                        </span>
+                      )}
+                      {attentionCount === 1 ? (
+                        cameraNeedsPairing(attentionCamera!) ? (
+                          <button
+                            className="home-statuslink"
+                            onClick={() => openPairing(attentionCamera!.deviceId)}
+                          >
+                            Reconnect {attentionCamera!.deviceName} &rarr;
+                          </button>
+                        ) : (
+                          <button
+                            className="home-statuslink"
+                            onClick={() => openCameraSettings(attentionCamera!.deviceId)}
+                          >
+                            Check status &rarr;
+                          </button>
+                        )
+                      ) : (
+                        <button
+                          className="home-statuslink"
+                          onClick={() => navigate('cameras')}
+                        >
+                          Review {attentionCount} cameras &rarr;
+                        </button>
+                      )}
+                    </section>
+                  )}
+
+                  <div className="home-layout">
+                    <section className="home-section">
+                      <div className="home-section-top">
+                        <h3>Favorites</h3>
+                        <button
+                          type="button"
+                          className="textbtn"
+                          onClick={() => setFavoritesEditorOpen(true)}
+                        >
+                          Edit
+                        </button>
+                      </div>
+
+                      {favoriteCameras.length === 0 ? (
+                        <div className="home-favorites-empty">
+                          <p>No favorites chosen yet.</p>
+                          <button
+                            type="button"
+                            className="btn secondary"
+                            onClick={() => setFavoritesEditorOpen(true)}
+                          >
+                            Choose favorites
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="favorites-grid">
+                          {favoriteCameras.map((camera) => (
+                            <FavoriteCameraCard
+                              key={camera.deviceId}
+                              camera={camera}
+                              needsPairing={cameraNeedsPairing(camera)}
+                              onOpen={openCamera}
+                              onDevice={openCameraSettings}
+                              onReconnect={(deviceId) => openPairing(deviceId)}
+                              onRemoveFavorite={(deviceId) =>
+                                toggleFavorite(deviceId, defaultFavoriteIds)
+                              }
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="footerline">
+                        <button
+                          type="button"
+                          className="textbtn"
+                          onClick={() => navigate('cameras')}
+                        >
+                          View all {hostCameras.length} device
+                          {hostCameras.length === 1 ? '' : 's'} &rarr;
+                        </button>
+                      </div>
+                    </section>
+
+                    <aside className="home-sidecol">
+                      <section className="sidecard">
+                        <div className="sidehead">
+                          <h3>Latest activity</h3>
+                          <button
+                            type="button"
+                            className="textbtn"
+                            onClick={() => navigate('events')}
+                          >
+                            See all
+                          </button>
+                        </div>
+                        <div className="feed">
+                          <LatestActivityPreview
+                            refreshRevision={motionEventRevision}
+                            onCamera={(cameraId) => {
+                              const camera = cameras.find(
+                                (item) => item.id === cameraId,
+                              );
+                              if (camera) openCamera(camera);
+                            }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="allactivity"
+                          onClick={() => navigate('events')}
+                        >
+                          Open Activity
+                        </button>
+                      </section>
+
+                      <section className="home-shortcut">
+                        <button type="button" onClick={() => navigate('cameras')}>
+                          <span className="q">
+                            <Icon name="grid" />
+                          </span>
+                          <span>
+                            <b>Manage devices</b>
+                            <small>Connections, names and camera settings</small>
+                          </span>
+                          <Icon name="chevronRight" />
+                        </button>
+                      </section>
+                    </aside>
+                  </div>
+
+                  {favoritesEditorOpen && (
+                    <FavoritesEditor
+                      cameras={hostCameras}
+                      favoriteDeviceIds={effectiveFavoriteIds}
+                      onToggle={(deviceId) =>
+                        toggleFavorite(deviceId, defaultFavoriteIds)
+                      }
+                      onDismiss={() => setFavoritesEditorOpen(false)}
+                    />
+                  )}
+                </div>
+              );
+            })()}
+
+          {page === 'cameras' &&
           (selectedDeviceId ? (
-            <section className="card wide workspace-medium">
+            <section className="camera-settings-panel">
               <CameraSettings
                 cameras={cameras.filter(
                   (camera) => camera.deviceId === selectedDeviceId,
@@ -1063,10 +1281,7 @@ export function App() {
               />
             </section>
           ) : (
-            <section
-              className="camera-catalog wide workspace-wide"
-              aria-label="Your cameras"
-            >
+            <section className="camera-catalog" aria-label="Your cameras">
               {pendingDevices.length > 0 && (
                 <ul className="pending-device-list">
                   {pendingDevices.map((device) => (
@@ -1136,7 +1351,6 @@ export function App() {
               pushRoute(`/settings?section=${section}`);
               setSettingsSection(section);
             }}
-            onLogout={() => void logout()}
             onDeleteAccount={requestDeleteAccount}
             onCurrentSessionRevoked={clearLocalSession}
             onUserChanged={() => {
@@ -1152,11 +1366,21 @@ export function App() {
           />
         )}
         {page === 'camera mode' && (
-          <AddCameraPage
-            onPairAndroid={() => openPairing()}
-            onUseBrowser={() => setBrowserCameraActive(true)}
-          />
-        )}
+          <>
+            <AddCameraPage
+              onBack={() => navigate('dashboard')}
+              onPairAndroid={() => openPairing()}
+              onUseBrowser={() => setBrowserCameraActive(true)}
+            />
+            {browserCameraActive && (
+              <BrowserCameraMode
+                canRecord={household?.role === 'owner'}
+                onBack={() => setBrowserCameraActive(false)}
+              />
+            )}
+          </>
+          )}
+        </div>
       </main>
       {pairingOpen && (
         <PairingDialog
@@ -1170,15 +1394,18 @@ export function App() {
           onRetry={() => void createPairingCode()}
         />
       )}
-      {pendingConfirm && (
-        <ConfirmDialog
-          title={pendingConfirm.title}
-          description={pendingConfirm.description}
-          confirmLabel={pendingConfirm.confirmLabel}
-          onConfirm={pendingConfirm.onConfirm}
-          onCancel={() => setPendingConfirm(null)}
-        />
-      )}
+              {pendingConfirm && (
+          <ConfirmDialog
+            title={pendingConfirm.title}
+            description={pendingConfirm.description}
+            confirmLabel={pendingConfirm.confirmLabel}
+            busy={pendingConfirmBusy}
+            onConfirm={pendingConfirm.onConfirm}
+            onCancel={() => setPendingConfirm(null)}
+          />
+        )}
     </div>
+    </SidebarProvider>
   );
 }
+

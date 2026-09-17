@@ -44,7 +44,10 @@ export const navigationIcons: Record<string, IconName> = {
   settings: 'settings',
 };
 
-export const pagesWithAddCamera: ReadonlySet<Page> = new Set(['cameras']);
+export const pagesWithAddCamera: ReadonlySet<Page> = new Set([
+  'dashboard',
+  'cameras',
+]);
 
 const pageContentWidth: Partial<Record<Page, 'medium' | 'wide'>> = {
   cameras: 'wide',

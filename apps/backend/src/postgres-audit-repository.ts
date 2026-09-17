@@ -1,5 +1,23 @@
 import type { Pool, PoolClient } from 'pg';
-import type { AccessHistoryRecord, AuditInput } from './store-contract.js';
+import type {
+  AccessHistoryOptions,
+  AccessHistoryPage,
+  AuditInput,
+} from './store-contract.js';
+
+const ACCESS_HISTORY_EVENT_TYPES = [
+  'camera_source_deleted',
+  'device_credential_revoked',
+  'device_deleted',
+  'device_self_removed',
+  'live_view_started',
+  'live_view_rejected',
+  'privacy_disabled',
+  'privacy_enabled',
+] as const;
+
+const ACCESS_HISTORY_MAX_LIMIT = 50;
+const ACCESS_HISTORY_DEFAULT_LIMIT = 20;
 
 type QueryExecutor = Pick<Pool | PoolClient, 'query'>;
 
@@ -37,27 +55,39 @@ export class PostgresAuditRepository {
     return result.rowCount ?? 0;
   }
 
-  async listAccessHistory(householdId: string): Promise<AccessHistoryRecord[]> {
-    const result = await this.pool.query<AccessHistoryRecord>(
-      `SELECT ae.id, u.email AS "actorEmail",
-              COALESCE(d.name, ae.metadata ->> 'deviceName') AS "deviceName",
-              ae.event_type AS "eventType", ae.occurred_at AS "occurredAt",
-              ae.success, ae.viewer_session_id AS "viewerSessionId",
-              ae.metadata
-       FROM audit_events ae
-       LEFT JOIN users u ON u.id = ae.user_id
-       LEFT JOIN cameras d ON d.id = ae.camera_id
-       WHERE ae.household_id = $1
-          AND ae.event_type IN (
-            'camera_source_deleted', 'device_credential_revoked',
-            'device_deleted', 'device_self_removed',
-            'live_view_started', 'live_view_rejected',
-            'privacy_disabled', 'privacy_enabled'
-          )
-       ORDER BY ae.occurred_at DESC
-       LIMIT 50`,
-      [householdId],
+  async listAccessHistory(
+    householdId: string,
+    options: AccessHistoryOptions = {},
+  ): Promise<AccessHistoryPage> {
+    const limit = Math.min(
+      Math.max(1, options.limit ?? ACCESS_HISTORY_DEFAULT_LIMIT),
+      ACCESS_HISTORY_MAX_LIMIT,
     );
-    return result.rows;
+    const offset = Math.max(0, options.offset ?? 0);
+    const [rows, count] = await Promise.all([
+      this.pool.query<AccessHistoryPage['events'][number]>(
+        `SELECT ae.id, u.email AS "actorEmail",
+                COALESCE(d.name, ae.metadata ->> 'deviceName') AS "deviceName",
+                ae.event_type AS "eventType", ae.occurred_at AS "occurredAt",
+                ae.success, ae.viewer_session_id AS "viewerSessionId",
+                ae.metadata
+         FROM audit_events ae
+         LEFT JOIN users u ON u.id = ae.user_id
+         LEFT JOIN cameras d ON d.id = ae.camera_id
+         WHERE ae.household_id = $1
+            AND ae.event_type = ANY($2::text[])
+         ORDER BY ae.occurred_at DESC
+         LIMIT $3 OFFSET $4`,
+        [householdId, ACCESS_HISTORY_EVENT_TYPES, limit, offset],
+      ),
+      this.pool.query<{ count: string }>(
+        `SELECT count(*)::text AS count
+         FROM audit_events ae
+         WHERE ae.household_id = $1
+            AND ae.event_type = ANY($2::text[])`,
+        [householdId, ACCESS_HISTORY_EVENT_TYPES],
+      ),
+    ]);
+    return { events: rows.rows, total: Number(count.rows[0]!.count) };
   }
 }

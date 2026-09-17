@@ -50,7 +50,8 @@ describe('HouseholdSharingSettings', () => {
     render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
     await screen.findByText('No household members.');
 
-    fireEvent.change(screen.getByLabelText('Email'), {
+    fireEvent.click(screen.getByRole('button', { name: 'Invite person' }));
+    fireEvent.change(await screen.findByLabelText('Email'), {
       target: { value: 'guest@example.com' },
     });
     fireEvent.change(screen.getByLabelText('Access level'), {
@@ -61,16 +62,15 @@ describe('HouseholdSharingSettings', () => {
       configurable: true,
       value: { writeText },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Create invitation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
 
     const copyLinkButton = await screen.findByRole('button', {
-      name: 'Copy invite link',
+      name: 'Copy link',
     });
     fireEvent.click(copyLinkButton);
     expect(writeText).toHaveBeenCalledWith(
       `${window.location.origin}/join?token=one-time-secret-code`,
     );
-    fireEvent.click(screen.getByText('Or share the code manually'));
     expect(screen.getByText('one-time-secret-code')).toBeVisible();
     expect(request).toHaveBeenCalledWith(
       '/api/household/invitations',
@@ -118,13 +118,10 @@ describe('HouseholdSharingSettings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resend' }));
 
     expect(
-      await screen.findByRole('button', { name: 'Copy invite link' }),
+      await screen.findByRole('button', { name: 'Copy link' }),
     ).toBeVisible();
-    fireEvent.click(screen.getByText('Or share the code manually'));
     expect(screen.getByText('fresh-one-time-code')).toBeVisible();
-    expect(
-      screen.getByText(/New invitation created for guest@example\.com/),
-    ).toBeVisible();
+    expect(screen.getByText(/A fresh code was created for guest@example\.com/)).toBeVisible();
   });
 
   it('saves explicit View and Listen grants without implicitly enabling Talk', async () => {
@@ -152,10 +149,10 @@ describe('HouseholdSharingSettings', () => {
     render(<HouseholdSharingSettings cameras={[camera]} role="admin" />);
     await screen.findByText('viewer@example.com');
 
-    fireEvent.click(screen.getByText('Camera access'));
-    fireEvent.click(screen.getByRole('checkbox', { name: 'View' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'View' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Listen' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save camera access' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() =>
       expect(request).toHaveBeenCalledWith(
@@ -194,14 +191,15 @@ describe('HouseholdSharingSettings', () => {
     render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
     await screen.findByText('No household members.');
 
-    fireEvent.change(screen.getByLabelText('Email'), {
+    fireEvent.click(screen.getByRole('button', { name: 'Invite person' }));
+    fireEvent.change(await screen.findByLabelText('Email'), {
       target: { value: 'viewer@example.com' },
     });
     // Access level defaults to Viewer, so the permission picker is already
     // showing; Listen defaults on, flip this test's picks explicitly.
-    fireEvent.click(screen.getByLabelText('Talk by default'));
-    fireEvent.click(screen.getByLabelText('Flip camera by default'));
-    fireEvent.click(screen.getByRole('button', { name: 'Create invitation' }));
+    fireEvent.click(screen.getByLabelText('Talk'));
+    fireEvent.click(screen.getByLabelText('Flip'));
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
 
     await waitFor(() =>
       expect(request).toHaveBeenCalledWith(
@@ -237,11 +235,12 @@ describe('HouseholdSharingSettings', () => {
     render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
     await screen.findByText('No household members.');
 
+    fireEvent.click(screen.getByRole('button', { name: 'Invite person' }));
     fireEvent.click(
-      screen.getByRole('radio', { name: 'Share a guest link' }),
+      await screen.findByRole('radio', { name: 'Guest link' }),
     );
     fireEvent.click(screen.getByRole('checkbox', { name: 'Hallway phone' }));
-    fireEvent.click(screen.getByLabelText('Let them listen'));
+    fireEvent.click(screen.getByLabelText('Listen'));
     fireEvent.click(screen.getByRole('button', { name: 'Create guest link' }));
 
     await waitFor(() =>
@@ -266,15 +265,13 @@ describe('HouseholdSharingSettings', () => {
       configurable: true,
       value: { writeText },
     });
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Copy guest link' }),
-    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy link' }));
     expect(writeText).toHaveBeenCalledWith(
       `${window.location.origin}/g/guest-link-secret`,
     );
   });
 
-  it('shows only one of the invite/guest-link forms at a time, and keeps the join form collapsed', async () => {
+  it('shows only one of the invite/guest-link forms at a time', async () => {
     vi.mocked(request).mockImplementation((path, options) => {
       if (path === '/api/household/sharing')
         return Promise.resolve({ invitations: [], members: [] });
@@ -285,24 +282,57 @@ describe('HouseholdSharingSettings', () => {
     render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
     await screen.findByText('No household members.');
 
-    // The manual join-by-code form starts collapsed -- most people arrive
-    // through a clicked invite link instead, which accepts automatically.
-    expect(screen.queryByLabelText('Invitation code')).not.toBeVisible();
-    fireEvent.click(screen.getByText('Have an invite code?'));
-    expect(screen.getByLabelText('Invitation code')).toBeVisible();
-
-    // Defaults to the invite form; the guest-link form's fields aren't
-    // rendered until its tab is chosen, and vice versa.
-    expect(screen.getByLabelText('Email')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Invite person' }));
+    expect(await screen.findByLabelText('Email')).toBeVisible();
     expect(screen.queryByLabelText('Label (optional)')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Share a guest link' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Guest link' }));
     expect(screen.getByLabelText('Label (optional)')).toBeVisible();
     expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Invite by email' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Email invitation' }));
     expect(screen.getByLabelText('Email')).toBeVisible();
     expect(screen.queryByLabelText('Label (optional)')).not.toBeInTheDocument();
+  });
+
+  it('joins another household with a pasted invitation code', async () => {
+    vi.mocked(request).mockImplementation((path, options) => {
+      if (path === '/api/household/sharing')
+        return Promise.resolve({ invitations: [], members: [] });
+      if (path === '/api/household/guest-links' && !options?.method)
+        return Promise.resolve({ guestLinks: [] });
+      if (
+        path === '/api/household/invitations/accept' &&
+        options?.method === 'POST'
+      )
+        return Promise.resolve({ householdId: 'other-household' });
+      if (path === '/api/account/household' && options?.method === 'PUT')
+        return Promise.resolve(undefined);
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+    const assign = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, assign },
+    });
+    render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
+    await screen.findByText('No household members.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Join household' }));
+    fireEvent.change(await screen.findByLabelText('Invitation code'), {
+      target: { value: 'some-code' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }));
+
+    await waitFor(() =>
+      expect(request).toHaveBeenCalledWith(
+        '/api/household/invitations/accept',
+        expect.objectContaining({
+          body: JSON.stringify({ token: 'some-code' }),
+        }),
+      ),
+    );
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/'));
   });
 
   it('lists pending invitations and active guest links together', async () => {
@@ -340,10 +370,10 @@ describe('HouseholdSharingSettings', () => {
     });
     render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
 
+    expect(await screen.findByText('viewer@example.com')).toBeVisible();
     expect(
-      await screen.findByText('viewer@example.com'),
+      screen.getByText(/Pending invitation · viewer · expires/),
     ).toBeVisible();
-    expect(screen.getByText(/Invitation · viewer · expires/)).toBeVisible();
     expect(screen.getByText('For grandma')).toBeVisible();
     expect(screen.getByText(/Guest link · 1 camera · expires/)).toBeVisible();
   });
@@ -373,10 +403,14 @@ describe('HouseholdSharingSettings', () => {
     render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
     await screen.findByText('gone@example.com');
 
+    fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
     expect(
       screen.queryByRole('button', { name: 'Remove access' }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove from list' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete from list' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
 
     await waitFor(() =>
       expect(request).toHaveBeenCalledWith(

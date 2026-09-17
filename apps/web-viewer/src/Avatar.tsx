@@ -1,3 +1,4 @@
+import './Avatar.css';
 import { useState } from 'react';
 
 /** Centralized account-avatar rendering: the Google profile picture when
@@ -36,3 +37,4 @@ export function Avatar({
     </span>
   );
 }
+

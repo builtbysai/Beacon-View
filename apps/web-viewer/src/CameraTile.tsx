@@ -4,6 +4,7 @@ import { Icon } from './Icon';
 import { InlineRename } from './InlineRename';
 import { LiveVideo } from './LiveVideo';
 import { OverflowMenu } from './OverflowMenu';
+import './CameraTile.css';
 
 export interface TileCamera extends CameraAvailability {
   id: string;
@@ -121,7 +122,8 @@ export function CameraTile({
         type="button"
         className="camera-tile-open"
         aria-label={`View live: ${primaryName}`}
-        aria-disabled={!state.available}
+        disabled={!state.available}
+          aria-disabled={!state.available}
         onClick={() => {
           if (state.available && !renaming) onOpen(camera);
         }}
@@ -151,7 +153,12 @@ export function CameraTile({
             </span>
           )}
         </span>
-        <span className="camera-tile-identity">
+        </button>
+        <div className="camera-tile-footer">
+          <div className="camera-tile-identity-wrapper" onClick={(e) => {
+              if (state.available && !renaming) onOpen(camera);
+            }}>
+            <span className="camera-tile-identity">
           {renaming ? (
             <InlineRename
               value={primaryName}
@@ -163,13 +170,15 @@ export function CameraTile({
               onCancel={() => setRenaming(false)}
             />
           ) : (
-            <strong>{primaryName}</strong>
+            <strong onDoubleClick={(e) => { e.stopPropagation(); if (onRename) setRenaming(true); }}>{primaryName}</strong>
           )}
-          {!groupedByHost && <span>{camera.deviceName}</span>}
+          <span className="camera-tile-secondary-status">
+            {camera.platform === 'android' ? 'Android device' : 'Browser'} &middot; {state.available ? 'Online � ready to view' : (state.label === 'Privacy on' ? 'Online � privacy on' : 'Offline � reconnect required')}
+          </span>
         </span>
-      </button>
-      {hasMenu && (
-        <OverflowMenu label={`${primaryName} options`}>
+          </div>
+          {hasMenu && (
+            <OverflowMenu anchorClassName="overflow-menu-container" label={`${primaryName} options`}>
           {(close) => (
             <>
               <button
@@ -254,7 +263,8 @@ export function CameraTile({
             </>
           )}
         </OverflowMenu>
-      )}
+          )}
+        </div>
     </article>
   );
 }

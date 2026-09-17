@@ -218,6 +218,16 @@ export interface AccessHistoryRecord {
   metadata: Record<string, string>;
 }
 
+export interface AccessHistoryOptions {
+  limit?: number;
+  offset?: number;
+}
+
+export interface AccessHistoryPage {
+  events: AccessHistoryRecord[];
+  total: number;
+}
+
 export interface MotionEventRecord {
   id: string;
   publicCameraId: string;
@@ -520,7 +530,10 @@ export interface MilestoneStore {
   deleteAccount(userId: string): Promise<boolean>;
   audit(input: AuditInput): Promise<void>;
   purgeExpiredAuditEvents(now: Date): Promise<number>;
-  listAccessHistory(householdId: string): Promise<AccessHistoryRecord[]>;
+  listAccessHistory(
+    householdId: string,
+    options?: AccessHistoryOptions,
+  ): Promise<AccessHistoryPage>;
   listMotionEvents(
     householdId: string,
     options?: MotionEventOptions,

@@ -109,7 +109,7 @@ describe('BrowserCameraMode', () => {
 
     const rendered = render(<BrowserCameraMode onBack={() => undefined} />);
     fireEvent.click(
-      screen.getByRole('button', { name: 'Allow and find cameras' }),
+      screen.getByRole('button', { name: 'Allow camera access' }),
     );
     await screen.findByText('Webcam');
     const name = screen.getByRole('textbox', { name: 'Device name' });
@@ -129,7 +129,7 @@ describe('BrowserCameraMode', () => {
     rendered.unmount();
     render(<BrowserCameraMode onBack={() => undefined} />);
     fireEvent.click(
-      screen.getByRole('button', { name: 'Allow and find cameras' }),
+      screen.getByRole('button', { name: 'Allow camera access' }),
     );
     await screen.findByText('Webcam');
     expect(screen.getByRole('textbox', { name: 'Device name' })).toHaveValue(
@@ -186,7 +186,7 @@ describe('BrowserCameraMode', () => {
 
     expect(fetch).not.toHaveBeenCalled();
     fireEvent.click(
-      screen.getByRole('button', { name: 'Allow and find cameras' }),
+      screen.getByRole('button', { name: 'Allow camera access' }),
     );
     expect(await screen.findByText('USB webcam')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
@@ -243,7 +243,7 @@ describe('BrowserCameraMode', () => {
     render(<BrowserCameraMode onBack={() => undefined} />);
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Allow and find cameras' }),
+      screen.getByRole('button', { name: 'Allow camera access' }),
     );
     await screen.findByText('Built-in webcam');
     fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
@@ -336,7 +336,7 @@ describe('BrowserCameraMode', () => {
 
     render(<BrowserCameraMode canRecord onBack={() => undefined} />);
     fireEvent.click(
-      screen.getByRole('button', { name: 'Allow and find cameras' }),
+      screen.getByRole('button', { name: 'Allow camera access' }),
     );
     await screen.findByText('Built-in webcam');
     fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
@@ -412,7 +412,7 @@ describe('BrowserCameraMode', () => {
 
     render(<BrowserCameraMode onBack={() => undefined} />);
     fireEvent.click(
-      screen.getByRole('button', { name: 'Allow and find cameras' }),
+      screen.getByRole('button', { name: 'Allow camera access' }),
     );
     await screen.findByText('Built-in webcam');
     fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));

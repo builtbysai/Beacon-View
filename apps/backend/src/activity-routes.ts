@@ -84,9 +84,21 @@ export function registerActivityRoutes(
   app.get('/api/access-history', async (request, reply) => {
     const session = await authenticateHouseholdAdmin(request, reply);
     if (!session) return;
-    const events = await store.listAccessHistory(session.householdId);
+    const query = request.query as { limit?: string; offset?: string };
+    const limit = query.limit ? Number(query.limit) : undefined;
+    const offset = query.offset ? Number(query.offset) : undefined;
+    if (
+      (limit !== undefined && (!Number.isFinite(limit) || limit < 1)) ||
+      (offset !== undefined && (!Number.isFinite(offset) || offset < 0))
+    ) {
+      return reply.code(400).send({ error: 'Invalid pagination parameters' });
+    }
+    const page = await store.listAccessHistory(session.householdId, {
+      ...(limit !== undefined ? { limit } : {}),
+      ...(offset !== undefined ? { offset } : {}),
+    });
     return {
-      events: events.map((event) => ({
+      events: page.events.map((event) => ({
         actorEmail: event.actorEmail,
         cameraName: event.metadata.cameraName ?? null,
         deviceName: event.deviceName,
@@ -96,6 +108,7 @@ export function registerActivityRoutes(
         success: event.success,
         viewerSessionId: event.viewerSessionId,
       })),
+      total: page.total,
     };
   });
 

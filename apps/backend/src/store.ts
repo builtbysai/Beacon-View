@@ -29,7 +29,8 @@ import type {
   SecurityEventType,
 } from './notification-types.js';
 import {
-  type AccessHistoryRecord,
+  type AccessHistoryOptions,
+  type AccessHistoryPage,
   type AccessibleCameraRecord,
   type AuditInput,
   type BrowserSessionRecord,
@@ -628,8 +629,11 @@ export class PostgresStore implements MilestoneStore {
     return this.auditRepository.purgeExpired(now);
   }
 
-  async listAccessHistory(householdId: string): Promise<AccessHistoryRecord[]> {
-    return this.auditRepository.listAccessHistory(householdId);
+  async listAccessHistory(
+    householdId: string,
+    options?: AccessHistoryOptions,
+  ): Promise<AccessHistoryPage> {
+    return this.auditRepository.listAccessHistory(householdId, options);
   }
 
   async listMotionEvents(

@@ -1,0 +1,214 @@
+.public-header {
+  height: 68px;
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-canvas);
+  border-bottom: 1px solid var(--border-default);
+  z-index: 100;
+  width: 100%;
+}
+
+.public-header.sticky {
+  position: sticky;
+  top: 0;
+  /* subtle translucent treatment */
+  background-color: rgba(var(--bg-canvas-rgb, 255, 255, 255), 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Page-specific alignment to match the max-width containers */
+.public-header .ph-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.public-header.align-splash .ph-wrap {
+  width: min(1180px, calc(100% - 40px));
+}
+
+.public-header.align-trust .ph-wrap {
+  width: min(1180px, calc(100% - 40px));
+}
+
+.public-header.align-contact .ph-wrap {
+  width: min(1120px, calc(100% - 32px));
+}
+
+.public-header.align-auth .ph-wrap {
+  width: min(1180px, 100%);
+  padding: 0 clamp(16px, 4vw, 48px);
+}
+
+.ph-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  color: var(--text-primary);
+  font-weight: 800;
+  letter-spacing: -.025em;
+  flex-shrink: 0;
+}
+
+.ph-brand svg {
+  width: 26px;
+  height: 26px;
+  color: var(--accent-base);
+}
+
+.ph-brand-word {
+  font-family: var(--font-sans);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.ph-nav-desktop {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  margin-left: auto;
+  margin-right: 32px;
+}
+
+.ph-nav-desktop a {
+  font-size: .88rem;
+  color: var(--text-secondary);
+  font-weight: 650;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.ph-nav-desktop a:hover,
+.ph-nav-desktop a.active {
+  color: var(--text-primary);
+}
+
+.ph-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ph-action-slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ph-menu-trigger {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.ph-menu-trigger:focus-visible,
+.ph-menu-close:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 2px;
+}
+
+.ph-mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+  animation: ph-fade-in 0.2s ease-out;
+}
+
+.ph-mobile-menu {
+  width: min(320px, 85vw);
+  height: 100%;
+  background: var(--bg-surface);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  animation: ph-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow-y: auto;
+}
+
+.ph-mobile-header {
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.ph-menu-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-right: -10px;
+}
+
+.ph-mobile-nav {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ph-mobile-nav a {
+  display: block;
+  padding: 12px 16px;
+  font-size: 1.05rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: var(--radius-md);
+}
+
+.ph-mobile-nav a:hover,
+.ph-mobile-nav a.active {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.ph-mobile-action {
+  margin-top: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@keyframes ph-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ph-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@media (max-width: 768px) {
+  .ph-nav-desktop {
+    display: none;
+  }
+  .ph-menu-trigger {
+    display: flex;
+  }
+}

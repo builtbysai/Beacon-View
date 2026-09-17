@@ -1,25 +1,40 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Sidebar } from './Sidebar';
+import { Sidebar, SidebarProvider, SidebarTrigger } from './Sidebar';
+import React from 'react';
 
 afterEach(() => {
   cleanup();
   localStorage.clear();
   vi.restoreAllMocks();
 });
+
 const items = [
   { label: 'Home', icon: 'home' as const, current: true, onSelect: vi.fn() },
 ];
+
+function TestSidebar() {
+  return (
+    <SidebarProvider>
+      <SidebarTrigger />
+      <Sidebar email="owner@example.test" items={items} onLogout={vi.fn()} />
+    </SidebarProvider>
+  );
+}
+
 describe('desktop sidebar preference', () => {
   it('restores collapse while keeping navigation and sign-out accessible', () => {
     const onLogout = vi.fn();
     const view = render(
-      <Sidebar email="owner@example.test" items={items} onLogout={onLogout} />,
+      <SidebarProvider>
+        <SidebarTrigger />
+        <Sidebar email="owner@example.test" items={items} onLogout={onLogout} />
+      </SidebarProvider>
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
-    expect(
-      screen.getByRole('button', { name: 'Expand sidebar' }),
-    ).toHaveAttribute('aria-expanded', 'false');
+    
+    // Default is expanded, so trigger will collapse it
+    fireEvent.click(screen.getAllByRole('button', { name: 'Toggle Sidebar' })[0]!);
+    
     expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute(
       'aria-current',
       'page',
@@ -29,16 +44,23 @@ describe('desktop sidebar preference', () => {
     );
     fireEvent.click(screen.getByRole('menuitem', { name: /Sign out/ }));
     expect(onLogout).toHaveBeenCalledOnce();
+    
     view.unmount();
+    
     render(
-      <Sidebar email="owner@example.test" items={items} onLogout={onLogout} />,
+      <SidebarProvider>
+        <SidebarTrigger />
+        <Sidebar email="owner@example.test" items={items} onLogout={onLogout} />
+      </SidebarProvider>
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
-    expect(
-      screen.getByRole('button', { name: 'Collapse sidebar' }),
-    ).toHaveAttribute('aria-expanded', 'true');
-    expect(localStorage.getItem('beacon.sidebar.collapsed.v1')).toBe('false');
+    
+    // It should remember it is collapsed
+    expect(localStorage.getItem('beacon.sidebar.state')).toBe('collapsed');
+    // Clicking trigger will expand it
+    fireEvent.click(screen.getAllByRole('button', { name: 'Toggle Sidebar' })[0]!);
+    expect(localStorage.getItem('beacon.sidebar.state')).toBe('expanded');
   });
+
   it('remains operable when browser storage is blocked', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('Blocked');
@@ -46,13 +68,8 @@ describe('desktop sidebar preference', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('Blocked');
     });
-    render(
-      <Sidebar email="owner@example.test" items={items} onLogout={vi.fn()} />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
-    expect(
-      screen.getByRole('button', { name: 'Expand sidebar' }),
-    ).toBeEnabled();
+    render(<TestSidebar />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Toggle Sidebar' })[0]!);
     fireEvent.click(screen.getByRole('button', { name: 'Home' }));
     expect(items[0]!.onSelect).toHaveBeenCalledOnce();
   });
@@ -61,12 +78,14 @@ describe('desktop sidebar preference', () => {
 describe('account menu', () => {
   it('renders a Google avatar photo and falls back to an initial if it fails to load', () => {
     const { container } = render(
-      <Sidebar
-        email="owner@example.test"
-        avatarUrl="https://lh3.googleusercontent.com/a/photo"
-        items={items}
-        onLogout={vi.fn()}
-      />,
+      <SidebarProvider>
+        <Sidebar
+          email="owner@example.test"
+          avatarUrl="https://lh3.googleusercontent.com/a/photo"
+          items={items}
+          onLogout={vi.fn()}
+        />
+      </SidebarProvider>
     );
     const image = container.querySelector('img.avatar');
     expect(image).toHaveAttribute(
@@ -82,7 +101,7 @@ describe('account menu', () => {
     render(
       <div>
         <button type="button">Outside</button>
-        <Sidebar email="owner@example.test" items={items} onLogout={vi.fn()} />
+        <TestSidebar />
       </div>,
     );
     fireEvent.click(
@@ -101,11 +120,9 @@ describe('account menu', () => {
   });
 
   it('portals the collapsed account menu outside the clipped sidebar', () => {
-    render(
-      <Sidebar email="owner@example.test" items={items} onLogout={vi.fn()} />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
-    fireEvent.click(screen.getByRole('button', { name: /Open account menu/ }));
+    render(<TestSidebar />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Toggle Sidebar' })[0]!); // Collapse
+    fireEvent.click(screen.getByRole('button', { name: /owner@example\.test/ }));
 
     const menu = screen.getByRole('menu');
     expect(menu.parentElement).toBe(document.body);
@@ -116,12 +133,8 @@ describe('account menu', () => {
   });
 
   it('supports the standard control-b sidebar shortcut', () => {
-    render(
-      <Sidebar email="owner@example.test" items={items} onLogout={vi.fn()} />,
-    );
+    render(<TestSidebar />);
     fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
-    expect(
-      screen.getByRole('button', { name: 'Expand sidebar' }),
-    ).toBeInTheDocument();
+    expect(localStorage.getItem('beacon.sidebar.state')).toBe('collapsed');
   });
 });

@@ -28,10 +28,10 @@ describe('BrowserSessions', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(<BrowserSessions onCurrentRevoked={vi.fn()} />);
 
-    expect(await screen.findByText('Signed-in browser')).toBeVisible();
+    expect(await screen.findByText('Signed-in device')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Revoke session' }),
+      await screen.findByRole('button', { name: 'Revoke device' }),
     );
     await waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith(
@@ -39,7 +39,7 @@ describe('BrowserSessions', () => {
         expect.objectContaining({ method: 'DELETE' }),
       ),
     );
-    expect(screen.queryByText('Signed-in browser')).not.toBeInTheDocument();
+    expect(screen.queryByText('Signed-in device')).not.toBeInTheDocument();
   });
 
   it('labels a session by its browser/OS and hides Revoke for the current one', async () => {
@@ -64,9 +64,8 @@ describe('BrowserSessions', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(<BrowserSessions onCurrentRevoked={vi.fn()} />);
 
-    expect(
-      await screen.findByText('Chrome on Windows (this session)'),
-    ).toBeVisible();
+    expect(await screen.findByText('Chrome on Windows')).toBeVisible();
+    expect(screen.getByText('Current')).toBeVisible();
     expect(
       screen.queryByRole('button', { name: 'Revoke' }),
     ).not.toBeInTheDocument();

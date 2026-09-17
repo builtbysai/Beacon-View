@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MotionRetentionSettings } from './MotionRetentionSettings';
+import { SettingsAutosaveProvider } from './SettingsAutosave';
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('MotionRetentionSettings', () => {
-  it('loads and saves the household metadata-retention choice', async () => {
+  it('loads and autosaves the household metadata-retention choice', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -19,23 +20,25 @@ describe('MotionRetentionSettings', () => {
         status: 200,
       });
     vi.stubGlobal('fetch', fetchMock);
-    render(<MotionRetentionSettings />);
-
-    expect(await screen.findByLabelText('Keep motion history for')).toHaveValue(
-      '30',
+    render(
+      <SettingsAutosaveProvider>
+        <MotionRetentionSettings />
+      </SettingsAutosaveProvider>,
     );
-    expect(screen.queryByText('✓ Saved')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Keep motion history for'), {
-      target: { value: '7' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(
+      await screen.findByRole('radio', { name: /^30 days/ }),
+    ).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByRole('radio', { name: '7 days' }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith(
         '/api/motion-retention',
-        expect.objectContaining({ method: 'PUT' }),
+        expect.objectContaining({ method: 'PUT', body: JSON.stringify({ days: 7 }) }),
       ),
     );
-    expect(await screen.findByText('✓ Saved')).toBeVisible();
+    expect(
+      await screen.findByRole('radio', { name: '7 days' }),
+    ).toHaveAttribute('aria-checked', 'true');
   });
 });

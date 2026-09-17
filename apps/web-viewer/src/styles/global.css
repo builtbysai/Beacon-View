@@ -1,0 +1,317 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+html {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  scrollbar-gutter: stable;
+  scroll-behavior: smooth;
+  transition: background-color 0.25s ease-out, color 0.25s ease-out;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  transition: background-color 0.25s ease-out, color 0.25s ease-out;
+}
+
+a {
+  color: var(--accent-base);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  cursor: pointer;
+  background: transparent;
+  border: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Base button styles */
+.btn-primary {
+  background-color: var(--action-base);
+  color: var(--action-text);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: background-color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--action-hover);
+}
+
+.btn-secondary {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--bg-surface-hover);
+  border-color: var(--border-strong);
+}
+
+/* Generic action buttons: the shared vocabulary for every "Sign out",
+   "Delete", "Revoke", "Connect" control across the app -- a component
+   reaches for one of these three classes (on a <button> or a link styled
+   as one) instead of hand-rolling its own button CSS. */
+.primary,
+.secondary,
+.danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.secondary {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.secondary:hover:not(:disabled) {
+  background-color: var(--bg-surface-hover);
+  border-color: var(--border-strong);
+}
+
+.primary {
+  background-color: var(--action-base);
+  color: var(--action-text);
+  border-color: var(--action-base);
+}
+
+.primary:hover:not(:disabled) {
+  background-color: var(--action-hover);
+}
+
+.danger {
+  background-color: var(--bg-surface);
+  color: var(--status-error);
+  border-color: var(--border-default);
+}
+
+.danger:hover:not(:disabled) {
+  background-color: var(--status-error-bg);
+  border-color: var(--status-error);
+}
+
+.button-link {
+  text-decoration: none;
+}
+
+.button-link:hover {
+  text-decoration: none;
+}
+
+/* Switch -- a real checkbox (see Switch.tsx), styled as a track + thumb. */
+.switch-input {
+  appearance: none;
+  flex-shrink: 0;
+  width: 36px;
+  height: 21px;
+  border-radius: var(--radius-full);
+  background-color: var(--border-strong);
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.switch-input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease;
+}
+
+.switch-input:checked {
+  background-color: var(--accent-base);
+}
+
+.switch-input:checked::after {
+  transform: translateX(15px);
+}
+
+.switch-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.switch-input:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 2px;
+}
+
+/* Forms */
+.input-field { border: 1px solid var(--border-default); border-radius: var(--radius-md); box-sizing: border-box; font-family: var(--font-sans); font-size: var(--text-sm);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent-base);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.form-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+/* Overflow Menu */
+.camera-tile-menu-anchor {
+  position: relative;
+  display: inline-block;
+}
+
+.camera-tile-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  background-color: transparent;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.camera-tile-more:hover, .camera-tile-more:focus-visible {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.camera-tile-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px); /* pop up by default for tiles */
+  background-color: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  z-index: 50;
+}
+
+.camera-tile-menu [role="menuitem"] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  text-align: left;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.camera-tile-menu [role="menuitem"]:hover, .camera-tile-menu [role="menuitem"]:focus {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.camera-tile-menu [role="menuitem"].danger {
+  color: var(--status-error);
+}
+
+.camera-tile-menu [role="menuitem"].danger:hover, .camera-tile-menu [role="menuitem"].danger:focus {
+  background-color: var(--status-error-bg);
+}
+
+.brand-lockup { display: flex; align-items: center; gap: var(--space-2); height: clamp(28px, 4vh, 32px); }
+.brand-word { font-family: var(--font-sans); font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text-primary); line-height: 1; }
+.brand-compact .brand-word { display: none; }
+
+
+.form-group { display: flex; flex-direction: column; gap: var(--space-2); }
+.form-group label { font-size: var(--text-sm); font-weight: 500; color: var(--text-primary); }
+
+
+.btn-primary { display: inline-flex; align-items: center; justify-content: center; background-color: var(--action-base); color: var(--action-text); border: none; border-radius: var(--radius-md); padding: var(--space-2) var(--space-4); font-size: var(--text-sm); font-weight: 500; cursor: pointer; transition: background-color 0.15s; }
+.btn-primary:hover { background-color: var(--action-hover); }
+
+
+@media (prefers-reduced-motion) { :root { --sidebar-transition: none !important; } }
+
+
+
+
+@keyframes page-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.splash-v4, .auth, .trust-v4, .contact-v4 {
+  animation: page-fade 0.25s ease-out both;
+}
+
+@media (prefers-reduced-motion) {
+  .splash-v4, .auth, .trust-v4, .contact-v4 {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+}
