@@ -13,14 +13,13 @@ interface BrowserSession {
   userAgent?: string | null;
 }
 
-const REVEAL_INITIAL = 8;
+const REVEAL_INITIAL = 4;
 
 function sessionLabel(session: BrowserSession): string {
-  const known = browserOsLabel(
+  return browserOsLabel(
     session.userAgent,
     session.current ? 'This device' : 'Signed-in device',
   );
-  return known;
 }
 
 export function BrowserSessions({
@@ -32,9 +31,7 @@ export function BrowserSessions({
   const [error, setError] = useState('');
   const [revoking, setRevoking] = useState('');
   const [visible, setVisible] = useState(REVEAL_INITIAL);
-  const [confirmSession, setConfirmSession] = useState<BrowserSession | null>(
-    null,
-  );
+  const [confirmSession, setConfirmSession] = useState<BrowserSession | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -74,39 +71,34 @@ export function BrowserSessions({
   }
 
   return (
-    <section aria-label="Signed-in devices" className="settings-subsection">
-      <h3>Signed-in devices</h3>
-      {error && (
-        <p role="alert" className="settings-card-inline-message">
-          {error}
-        </p>
-      )}
+    <section aria-label="Signed-in devices" className="settings-subsection settings-security-block">
+      <div className="settings-subsection-heading">
+        <div>
+          <h3>Signed-in devices</h3>
+          <p>Browsers and devices currently signed in to your account.</p>
+        </div>
+      </div>
+      {error && <p role="alert" className="settings-card-inline-message">{error}</p>}
       {sessions === null && !error && (
-        <p role="status" className="settings-card-inline-message">
-          Loading…
-        </p>
+        <p role="status" className="settings-card-inline-message">Loading…</p>
       )}
-      {sessions?.length === 0 && (
-        <p className="settings-card-empty">No signed-in devices.</p>
-      )}
+      {sessions?.length === 0 && <p className="settings-card-empty">No signed-in devices.</p>}
       {sessions && sessions.length > 0 && (
         <>
-          <ul className="session-list">
+          <ul className="session-list settings-list-card">
             {sessions.slice(0, visible).map((session) => (
               <li className="session-row" key={session.id}>
-                <span className="item-icon">
-                  <Icon name="browser" />
-                </span>
+                <span className="item-icon"><Icon name="browser" /></span>
                 <div className="session-identity">
                   <strong>{sessionLabel(session)}</strong>
                   <span>
                     {session.current
-                      ? 'Active now'
+                      ? 'This browser · active now'
                       : `Last active ${new Date(session.lastSeenAt).toLocaleDateString()}`}
                   </span>
                 </div>
                 {session.current ? (
-                  <span className="pill">Current</span>
+                  <span className="pill pill-on">Current</span>
                 ) : (
                   <button
                     className="secondary"
@@ -122,9 +114,7 @@ export function BrowserSessions({
           </ul>
           {sessions.length > visible && (
             <div className="notification-reveal">
-              <span>
-                {visible} of {sessions.length} devices
-              </span>
+              <span>{visible} of {sessions.length} devices</span>
               <button
                 type="button"
                 className="secondary"
