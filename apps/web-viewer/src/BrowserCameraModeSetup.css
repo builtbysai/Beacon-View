@@ -1,44 +1,57 @@
 .local-modal {
-  width: min(620px, 100vw);
+  width: min(600px, 100%);
+  max-height: min(86dvh, 720px);
+  overflow: auto;
+  box-sizing: border-box;
   background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 16px;
-  padding: 24px;
+  padding: clamp(18px, 3vw, 24px);
 }
+
 .local-mh {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
+
 .local-mh h2 {
-  font-size: 21px;
-  margin: 3px 0 5px;
-  letter-spacing: -0.4px;
+  font-size: clamp(20px, 3vw, 23px);
+  line-height: 1.15;
+  margin: 4px 0 6px;
+  letter-spacing: -0.035em;
   color: var(--text-primary);
   font-weight: 700;
 }
+
 .local-mh p {
+  max-width: 500px;
   margin: 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.5;
 }
+
 .local-eyebrow {
-  font-size: 10px;
+  font-size: 9px;
   text-transform: uppercase;
   color: var(--text-muted);
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.09em;
 }
 
 .local-steps {
   display: flex;
-  gap: 7px;
-  margin-bottom: 20px;
+  gap: 6px;
+  margin-bottom: 18px;
 }
+
 .local-step {
-  height: 4px;
-  border-radius: 9px;
+  height: 3px;
+  border-radius: 999px;
   background: var(--border-default);
   flex: 1;
+  transition: background-color 160ms ease;
 }
+
 .local-step.on {
   background: var(--text-primary);
 }
@@ -47,81 +60,147 @@
   background: var(--bg-canvas);
   border: 1px solid var(--border-default);
   border-radius: 12px;
-  padding: 16px;
-  margin: 12px 0 18px;
+  padding: 14px;
+  margin: 10px 0 16px;
   display: flex;
-  gap: 12px;
+  gap: 11px;
+  align-items: flex-start;
 }
+
 .local-permission b {
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--text-primary);
-}
-.local-permission p {
   font-size: 12px;
-  color: var(--text-secondary);
-  margin: 4px 0 0;
-  line-height: 1.45;
-}
-.local-permission-icon {
-  font-size: 20px;
+  font-weight: 700;
   color: var(--text-primary);
-  display: flex;
-  align-items: center;
+}
+
+.local-permission p {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 3px 0 0;
+  line-height: 1.5;
+}
+
+.local-permission-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 9px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  display: grid;
+  place-items: center;
+}
+
+.local-permission-icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 .local-controls {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
 }
+
 .local-field {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
+
 .local-field label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 750;
   margin-bottom: 5px;
   color: var(--text-primary);
 }
-.local-field input, .local-field select {
+
+.local-field input,
+.local-field select {
   width: 100%;
+  min-width: 0;
   height: 39px;
+  box-sizing: border-box;
   border: 1px solid var(--border-default);
   border-radius: 8px;
   background: var(--bg-surface);
   padding: 0 10px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 12px;
+  outline: none;
 }
+
+.local-field input:focus,
+.local-field select:focus {
+  border-color: var(--accent-base);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-base) 12%, transparent);
+}
+
 .local-field.full {
   grid-column: 1 / -1;
 }
+
 .local-check {
   display: flex;
   gap: 8px;
-  align-items: center;
-  font-size: 12px;
+  align-items: flex-start;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.45;
   color: var(--text-primary);
 }
-.local-hint {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 5px;
+
+.local-check input {
+  flex: 0 0 auto;
+  margin-top: 2px;
 }
+
+.local-hint {
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
 .local-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 20px;
+  margin-top: 18px;
 }
 
-@media(max-width: 620px) {
+.local-actions .btn {
+  min-height: 38px;
+}
+
+@media (max-width: 620px) {
+  .local-modal {
+    width: 100%;
+    max-height: min(90dvh, 760px);
+    border-radius: 15px;
+  }
+
   .local-controls {
     grid-template-columns: 1fr;
   }
+
   .local-field.full {
     grid-column: auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .local-modal {
+    padding: 17px;
+  }
+
+  .local-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .local-actions .btn {
+    width: 100%;
   }
 }
