@@ -30,3 +30,19 @@
 @keyframes splash-window-light{0%,100%{transform:translateX(-20%);opacity:.2}50%{transform:translateX(20%);opacity:.8}}
 @keyframes splash-record-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.62;transform:scale(.82)}}
 @media(prefers-reduced-motion:reduce){.splash-v4 .scene-window:after,.splash-v4 .controlset button.demo-record-control.is-recording svg{animation:none}.splash-v4 .controlset button.control{transition:none}}
+
+/* Camera switching gives the hero demo a second believable state without network calls. */
+.splash-v4 .demo-camera-switch{display:flex;align-items:center;gap:2px;padding:2px;border:1px solid var(--line);border-radius:9px;background:var(--bg-canvas);margin-left:auto;margin-right:8px}
+.splash-v4 .demo-camera-switch button{border:0;background:transparent;color:var(--text-muted);font:inherit;font-size:.54rem;font-weight:750;padding:5px 7px;border-radius:6px;cursor:pointer;line-height:1}
+.splash-v4 .demo-camera-switch button.is-selected{background:var(--bg-surface);color:var(--text-primary);box-shadow:0 1px 3px rgba(8,19,38,.08)}
+.splash-v4 .demo-camera-switch button:focus-visible{outline:2px solid var(--accent-base);outline-offset:2px}
+.splash-v4 .demo-scene{transition:filter .35s ease,background .35s ease}
+.splash-v4 .demo-scene-entry{background:linear-gradient(165deg,#5e6a72 0%,#3c4b55 46%,#24333d 100%);filter:saturate(.82) contrast(1.04)}
+.splash-v4 .demo-scene-entry .scene-window{right:auto;left:7%;width:25%;height:48%;top:9%;background:linear-gradient(160deg,#a6b1b4,#d7d6c9 58%,#89979b)}
+.splash-v4 .demo-scene-entry .scene-frame-a{left:52%;top:16%;width:12%}.splash-v4 .demo-scene-entry .scene-frame-b{left:67%;top:20%;width:9%}
+.splash-v4 .demo-scene-entry .scene-sofa{left:38%;width:48%;bottom:16%;background:linear-gradient(180deg,#39454b,#28353c)}
+.splash-v4 .demo-scene-entry .scene-table{right:auto;left:15%;bottom:13%}
+.splash-v4 .demo-scene-entry .scene-plant{right:4%;bottom:26%}
+.splash-v4 .demo-scene-entry .scene-lamp{display:none}
+@media(max-width:500px){.splash-v4 .demo-camera-switch{display:none}.splash-v4 .controls{gap:8px}.splash-v4 .controlset{margin-left:auto}}
+@media(prefers-reduced-motion:reduce){.splash-v4 .demo-scene{transition:none}}
