@@ -78,7 +78,6 @@ export function MobileAuthReturnPage() {
   );
 }
 
-
 export function PublicTrustPage({
   returnHref = '/',
   returnLabel = 'Return to Beacon',
@@ -88,16 +87,23 @@ export function PublicTrustPage({
 }) {
   const trustLinks = [
     { label: 'How it works', href: '#details' },
-    { label: 'Questions', href: '#faq' }
+    { label: 'Questions', href: '#faq' },
   ];
 
   const trustAction = (
-    <a href={returnHref} className="ph-back-action">&larr; {returnLabel}</a>
+    <a href={returnHref} className="ph-back-action">
+      &larr; {returnLabel}
+    </a>
   );
 
   return (
     <div className="trust-v4">
-      <PublicHeader links={trustLinks} action={trustAction} sticky={true} alignContainer="trust" />
+      <PublicHeader
+        links={trustLinks}
+        action={trustAction}
+        sticky={true}
+        alignContainer="trust"
+      />
 
       <main>
         <section className="hero wrap">
@@ -106,7 +112,8 @@ export function PublicTrustPage({
               <p className="eyebrow">Trust & privacy</p>
               <h1>Privacy is part of how Beacon works.</h1>
               <p className="lede">
-                Beacon connects your devices for live viewing without building a cloud archive of your camera or microphone.
+                Beacon connects your devices for live viewing without building
+                a cloud archive of your camera or microphone.
               </p>
             </div>
             <div className="commitments">
@@ -125,7 +132,10 @@ export function PublicTrustPage({
                 </div>
                 <div>
                   <h2>Capture stays visible</h2>
-                  <p>The camera device indicates when camera or microphone capture is active.</p>
+                  <p>
+                    The camera device indicates when camera or microphone
+                    capture is active.
+                  </p>
                 </div>
               </article>
               <article className="commitment">
@@ -134,12 +144,15 @@ export function PublicTrustPage({
                 </div>
                 <div>
                   <h2>Authenticated access</h2>
-                  <p>Live media uses encrypted WebRTC and is available to authenticated viewers.</p>
+                  <p>
+                    Live media uses encrypted WebRTC and is available to
+                    authenticated viewers.
+                  </p>
                 </div>
               </article>
             </div>
           </div>
-          <div className="scrollcue">â†“ &nbsp;See exactly what Beacon keeps</div>
+          <div className="scrollcue">↓ &nbsp;See exactly what Beacon keeps</div>
         </section>
 
         <section className="section" id="details">
@@ -149,22 +162,32 @@ export function PublicTrustPage({
               <div>
                 <h2 className="big">Your stream is for the session.</h2>
                 <p className="section-intro">
-                  Beacon is designed around direct live viewing rather than cloud video storage.
+                  Beacon is designed around direct live viewing rather than
+                  cloud video storage.
                 </p>
               </div>
             </div>
             <div className="factgrid">
               <article className="fact">
                 <h3>Video & audio</h3>
-                <p>Live media is streamed for viewing and is not stored by Beacon.</p>
+                <p>
+                  Live media is streamed for viewing and is not stored by
+                  Beacon.
+                </p>
               </article>
               <article className="fact">
                 <h3>Connection</h3>
-                <p>Media streams use WebRTC encryption between participating devices.</p>
+                <p>
+                  Media streams use WebRTC encryption between participating
+                  devices.
+                </p>
               </article>
               <article className="fact">
                 <h3>Awareness</h3>
-                <p>The camera interface shows when capture is active, so recording hardware is not silently engaged.</p>
+                <p>
+                  The camera interface shows when capture is active, so
+                  recording hardware is not silently engaged.
+                </p>
               </article>
             </div>
           </div>
@@ -177,7 +200,8 @@ export function PublicTrustPage({
               <div>
                 <h2 className="big">A short list, on purpose.</h2>
                 <p className="section-intro">
-                  Beacon needs some information to operate your account and cameras. Live media is not part of that stored data.
+                  Beacon needs some information to operate your account and
+                  cameras. Live media is not part of that stored data.
                 </p>
               </div>
             </div>
@@ -185,12 +209,16 @@ export function PublicTrustPage({
               <article>
                 <h3>Beacon keeps</h3>
                 <p>
-                  Account settings, camera names, camera settings, and motion-event metadata such as timestamps without images, for the configured retention period.
+                  Account settings, camera names, camera settings, and
+                  motion-event metadata such as timestamps without images, for
+                  the configured retention period.
                 </p>
               </article>
               <article>
                 <h3>Beacon does not keep</h3>
-                <p>Video streams, audio clips, thumbnails, or facial identities.</p>
+                <p>
+                  Video streams, audio clips, thumbnails, or facial identities.
+                </p>
               </article>
             </div>
           </div>
@@ -207,19 +235,32 @@ export function PublicTrustPage({
             <div className="faq">
               <details>
                 <summary>Does Beacon record my live video?</summary>
-                <p>No. Beacon's stated design is live viewing without storing the video stream.</p>
+                <p>
+                  No. Beacon's stated design is live viewing without storing the
+                  video stream.
+                </p>
               </details>
               <details>
                 <summary>Who can view a live camera?</summary>
-                <p>Beacon describes live media as available to authenticated viewers through encrypted WebRTC connections.</p>
+                <p>
+                  Beacon describes live media as available to authenticated
+                  viewers through encrypted WebRTC connections.
+                </p>
               </details>
               <details>
                 <summary>What information does Beacon retain?</summary>
-                <p>Account and camera settings, camera names, and motion-event metadata may be retained. Live video, audio, thumbnails, and facial identities are not.</p>
+                <p>
+                  Account and camera settings, camera names, and motion-event
+                  metadata may be retained. Live video, audio, thumbnails, and
+                  facial identities are not.
+                </p>
               </details>
               <details>
                 <summary>Can I ask a privacy question?</summary>
-                <p>Yes. Use the contact path below for privacy or deletion questions.</p>
+                <p>
+                  Yes. Use the contact path below for privacy or deletion
+                  questions.
+                </p>
               </details>
             </div>
           </div>
@@ -231,14 +272,19 @@ export function PublicTrustPage({
               <h2>Still have a privacy question?</h2>
               <p>Contact Beacon about privacy or deletion.</p>
             </div>
-            <a className="button" href="/contact">Contact Beacon</a>
+            <a className="button" href="/contact">
+              Contact Beacon
+            </a>
           </div>
         </section>
       </main>
 
       <footer>
         <div className="wrap foot">
-          <span>Beacon is a private alpha. Not for emergency or life-safety monitoring.</span>
+          <span>
+            Beacon is a private alpha. Not for emergency or life-safety
+            monitoring.
+          </span>
           <div className="footlinks">
             <a href="/contact">Contact</a>
             <a href={returnHref}>{returnLabel}</a>
@@ -248,6 +294,3 @@ export function PublicTrustPage({
     </div>
   );
 }
-
-
-
