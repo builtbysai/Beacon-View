@@ -92,7 +92,7 @@ export function PublicTrustPage({
   ];
 
   const trustAction = (
-    <a href={returnHref} style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: 650, fontSize: '.88rem' }}>{returnLabel}</a>
+    <a href={returnHref} className="ph-back-action">&larr; {returnLabel}</a>
   );
 
   return (

@@ -2,66 +2,95 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 17px;
+  gap: 16px;
+  margin-bottom: 24px;
+  min-width: 0;
 }
 
 .camera-search {
-  height: 39px;
+  height: 40px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 11px;
-  flex: 1 1 240px;
-  max-width: 360px;
+  gap: 10px;
+  padding: 0 14px;
+  flex: 1 1 280px;
+  max-width: 380px;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
+
+.camera-search:focus-within {
+  border-color: var(--accent-base);
+  box-shadow: 0 0 0 1px var(--accent-base);
+}
+
 .camera-search .icon {
   color: var(--text-muted);
+  flex-shrink: 0;
 }
+
 .camera-search input {
   border: 0;
   outline: 0;
   width: 100%;
-  font-size: 12px;
+  font-size: 0.95rem;
+  font-family: inherit;
   background: transparent;
   color: var(--text-primary);
+  padding: 0;
+}
+
+.camera-search input::placeholder {
+  color: var(--text-muted);
 }
 
 .filter-pills {
   display: flex;
-  gap: 5px;
+  gap: 8px;
   flex-wrap: wrap;
-  flex: 1 1 320px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .filter-pills button {
-  height: 32px;
-  border: 1px solid transparent;
+  height: 34px;
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-full);
-  background: transparent;
-  color: var(--text-secondary);
-  padding: 0 10px;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: 0.15s;
-}
-.filter-pills button[aria-checked="true"] {
   background: var(--bg-surface);
-  border-color: var(--border-default);
+  color: var(--text-secondary);
+  padding: 0 14px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.filter-pills button:hover {
+  background: var(--bg-surface-hover);
   color: var(--text-primary);
 }
+
+.filter-pills button[aria-checked="true"] {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--bg-canvas);
+}
+
 .filter-pills button span {
-  margin-left: 5px;
-  color: var(--text-muted);
+  margin-left: 6px;
+  color: inherit;
+  opacity: 0.7;
 }
 
 .camera-results {
-  font-size: 10px;
-  color: var(--text-muted);
+  font-size: 0.88rem;
+  color: var(--text-secondary);
   white-space: nowrap;
   margin-left: auto;
 }
@@ -80,7 +109,7 @@
   padding: 22px 0 2px;
 }
 .camera-loadarea .progress {
-  font-size: 10px;
+  font-size: 0.85rem;
   color: var(--text-muted);
 }
 .camera-loadarea .btn {
@@ -104,25 +133,40 @@
   margin-bottom: 12px;
 }
 .camera-no-results h3 {
-  font-size: 15px;
+  font-size: 1rem;
   margin: 0 0 5px;
 }
 .camera-no-results p {
-  font-size: 11px;
+  font-size: 0.9rem;
   color: var(--text-secondary);
   margin: 0 0 16px;
 }
 
 @media (max-width: 650px) {
+  .camera-browser-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
   .camera-search {
-    flex-basis: 100%;
+    flex-basis: auto;
     max-width: none;
   }
+  
   .filter-pills {
     flex-wrap: nowrap;
     overflow-x: auto;
-    padding-bottom: 3px;
+    padding-bottom: 4px;
+    margin-inline: -16px;
+    padding-inline: 16px;
+    scrollbar-width: none;
   }
+  
+  .filter-pills::-webkit-scrollbar {
+    display: none;
+  }
+  
   .camera-results {
     display: none;
   }

@@ -56,7 +56,7 @@ export function ContactPage({
   };
 
   const contactAction = (
-    <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 650, fontSize: '.88rem', fontFamily: 'inherit' }}>← Back to Beacon</button>
+    <button onClick={onBack} className="ph-back-action">&larr; Back to Beacon</button>
   );
 
   return (

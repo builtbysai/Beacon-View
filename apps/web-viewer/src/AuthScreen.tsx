@@ -64,7 +64,7 @@ export function AuthScreen({
   };
 
   const authAction = (
-    <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 650, fontSize: '.82rem', fontFamily: 'inherit' }}>← Back</button>
+    <button onClick={onBack} className="ph-back-action">&larr; Back to Beacon</button>
   );
 
   return (

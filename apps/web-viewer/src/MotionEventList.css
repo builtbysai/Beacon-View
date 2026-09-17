@@ -8,44 +8,67 @@
   position: relative;
 }
 .activity-v3-learnbtn {
-  border: 0;
+  appearance: none;
   background: transparent;
+  border: none;
   color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 650;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
   cursor: pointer;
-  padding: 0;
   display: inline-flex;
   align-items: center;
-  margin-top: 4px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease, color 0.15s ease;
+  margin: -6px -10px;
 }
+
+.activity-v3-learnbtn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.activity-v3-learnbtn:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 2px;
+}
+
 .activity-v3-learnpanel {
   display: none;
   position: absolute;
+  top: calc(100% + 8px);
   right: 0;
-  top: 42px;
-  width: 350px;
-  padding: 16px;
+  width: 320px;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: 12px;
-  box-shadow: var(--shadow-lg);
-  z-index: 5;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  z-index: 50;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-align: left;
+  line-height: 1.5;
 }
+
 .activity-v3-learnpanel.show {
   display: block;
 }
+
 .activity-v3-learnpanel strong {
   display: block;
-  margin-bottom: 5px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  margin-bottom: 8px;
 }
+
 .activity-v3-learnpanel p {
-  font-size: 12px;
-  color: var(--text-muted);
   margin: 0;
 }
+
 .activity-v3-learnpanel p + p {
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 .activity-v3-controls {
