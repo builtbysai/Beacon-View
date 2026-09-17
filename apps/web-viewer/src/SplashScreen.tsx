@@ -7,6 +7,7 @@ export function SplashScreen({ onContinue }: { onContinue: () => void }) {
   const [listening, setListening] = useState(false);
   const [talking, setTalking] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [demoCamera, setDemoCamera] = useState<'living' | 'entry'>('living');
   const splashLinks = [
     { label: 'How it works', href: '#how' },
     { label: 'Privacy', href: '#privacy' },
@@ -46,7 +47,7 @@ export function SplashScreen({ onContinue }: { onContinue: () => void }) {
                   <span className="live">LIVE</span>
                 </div>
                 <div className="feed">
-                  <div className="demo-scene" aria-hidden="true">
+                  <div className={`demo-scene demo-scene-${demoCamera}`} aria-hidden="true">
                     <div className="scene-wall"><span className="scene-frame scene-frame-a"></span><span className="scene-frame scene-frame-b"></span></div>
                     <div className="scene-window"><i></i><i></i><i></i><i></i></div>
                     <div className="scene-sofa"><span></span><span></span><span></span></div>
@@ -62,14 +63,14 @@ export function SplashScreen({ onContinue }: { onContinue: () => void }) {
                   </div>
                   <div className="feed-identity">
                     <span className="feed-camera-icon"><Icon name="camera" /></span>
-                    <span><strong>Living room</strong><small>Spare phone · Rear camera</small></span>
+                    <span><strong>{demoCamera === 'living' ? 'Living room' : 'Front entry'}</strong><small>{demoCamera === 'living' ? 'Spare phone · Rear camera' : 'Tablet · Wide camera'}</small></span>
                   </div>
                   <div className="feed-time" aria-hidden="true"><span className="feed-pulse"></span>Live now</div>
                 </div>
                 <div className="controls demo-controls">
                   <div className="device">
-                    <span className="avatar"><Icon name="phone" /></span>
-                    <span className="demo-device-copy"><strong>Spare phone</strong><small>Online · Wi-Fi</small></span>
+                    <span className="avatar"><Icon name={demoCamera === 'living' ? 'phone' : 'browser'} /></span>
+                    <span className="demo-device-copy"><strong>{demoCamera === 'living' ? 'Spare phone' : 'Entry tablet'}</strong><small>Online · Wi-Fi</small></span>
                   </div>
                   <div className="controlset" aria-label="Example live view controls">
                     <span className="control" title="Listen"><Icon name="speaker" /></span>
@@ -79,7 +80,7 @@ export function SplashScreen({ onContinue }: { onContinue: () => void }) {
                   </div>
                 </div>
                 <div className="demo-statusbar" aria-hidden="true">
-                  <span><i className="status-dot"></i>Direct connection</span><span>{recording ? 'Recording' : listening ? 'Listening' : talking ? 'Talking' : '1 viewer'}</span><span>{recording ? 'REC' : '00:18'}</span>
+                  <span><i className="status-dot"></i>Direct connection</span><span>{recording ? 'Recording' : listening ? 'Listening' : talking ? 'Talking' : '1 viewer'}</span><span>{recording ? 'REC' : demoCamera === 'living' ? '00:18' : '00:07'}</span>
                 </div>
               </div>
               <div className="demo-float-card demo-float-secure" aria-hidden="true"><span><Icon name="lock" /></span><div><strong>Private connection</strong><small>Media is encrypted in transit</small></div></div>
