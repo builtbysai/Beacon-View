@@ -14,3 +14,19 @@
 @media(max-height:720px) and (min-width:851px){.splash-v4 .hero{padding:25px 0;gap:60px}.splash-v4 h1{font-size:clamp(3rem,5.5vw,5rem)}.splash-v4 .lede{margin-top:17px}.splash-v4 .ctas{margin-top:20px}.splash-v4 .micro{margin-top:18px}.splash-v4 .demo{padding:20px 16px 24px}.splash-v4 .feed{aspect-ratio:1.58}.splash-v4 .demo-float-card{transform:scale(.9)}}
 @media(prefers-reduced-motion:reduce){.splash-v4 .live:before{animation:none}.splash-v4 .splash-demo-window{transition:none}.splash-v4 .demo:hover .splash-demo-window{transform:none}}
 .splash-v4 section[id]{scroll-margin-top:80px}
+
+/* Demo interaction and camera texture */
+.splash-v4 .feed:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.13;background:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0,rgba(255,255,255,.025) 1px,transparent 1px,transparent 3px);mix-blend-mode:soft-light}
+.splash-v4 .scene-window:after{content:"";position:absolute;inset:-35%;background:linear-gradient(115deg,transparent 38%,rgba(232,245,244,.16) 49%,transparent 61%);animation:splash-window-light 9s ease-in-out infinite}
+.splash-v4 .controlset button.control{font:inherit;padding:0;cursor:pointer;transition:transform .16s ease,border-color .16s ease,background .16s ease,color .16s ease,box-shadow .16s ease}
+.splash-v4 .controlset button.control:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent-base) 35%,var(--line));color:var(--text-primary);box-shadow:0 4px 10px rgba(8,19,38,.08)}
+.splash-v4 .controlset button.control:focus-visible{outline:2px solid var(--accent-base);outline-offset:2px}
+.splash-v4 .controlset button.control.is-active{background:color-mix(in srgb,var(--accent-base) 11%,var(--bg-surface));border-color:color-mix(in srgb,var(--accent-base) 34%,var(--line));color:var(--accent-base)}
+.splash-v4 .controlset button.demo-record-control.is-recording{background:rgba(226,85,85,.1);border-color:rgba(226,85,85,.36);color:#e25555}
+.splash-v4 .controlset button.demo-record-control.is-recording svg{animation:splash-record-pulse 1.45s ease-in-out infinite}
+.splash-v4 .demo-statusbar span:last-child{min-width:26px;text-align:right;font-variant-numeric:tabular-nums}
+.splash-v4 .demo-statusbar span:nth-child(2){transition:color .16s ease}
+.splash-v4 .splash-demo-window:before{content:"";position:absolute;z-index:6;inset:0;border-radius:inherit;pointer-events:none;box-shadow:inset 0 1px rgba(255,255,255,.18)}
+@keyframes splash-window-light{0%,100%{transform:translateX(-20%);opacity:.2}50%{transform:translateX(20%);opacity:.8}}
+@keyframes splash-record-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.62;transform:scale(.82)}}
+@media(prefers-reduced-motion:reduce){.splash-v4 .scene-window:after,.splash-v4 .controlset button.demo-record-control.is-recording svg{animation:none}.splash-v4 .controlset button.control{transition:none}}
