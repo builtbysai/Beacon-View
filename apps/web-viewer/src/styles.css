@@ -1,6 +1,4 @@
 @import './styles/reset.css';
 @import './styles/tokens.css';
 @import './styles/global.css';
-
-
-/* We will migrate component styles to individual CSS files and import them here (or directly in components) */
+@import './styles/recovery-layout.css';
