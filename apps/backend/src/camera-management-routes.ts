@@ -223,6 +223,20 @@ export function registerCameraManagementRoutes(
     ) {
       return reply.code(404).send({ error: 'Device not found' });
     }
+    await store.audit({
+      eventType: 'device_updated',
+      householdId: session.householdId,
+      ipAddress: request.ip,
+      metadata: {
+        deviceId: parameters.data.deviceId,
+        ...(body.data.name !== undefined ? { name: body.data.name } : {}),
+        ...(body.data.enabled !== undefined
+          ? { enabled: String(body.data.enabled) }
+          : {}),
+      },
+      success: true,
+      userId: session.userId,
+    });
     if (body.data.enabled === false) {
       const cameras = await store.listCameras(session.householdId);
       for (const camera of cameras.filter(
