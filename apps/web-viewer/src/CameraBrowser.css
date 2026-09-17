@@ -2,7 +2,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   margin-bottom: 24px;
   min-width: 0;
 }
@@ -12,13 +12,16 @@
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
-  display: flex;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-  flex: 1 1 280px;
-  max-width: 380px;
+  column-gap: 10px;
+  padding: 0 13px;
+  flex: 0 1 360px;
+  width: min(360px, 100%);
+  min-width: min(240px, 100%);
   transition: border-color 0.15s, box-shadow 0.15s;
+  overflow: hidden;
 }
 
 .camera-search:focus-within {
@@ -27,30 +30,34 @@
 }
 
 .camera-search .icon {
+  width: 18px;
+  height: 18px;
   color: var(--text-muted);
-  flex-shrink: 0;
 }
 
 .camera-search input {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  height: 38px;
   border: 0;
   outline: 0;
-  width: 100%;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  line-height: normal;
   font-family: inherit;
   background: transparent;
   color: var(--text-primary);
   padding: 0;
+  margin: 0;
 }
 
-.camera-search input::placeholder {
-  color: var(--text-muted);
-}
+.camera-search input::placeholder { color: var(--text-muted); }
 
 .filter-pills {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  flex: 1 1 auto;
+  flex: 1 1 420px;
   min-width: 0;
 }
 
@@ -70,133 +77,47 @@
   align-items: center;
   white-space: nowrap;
 }
+.filter-pills button:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+.filter-pills button[aria-checked="true"] { background: var(--text-primary); border-color: var(--text-primary); color: var(--bg-canvas); }
+.filter-pills button span { margin-left: 6px; color: inherit; opacity: 0.7; }
 
-.filter-pills button:hover {
-  background: var(--bg-surface-hover);
-  color: var(--text-primary);
-}
-
-.filter-pills button[aria-checked="true"] {
-  background: var(--text-primary);
-  border-color: var(--text-primary);
-  color: var(--bg-canvas);
-}
-
-.filter-pills button span {
-  margin-left: 6px;
-  color: inherit;
-  opacity: 0.7;
-}
-
-.camera-results {
-  font-size: 0.88rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  margin-left: auto;
-}
+.camera-results { font-size: 0.88rem; color: var(--text-secondary); white-space: nowrap; margin-left: auto; }
 
 .camera-tile-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(210px, 22vw, 280px), 1fr));
+  gap: clamp(10px, 1.25vw, 16px);
+  align-items: start;
 }
 
-.camera-loadarea {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 22px 0 2px;
-}
-.camera-loadarea .progress {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-.camera-loadarea .btn {
-  min-width: 120px;
-}
+.camera-loadarea { display:flex; flex-direction:column; align-items:center; gap:8px; padding:22px 0 2px; }
+.camera-loadarea .progress { font-size:.85rem; color:var(--text-muted); }
+.camera-loadarea .btn { min-width:120px; }
+.camera-no-results { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:70px 20px; border:1px dashed var(--border-default); border-radius:13px; background:var(--bg-surface); }
+.camera-no-results .icon { font-size:24px; color:var(--text-muted); margin-bottom:12px; }
+.camera-no-results h3 { font-size:1rem; margin:0 0 5px; }
+.camera-no-results p { font-size:.9rem; color:var(--text-secondary); margin:0 0 16px; }
 
-.camera-no-results {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 70px 20px;
-  border: 1px dashed var(--border-default);
-  border-radius: 13px;
-  background: var(--bg-surface);
-}
-.camera-no-results .icon {
-  font-size: 24px;
-  color: var(--text-muted);
-  margin-bottom: 12px;
-}
-.camera-no-results h3 {
-  font-size: 1rem;
-  margin: 0 0 5px;
-}
-.camera-no-results p {
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  margin: 0 0 16px;
+.camera-browser-intro { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:24px; }
+.camera-browser-intro h2 { font-size:30px; letter-spacing:-1.15px; margin:0 0 7px; font-weight:750; color:var(--text-primary); }
+.camera-browser-intro p { margin:0; color:var(--text-secondary); font-size:13px; }
+
+@media (max-width: 900px) {
+  .camera-tile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 650px) {
-  .camera-browser-controls {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-  
-  .camera-search {
-    flex-basis: auto;
-    max-width: none;
-  }
-  
-  .filter-pills {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    margin-inline: -16px;
-    padding-inline: 16px;
-    scrollbar-width: none;
-  }
-  
-  .filter-pills::-webkit-scrollbar {
-    display: none;
-  }
-  
-  .camera-results {
-    display: none;
-  }
+  .camera-browser-controls { flex-direction:column; align-items:stretch; gap:12px; }
+  .camera-search { flex-basis:auto; width:100%; max-width:none; min-width:0; }
+  .filter-pills { flex:0 0 auto; flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; margin-inline:-16px; padding-inline:16px; scrollbar-width:none; }
+  .filter-pills::-webkit-scrollbar { display:none; }
+  .camera-results { display:none; }
+  .camera-browser-intro { align-items:flex-start; }
+  .camera-browser-intro h2 { font-size:26px; }
 }
 
-.camera-browser-intro {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 24px;
-}
-.camera-browser-intro h2 {
-  font-size: 30px;
-  letter-spacing: -1.15px;
-  margin: 0 0 7px;
-  font-weight: 750;
-  color: var(--text-primary);
-}
-.camera-browser-intro p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-@media(max-width: 650px) {
-  .camera-browser-intro {
-    align-items: flex-start;
-  }
-  .camera-browser-intro h2 {
-    font-size: 26px;
-  }
+/* Keep two useful cards visible much deeper into compact layouts. Only
+   collapse to a single column when a card would become genuinely cramped. */
+@media (max-width: 470px) {
+  .camera-tile-grid { grid-template-columns: 1fr; }
 }
