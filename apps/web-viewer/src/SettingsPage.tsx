@@ -22,14 +22,7 @@ type SettingsPageProps = {
   user: User;
   household: HouseholdSession;
   cameras: Camera[];
-  /** Bumped whenever a household event says membership, invitations, or
-   * grants changed elsewhere -- People & access reloads when this changes
-   * instead of only ever reflecting its own actions. */
   membershipRevision: number;
-  /** The section named in the URL (?section=...) to scroll to on load, so
-   * an external deep link (e.g. "Connect Drive" from the live view) lands
-   * on the right part of the page. Every section is always on the page --
-   * this only controls the initial scroll position and jump-nav highlight. */
   requestedSection: string | null;
   onSectionChange: (section: SettingsSection) => void;
   onDeleteAccount: () => void;
@@ -46,9 +39,6 @@ type SettingsSection =
   | 'account'
   | 'privacy';
 
-/** Older links may still point at the section name this page used before
- * "storage" merged into "data" -- resolve it instead of silently failing
- * to scroll. */
 const legacySectionAliases: Record<string, string> = {
   alerts: 'notifications',
   camera: 'data',
@@ -64,6 +54,15 @@ const sectionInfo: Record<SettingsSection, { label: string; icon: IconName }> = 
   account: { label: 'Account', icon: 'user' },
   privacy: { label: 'Privacy', icon: 'lock' },
 };
+
+function SectionHead({ title, children }: { title: string; children: string }) {
+  return (
+    <div className="settings-section-head">
+      <h2>{title}</h2>
+      <p>{children}</p>
+    </div>
+  );
+}
 
 export function SettingsPage({
   user,
@@ -159,6 +158,7 @@ export function SettingsPage({
     <SettingsAutosaveProvider>
       <div className="settings-shell">
         <nav className="settings-jump" aria-label="Settings sections">
+          <span className="settings-jump-label" aria-hidden="true">Settings</span>
           {sections.map((section) => (
             <a
               key={section}
@@ -185,7 +185,7 @@ export function SettingsPage({
               sectionRefs.current.household = element;
             }}
           >
-            <h2>Household</h2>
+            <SectionHead title="Household">Your shared Beacon space.</SectionHead>
             <HouseholdSwitcher
               currentHouseholdId={household.id}
               memberCount={manager ? memberCount : null}
@@ -201,7 +201,9 @@ export function SettingsPage({
                 sectionRefs.current.notifications = element;
               }}
             >
-              <h2>Notifications</h2>
+              <SectionHead title="Notifications">
+                Control browser delivery and alerts from each camera.
+              </SectionHead>
               <NotificationSettings />
             </section>
           )}
@@ -213,7 +215,9 @@ export function SettingsPage({
               sectionRefs.current.access = element;
             }}
           >
-            <h2>People &amp; access</h2>
+            <SectionHead title="People & access">
+              Manage who belongs to this household and what they can access.
+            </SectionHead>
             <HouseholdSharingSettings
               cameras={cameras}
               role={household.role}
@@ -229,7 +233,9 @@ export function SettingsPage({
               sectionRefs.current.data = element;
             }}
           >
-            <h2>Data &amp; storage</h2>
+            <SectionHead title="Data & storage">
+              Choose how long event metadata is kept and where optional cloud data is stored.
+            </SectionHead>
             {manager && <MotionRetentionSettings />}
             <div id="storage">
               <GoogleDriveSettings />
@@ -244,7 +250,9 @@ export function SettingsPage({
                 sectionRefs.current.security = element;
               }}
             >
-              <h2>Security</h2>
+              <SectionHead title="Security">
+                Review signed-in browsers and security-relevant camera access.
+              </SectionHead>
               <BrowserSessions onCurrentRevoked={onCurrentSessionRevoked} />
               <AccessHistory currentEmail={user.email} />
             </section>
@@ -257,25 +265,27 @@ export function SettingsPage({
               sectionRefs.current.account = element;
             }}
           >
-            <h2>Account</h2>
-            <SettingsRow
-              title={user.email}
-              description={
-                user.emailVerified ? 'Verified' : undefined
-              }
-            >
-              <Avatar email={user.email} avatarUrl={user.avatarUrl} size="lg" />
-            </SettingsRow>
-            {!user.emailVerified && <EmailVerification verified={false} />}
-            <div className="settings-subsection">
-              <h3>Sign-in methods</h3>
-              {!user.hasPassword && <SetPassword onSet={onUserChanged} />}
-              <LinkGoogleAccount linked={Boolean(user.googleLinked)} />
+            <SectionHead title="Account">
+              Manage how you sign in and your Beacon account.
+            </SectionHead>
+            <div className="settings-card settings-account-card">
+              <SettingsRow
+                title={user.email}
+                description={user.emailVerified ? 'Email verified' : 'Email not verified'}
+              >
+                <Avatar email={user.email} avatarUrl={user.avatarUrl} size="lg" />
+              </SettingsRow>
+              {!user.emailVerified && <EmailVerification verified={false} />}
+              <div className="settings-account-methods">
+                <h3>Sign-in methods</h3>
+                {!user.hasPassword && <SetPassword onSet={onUserChanged} />}
+                <LinkGoogleAccount linked={Boolean(user.googleLinked)} />
+              </div>
             </div>
-            <div className="danger-zone">
+            <div className="settings-card settings-card-danger settings-danger-card">
               <SettingsRow
                 title="Delete account"
-                description="Permanently removes your Beacon data and access."
+                description="Permanently removes your Beacon account, data and access."
               >
                 <button className="quiet-button quiet-button-danger" onClick={onDeleteAccount}>
                   Delete account
@@ -291,15 +301,37 @@ export function SettingsPage({
               sectionRefs.current.privacy = element;
             }}
           >
-            <h2>Privacy</h2>
-            <SettingsRow
-              title="Trust &amp; privacy"
-              description="How Beacon handles capture, sharing, retention and account data."
-            >
-              <a className="secondary button-link" href="/trust">
-                View details
-              </a>
-            </SettingsRow>
+            <SectionHead title="Privacy">
+              Understand the data Beacon keeps and where to find the full details.
+            </SectionHead>
+            <div className="settings-card privacy-settings-card">
+              <div className="privacy-settings-intro">
+                <h3>Your privacy defaults</h3>
+                <p>The important parts are summarized here. Full technical details remain on Trust &amp; privacy.</p>
+              </div>
+              <div className="privacy-settings-facts">
+                <div>
+                  <strong>Motion history</strong>
+                  <span>Event time, camera and motion metadata follow your retention setting.</span>
+                </div>
+                <div>
+                  <strong>Security activity</strong>
+                  <span>Session and access history is shown without a device fingerprint.</span>
+                </div>
+                <div>
+                  <strong>Cloud storage</strong>
+                  <span>Google Drive is optional and recording is controlled separately.</span>
+                </div>
+              </div>
+              <SettingsRow
+                title="Trust & privacy"
+                description="Capture, sharing, retention and account-data details."
+              >
+                <a className="secondary button-link" href="/trust">
+                  View details
+                </a>
+              </SettingsRow>
+            </div>
           </section>
         </div>
       </div>
