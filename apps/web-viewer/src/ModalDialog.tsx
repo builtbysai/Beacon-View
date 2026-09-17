@@ -15,25 +15,29 @@ export function ModalDialog({
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    // `showModal()` already makes the rest of the page inert to clicks,
-    // taps, and keyboard focus, but it does not stop the page behind the
-    // dialog from scrolling (wheel/touch scroll isn't blocked by inertness
-    // alone), so lock it explicitly. Also remember what had focus so it can
-    // be restored once the dialog closes, instead of focus silently
-    // resetting to the body.
+
     const trigger = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const scrollHost = document.querySelector<HTMLElement>('.main-content');
+    const previousOverflowY = scrollHost?.style.overflowY ?? '';
+
+    /* Beacon scrolls the authenticated workspace inside .main-content. Lock
+       that real scroll host rather than body; scrollbar-gutter is reserved in
+       CSS so the page does not move sideways when the modal appears. Public
+       pages that do not have .main-content rely on the native modal behavior. */
+    if (scrollHost) scrollHost.style.overflowY = 'hidden';
+
     if (typeof dialog.showModal === 'function') {
       dialog.showModal();
     } else {
       dialog.setAttribute('open', '');
     }
-    dialog.querySelector<HTMLElement>('button, a, input')?.focus();
+
+    dialog.querySelector<HTMLElement>('button, a, input, select, textarea')?.focus();
+
     return () => {
       if (dialog.open && typeof dialog.close === 'function') dialog.close();
-      document.body.style.overflow = previousOverflow;
-      trigger?.focus();
+      if (scrollHost) scrollHost.style.overflowY = previousOverflowY;
+      trigger?.focus({ preventScroll: true });
     };
   }, []);
 
