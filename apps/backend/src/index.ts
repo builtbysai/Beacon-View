@@ -6,6 +6,7 @@ import { startAuditRetentionJob } from './audit-retention.js';
 import { parseConfig } from './config.js';
 import { startMotionRetentionJob } from './motion-retention.js';
 import { startNotificationJob } from './notification-job.js';
+import { startPresenceActivityJob } from './presence-activity-job.js';
 
 loadEnvironment({
   override: false,
@@ -19,6 +20,7 @@ let shuttingDown = false;
 let stopRetentionJob: (() => void) | undefined;
 let stopAuditRetentionJob: (() => void) | undefined;
 let stopNotificationJob: (() => void) | undefined;
+let stopPresenceActivityJob: (() => void) | undefined;
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   if (shuttingDown) return;
@@ -26,6 +28,7 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   stopRetentionJob?.();
   stopAuditRetentionJob?.();
   stopNotificationJob?.();
+  stopPresenceActivityJob?.();
 
   app.log.info({ signal }, 'Shutdown requested');
   await app.close();
@@ -46,6 +49,7 @@ try {
   stopRetentionJob = startMotionRetentionJob(store, app.log);
   stopAuditRetentionJob = startAuditRetentionJob(store, app.log);
   stopNotificationJob = startNotificationJob(store, config, app.log);
+  stopPresenceActivityJob = startPresenceActivityJob(store, app.log);
 } catch (error) {
   app.log.fatal({ err: error }, 'Backend startup failed');
   process.exitCode = 1;
