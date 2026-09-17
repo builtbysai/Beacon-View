@@ -3,6 +3,7 @@ import { ApiError, request } from './api';
 import { Brand, Icon } from './Icon';
 import { LiveVideo } from './LiveVideo';
 import type { Camera } from './domain';
+import './GuestViewPage.css';
 
 type Status = 'entering' | 'invalid' | 'empty' | 'ready';
 
