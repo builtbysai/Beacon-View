@@ -115,6 +115,15 @@ export function registerActivityRoutes(
       return reply.code(400).send({ error: 'Invalid activity event type' });
     }
 
+    // Activity contains household-wide security and membership metadata.
+    // Keep the unfiltered feed aligned with /api/events and /api/access-history
+    // until viewer/guest activity can be filtered by camera grants.
+    if (session.role !== 'owner' && session.role !== 'admin') {
+      return reply
+        .code(403)
+        .send({ error: 'Household administrator access required' });
+    }
+
     const page = await store.listHouseholdActivity(session.householdId, {
       ...(limit !== undefined ? { limit } : {}),
       ...(offset !== undefined ? { offset } : {}),
