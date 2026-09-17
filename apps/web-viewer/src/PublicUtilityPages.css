@@ -1,0 +1,54 @@
+/* Shared finishing layer for small public/account utility routes that use the
+   Trust shell. Keep these pages calm, centered and usable without page-specific
+   layout hacks. */
+.trust-shell .trust-page {
+  width: min(100% - 32px, 560px);
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.trust-shell .trust-page > .eyebrow {
+  margin-top: 0;
+}
+
+.trust-shell .trust-page > h1 {
+  text-wrap: balance;
+}
+
+.trust-shell .trust-page .trust-lead {
+  max-width: 52ch;
+}
+
+.trust-shell .trust-page form {
+  width: 100%;
+  min-width: 0;
+}
+
+.trust-shell .trust-page .form-group,
+.trust-shell .trust-page .input-field {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.trust-shell .trust-page .auth-alert {
+  margin: 0;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pair-link-code {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 520px) {
+  .trust-shell .trust-page {
+    width: min(100% - 24px, 560px);
+  }
+
+  .trust-shell .trust-page > h1 {
+    font-size: clamp(25px, 8vw, 34px);
+  }
+}
