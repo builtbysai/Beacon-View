@@ -228,6 +228,47 @@ export interface AccessHistoryPage {
   total: number;
 }
 
+export const HOUSEHOLD_ACTIVITY_EVENT_TYPES = [
+  'camera_source_deleted',
+  'device_credential_revoked',
+  'device_deleted',
+  'device_self_removed',
+  'live_view_started',
+  'live_view_rejected',
+  'privacy_disabled',
+  'privacy_enabled',
+  'motion_settings_changed',
+  'motion_history_cleared',
+  'motion_retention_changed',
+  'notification_preference_changed',
+  'notification_subscription_created',
+  'notification_subscription_revoked',
+] as const;
+
+export type HouseholdActivityEventType =
+  (typeof HOUSEHOLD_ACTIVITY_EVENT_TYPES)[number];
+
+export interface HouseholdActivityRecord {
+  id: string;
+  actorEmail: string | null;
+  deviceName: string | null;
+  eventType: HouseholdActivityEventType;
+  occurredAt: Date;
+  success: boolean;
+  metadata: Record<string, string>;
+}
+
+export interface HouseholdActivityOptions {
+  limit?: number;
+  offset?: number;
+  eventTypes?: HouseholdActivityEventType[];
+}
+
+export interface HouseholdActivityPage {
+  events: HouseholdActivityRecord[];
+  total: number;
+}
+
 export interface MotionEventRecord {
   id: string;
   publicCameraId: string;
@@ -534,6 +575,10 @@ export interface MilestoneStore {
     householdId: string,
     options?: AccessHistoryOptions,
   ): Promise<AccessHistoryPage>;
+  listHouseholdActivity(
+    householdId: string,
+    options?: HouseholdActivityOptions,
+  ): Promise<HouseholdActivityPage>;
   listMotionEvents(
     householdId: string,
     options?: MotionEventOptions,
