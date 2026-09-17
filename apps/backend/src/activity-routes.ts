@@ -16,6 +16,10 @@ import { hashSecret } from './security.js';
 import { unauthorized, type SessionAuth } from './session-auth.js';
 import type { SignalingHub } from './signaling.js';
 import type { MilestoneStore } from './store.js';
+import {
+  HOUSEHOLD_ACTIVITY_EVENT_TYPES,
+  type HouseholdActivityEventType,
+} from './store-contract.js';
 
 interface ActivityRouteDependencies {
   auth: SessionAuth;
@@ -78,6 +82,57 @@ export function registerActivityRoutes(
         platform: device.platform,
         softwareVersion: device.softwareVersion,
       })),
+    };
+  });
+
+
+  app.get('/api/activity', async (request, reply) => {
+    const session = await auth.authenticate(request, reply);
+    if (!session) return;
+    const query = request.query as {
+      limit?: string;
+      offset?: string;
+      eventType?: string | string[];
+    };
+    const limit = query.limit ? Number(query.limit) : undefined;
+    const offset = query.offset ? Number(query.offset) : undefined;
+    if (
+      (limit !== undefined &&
+        (!Number.isInteger(limit) || limit < 1 || limit > 50)) ||
+      (offset !== undefined && (!Number.isInteger(offset) || offset < 0))
+    ) {
+      return reply.code(400).send({ error: 'Invalid pagination parameters' });
+    }
+
+    const requestedTypes =
+      query.eventType === undefined
+        ? undefined
+        : Array.isArray(query.eventType)
+          ? query.eventType
+          : [query.eventType];
+    const allowedTypes = new Set<string>(HOUSEHOLD_ACTIVITY_EVENT_TYPES);
+    if (requestedTypes?.some((eventType) => !allowedTypes.has(eventType))) {
+      return reply.code(400).send({ error: 'Invalid activity event type' });
+    }
+
+    const page = await store.listHouseholdActivity(session.householdId, {
+      ...(limit !== undefined ? { limit } : {}),
+      ...(offset !== undefined ? { offset } : {}),
+      ...(requestedTypes
+        ? { eventTypes: requestedTypes as HouseholdActivityEventType[] }
+        : {}),
+    });
+    return {
+      events: page.events.map((event) => ({
+        id: event.id,
+        actorEmail: event.actorEmail,
+        deviceName: event.deviceName,
+        eventType: event.eventType,
+        occurredAt: event.occurredAt.toISOString(),
+        success: event.success,
+        metadata: event.metadata,
+      })),
+      total: page.total,
     };
   });
 
