@@ -151,6 +151,7 @@ export function MotionSettingsPanel({
             <span><strong>Motion detection</strong><small>Create motion events when activity is detected.</small></span>
             <label className="camera-settings-switch-label">
               <input
+                aria-label="Detect motion on this camera"
                 className="visually-hidden"
                 type="checkbox"
                 checked={active.enabled}
@@ -165,6 +166,7 @@ export function MotionSettingsPanel({
           <label className="camera-settings-form-row">
             <span><strong>Sensitivity</strong><small>How readily motion creates an event.</small></span>
             <select
+              aria-label="Sensitivity"
               disabled={busy || !active.enabled}
               value={active.sensitivity}
               onChange={(event) => change({ sensitivity: event.target.value as MotionSettings['sensitivity'] })}
@@ -179,6 +181,7 @@ export function MotionSettingsPanel({
             <span><strong>Record on motion</strong><small>Save a short clip when motion is detected.</small></span>
             <label className="camera-settings-switch-label">
               <input
+                aria-label="Record a short clip when motion is detected"
                 className="visually-hidden"
                 type="checkbox"
                 checked={active.recordOnMotion}
@@ -192,6 +195,7 @@ export function MotionSettingsPanel({
           <label className="camera-settings-form-row">
             <span><strong>Time between events</strong><small>Minimum delay before another event can be created.</small></span>
             <select
+              aria-label="Time between events"
               disabled={busy || !active.enabled}
               value={active.cooldownSeconds}
               onChange={(event) => change({ cooldownSeconds: Number(event.target.value) as MotionSettings['cooldownSeconds'] })}
@@ -208,6 +212,7 @@ export function MotionSettingsPanel({
               <span><strong>Quiet hours</strong><small>Pause motion events on a daily schedule.</small></span>
               <label className="camera-settings-switch-label">
                 <input
+                  aria-label="Quiet hours"
                   className="visually-hidden"
                   type="checkbox"
                   checked={active.quietHours !== null}
