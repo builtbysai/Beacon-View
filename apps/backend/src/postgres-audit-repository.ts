@@ -58,6 +58,58 @@ export class PostgresAuditRepository {
     return result.rowCount ?? 0;
   }
 
+
+  async scanDevicePresenceActivity(now: Date, offlineAfterMs: number): Promise<number> {
+    const result = await this.pool.query(
+      `INSERT INTO audit_events
+       (household_id, camera_id, event_type, success, metadata, occurred_at)
+       SELECT d.household_id, d.id, 'device_offline', true,
+              jsonb_build_object('deviceId', d.public_device_id::text, 'deviceName', d.name),
+              $1
+       FROM cameras d
+       WHERE d.enabled = true AND d.privacy_mode = false AND d.revoked_at IS NULL
+         AND d.last_seen_at IS NOT NULL
+         AND d.last_seen_at < $1::timestamptz - ($2::bigint * interval '1 millisecond')
+         AND EXISTS (
+           SELECT 1 FROM device_credentials dc
+           WHERE dc.camera_id = d.id AND dc.revoked_at IS NULL
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM audit_events ae
+           WHERE ae.camera_id = d.id AND ae.event_type = 'device_offline'
+             AND ae.occurred_at > d.last_seen_at
+         )`,
+      [now, offlineAfterMs],
+    );
+    return result.rowCount ?? 0;
+  }
+
+  async recordDeviceRecoveredIfOffline(input: {
+    cameraId: string;
+    householdId: string;
+    publicDeviceId: string;
+    now: Date;
+  }): Promise<boolean> {
+    const result = await this.pool.query(
+      `INSERT INTO audit_events
+       (household_id, camera_id, event_type, success, metadata, occurred_at)
+       SELECT $1, $2, 'device_recovered', true,
+              jsonb_build_object('deviceId', $3::text), $4
+       WHERE EXISTS (
+         SELECT 1 FROM audit_events offline
+         WHERE offline.camera_id = $2 AND offline.event_type = 'device_offline'
+           AND NOT EXISTS (
+             SELECT 1 FROM audit_events recovered
+             WHERE recovered.camera_id = $2
+               AND recovered.event_type = 'device_recovered'
+               AND recovered.occurred_at > offline.occurred_at
+           )
+       )`,
+      [input.householdId, input.cameraId, input.publicDeviceId, input.now],
+    );
+    return (result.rowCount ?? 0) === 1;
+  }
+
   async listHouseholdActivity(
     householdId: string,
     options: HouseholdActivityOptions = {},
