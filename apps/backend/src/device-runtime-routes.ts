@@ -91,10 +91,21 @@ export function registerDeviceRuntimeRoutes(
           )
         : null;
     if (!cameraId) return unauthorized(reply);
+    const recovered = await store.recordDeviceRecoveredIfOffline({
+      cameraId,
+      householdId: identity!.householdId,
+      publicDeviceId: identity!.publicDeviceId,
+      now: new Date(),
+    });
     householdEvents.publish(identity!.householdId, {
       cameraId: identity!.publicCameraId,
       type: 'camera-presence-changed',
     });
+    if (recovered) {
+      householdEvents.publish(identity!.householdId, {
+        type: 'device-management-changed',
+      });
+    }
     return reply.code(204).send();
   });
 
