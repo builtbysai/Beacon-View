@@ -40,7 +40,7 @@
 
 .notification-table-head {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(140px, 1.1fr) minmax(80px, .65fr) minmax(120px, .9fr) minmax(230px, 1.6fr);
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
   background-color: var(--bg-surface-hover);
@@ -53,7 +53,7 @@
 
 .notification-table-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(140px, 1.1fr) minmax(80px, .65fr) minmax(120px, .9fr) minmax(230px, 1.6fr);
   gap: var(--space-3);
   align-items: start;
   padding: var(--space-3) var(--space-4);
@@ -86,13 +86,29 @@
   display: none;
 }
 
+.notification-table-quiet {
+  min-width: 0;
+  align-items: center;
+}
+
 .notification-quiet-hours {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+}
+
+.notification-quiet-hours label {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 96px;
 }
 
 .notification-quiet-hours input[type='time'] {
+  width: 100%;
+  min-width: 0;
   height: 30px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -100,6 +116,7 @@
   color: var(--text-primary);
   padding: 0 var(--space-2);
   font-size: var(--text-xs);
+  box-sizing: border-box;
 }
 
 .notification-quiet-hours span[aria-hidden] {
@@ -142,6 +159,13 @@
   }
   .notification-table-quiet {
     flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .notification-quiet-hours {
+    width: auto;
+    margin-left: auto;
+    justify-content: flex-end;
   }
 }
 
