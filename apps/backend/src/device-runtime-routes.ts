@@ -74,35 +74,34 @@ export function registerDeviceRuntimeRoutes(
     const token = authorization?.startsWith('Bearer ')
       ? authorization.slice('Bearer '.length)
       : '';
-    const identity = token
-      ? await store.findDeviceByCredential(hashSecret(token))
-      : null;
-    const cameraId =
-      token && identity
-        ? await store.heartbeat(
-            hashSecret(token),
-            new Date(),
-            health.data.batteryPercent === undefined
-              ? undefined
-              : {
-                  batteryPercent: health.data.batteryPercent,
-                  batteryCharging: health.data.batteryCharging!,
-                },
-          )
-        : null;
+    if (!token) return unauthorized(reply);
+    const credentialHash = hashSecret(token);
+    const identity = await store.findDeviceByCredential(credentialHash);
+    if (!identity) return unauthorized(reply);
+    const now = new Date();
+    const cameraId = await store.heartbeat(
+      credentialHash,
+      now,
+      health.data.batteryPercent === undefined
+        ? undefined
+        : {
+            batteryPercent: health.data.batteryPercent,
+            batteryCharging: health.data.batteryCharging!,
+          },
+    );
     if (!cameraId) return unauthorized(reply);
     const recovered = await store.recordDeviceRecoveredIfOffline({
       cameraId,
-      householdId: identity!.householdId,
-      publicDeviceId: identity!.publicDeviceId,
-      now: new Date(),
+      householdId: identity.householdId,
+      publicDeviceId: identity.publicDeviceId,
+      now,
     });
-    householdEvents.publish(identity!.householdId, {
-      cameraId: identity!.publicCameraId,
+    householdEvents.publish(identity.householdId, {
+      cameraId: identity.publicCameraId,
       type: 'camera-presence-changed',
     });
     if (recovered) {
-      householdEvents.publish(identity!.householdId, {
+      householdEvents.publish(identity.householdId, {
         type: 'device-management-changed',
       });
     }
