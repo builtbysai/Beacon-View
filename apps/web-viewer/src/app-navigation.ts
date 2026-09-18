@@ -50,9 +50,11 @@ export const pagesWithAddCamera: ReadonlySet<Page> = new Set([
 ]);
 
 const pageContentWidth: Partial<Record<Page, 'medium' | 'wide'>> = {
+  dashboard: 'wide',
   cameras: 'wide',
+  events: 'wide',
+  settings: 'wide',
   'camera mode': 'medium',
-  events: 'medium',
 };
 
 export function contentWidthClass(page: Page): string {
