@@ -309,11 +309,12 @@ function NotificationCameraRow({
         />
         {quietHours && (
           <span className="notification-quiet-hours">
-            <label>
-              <span className="visually-hidden">
-                Quiet hours start for {preference.deviceName}
+            <label className="notification-time-field">
+              <span className="notification-time-caption" aria-hidden="true">
+                Starts
               </span>
               <input
+                aria-label={`Quiet hours start for ${preference.deviceName}`}
                 type="time"
                 value={quietHours.start}
                 onChange={(event) =>
@@ -333,11 +334,12 @@ function NotificationCameraRow({
               />
             </label>
             <span aria-hidden="true">–</span>
-            <label>
-              <span className="visually-hidden">
-                Quiet hours end for {preference.deviceName}
+            <label className="notification-time-field">
+              <span className="notification-time-caption" aria-hidden="true">
+                Ends
               </span>
               <input
+                aria-label={`Quiet hours end for ${preference.deviceName}`}
                 type="time"
                 value={quietHours.end}
                 onChange={(event) =>
