@@ -83,41 +83,57 @@
   color: var(--status-success);
 }
 
-/* Compact the jump nav progressively. On phones it becomes an icon rail;
-   link text remains in the accessibility tree because it is only visually
-   suppressed by font sizing. */
+/* On compact screens the section nav behaves like a horizontal tab strip:
+   labels stay visible, the active section is obvious, and the row can be
+   swiped without consuming a large chunk of vertical space. */
 @media (max-width: 720px) {
   .settings-jump {
     gap: 6px !important;
+    align-items: center;
     padding-block: 8px !important;
+    overflow-x: auto !important;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-jump::-webkit-scrollbar {
+    display: none;
   }
 
   .settings-jump-item {
-    min-height: 36px !important;
-    padding: 0 10px !important;
+    flex: 0 0 auto !important;
+    min-height: 38px !important;
+    padding: 0 12px !important;
+    gap: 7px !important;
+    border-radius: var(--radius-full) !important;
+    scroll-snap-align: start;
+    font-size: 12px !important;
+    white-space: nowrap;
+  }
+
+  .settings-jump-item svg {
+    display: block !important;
+    width: 15px;
+    height: 15px;
   }
 }
 
 @media (max-width: 520px) {
   .settings-jump {
-    align-items: center;
-    padding-inline: 12px !important;
+    margin-inline: -16px !important;
+    padding-inline: 16px !important;
   }
 
   .settings-jump-item {
-    width: 38px;
-    min-width: 38px;
-    height: 38px;
-    padding: 0 !important;
-    justify-content: center;
-    font-size: 0 !important;
-    border-radius: 50% !important;
+    min-height: 40px !important;
+    padding-inline: 12px !important;
+    font-size: 11.5px !important;
   }
 
-  .settings-jump-item svg {
-    display: block !important;
-    width: 17px;
-    height: 17px;
+  .settings-jump-item[aria-current='true'] {
+    box-shadow: inset 0 0 0 1px var(--accent-base);
   }
 
   .settings-section {
