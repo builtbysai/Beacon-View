@@ -88,22 +88,31 @@
 
 .notification-table-quiet {
   min-width: 0;
+  flex-direction: row;
   align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.notification-table-quiet .switch-input {
+  align-self: auto;
+  flex: 0 0 auto;
 }
 
 .notification-quiet-hours {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--space-2);
-  width: 100%;
+  width: auto;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .notification-quiet-hours label {
-  flex: 1 1 0;
-  min-width: 0;
-  max-width: 96px;
+  flex: 0 1 116px;
+  min-width: 108px;
+  max-width: 116px;
 }
 
 .notification-quiet-hours input[type='time'] {
@@ -158,13 +167,24 @@
     color: var(--text-secondary);
   }
   .notification-table-quiet {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
+    gap: var(--space-2) var(--space-3);
+  }
+
+  .notification-table-quiet .notification-table-label {
+    grid-column: 1;
+  }
+
+  .notification-table-quiet .switch-input {
+    grid-column: 2;
   }
 
   .notification-quiet-hours {
-    width: auto;
-    margin-left: auto;
+    grid-column: 1 / -1;
+    width: 100%;
+    margin-left: 0;
     justify-content: flex-end;
   }
 }
