@@ -91,6 +91,7 @@ export function SettingsPage({
   );
 
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
+  const jumpNavRef = useRef<HTMLElement | null>(null);
   const [activeSection, setActiveSection] = useState<SettingsSection>(sections[0]!);
   const [memberCount, setMemberCount] = useState<number | null>(null);
 
@@ -138,6 +139,20 @@ export function SettingsPage({
     };
   }, [sections]);
 
+  useEffect(() => {
+    const nav = jumpNavRef.current;
+    if (!nav || !window.matchMedia('(max-width: 900px)').matches) return;
+    const active = nav.querySelector<HTMLElement>('[aria-current="true"]');
+    if (!active) return;
+
+    const targetLeft =
+      active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2;
+    nav.scrollTo({
+      behavior: 'smooth',
+      left: Math.max(0, targetLeft),
+    });
+  }, [activeSection]);
+
   function jumpTo(section: SettingsSection) {
     sectionRefs.current[section]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setActiveSection(section);
@@ -147,7 +162,7 @@ export function SettingsPage({
   return (
     <SettingsAutosaveProvider>
       <div className="settings-shell">
-        <nav className="settings-jump" aria-label="Settings sections">
+        <nav ref={jumpNavRef} className="settings-jump" aria-label="Settings sections">
           <span className="settings-jump-label" aria-hidden="true">Settings</span>
           {sections.map((section) => (
             <a
