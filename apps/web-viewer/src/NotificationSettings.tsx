@@ -288,7 +288,10 @@ function NotificationCameraRow({
         />
       </span>
       <span className="notification-table-cell notification-table-quiet" role="cell">
-        <span className="notification-table-label">Quiet hours</span>
+        <span className="notification-table-label notification-quiet-heading">
+          <span>Quiet hours</span>
+          <small>Pause alerts during this window</small>
+        </span>
         <Switch
           label={`Quiet hours for ${preference.deviceName}`}
           checked={quietHours !== null}
@@ -311,7 +314,7 @@ function NotificationCameraRow({
           <span className="notification-quiet-hours">
             <label className="notification-time-field">
               <span className="notification-time-caption" aria-hidden="true">
-                Starts
+                From
               </span>
               <input
                 aria-label={`Quiet hours start for ${preference.deviceName}`}
@@ -336,7 +339,7 @@ function NotificationCameraRow({
             <span aria-hidden="true">–</span>
             <label className="notification-time-field">
               <span className="notification-time-caption" aria-hidden="true">
-                Ends
+                Until
               </span>
               <input
                 aria-label={`Quiet hours end for ${preference.deviceName}`}
@@ -358,6 +361,9 @@ function NotificationCameraRow({
                 }
               />
             </label>
+            <span className="notification-quiet-zone">
+              Time zone: {quietHours.timeZone.replace(/_/g, ' ')}
+            </span>
           </span>
         )}
       </span>
