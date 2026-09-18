@@ -18,25 +18,35 @@ export function ModalDialog({
 
     const trigger = document.activeElement as HTMLElement | null;
     const scrollHost = document.querySelector<HTMLElement>('.main-content');
-    const previousOverflowY = scrollHost?.style.overflowY ?? '';
+    const scrollTop = scrollHost?.scrollTop ?? 0;
+    let restoreFrame = 0;
 
-    /* Beacon scrolls the authenticated workspace inside .main-content. Lock
-       that real scroll host rather than body; scrollbar-gutter is reserved in
-       CSS so the page does not move sideways when the modal appears. Public
-       pages that do not have .main-content rely on the native modal behavior. */
-    if (scrollHost) scrollHost.style.overflowY = 'hidden';
-
+    /* Native modal dialogs already make the rest of the page inert. Do not
+       toggle the workspace scrollbar on open: removing that scrollbar was
+       enough to make the whole app visibly jump sideways. The backdrop
+       contains scroll chaining in CSS, while we preserve the workspace's
+       exact scroll position through the browser's initial dialog focus. */
     if (typeof dialog.showModal === 'function') {
       dialog.showModal();
     } else {
       dialog.setAttribute('open', '');
     }
 
-    dialog.querySelector<HTMLElement>('button, a, input, select, textarea')?.focus();
+    dialog
+      .querySelector<HTMLElement>('button, a, input, select, textarea')
+      ?.focus({ preventScroll: true });
+
+    if (scrollHost) {
+      scrollHost.scrollTop = scrollTop;
+      restoreFrame = requestAnimationFrame(() => {
+        scrollHost.scrollTop = scrollTop;
+      });
+    }
 
     return () => {
+      if (restoreFrame) cancelAnimationFrame(restoreFrame);
       if (dialog.open && typeof dialog.close === 'function') dialog.close();
-      if (scrollHost) scrollHost.style.overflowY = previousOverflowY;
+      if (scrollHost) scrollHost.scrollTop = scrollTop;
       trigger?.focus({ preventScroll: true });
     };
   }, []);
