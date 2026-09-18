@@ -83,23 +83,42 @@
   color: var(--status-success);
 }
 
-/* On compact screens the section nav behaves like a horizontal tab strip:
-   labels stay visible, the active section is obvious, and the row can be
-   swiped without consuming a large chunk of vertical space. */
-@media (max-width: 720px) {
+/* On compact screens, Settings becomes a sticky, swipeable tab strip.
+   The active section follows the user's scroll position and is centered by
+   SettingsPage, so long labels never leave the current location ambiguous. */
+@media (max-width: 900px) {
   .settings-jump {
-    gap: 6px !important;
-    align-items: center;
-    padding-block: 8px !important;
+    position: sticky !important;
+    top: 70px !important;
+    z-index: 30 !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 4px !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: -2px -24px 18px !important;
+    padding: 8px 24px !important;
     overflow-x: auto !important;
+    overflow-y: hidden !important;
     overscroll-behavior-inline: contain;
     scroll-snap-type: x proximity;
+    scroll-padding-inline: 24px;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+    background: color-mix(in srgb, var(--bg-canvas) 94%, transparent) !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    box-shadow: 0 4px 14px rgba(16, 24, 40, .025);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
   }
 
   .settings-jump::-webkit-scrollbar {
     display: none;
+  }
+
+  .settings-jump-label {
+    display: none !important;
   }
 
   .settings-jump-item {
@@ -107,37 +126,65 @@
     min-height: 38px !important;
     padding: 0 12px !important;
     gap: 7px !important;
+    border: 1px solid transparent !important;
     border-radius: var(--radius-full) !important;
-    scroll-snap-align: start;
+    background: transparent !important;
+    color: var(--text-secondary) !important;
+    scroll-snap-align: center;
     font-size: 12px !important;
+    font-weight: 650 !important;
     white-space: nowrap;
+  }
+
+  .settings-jump-item:hover {
+    background: var(--bg-surface-hover) !important;
+    color: var(--text-primary) !important;
+  }
+
+  .settings-jump-item[aria-current='true'] {
+    background: var(--bg-surface) !important;
+    border-color: var(--border-default) !important;
+    color: var(--accent-base) !important;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, .06);
   }
 
   .settings-jump-item svg {
     display: block !important;
-    width: 15px;
-    height: 15px;
+    width: 15px !important;
+    height: 15px !important;
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 680px) {
   .settings-jump {
+    top: 54px !important;
     margin-inline: -16px !important;
-    padding-inline: 16px !important;
+    padding: 7px 16px !important;
+    scroll-padding-inline: 16px;
   }
 
   .settings-jump-item {
-    min-height: 40px !important;
-    padding-inline: 12px !important;
+    min-height: 38px !important;
+    padding-inline: 11px !important;
     font-size: 11.5px !important;
-  }
-
-  .settings-jump-item[aria-current='true'] {
-    box-shadow: inset 0 0 0 1px var(--accent-base);
   }
 
   .settings-section {
     padding: 20px 0 !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .settings-jump {
+    gap: 2px !important;
+  }
+
+  .settings-jump-item {
+    padding-inline: 10px !important;
+  }
+
+  .settings-jump-item svg {
+    display: none !important;
   }
 }
 
