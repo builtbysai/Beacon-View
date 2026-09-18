@@ -44,7 +44,7 @@ export function PublicHeader({ links = [], action, sticky = false, alignContaine
 
   return (
     <>
-      <header className={`public-header ${sticky ? 'sticky' : ''} align-${alignContainer}`}>
+      <header className={`public-header ${sticky ? 'sticky' : ''} align-${alignContainer} ${links.length > 0 ? 'has-links' : 'no-links'}`}>
         <div className="ph-wrap">
           <a className="ph-brand" href="/" aria-label="Beacon home">
             <Brand compact />
