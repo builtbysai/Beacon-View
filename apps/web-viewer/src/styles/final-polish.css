@@ -181,7 +181,7 @@
   height: 100dvh !important;
   padding: clamp(14px, 3vw, 28px) !important;
   box-sizing: border-box;
-  overflow: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
 }
 
@@ -216,8 +216,8 @@
 }
 
 @keyframes beacon-modal-panel-in {
-  from { opacity: 0; transform: translateY(6px) scale(.985); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (max-width: 620px) {
