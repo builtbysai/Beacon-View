@@ -29,7 +29,7 @@ function renderNotificationSettings() {
 
 describe('NotificationSettings', () => {
   beforeEach(() => {
-    vi.mocked(request).mockResolvedValue({
+    vi.mocked(request).mockReset().mockResolvedValue({
       preferences: [
         {
           deviceId: '8dc18bea-7a3b-48ad-b48a-48d00f975f54',
@@ -175,5 +175,21 @@ describe('NotificationSettings', () => {
         `Time zone: ${savedQuietHours!.timeZone.replace(/_/g, ' ')}`,
       ),
     ).toBeVisible();
+  });
+
+  it('shows a retryable error instead of an empty-camera message when preferences fail to load', async () => {
+    vi.mocked(request)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ preferences: [] });
+    renderNotificationSettings();
+    expect(
+      await screen.findByText('Notification settings could not be loaded.', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    expect(screen.queryByText(/Pair a camera/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText(/Pair a camera/)).toBeVisible();
+    expect(request).toHaveBeenCalledTimes(2);
   });
 });

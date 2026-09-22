@@ -78,3 +78,6 @@ or health changes. Route and job tests cover these triggers; the full backend
 suite passes 210 tests. The Activity UI consumes the structured events and
 refreshes for management, pairing, credential, and membership broadcasts. The
 full web suite passes 173 tests; its typecheck and production build pass.
+Notification preference load failures now render a retryable error instead of
+the misleading empty-camera state. The full web suite passes 174 tests after
+this fix.

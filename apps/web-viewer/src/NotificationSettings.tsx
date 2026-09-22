@@ -58,12 +58,22 @@ export function NotificationSettings() {
   const [enabled, setEnabled] = useState(false);
   const [channelBusy, setChannelBusy] = useState(false);
   const [channelError, setChannelError] = useState('');
+  const [preferencesError, setPreferencesError] = useState(false);
   const [visible, setVisible] = useState(REVEAL_INITIAL);
 
-  useEffect(() => {
+  function loadPreferences() {
+    setPreferencesError(false);
+    setPreferences(null);
     void request<{ preferences: Preference[] }>('/api/notification-preferences')
       .then((result) => setPreferences(result.preferences))
-      .catch(() => setPreferences([]));
+      .catch(() => {
+        setPreferencesError(true);
+        setPreferences([]);
+      });
+  }
+
+  useEffect(() => {
+    loadPreferences();
     if ('serviceWorker' in navigator) {
       void navigator.serviceWorker
         .getRegistration('/')
@@ -179,6 +189,17 @@ export function NotificationSettings() {
 
   const visiblePreferences = preferences.slice(0, visible);
   const remaining = preferences.length - visiblePreferences.length;
+
+  if (preferencesError) {
+    return (
+      <p role="alert" className="settings-card-inline-message">
+        Notification settings could not be loaded.{' '}
+        <button type="button" className="secondary" onClick={loadPreferences}>
+          Retry
+        </button>
+      </p>
+    );
+  }
 
   return (
     <div className="notification-settings">
