@@ -66,6 +66,7 @@ describe.skipIf(!store)('notification transport persistence', () => {
     });
     await store!.updateNotificationPreference({
       userId: owner.id,
+      householdId: owner.householdId,
       publicDeviceId: device.publicDeviceId,
       motionEnabled: true,
       offlineEnabled: false,
@@ -106,7 +107,10 @@ describe.skipIf(!store)('notification transport persistence', () => {
   it('defaults a newly paired device to motion and offline notifications on, before the owner ever visits Settings', async () => {
     const { device, owner } = await fixture();
 
-    const preferences = await store!.listNotificationPreferences(owner.id);
+    const preferences = await store!.listNotificationPreferences(
+      owner.id,
+      owner.householdId,
+    );
 
     expect(preferences).toEqual([
       expect.objectContaining({
@@ -135,13 +139,15 @@ describe.skipIf(!store)('notification transport persistence', () => {
     };
     await store!.updateNotificationPreference({
       userId: owner.id,
+      householdId: owner.householdId,
       publicDeviceId: device.publicDeviceId,
       motionEnabled: true,
       offlineEnabled: false,
       quietHours,
     });
     expect(
-      (await store!.listNotificationPreferences(owner.id))[0]?.quietHours,
+      (await store!.listNotificationPreferences(owner.id, owner.householdId))[0]
+        ?.quietHours,
     ).toEqual(quietHours);
 
     await store!.createMotionEvent({
@@ -181,6 +187,7 @@ describe.skipIf(!store)('notification transport persistence', () => {
     });
     await store!.updateNotificationPreference({
       userId: owner.id,
+      householdId: owner.householdId,
       publicDeviceId: device.publicDeviceId,
       motionEnabled: true,
       offlineEnabled: false,
@@ -229,6 +236,7 @@ describe.skipIf(!store)('notification transport persistence', () => {
     });
     await store!.updateNotificationPreference({
       userId: owner.id,
+      householdId: owner.householdId,
       publicDeviceId: device.publicDeviceId,
       motionEnabled: false,
       offlineEnabled: true,
@@ -363,6 +371,92 @@ describe.skipIf(!store)('notification transport persistence', () => {
       [owner.id],
     );
     expect(rows.rows).toEqual([{ category: 'security', outboxCount: 1 }]);
+  });
+
+  it('persists an administrator preference for the active household and delivers that user motion alerts', async () => {
+    const { device, now, owner } = await fixture();
+    const admin = await store!.createAccount(
+      'notifications-admin@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.2',
+    );
+    await store!.pool.query(
+      `INSERT INTO household_members (household_id, user_id, role)
+       VALUES ($1, $2, 'admin')`,
+      [owner.householdId, admin.id],
+    );
+    await store!.createSession({
+      absoluteExpiresAt: new Date(now.getTime() + 86_400_000),
+      csrfHash: hashSecret('notification-admin-csrf'),
+      idleExpiresAt: new Date(now.getTime() + 86_400_000),
+      tokenHash: hashSecret('notification-admin-session'),
+      userId: admin.id,
+    });
+    const session = await store!.pool.query<{ id: string }>(
+      'SELECT id FROM browser_sessions WHERE user_id=$1',
+      [admin.id],
+    );
+    await store!.upsertNotificationSubscription({
+      channel: 'web_push',
+      consentedAt: now,
+      deviceLabel: 'Admin browser',
+      installationId: randomUUID(),
+      providerMaterial: JSON.stringify({
+        endpoint: 'https://push.example/admin',
+      }),
+      sessionId: session.rows[0]!.id,
+      userId: admin.id,
+    });
+    expect(
+      await store!.listNotificationPreferences(admin.id, owner.householdId),
+    ).toEqual([
+      expect.objectContaining({
+        deviceId: device.publicDeviceId,
+        motionEnabled: false,
+      }),
+    ]);
+    await store!.updateNotificationPreference({
+      userId: admin.id,
+      householdId: owner.householdId,
+      publicDeviceId: device.publicDeviceId,
+      motionEnabled: true,
+      offlineEnabled: false,
+      quietHours: null,
+    });
+    await store!.createMotionEvent({
+      credentialHash: hashSecret('notification-device-credential'),
+      publicCameraId: device.publicCameraId,
+      confidence: 0.8,
+      now,
+    });
+    const deliveredFor = await store!.pool.query<{ userId: string }>(
+      `SELECT DISTINCT ne.user_id AS "userId"
+       FROM notification_events ne JOIN notification_outbox no ON no.event_id=ne.id`,
+    );
+    expect(deliveredFor.rows).toEqual([{ userId: admin.id }]);
+
+    await store!.pool.query(
+      `INSERT INTO notification_presence_state (user_id, device_id)
+       VALUES ($1,$3),($2,$3)`,
+      [owner.id, admin.id, device.id],
+    );
+    await store!.updateNotificationPreference({
+      userId: admin.id,
+      householdId: owner.householdId,
+      publicDeviceId: device.publicDeviceId,
+      motionEnabled: true,
+      offlineEnabled: false,
+      quietHours: null,
+    });
+    expect(
+      (
+        await store!.pool.query<{ userId: string }>(
+          `SELECT user_id AS "userId" FROM notification_presence_state
+           WHERE device_id=$1 ORDER BY user_id`,
+          [device.id],
+        )
+      ).rows,
+    ).toEqual([{ userId: owner.id }]);
   });
 
   it('records a security event that reaches no subscriber without error', async () => {

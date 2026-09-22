@@ -67,7 +67,13 @@ delivery check: preferences persist with their IANA time zone, motion remains
 recorded during the quiet window, and alert creation resumes outside it. The
 full web suite passes 172 tests and the full backend suite passes 205 tests
 against the dedicated test database. Admin notification policy and realtime
-configuration invalidation remain open.
+configuration invalidation were open at that checkpoint. ADR 0055 now defines
+notification preferences as personal owner/admin settings scoped to the active
+household. Migration 0026 makes delivery and presence state multi-user; an
+administrator persistence/delivery integration test passes. A clean temporary
+database applied all 27 migrations and contained both the motion-recording and
+multi-user notification schema. Viewer/guest notifications remain intentionally
+outside this manager-only contract.
 The backend now records offline/recovered device activity from a presence
 sweep and heartbeat recovery. A PostgreSQL advisory transaction lock prevents
 concurrent workers from duplicating those transitions; the dedicated database

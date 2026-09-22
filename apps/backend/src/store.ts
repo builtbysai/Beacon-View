@@ -288,12 +288,14 @@ export class PostgresStore implements MilestoneStore {
 
   async listNotificationPreferences(
     userId: string,
+    householdId: string,
   ): Promise<NotificationPreferenceRecord[]> {
-    return this.notifications.listPreferences(userId);
+    return this.notifications.listPreferences(userId, householdId);
   }
 
   async updateNotificationPreference(input: {
     userId: string;
+    householdId: string;
     publicDeviceId: string;
     motionEnabled: boolean;
     offlineEnabled: boolean;

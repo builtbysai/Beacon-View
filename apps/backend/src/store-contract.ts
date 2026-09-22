@@ -410,9 +410,11 @@ export interface MilestoneStore {
   ): Promise<boolean>;
   listNotificationPreferences(
     userId: string,
+    householdId: string,
   ): Promise<NotificationPreferenceRecord[]>;
   updateNotificationPreference(input: {
     userId: string;
+    householdId: string;
     publicDeviceId: string;
     motionEnabled: boolean;
     offlineEnabled: boolean;
