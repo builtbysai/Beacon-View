@@ -1,11 +1,11 @@
 import type { Pool, PoolClient } from 'pg';
+import { HOUSEHOLD_ACTIVITY_EVENT_TYPES } from './store-contract.js';
 import type {
   AccessHistoryOptions,
   AccessHistoryPage,
   AuditInput,
   HouseholdActivityOptions,
   HouseholdActivityPage,
-  HOUSEHOLD_ACTIVITY_EVENT_TYPES,
 } from './store-contract.js';
 
 const ACCESS_HISTORY_EVENT_TYPES = [
@@ -64,8 +64,9 @@ export class PostgresAuditRepository {
   ): Promise<HouseholdActivityPage> {
     const limit = Math.min(Math.max(1, options.limit ?? 20), 50);
     const offset = Math.max(0, options.offset ?? 0);
-    const requestedTypes =
-      options.eventTypes?.length ? options.eventTypes : HOUSEHOLD_ACTIVITY_EVENT_TYPES;
+    const requestedTypes = options.eventTypes?.length
+      ? options.eventTypes
+      : HOUSEHOLD_ACTIVITY_EVENT_TYPES;
     const [rows, count] = await Promise.all([
       this.pool.query<HouseholdActivityPage['events'][number]>(
         `SELECT ae.id, u.email AS "actorEmail",

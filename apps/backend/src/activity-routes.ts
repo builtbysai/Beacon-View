@@ -85,7 +85,6 @@ export function registerActivityRoutes(
     };
   });
 
-
   app.get('/api/activity', async (request, reply) => {
     const session = await auth.authenticate(request, reply);
     if (!session) return;
