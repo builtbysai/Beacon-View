@@ -20,13 +20,12 @@ export function registerServiceRoutes(
     timestamp: new Date().toISOString(),
   }));
 
-
   app.get('/api/capabilities', () => ({
     auth: {
       google: Boolean(
         config.GOOGLE_OAUTH_CLIENT_ID &&
-          config.GOOGLE_OAUTH_CLIENT_SECRET &&
-          config.GOOGLE_OAUTH_REDIRECT_URI,
+        config.GOOGLE_OAUTH_CLIENT_SECRET &&
+        config.GOOGLE_OAUTH_REDIRECT_URI,
       ),
     },
     contact: Boolean(
@@ -34,31 +33,31 @@ export function registerServiceRoutes(
     ),
     googleDrive: Boolean(
       config.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY &&
-        config.GOOGLE_OAUTH_CLIENT_ID &&
-        config.GOOGLE_OAUTH_CLIENT_SECRET &&
-        config.GOOGLE_OAUTH_REDIRECT_URI,
+      config.GOOGLE_OAUTH_CLIENT_ID &&
+      config.GOOGLE_OAUTH_CLIENT_SECRET &&
+      config.GOOGLE_OAUTH_REDIRECT_URI,
     ),
     notifications: {
       firebase: Boolean(
         config.NOTIFICATION_ENCRYPTION_KEY &&
-          config.NOTIFICATION_FINGERPRINT_KEY &&
-          config.FIREBASE_PROJECT_ID &&
-          config.GOOGLE_APPLICATION_CREDENTIALS,
+        config.NOTIFICATION_FINGERPRINT_KEY &&
+        config.FIREBASE_PROJECT_ID &&
+        config.GOOGLE_APPLICATION_CREDENTIALS,
       ),
       webPush: Boolean(
         config.NOTIFICATION_ENCRYPTION_KEY &&
-          config.NOTIFICATION_FINGERPRINT_KEY &&
-          config.WEB_PUSH_VAPID_PUBLIC_KEY &&
-          config.WEB_PUSH_VAPID_PRIVATE_KEY &&
-          config.WEB_PUSH_VAPID_SUBJECT,
+        config.NOTIFICATION_FINGERPRINT_KEY &&
+        config.WEB_PUSH_VAPID_PUBLIC_KEY &&
+        config.WEB_PUSH_VAPID_PRIVATE_KEY &&
+        config.WEB_PUSH_VAPID_SUBJECT,
       ),
     },
     realtime: true,
     recordings: Boolean(
       config.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY &&
-        config.GOOGLE_OAUTH_CLIENT_ID &&
-        config.GOOGLE_OAUTH_CLIENT_SECRET &&
-        config.GOOGLE_OAUTH_REDIRECT_URI,
+      config.GOOGLE_OAUTH_CLIENT_ID &&
+      config.GOOGLE_OAUTH_CLIENT_SECRET &&
+      config.GOOGLE_OAUTH_REDIRECT_URI,
     ),
   }));
 
