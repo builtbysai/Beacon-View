@@ -143,14 +143,13 @@ export class PostgresDeviceRepository {
       const rearSource = sources.find((source) => source.facing === 'rear');
       if (rearSource) {
         await client.query(
-          `UPDATE camera_sources SET source_key = $2,
-                  display_name = $3, updated_at = $4
+          `UPDATE camera_sources SET source_key = $2, updated_at = $3
            WHERE device_id = $1 AND source_key = 'legacy-default'
              AND NOT EXISTS (
                SELECT 1 FROM camera_sources
                WHERE device_id = $1 AND source_key = $2
              )`,
-          [deviceId, rearSource.sourceKey, rearSource.name, now],
+          [deviceId, rearSource.sourceKey, now],
         );
       }
       for (const source of sources) {

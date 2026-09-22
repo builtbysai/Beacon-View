@@ -46,6 +46,9 @@ and supplies an `android:default` fallback if no recognized source remains.
 Therefore an omitted key does not reliably mean the source was removed. Android
 supplies generic hardware names, while web users can rename sources. Preserve
 user display names and only treat facing/capabilities as device-owned data.
+ADR 0054 records the resulting contract: `0cd4631` and its dependent source
+removal commits are withheld; the existing positive-observation sync remains.
+The one-time legacy source migration now preserves a user rename.
 
 Progress on this branch: Diagnostics now has a retryable error state; the
 owner/admin activity API reads `audit_events`; the capability endpoint reports
