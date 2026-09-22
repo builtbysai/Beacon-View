@@ -24,10 +24,27 @@ export function Diagnostics() {
   const [diagnostics, setDiagnostics] = useState<DiagnosticSnapshot | null>(
     null,
   );
+  const [error, setError] = useState(false);
+  const [requestRevision, setRequestRevision] = useState(0);
 
   useEffect(() => {
-    void request<DiagnosticSnapshot>('/api/diagnostics').then(setDiagnostics);
-  }, []);
+    let active = true;
+    void request<DiagnosticSnapshot>('/api/diagnostics')
+      .then((result) => {
+        if (active) setDiagnostics(result);
+      })
+      .catch(() => {
+        if (active) setError(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [requestRevision]);
+
+  function retry() {
+    setError(false);
+    setRequestRevision((revision) => revision + 1);
+  }
 
   return (
     <div className="view-body">
@@ -37,7 +54,14 @@ export function Diagnostics() {
           <p>System and device status for debugging.</p>
         </header>
 
-        {!diagnostics ? (
+        {error ? (
+          <p role="alert">
+            Diagnostics could not be loaded.{' '}
+            <button type="button" className="secondary" onClick={retry}>
+              Retry
+            </button>
+          </p>
+        ) : !diagnostics ? (
           <p>Loading sanitized connection diagnostics...</p>
         ) : (
           <>
@@ -82,7 +106,10 @@ export function Diagnostics() {
 
         <div className="diagnostics-notice">
           <Icon name="shield" />
-          <p>Diagnostics use public identifiers and never include credentials, SDP, raw ICE candidates, or household IDs.</p>
+          <p>
+            Diagnostics use public identifiers and never include credentials,
+            SDP, raw ICE candidates, or household IDs.
+          </p>
         </div>
       </div>
     </div>
