@@ -47,7 +47,7 @@ export TEST_DATABASE_URL='postgresql://beacon_local:local-development-only@127.0
 DATABASE_URL="$TEST_DATABASE_URL" pnpm --filter @beacon/backend db:migrate
 ```
 
-Create the test DB only once. The repository has migrations but no general seed command; register a disposable account through the app. Windows local data includes ten user rows, zero recordings, zero Drive connections and zero push subscriptions. It is not required to bootstrap Omarchy; do not move an opaque DB dump by default. If any records prove irreplaceable, make an encrypted `pg_dump` only after owner review and keep it out of Git and the ordinary ZIP.
+Create the test DB only once. The repository has migrations but no general seed command; register a disposable account through the app. Windows local data includes 10 users, 6 households, 25 cameras, 100 motion events, and 210 audit events; it has zero recordings, zero Drive connections, and zero push subscriptions. The owner must decide whether the local records are valuable before disposing of the Docker volume. It is not required to bootstrap Omarchy; do not move an opaque DB dump by default. If any records prove irreplaceable, make an encrypted `pg_dump` only after owner review and keep it out of Git and the ordinary ZIP.
 
 ## Run and validate
 
