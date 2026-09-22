@@ -292,7 +292,7 @@ describe.skipIf(!store)('notification transport persistence', () => {
         new Date(now.getTime() + 119_999),
         120_000,
       ),
-    ).toBe(0);
+    ).toEqual([]);
     const offlineAt = new Date(now.getTime() + 120_001);
     expect(
       (
@@ -300,8 +300,8 @@ describe.skipIf(!store)('notification transport persistence', () => {
           store!.scanDevicePresenceActivity(offlineAt, 120_000),
           store!.scanDevicePresenceActivity(offlineAt, 120_000),
         ])
-      ).reduce((total, created) => total + created, 0),
-    ).toBe(1);
+      ).flat(),
+    ).toEqual([owner.householdId]);
     const recovery = {
       cameraId: device.id,
       householdId: owner.householdId,
@@ -325,7 +325,7 @@ describe.skipIf(!store)('notification transport persistence', () => {
         new Date(now.getTime() + 240_004),
         120_000,
       ),
-    ).toBe(1);
+    ).toEqual([owner.householdId]);
     expect(
       (
         await store!.listHouseholdActivity(owner.householdId, {

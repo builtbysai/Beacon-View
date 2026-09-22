@@ -115,8 +115,8 @@ export function registerHouseholdEvents(
   app: FastifyInstance,
   config: AppConfig,
   store: MilestoneStore,
+  hub = new HouseholdEventHub(),
 ): HouseholdEventHub {
-  const hub = new HouseholdEventHub();
   void app.register((eventApp) => {
     eventApp.addHook('onClose', () => hub.close());
     eventApp.get(

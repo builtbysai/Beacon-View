@@ -6,6 +6,7 @@ import type {
   CameraRecord,
   CameraSourceInput,
   DeviceRecord,
+  DeviceHeartbeatIdentity,
 } from './store-contract.js';
 
 export class PostgresDeviceRepository {
@@ -428,12 +429,15 @@ export class PostgresDeviceRepository {
 
   async findByCredential(
     credentialHash: string,
-  ): Promise<CameraIdentity | null> {
-    const result = await this.pool.query<CameraIdentity>(
+  ): Promise<DeviceHeartbeatIdentity | null> {
+    const result = await this.pool.query<DeviceHeartbeatIdentity>(
       `SELECT cs.id AS "cameraId", d.id AS "deviceId",
               d.household_id AS "householdId",
               cs.public_camera_id AS "publicCameraId",
-              d.public_device_id AS "publicDeviceId"
+              d.public_device_id AS "publicDeviceId",
+              d.last_seen_at AS "lastSeenAt",
+              d.battery_percent AS "batteryPercent",
+              d.battery_charging AS "batteryCharging"
        FROM cameras d
        JOIN device_credentials dc ON dc.camera_id = d.id
        JOIN LATERAL (

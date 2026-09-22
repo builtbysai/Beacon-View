@@ -70,6 +70,7 @@ The backend now records offline/recovered device activity from a presence
 sweep and heartbeat recovery. A PostgreSQL advisory transaction lock prevents
 concurrent workers from duplicating those transitions; the dedicated database
 test covers concurrent sweeps and recoveries. The full backend suite passes
-206 tests. The presence sweep does not yet publish household realtime
-invalidation, while heartbeat still publishes on every report; targeted
-transition broadcasts remain open.
+206 tests at that checkpoint. The presence sweep now publishes a single
+refresh per affected household, and heartbeat only publishes on stale-to-online
+or health changes. Route and job tests cover these triggers; the full backend
+suite passes 210 tests. Activity UI consumption of these events remains open.

@@ -12,7 +12,10 @@ import { registerDriveRoutes } from './drive-routes.js';
 import { registerEnrollmentRoutes } from './enrollment-routes.js';
 import { registerGuestRoutes } from './guest-routes.js';
 import { RateLimiter } from './rate-limit.js';
-import { registerHouseholdEvents } from './household-events.js';
+import {
+  HouseholdEventHub,
+  registerHouseholdEvents,
+} from './household-events.js';
 import { createSessionAuth } from './session-auth.js';
 import { registerSignaling } from './signaling-route.js';
 import { registerServiceRoutes } from './service-routes.js';
@@ -41,6 +44,7 @@ export function createPostgresStore(config: AppConfig): PostgresStore {
 export function buildApp(
   config: AppConfig,
   suppliedStore?: MilestoneStore,
+  suppliedHouseholdEvents?: HouseholdEventHub,
 ): FastifyInstance {
   const app = Fastify({
     logger: {
@@ -67,7 +71,12 @@ export function buildApp(
 
   void app.register(cookie);
   void app.register(websocket, { options: { maxPayload: 1_100_000 } });
-  const householdEvents = registerHouseholdEvents(app, config, store);
+  const householdEvents = registerHouseholdEvents(
+    app,
+    config,
+    store,
+    suppliedHouseholdEvents,
+  );
   const signaling = registerSignaling(app, config, store, householdEvents);
   app.addHook('onClose', async () => store.close());
   app.addHook('onClose', () => limiter.close());

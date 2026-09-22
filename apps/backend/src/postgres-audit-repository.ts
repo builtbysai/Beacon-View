@@ -81,9 +81,9 @@ export class PostgresAuditRepository {
   async scanDevicePresenceActivity(
     now: Date,
     offlineAfterMs: number,
-  ): Promise<number> {
+  ): Promise<string[]> {
     return this.withPresenceLock(async (client) => {
-      const result = await client.query(
+      const result = await client.query<{ householdId: string }>(
         `INSERT INTO audit_events
        (household_id, camera_id, event_type, success, metadata, occurred_at)
        SELECT d.household_id, d.id, 'device_offline', true,
@@ -101,10 +101,11 @@ export class PostgresAuditRepository {
            SELECT 1 FROM audit_events ae
            WHERE ae.camera_id = d.id AND ae.event_type = 'device_offline'
              AND ae.occurred_at > d.last_seen_at
-         )`,
+         )
+       RETURNING household_id AS "householdId"`,
         [now, offlineAfterMs],
       );
-      return result.rowCount ?? 0;
+      return [...new Set(result.rows.map((row) => row.householdId))];
     });
   }
 

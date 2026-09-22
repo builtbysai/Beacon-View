@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
+import { isCameraOnline } from './camera-presentation.js';
 import type { HouseholdEventHub } from './household-events.js';
 import {
   cameraParameterSchema,
@@ -79,6 +80,11 @@ export function registerDeviceRuntimeRoutes(
     const identity = await store.findDeviceByCredential(credentialHash);
     if (!identity) return unauthorized(reply);
     const now = new Date();
+    const presenceChanged = !isCameraOnline(identity.lastSeenAt, now);
+    const healthChanged =
+      health.data.batteryPercent !== undefined &&
+      (health.data.batteryPercent !== identity.batteryPercent ||
+        health.data.batteryCharging !== identity.batteryCharging);
     const cameraId = await store.heartbeat(
       credentialHash,
       now,
@@ -96,10 +102,12 @@ export function registerDeviceRuntimeRoutes(
       publicDeviceId: identity.publicDeviceId,
       now,
     });
-    householdEvents.publish(identity.householdId, {
-      cameraId: identity.publicCameraId,
-      type: 'camera-presence-changed',
-    });
+    if (presenceChanged || healthChanged) {
+      householdEvents.publish(identity.householdId, {
+        cameraId: identity.publicCameraId,
+        type: 'camera-presence-changed',
+      });
+    }
     if (recovered) {
       householdEvents.publish(identity.householdId, {
         type: 'device-management-changed',

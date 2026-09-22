@@ -39,6 +39,7 @@ import {
   type CameraRecord,
   type CameraSourceInput,
   type DeviceRecord,
+  type DeviceHeartbeatIdentity,
   type MilestoneStore,
   type MotionEventOptions,
   type MotionEventRecord,
@@ -648,7 +649,7 @@ export class PostgresStore implements MilestoneStore {
   async scanDevicePresenceActivity(
     now: Date,
     offlineAfterMs: number,
-  ): Promise<number> {
+  ): Promise<string[]> {
     return this.auditRepository.scanDevicePresenceActivity(now, offlineAfterMs);
   }
 
@@ -858,7 +859,7 @@ export class PostgresStore implements MilestoneStore {
 
   async findDeviceByCredential(
     credentialHash: string,
-  ): Promise<CameraIdentity | null> {
+  ): Promise<DeviceHeartbeatIdentity | null> {
     return this.devices.findByCredential(credentialHash);
   }
 

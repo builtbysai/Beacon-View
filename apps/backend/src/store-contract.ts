@@ -146,6 +146,12 @@ export interface CameraIdentity {
   publicDeviceId: string;
 }
 
+export interface DeviceHeartbeatIdentity extends CameraIdentity {
+  lastSeenAt: Date | null;
+  batteryPercent: number | null;
+  batteryCharging: boolean | null;
+}
+
 export interface CameraAccess extends CameraIdentity {
   canListen: boolean;
   canTalk: boolean;
@@ -603,7 +609,7 @@ export interface MilestoneStore {
   scanDevicePresenceActivity(
     now: Date,
     offlineAfterMs: number,
-  ): Promise<number>;
+  ): Promise<string[]>;
   recordDeviceRecoveredIfOffline(input: {
     cameraId: string;
     householdId: string;
@@ -723,7 +729,7 @@ export interface MilestoneStore {
   deleteCamera(householdId: string, publicCameraId: string): Promise<boolean>;
   findDeviceByCredential(
     credentialHash: string,
-  ): Promise<CameraIdentity | null>;
+  ): Promise<DeviceHeartbeatIdentity | null>;
   findCameraForDeviceCredential(
     credentialHash: string,
     publicCameraId: string,
