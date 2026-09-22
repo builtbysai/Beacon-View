@@ -1,0 +1,810 @@
+/* Scoped forward-only refinements for the recovered Beacon UI. */
+
+/* Shared shell geometry that was lost during the CSS split. */
+.app-shell {
+  display: flex;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  background: var(--bg-canvas);
+  overflow: hidden;
+}
+.main-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg-canvas);
+}
+.app-topbar {
+  height: 70px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--bg-canvas) 94%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.page-content-inner {
+  width: 100%;
+  min-width: 0;
+  margin-inline: auto;
+  padding-inline: clamp(20px, 3vw, 44px);
+  box-sizing: border-box;
+}
+.page-content-inner.workspace-wide {
+  max-width: 1760px;
+}
+.page-content-inner.workspace-medium {
+  max-width: 1180px;
+}
+.page-content-inner:not(.workspace-wide):not(.workspace-medium) {
+  max-width: 1440px;
+}
+.page-header-row {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.app-topbar-left,
+.app-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.app-topbar-actions {
+  margin-left: auto;
+}
+.app-topbar-title {
+  min-width: 0;
+}
+.page-title {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.mobile-brand-header {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  font-weight: 750;
+}
+.mobile-brand-header .mark {
+  display: grid;
+  place-items: center;
+  color: var(--accent-base);
+}
+.page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 0 24px;
+}
+.page-heading-inner {
+  min-width: 0;
+}
+.page-heading-inner p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 680px;
+}
+
+/* Home: cards scale down before the rail drops. */
+.home-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 330px);
+  gap: clamp(18px, 2.5vw, 34px);
+  align-items: start;
+}
+.home-section,
+.home-sidecol {
+  min-width: 0;
+}
+.home-sidecol {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.home-section-top,
+.sidehead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.home-section-top h3,
+.sidehead h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.textbtn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 7px;
+}
+.textbtn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+.favorites-grid {
+  display: grid !important;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(clamp(190px, 18vw, 245px), 1fr)
+  ) !important;
+  gap: clamp(10px, 1.2vw, 16px) !important;
+  align-items: start;
+}
+.favorite-card-body {
+  padding: 10px 12px 12px;
+}
+.favorite-card-frame {
+  aspect-ratio: 16/9;
+}
+@media (max-width: 980px) {
+  .home-layout {
+    grid-template-columns: 1fr;
+  }
+  .home-sidecol {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .favorites-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 760px) {
+  .favorites-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 680px) {
+  .app-topbar {
+    height: 54px;
+  }
+  .page-content-inner {
+    padding-inline: 16px;
+  }
+  .app-topbar-title {
+    display: none;
+  }
+  .mobile-brand-header {
+    display: flex;
+  }
+  .home-sidecol {
+    display: flex;
+  }
+  .page-heading {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+@media (max-width: 430px) {
+  .favorites-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Settings V7: continuous page, compact cards and clear section hierarchy. */
+.settings-shell {
+  grid-template-columns: 180px minmax(0, 850px);
+  gap: clamp(30px, 4vw, 48px);
+  justify-content: center;
+  width: 100%;
+  align-items: start;
+}
+.settings-jump {
+  top: 94px;
+  gap: 2px;
+}
+.settings-jump-label {
+  padding: 0 10px 7px;
+  color: var(--text-muted);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+.settings-jump-item {
+  min-height: 38px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.settings-jump-item[aria-current='true'] {
+  background: var(--accent-subtle);
+  color: var(--accent-base);
+  box-shadow: none;
+}
+.settings-sections {
+  gap: 0;
+}
+.settings-section {
+  padding: 0 0 30px;
+  margin: 0 0 30px;
+  border-bottom: 1px solid var(--border-subtle);
+  scroll-margin-top: 98px;
+}
+.settings-section:last-child {
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+.settings-section-head {
+  margin: 0 0 12px;
+}
+.settings-section-head h2 {
+  font-size: 20px;
+  letter-spacing: -0.025em;
+  margin: 0 0 3px;
+  color: var(--text-primary);
+}
+.settings-section-head p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.settings-section > h2 {
+  display: none;
+}
+.settings-section .settings-card {
+  border-radius: 14px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.025);
+}
+.settings-section .settings-row {
+  min-height: 62px;
+  padding-block: 12px;
+}
+.settings-section .settings-row-identity strong {
+  font-size: 13px;
+}
+.settings-section .settings-row-identity p {
+  font-size: 11px;
+  line-height: 1.45;
+}
+.settings-subsection {
+  margin-top: 18px;
+}
+.settings-subsection h3,
+.settings-account-methods h3 {
+  font-size: 12px;
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+}
+.settings-autosave {
+  border: 0;
+  padding: 10px;
+  margin-top: 8px;
+  min-height: 34px;
+}
+.retention-choices {
+  gap: 7px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.retention-choices button {
+  min-height: 38px;
+  border-radius: 9px;
+}
+.danger-zone {
+  margin-top: 18px;
+  padding-top: 8px;
+}
+
+/* Household summary lifted from the refined mockup, using only real data. */
+.household-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.025);
+}
+.household-card-hero {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.household-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--accent-subtle);
+  color: var(--accent-base);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  flex: 0 0 42px;
+}
+.household-card-copy {
+  min-width: 0;
+  flex: 1;
+}
+.household-card-copy > strong {
+  display: block;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.household-ownerline {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 3px;
+  min-width: 0;
+}
+.household-ownerline > span:last-child {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.household-switch {
+  margin-left: auto;
+}
+.household-switch select {
+  max-width: 220px;
+}
+.household-metrics {
+  padding: 0 14px 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.household-metric {
+  padding: 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-canvas) 75%, var(--bg-surface));
+  border: 1px solid var(--border-subtle);
+  min-width: 0;
+}
+.household-metric > span {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 8.5px;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+.household-metric > strong {
+  display: block;
+  font-size: 15px;
+  margin-top: 3px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.household-metric > small {
+  display: block;
+  margin-top: 1px;
+  font-size: 9.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* People & access: compact action strip and member cards. */
+.settings-section .people-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.settings-section .people-actions > button {
+  min-height: 42px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+.settings-section .member-list {
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+.settings-section .member-row {
+  min-height: 62px;
+  padding: 12px 14px;
+}
+.settings-section .member-row + .member-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Notifications/data/security inherit their real controls, just tighten rhythm. */
+.notification-settings > .settings-row:first-child {
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  padding-inline: 14px;
+  margin-bottom: 10px;
+  background: var(--bg-surface);
+}
+.notification-table {
+  border-radius: 12px !important;
+}
+.notification-reveal {
+  margin-top: 9px;
+}
+.settings-section .settings-subsection-heading {
+  margin-bottom: 8px;
+}
+.settings-section .session-row,
+.settings-section .access-event {
+  padding-block: 11px;
+}
+.settings-section .history-pagination {
+  margin-top: 10px;
+}
+
+/* Account and privacy are grouped as coherent cards instead of loose rows. */
+.settings-account-card > .settings-row:first-child {
+  padding-inline: 15px;
+}
+.settings-account-methods {
+  padding: 12px 15px 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+.settings-account-methods > .settings-card,
+.settings-account-methods > .settings-row {
+  margin-bottom: 8px;
+}
+.settings-danger-card {
+  border-color: color-mix(
+    in srgb,
+    var(--status-error) 22%,
+    var(--border-default)
+  ) !important;
+}
+.settings-danger-card .settings-row {
+  padding-inline: 15px;
+  background: color-mix(in srgb, var(--status-error) 3%, var(--bg-surface));
+}
+.privacy-settings-intro {
+  padding: 15px;
+}
+.privacy-settings-intro h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.privacy-settings-intro p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.privacy-settings-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.privacy-settings-facts > div {
+  padding: 13px;
+  min-width: 0;
+}
+.privacy-settings-facts > div + div {
+  border-left: 1px solid var(--border-subtle);
+}
+.privacy-settings-facts strong {
+  display: block;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+.privacy-settings-facts span {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.privacy-settings-card > .settings-row {
+  padding-inline: 15px;
+}
+
+/* Camera settings intentionally left as-is until the settings pass is approved. */
+.camera-settings-panel {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  padding-bottom: 32px;
+}
+.camera-settings-panel > .heading.device-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 18px;
+}
+.camera-settings-panel .eyebrow {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.camera-settings-panel .heading-with-rename {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.camera-settings-panel .heading-with-rename h3 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+.camera-settings-panel .rename-affordance {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.camera-settings-panel .rename-affordance:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+.camera-settings-panel .device-back-button {
+  order: -1;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  flex: 0 0 34px;
+}
+.camera-settings-panel .device-back-button span {
+  display: none;
+}
+.camera-settings-panel .device-health {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--border-default);
+  border-radius: 11px;
+  background: var(--bg-surface);
+  margin: 0 0 12px;
+  overflow: hidden;
+}
+.camera-settings-panel .device-health > div {
+  padding: 11px 13px;
+  min-width: 0;
+}
+.camera-settings-panel .device-health > div + div {
+  border-left: 1px solid var(--border-subtle);
+}
+.camera-settings-panel .device-health span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+.camera-settings-panel .device-health strong {
+  display: block;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.camera-settings-panel .device-controls,
+.camera-settings-panel .device-guidance,
+.camera-settings-panel .device-settings {
+  border: 1px solid var(--border-default);
+  border-radius: 11px;
+  background: var(--bg-surface);
+  margin: 10px 0;
+  padding: 12px 13px;
+}
+.camera-settings-panel .device-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.camera-settings-panel .device-controls h4 {
+  margin: 0 0 2px;
+  font-size: 12px;
+}
+.camera-settings-panel .device-controls p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.camera-settings-panel .device-guidance summary,
+.camera-settings-panel .device-settings summary {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+.camera-settings-panel .section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20px 0 8px;
+}
+.camera-settings-panel .section-heading h4 {
+  margin: 0;
+  font-size: 12px;
+}
+.camera-settings-panel .camera-tile-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(210px, 100%), 1fr));
+  gap: 10px;
+}
+.camera-settings-panel .camera-tile-frame {
+  aspect-ratio: 16/10;
+}
+.camera-settings-panel .camera-tile-footer {
+  padding: 9px 11px;
+}
+.camera-settings-panel .health-warning {
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 9px 0;
+  background: var(--status-warning-bg, var(--bg-surface-hover));
+  font-size: 10px;
+}
+.camera-settings-panel .device-settings-content {
+  padding-top: 10px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .settings-shell {
+    grid-template-columns: 1fr;
+    max-width: 850px;
+    margin: auto;
+    gap: 18px;
+  }
+  .settings-jump {
+    position: sticky;
+    top: 70px;
+    z-index: 20;
+    flex-direction: row;
+    overflow-x: auto;
+    background: var(--bg-canvas);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 10px 0;
+    margin: 0 0 20px;
+    scrollbar-width: none;
+  }
+  .settings-jump-label {
+    display: none;
+  }
+  .settings-jump-item {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    border: 1px solid var(--border-default);
+    border-radius: 999px;
+  }
+  .settings-jump-item[aria-current='true'] {
+    border-color: var(--accent-base);
+  }
+  .settings-autosave {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 9px 4px;
+    white-space: nowrap;
+  }
+  .settings-section {
+    scroll-margin-top: 132px;
+  }
+  .camera-settings-panel .device-health {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .camera-settings-panel .device-health > div:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .camera-settings-panel .device-health > div:nth-child(4) {
+    border-top: 1px solid var(--border-subtle);
+  }
+}
+@media (max-width: 680px) {
+  .settings-section {
+    padding-bottom: 24px;
+    margin-bottom: 24px;
+  }
+  .settings-jump {
+    top: 54px;
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+  .settings-jump-item svg {
+    display: none;
+  }
+  .settings-section .settings-row {
+    align-items: flex-start;
+  }
+  .household-card-hero {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .household-switch {
+    width: 100%;
+    margin-left: 54px;
+  }
+  .household-switch select {
+    width: 100%;
+    max-width: none;
+  }
+  .household-metrics {
+    grid-template-columns: 1fr;
+  }
+  .settings-section .people-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+  .retention-choices {
+    grid-template-columns: 1fr 1fr;
+  }
+  .privacy-settings-facts {
+    grid-template-columns: 1fr;
+  }
+  .privacy-settings-facts > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .camera-settings-panel > .heading.device-heading {
+    gap: 9px;
+  }
+  .camera-settings-panel .heading-with-rename h3 {
+    font-size: 20px;
+  }
+  .camera-settings-panel .device-health {
+    grid-template-columns: 1fr 1fr;
+  }
+  .camera-settings-panel .device-health > div {
+    padding: 10px;
+  }
+  .camera-settings-panel .device-controls {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .camera-settings-panel .device-controls > button {
+    width: 100%;
+  }
+}
+@media (max-width: 440px) {
+  .settings-section .people-actions {
+    grid-template-columns: 1fr;
+  }
+  .household-switch {
+    margin-left: 0;
+  }
+  .settings-jump-item {
+    padding-inline: 11px;
+  }
+  .settings-section-head h2 {
+    font-size: 19px;
+  }
+}

@@ -14,9 +14,7 @@ describe('history-nav', () => {
 
     const fallback = vi.fn();
     goBack(fallback);
-    await vi.waitFor(() =>
-      expect(window.location.pathname).toBe('/cameras'),
-    );
+    await vi.waitFor(() => expect(window.location.pathname).toBe('/cameras'));
     expect(fallback).not.toHaveBeenCalled();
   });
 

@@ -146,6 +146,12 @@ export interface CameraIdentity {
   publicDeviceId: string;
 }
 
+export interface DeviceHeartbeatIdentity extends CameraIdentity {
+  lastSeenAt: Date | null;
+  batteryPercent: number | null;
+  batteryCharging: boolean | null;
+}
+
 export interface CameraAccess extends CameraIdentity {
   canListen: boolean;
   canTalk: boolean;
@@ -216,6 +222,78 @@ export interface AccessHistoryRecord {
   success: boolean;
   viewerSessionId: string | null;
   metadata: Record<string, string>;
+}
+
+export interface AccessHistoryOptions {
+  limit?: number;
+  offset?: number;
+}
+
+export interface AccessHistoryPage {
+  events: AccessHistoryRecord[];
+  total: number;
+}
+
+export const HOUSEHOLD_ACTIVITY_EVENT_TYPES = [
+  'camera_source_deleted',
+  'camera_source_added',
+  'camera_source_updated',
+  'device_paired',
+  'device_reconnected',
+  'device_credential_revoked',
+  'device_deleted',
+  'device_self_removed',
+  'device_self_disconnected',
+  'device_updated',
+  'device_offline',
+  'device_recovered',
+  'camera_updated',
+  'household_invitation_created',
+  'household_invitation_resent',
+  'household_invitation_accepted',
+  'household_invitation_revoked',
+  'household_camera_grants_changed',
+  'household_member_revoked',
+  'household_member_removed',
+  'camera_access_left',
+  'recording_requested',
+  'recording_deleted',
+  'recording_available',
+  'recording_failed',
+  'live_view_started',
+  'live_view_rejected',
+  'privacy_disabled',
+  'privacy_enabled',
+  'motion_settings_changed',
+  'motion_history_cleared',
+  'motion_retention_changed',
+  'notification_preference_changed',
+  'notification_subscription_created',
+  'notification_subscription_revoked',
+] as const;
+
+export type HouseholdActivityEventType =
+  (typeof HOUSEHOLD_ACTIVITY_EVENT_TYPES)[number];
+
+export interface HouseholdActivityRecord {
+  id: string;
+  actorEmail: string | null;
+  deviceName: string | null;
+  eventType: HouseholdActivityEventType;
+  occurredAt: Date;
+  success: boolean;
+  metadata: Record<string, string>;
+}
+
+export interface HouseholdActivityOptions {
+  limit?: number;
+  offset?: number;
+  eventTypes?: HouseholdActivityEventType[];
+}
+
+export interface HouseholdActivityPage {
+  events: HouseholdActivityRecord[];
+  total: number;
 }
 
 export interface MotionEventRecord {
@@ -332,9 +410,11 @@ export interface MilestoneStore {
   ): Promise<boolean>;
   listNotificationPreferences(
     userId: string,
+    householdId: string,
   ): Promise<NotificationPreferenceRecord[]>;
   updateNotificationPreference(input: {
     userId: string;
+    householdId: string;
     publicDeviceId: string;
     motionEnabled: boolean;
     offlineEnabled: boolean;
@@ -520,7 +600,24 @@ export interface MilestoneStore {
   deleteAccount(userId: string): Promise<boolean>;
   audit(input: AuditInput): Promise<void>;
   purgeExpiredAuditEvents(now: Date): Promise<number>;
-  listAccessHistory(householdId: string): Promise<AccessHistoryRecord[]>;
+  listAccessHistory(
+    householdId: string,
+    options?: AccessHistoryOptions,
+  ): Promise<AccessHistoryPage>;
+  listHouseholdActivity(
+    householdId: string,
+    options?: HouseholdActivityOptions,
+  ): Promise<HouseholdActivityPage>;
+  scanDevicePresenceActivity(
+    now: Date,
+    offlineAfterMs: number,
+  ): Promise<string[]>;
+  recordDeviceRecoveredIfOffline(input: {
+    cameraId: string;
+    householdId: string;
+    publicDeviceId: string;
+    now: Date;
+  }): Promise<boolean>;
   listMotionEvents(
     householdId: string,
     options?: MotionEventOptions,
@@ -634,7 +731,7 @@ export interface MilestoneStore {
   deleteCamera(householdId: string, publicCameraId: string): Promise<boolean>;
   findDeviceByCredential(
     credentialHash: string,
-  ): Promise<CameraIdentity | null>;
+  ): Promise<DeviceHeartbeatIdentity | null>;
   findCameraForDeviceCredential(
     credentialHash: string,
     publicCameraId: string,

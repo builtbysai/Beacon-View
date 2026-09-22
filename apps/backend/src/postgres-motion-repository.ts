@@ -276,7 +276,6 @@ export class PostgresMotionRepository {
           motionEventId,
           now: input.now,
           sourceId,
-          userId: device.userId,
         });
       }
       const created = (inserted.rowCount ?? 0) === 1;

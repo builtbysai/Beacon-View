@@ -137,6 +137,10 @@ export class PostgresPairingRepository {
           eventType: 'device_reconnected',
           householdId: pairingCode.householdId,
           ipAddress: input.ipAddress,
+          metadata: {
+            deviceId: reconnected.publicDeviceId,
+            deviceName: reconnected.name,
+          },
           success: true,
         });
         await client.query('COMMIT');
@@ -232,9 +236,14 @@ export class PostgresPairingRepository {
       );
       await this.audit.insert(client, {
         cameraId: created.id,
-        eventType: 'pairing_succeeded',
+        eventType: 'device_paired',
         householdId: pairingCode.householdId,
         ipAddress: input.ipAddress,
+        metadata: {
+          cameraId: defaultCamera.rows[0]!.publicCameraId,
+          deviceId: created.publicDeviceId,
+          deviceName: created.name,
+        },
         success: true,
       });
       await client.query('COMMIT');

@@ -405,6 +405,11 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
         sourceKey: 'legacy-default',
       },
     ]);
+    await expect(
+      store!.updateCamera(owner.householdId, paired.publicCameraId, {
+        name: 'My driveway camera',
+      }),
+    ).resolves.toBe(true);
 
     const synchronized = await store!.syncDeviceCameras(
       hashSecret(credential),
@@ -418,6 +423,18 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
     expect(synchronized?.every((camera) => camera.deviceId === paired.id)).toBe(
       true,
     );
+    expect(
+      synchronized?.find((camera) => camera.sourceKey === 'android:0')?.name,
+    ).toBe('My driveway camera');
+    await store!.syncDeviceCameras(
+      hashSecret(credential),
+      [{ facing: 'rear', name: 'Rear camera', sourceKey: 'android:0' }],
+      new Date(),
+    );
+    expect(await store!.listCameras(owner.householdId)).toMatchObject([
+      { name: 'My driveway camera', sourceKey: 'android:0' },
+      { sourceKey: 'android:1' },
+    ]);
     await expect(store!.listCameras(other.householdId)).resolves.toEqual([]);
 
     const installationId = randomUUID();

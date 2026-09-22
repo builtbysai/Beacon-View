@@ -221,7 +221,7 @@ event (notification-transport work landed September 14). Invitation
 create/resend/revoke stay email-only, since a pending invitation targets an
 `invitedEmail` with no confirmed Beacon session to alert. A real targeting bug
 was found and fixed in the same pass: member removal recorded the event
-against the *admin* who removed them instead of the removed member, so the
+against the _admin_ who removed them instead of the removed member, so the
 one account whose access actually changed never received the alert. A live
 PostgreSQL 18 integration assertion proves both paths target the affected
 member and was confirmed to fail against the prior code before the fix landed;

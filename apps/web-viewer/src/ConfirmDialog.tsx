@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { ModalDialog } from './ModalDialog';
+import { Icon } from './Icon';
 
 /** Shared confirmation step for destructive/irreversible actions (delete
  * camera, delete device, revoke a session, delete the account…), replacing
@@ -29,11 +30,18 @@ export function ConfirmDialog({
   return (
     <ModalDialog labelledBy="confirm-dialog-title" onDismiss={onCancel}>
       <section aria-labelledby="confirm-dialog-title" className="confirm-modal">
-        <h2 id="confirm-dialog-title">{title}</h2>
+        <div className="confirm-modal-header">
+          {destructive && (
+            <div className="confirm-modal-icon">
+              <Icon name="alert" />
+            </div>
+          )}
+          <h2 id="confirm-dialog-title">{title}</h2>
+        </div>
         <div className="confirm-modal-body">{description}</div>
         <div className="heading-actions confirm-modal-actions">
           <button
-            className="secondary"
+            className="btn secondary"
             disabled={busy}
             onClick={onCancel}
             type="button"
@@ -41,7 +49,7 @@ export function ConfirmDialog({
             {cancelLabel}
           </button>
           <button
-            className={destructive ? 'danger' : ''}
+            className={`btn ${destructive ? 'danger' : 'primary'}`}
             disabled={busy}
             onClick={onConfirm}
             type="button"

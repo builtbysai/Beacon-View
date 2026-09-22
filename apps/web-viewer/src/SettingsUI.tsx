@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import './Settings.css';
 
 /**
  * Shared building blocks for every Settings section. The goal is that no

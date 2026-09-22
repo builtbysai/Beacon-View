@@ -55,6 +55,13 @@ const shapes = {
       <path d="M10 5h4m-3 14h2" />
     </>
   ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2M12 19v2M4 12H2M22 12h-2M6.34 6.34l-1.41-1.41M19.07 19.07l-1.41-1.41M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+    </>
+  ),
+  moon: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />,
   browser: (
     <>
       <rect x="2" y="4" width="20" height="16" rx="2" />
@@ -114,17 +121,18 @@ const shapes = {
   ),
   trash: (
     <>
-      <path d="M4 7h16M9 7V4h6v3m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" />
-      <path d="M10 11v6m4-6v6" />
+      <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M10 11v6M14 11v6" />
     </>
   ),
   more: (
     <>
-      <circle cx="5" cy="12" r="1.6" />
-      <circle cx="12" cy="12" r="1.6" />
-      <circle cx="19" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="12" cy="5" r="1" />
+      <circle cx="12" cy="19" r="1" />
     </>
   ),
+  check: <path d="M20 6 9 17l-5-5" />,
   close: <path d="m5 5 14 14M19 5 5 19" />,
   mic: (
     <>
@@ -195,6 +203,48 @@ const shapes = {
   cloud: (
     <path d="M7 18a4.5 4.5 0 0 1-.5-8.98A5.5 5.5 0 0 1 17.4 8 4 4 0 0 1 17 18H7Z" />
   ),
+
+  package: (
+    <>
+      <path d="M16.5 9.4 7.5 4.21" />
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+      <line x1="12" y1="22.08" x2="12" y2="12" />
+    </>
+  ),
+  car: (
+    <>
+      <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+      <circle cx="7" cy="17" r="2" />
+      <circle cx="17" cy="17" r="2" />
+    </>
+  ),
+  animal: (
+    <>
+      <circle cx="5" cy="14" r="2" />
+      <circle cx="19" cy="14" r="2" />
+      <path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
+      <path d="M9 16c1-2 5-2 6 0" />
+      <circle cx="9" cy="9" r="2" />
+      <circle cx="15" cy="9" r="2" />
+    </>
+  ),
+  sound: (
+    <>
+      <path d="M2 10v3" />
+      <path d="M6 6v11" />
+      <path d="M10 3v18" />
+      <path d="M14 8v7" />
+      <path d="M18 5v13" />
+      <path d="M22 10v3" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof shapes;
@@ -233,7 +283,15 @@ export function Brand({
   className = '',
 }: { compact?: boolean; className?: string } = {}) {
   const mark = (
-    <>
+    <svg
+      className="brand-mark"
+      viewBox="0 0 44 44"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="Beacon"
+      style={{ width: 'auto', height: '100%' }}
+    >
       <path
         d="M11 11.5C5.5 16.2 5.5 23.8 11 28.5M33 11.5c5.5 4.7 5.5 12.3 0 17"
         stroke="#38bdf8"
@@ -257,45 +315,19 @@ export function Brand({
         strokeWidth="2.8"
         strokeLinecap="round"
       />
-    </>
+    </svg>
   );
 
   if (compact) {
     return (
-      <svg
-        className={`brand-mark ${className}`}
-        viewBox="0 0 44 44"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        role="img"
-        aria-label="Beacon"
-      >
-        {mark}
-      </svg>
+      <div className={`brand-lockup brand-compact ${className}`}>{mark}</div>
     );
   }
 
   return (
-    <svg
-      className={`brand-lockup ${className}`}
-      viewBox="0 0 232 44"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      role="img"
-      aria-label="Beacon"
-    >
+    <div className={`brand-lockup ${className}`}>
       {mark}
-      <text
-        x="50"
-        y="29"
-        fontFamily="Inter, -apple-system, system-ui, sans-serif"
-        fontSize="21"
-        letterSpacing="-0.4"
-      >
-        <tspan className="brand-word" fontWeight="800">
-          Beacon
-        </tspan>
-      </text>
-    </svg>
+      <span className="brand-word">Beacon</span>
+    </div>
   );
 }

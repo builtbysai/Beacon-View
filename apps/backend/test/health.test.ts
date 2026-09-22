@@ -47,6 +47,61 @@ describe('GET /health', () => {
   });
 });
 
+describe('GET /api/capabilities', () => {
+  it('reports unavailable optional integrations without exposing configuration', async () => {
+    const app = buildApp(config);
+    apps.add(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/capabilities',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      auth: { google: false },
+      contact: false,
+      googleDrive: false,
+      notifications: { firebase: false, webPush: false },
+      realtime: true,
+      recordings: false,
+    });
+  });
+
+  it('returns flags for configured integrations without returning secret values', async () => {
+    const key = Buffer.alloc(32, 7).toString('base64url');
+    const configured = {
+      ...config,
+      GOOGLE_OAUTH_CLIENT_ID: 'client-id',
+      GOOGLE_OAUTH_CLIENT_SECRET: 'private-client-secret',
+      GOOGLE_OAUTH_REDIRECT_URI: 'https://example.com/callback',
+      GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY: key,
+      NOTIFICATION_ENCRYPTION_KEY: key,
+      NOTIFICATION_FINGERPRINT_KEY: key,
+      WEB_PUSH_VAPID_PUBLIC_KEY: 'public-vapid-key',
+      WEB_PUSH_VAPID_PRIVATE_KEY: 'private-vapid-key',
+      WEB_PUSH_VAPID_SUBJECT: 'mailto:example@example.com',
+    };
+    const app = buildApp(configured);
+    apps.add(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/capabilities',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      auth: { google: true },
+      googleDrive: true,
+      notifications: { firebase: false, webPush: true },
+      recordings: true,
+    });
+    expect(response.body).not.toContain('private-');
+    expect(response.body).not.toContain(key);
+  });
+});
+
 describe('GET /ready', () => {
   it('reports ready only after the store accepts a database probe', async () => {
     const app = buildApp(config, {

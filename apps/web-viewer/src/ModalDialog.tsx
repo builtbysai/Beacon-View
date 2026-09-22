@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import './ModalDialog.css';
 
 export function ModalDialog({
   children,
@@ -14,25 +15,39 @@ export function ModalDialog({
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    // `showModal()` already makes the rest of the page inert to clicks,
-    // taps, and keyboard focus, but it does not stop the page behind the
-    // dialog from scrolling (wheel/touch scroll isn't blocked by inertness
-    // alone), so lock it explicitly. Also remember what had focus so it can
-    // be restored once the dialog closes, instead of focus silently
-    // resetting to the body.
+
     const trigger = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const scrollHost = document.querySelector<HTMLElement>('.main-content');
+    const scrollTop = scrollHost?.scrollTop ?? 0;
+    let restoreFrame = 0;
+
+    /* Native modal dialogs already make the rest of the page inert. Do not
+       toggle the workspace scrollbar on open: removing that scrollbar was
+       enough to make the whole app visibly jump sideways. The backdrop
+       contains scroll chaining in CSS, while we preserve the workspace's
+       exact scroll position through the browser's initial dialog focus. */
     if (typeof dialog.showModal === 'function') {
       dialog.showModal();
     } else {
       dialog.setAttribute('open', '');
     }
-    dialog.querySelector<HTMLElement>('button, a, input')?.focus();
+
+    dialog
+      .querySelector<HTMLElement>('button, a, input, select, textarea')
+      ?.focus({ preventScroll: true });
+
+    if (scrollHost) {
+      scrollHost.scrollTop = scrollTop;
+      restoreFrame = requestAnimationFrame(() => {
+        scrollHost.scrollTop = scrollTop;
+      });
+    }
+
     return () => {
+      if (restoreFrame) cancelAnimationFrame(restoreFrame);
       if (dialog.open && typeof dialog.close === 'function') dialog.close();
-      document.body.style.overflow = previousOverflow;
-      trigger?.focus();
+      if (scrollHost) scrollHost.scrollTop = scrollTop;
+      trigger?.focus({ preventScroll: true });
     };
   }, []);
 

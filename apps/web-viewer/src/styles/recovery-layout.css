@@ -1,0 +1,153 @@
+.app-shell {
+  min-height: 100dvh;
+  display: flex;
+  width: 100%;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+}
+
+.main-content {
+  min-width: 0;
+  min-height: 100dvh;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow-x: clip;
+}
+
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  flex: 0 0 auto;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  background: color-mix(in srgb, var(--bg-canvas) 94%, transparent);
+  border-bottom: 1px solid var(--border-default);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.page-content-inner {
+  width: calc(100% - 48px);
+  min-width: 0;
+  margin-inline: auto;
+}
+
+.page-content-inner.workspace-wide {
+  max-width: 1760px;
+}
+
+.page-content-inner.workspace-medium {
+  max-width: 1120px;
+}
+
+.page-content-inner:not(.workspace-wide):not(.workspace-medium) {
+  max-width: 1440px;
+}
+
+.page-header-row {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.app-topbar-left,
+.app-topbar-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.app-topbar-left {
+  gap: 12px;
+}
+.app-topbar-actions {
+  gap: 10px;
+  margin-left: auto;
+}
+
+.app-topbar-title {
+  min-width: 0;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.2;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.mobile-brand-header {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  font-weight: 750;
+}
+
+.mobile-brand-header .mark {
+  display: inline-grid;
+  place-items: center;
+  color: var(--accent-base);
+}
+
+.page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 0 24px;
+}
+
+.page-heading-inner {
+  min-width: 0;
+  max-width: 720px;
+}
+
+.page-heading-inner h2 {
+  margin: 0 0 6px;
+  font-size: clamp(1.6rem, 2.4vw, 2rem);
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+
+.page-heading-inner p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+@media (max-width: 900px) {
+  .page-content-inner {
+    width: calc(100% - 32px);
+  }
+}
+
+@media (max-width: 680px) {
+  .app-topbar {
+    height: 54px;
+  }
+
+  .page-content-inner {
+    width: calc(100% - 32px);
+  }
+
+  .app-topbar-title {
+    display: none;
+  }
+  .mobile-brand-header {
+    display: flex;
+  }
+
+  .page-heading {
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+}

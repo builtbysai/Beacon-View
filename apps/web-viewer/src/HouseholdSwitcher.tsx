@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
 import { request } from './api';
-import { SettingsCard, SettingsRow } from './SettingsUI';
 import type { HouseholdRole } from './domain';
 
 interface HouseholdAccess {
@@ -11,10 +10,29 @@ interface HouseholdAccess {
   role: HouseholdRole;
 }
 
+function roleLabel(role: HouseholdRole): string {
+  return role[0]!.toUpperCase() + role.slice(1);
+}
+
+function initials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('') || 'H'
+  );
+}
+
 export function HouseholdSwitcher({
   currentHouseholdId,
+  memberCount,
+  cameraCount,
 }: {
   currentHouseholdId: string;
+  memberCount: number | null;
+  cameraCount: number;
 }) {
   const [households, setHouseholds] = useState<HouseholdAccess[]>([]);
   const [busy, setBusy] = useState(false);
@@ -40,25 +58,27 @@ export function HouseholdSwitcher({
   }, []);
 
   const current = households.find((item) => item.id === currentHouseholdId);
+  const name = current?.name ?? 'Household';
+  const role = current ? roleLabel(current.role) : '…';
+  const isOwner = current?.role === 'owner';
+
   return (
-    <SettingsCard aria-label="Household">
-      <SettingsRow
-        title={current?.name ?? 'Current household'}
-        description={
-          <>
-            {current
-              ? `${current.role[0]!.toUpperCase()}${current.role.slice(1)} access${
-                  current.expiresAt
-                    ? ` until ${new Date(current.expiresAt).toLocaleString()}`
-                    : ''
-                }`
-              : 'Loading household access…'}
-            {error && <span role="alert">{` ${error}`}</span>}
-          </>
-        }
-      >
+    <div className="household-card">
+      <div className="household-card-hero">
+        <div className="household-avatar" aria-hidden="true">
+          {initials(name)}
+        </div>
+        <div className="household-card-copy">
+          <strong>{name}</strong>
+          <div className="household-ownerline">
+            <span className="pill pill-on">
+              {isOwner ? 'Your household' : 'Shared household'}
+            </span>
+            <span>You are {role}</span>
+          </div>
+        </div>
         {households.length > 1 && (
-          <label>
+          <label className="household-switch">
             <span className="visually-hidden">Switch household</span>
             <select
               aria-label="Switch household"
@@ -91,7 +111,35 @@ export function HouseholdSwitcher({
             </select>
           </label>
         )}
-      </SettingsRow>
-    </SettingsCard>
+      </div>
+
+      <div className="household-metrics" aria-label="Household summary">
+        <div className="household-metric">
+          <span>People</span>
+          <strong>{memberCount ?? '—'}</strong>
+          <small>
+            {memberCount === null ? 'Loading membership' : 'In this household'}
+          </small>
+        </div>
+        <div className="household-metric">
+          <span>Cameras</span>
+          <strong>{cameraCount}</strong>
+          <small>Available here</small>
+        </div>
+        <div className="household-metric">
+          <span>Your role</span>
+          <strong>{role}</strong>
+          <small>
+            {isOwner ? 'Full household access' : 'Based on your membership'}
+          </small>
+        </div>
+      </div>
+
+      {error && (
+        <p role="alert" className="settings-card-inline-message">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

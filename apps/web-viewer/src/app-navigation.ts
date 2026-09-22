@@ -44,12 +44,17 @@ export const navigationIcons: Record<string, IconName> = {
   settings: 'settings',
 };
 
-export const pagesWithAddCamera: ReadonlySet<Page> = new Set(['cameras']);
+export const pagesWithAddCamera: ReadonlySet<Page> = new Set([
+  'dashboard',
+  'cameras',
+]);
 
 const pageContentWidth: Partial<Record<Page, 'medium' | 'wide'>> = {
+  dashboard: 'wide',
   cameras: 'wide',
+  events: 'wide',
+  settings: 'wide',
   'camera mode': 'medium',
-  events: 'medium',
 };
 
 export function contentWidthClass(page: Page): string {

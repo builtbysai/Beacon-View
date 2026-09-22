@@ -29,7 +29,8 @@ import type {
   SecurityEventType,
 } from './notification-types.js';
 import {
-  type AccessHistoryRecord,
+  type AccessHistoryOptions,
+  type AccessHistoryPage,
   type AccessibleCameraRecord,
   type AuditInput,
   type BrowserSessionRecord,
@@ -38,6 +39,7 @@ import {
   type CameraRecord,
   type CameraSourceInput,
   type DeviceRecord,
+  type DeviceHeartbeatIdentity,
   type MilestoneStore,
   type MotionEventOptions,
   type MotionEventRecord,
@@ -47,6 +49,8 @@ import {
   type RetentionPurgeRecord,
   type SessionRecord,
   type HouseholdAccessRecord,
+  type HouseholdActivityOptions,
+  type HouseholdActivityPage,
   type HouseholdInvitationRecord,
   type HouseholdMemberRecord,
   type GoogleDriveConnectionRecord,
@@ -284,12 +288,14 @@ export class PostgresStore implements MilestoneStore {
 
   async listNotificationPreferences(
     userId: string,
+    householdId: string,
   ): Promise<NotificationPreferenceRecord[]> {
-    return this.notifications.listPreferences(userId);
+    return this.notifications.listPreferences(userId, householdId);
   }
 
   async updateNotificationPreference(input: {
     userId: string;
+    householdId: string;
     publicDeviceId: string;
     motionEnabled: boolean;
     offlineEnabled: boolean;
@@ -628,8 +634,34 @@ export class PostgresStore implements MilestoneStore {
     return this.auditRepository.purgeExpired(now);
   }
 
-  async listAccessHistory(householdId: string): Promise<AccessHistoryRecord[]> {
-    return this.auditRepository.listAccessHistory(householdId);
+  async listAccessHistory(
+    householdId: string,
+    options?: AccessHistoryOptions,
+  ): Promise<AccessHistoryPage> {
+    return this.auditRepository.listAccessHistory(householdId, options);
+  }
+
+  async listHouseholdActivity(
+    householdId: string,
+    options?: HouseholdActivityOptions,
+  ): Promise<HouseholdActivityPage> {
+    return this.auditRepository.listHouseholdActivity(householdId, options);
+  }
+
+  async scanDevicePresenceActivity(
+    now: Date,
+    offlineAfterMs: number,
+  ): Promise<string[]> {
+    return this.auditRepository.scanDevicePresenceActivity(now, offlineAfterMs);
+  }
+
+  async recordDeviceRecoveredIfOffline(input: {
+    cameraId: string;
+    householdId: string;
+    publicDeviceId: string;
+    now: Date;
+  }): Promise<boolean> {
+    return this.auditRepository.recordDeviceRecoveredIfOffline(input);
   }
 
   async listMotionEvents(
@@ -829,7 +861,7 @@ export class PostgresStore implements MilestoneStore {
 
   async findDeviceByCredential(
     credentialHash: string,
-  ): Promise<CameraIdentity | null> {
+  ): Promise<DeviceHeartbeatIdentity | null> {
     return this.devices.findByCredential(credentialHash);
   }
 

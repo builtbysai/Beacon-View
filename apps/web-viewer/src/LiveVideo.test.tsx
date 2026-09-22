@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -427,16 +428,17 @@ describe('LiveVideo', () => {
 
     // Stop: the same button now finishes the capture and drives it through
     // upload-session, the direct-to-Drive PUT, and complete.
-    await act(async () => {
+    act(() => {
       fireEvent.click(activeButton);
       const recorder = FakeMediaRecorder.instances[0]!;
       recorder.stop();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
     });
 
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Recording saved' }),
+      ).toBeDisabled(),
+    );
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/recordings/rec-1/upload-session',
       expect.objectContaining({ method: 'POST' }),
@@ -452,9 +454,6 @@ describe('LiveVideo', () => {
         method: 'POST',
       }),
     );
-    expect(
-      screen.getByRole('button', { name: 'Recording saved' }),
-    ).toBeDisabled();
     unmount();
   });
 

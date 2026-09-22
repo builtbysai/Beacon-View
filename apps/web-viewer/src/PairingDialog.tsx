@@ -2,6 +2,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { ModalDialog } from './ModalDialog';
 import { pairingLink } from './app-navigation';
 import type { PairingLifecycle } from './lifecycle';
+import { Icon } from './Icon';
+import './PairingDialog.css';
 
 type PairingDialogProps = {
   busy: boolean;
@@ -29,59 +31,86 @@ export function PairingDialog({
       <section aria-labelledby="pair-title" className="pair-modal">
         {state === 'completed' ? (
           <div className="pair-success" role="status">
-            <span aria-hidden="true">✓</span>
+            <span className="icon" aria-hidden="true">
+              <Icon name="check" />
+            </span>
             <h2 id="pair-title">Camera connected</h2>
-            <p>Taking you to Cameras…</p>
+            <p>Taking you to Cameras...</p>
           </div>
         ) : (
           <>
-            <p className="eyebrow">
-              {reconnecting ? 'Reconnect' : 'New camera'}
-            </p>
-            <h2 id="pair-title">
-              {reconnecting ? 'Reconnect camera' : 'Pair a device'}
-            </h2>
-            <p>
-              {reconnecting
-                ? 'On the disconnected Android camera, scan this code to restore its existing settings.'
-                : 'Scan with Beacon on Android, or share this one-time setup link.'}
-            </p>
+            <div className="pair-mh">
+              <div className="pair-eyebrow">
+                {reconnecting ? 'Reconnect' : 'Add device'}
+              </div>
+              <h2 id="pair-title">
+                {reconnecting ? 'Reconnect camera' : 'Pair another device'}
+              </h2>
+              <p>
+                {reconnecting
+                  ? 'On the disconnected Android camera, scan this code to restore its existing settings.'
+                  : 'Scan the QR code with Beacon on Android, or share the one-time setup link.'}
+              </p>
+            </div>
+
             {code ? (
-              <div className="pairing" role="status">
-                <QRCodeSVG
-                  aria-label="Beacon pairing QR code"
-                  bgColor="#ffffff"
-                  fgColor="#101820"
-                  level="M"
-                  marginSize={2}
-                  size={180}
-                  title="Scan with Beacon on Android"
-                  value={pairingLink(code)}
-                />
-                <div className="pairing-code-copy">
-                  <strong>{code}</strong>
-                  <span>Expires in 10 minutes</span>
+              <div className="pairbody" role="status">
+                <div className="pair-qr">
+                  <QRCodeSVG
+                    aria-label="Beacon pairing QR code"
+                    bgColor="#ffffff"
+                    fgColor="#101820"
+                    level="M"
+                    marginSize={0}
+                    size={180}
+                    title="Scan with Beacon on Android"
+                    value={pairingLink(code)}
+                  />
+                </div>
+                <div className="pair-code">
+                  <h3>One-time pairing code</h3>
+                  <div className="big">{code}</div>
+                  <p>Expires in 10 minutes</p>
                   <button
-                    className="secondary"
-                    onClick={() =>
-                      void navigator.clipboard
+                    className="btn secondary"
+                    onClick={() => {
+                      navigator.clipboard
                         .writeText(pairingLink(code))
-                        .catch(onCopyError)
-                    }
+                        .catch(onCopyError);
+                    }}
                   >
                     Copy setup link
                   </button>
                 </div>
               </div>
+            ) : error ? (
+              <div className="pair-error" role="alert">
+                <p>
+                  <strong>Couldn't prepare pairing code</strong>
+                </p>
+                <p>{error}</p>
+                <div className="pair-modalfoot">
+                  <button className="btn secondary" onClick={onDismiss}>
+                    Cancel
+                  </button>
+                  <button className="btn primary" onClick={onRetry}>
+                    Try again
+                  </button>
+                </div>
+              </div>
             ) : (
-              <button disabled={busy} onClick={onRetry}>
-                {busy ? 'Preparing secure code…' : 'Try again'}
-              </button>
+              <div className="pair-loading" aria-busy={busy}>
+                <p>Preparing...</p>
+              </div>
             )}
-            {error && <p role="alert">{error}</p>}
-            <button className="secondary" onClick={onDismiss}>
-              Cancel
-            </button>
+
+            {!error && (
+              <div className="pair-modalfoot">
+                <button className="btn secondary" onClick={onDismiss}>
+                  Cancel
+                </button>
+              </div>
+            )}
           </>
         )}
       </section>

@@ -3,6 +3,7 @@ import { ApiError, request } from './api';
 import { Brand, Icon } from './Icon';
 import { LiveVideo } from './LiveVideo';
 import type { Camera } from './domain';
+import './GuestViewPage.css';
 
 type Status = 'entering' | 'invalid' | 'empty' | 'ready';
 
@@ -30,8 +31,7 @@ export function GuestViewPage() {
         if (cancelled) return;
         setCameras(result.cameras);
         setStatus(result.cameras.length === 0 ? 'empty' : 'ready');
-        if (result.cameras.length === 1)
-          setSelectedId(result.cameras[0]!.id);
+        if (result.cameras.length === 1) setSelectedId(result.cameras[0]!.id);
       } catch (error) {
         if (!cancelled) {
           setStatus('invalid');
@@ -102,9 +102,7 @@ export function GuestViewPage() {
         privacyMode={selected.privacyMode}
         deviceName={selected.deviceName}
         viewerCount={selected.viewerCount}
-        {...(cameras.length > 1
-          ? { onBack: () => setSelectedId(null) }
-          : {})}
+        {...(cameras.length > 1 ? { onBack: () => setSelectedId(null) } : {})}
         canFlip={false}
         canPause={false}
       />

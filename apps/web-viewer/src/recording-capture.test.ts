@@ -109,13 +109,11 @@ describe('sha256Hex', () => {
 
 describe('uploadClipToDrive', () => {
   it('PUTs the blob and returns the Drive file id', async () => {
-    const fetchMock = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ id: 'drive-file-42' }), {
-          status: 200,
-        }),
-      );
+    const fetchMock = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ id: 'drive-file-42' }), {
+        status: 200,
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     const blob = new Blob(['clip'], { type: 'video/webm' });

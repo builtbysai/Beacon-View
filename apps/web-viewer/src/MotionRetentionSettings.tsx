@@ -1,124 +1,87 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { request } from './api';
-import { SettingsCard, SettingsField, SettingsFieldRow } from './SettingsUI';
+import { useSettingsAutosave } from './SettingsAutosave';
+import { SettingsRow } from './SettingsUI';
 
 const OPTIONS = [
   { days: 1, label: '1 day' },
   { days: 7, label: '7 days' },
-  { days: 30, label: '30 days (recommended)' },
+  { days: 30, label: '30 days' },
   { days: 90, label: '90 days' },
-];
+] as const;
+
+/** 30 days is Beacon's actual default retention (see the backend's
+ * motion-retention default), not a made-up recommendation. */
+const RECOMMENDED_DAYS = 30;
 
 export function MotionRetentionSettings() {
+  const { run } = useSettingsAutosave();
   const [days, setDays] = useState<number | null>(null);
-  const [savedDays, setSavedDays] = useState<number | null>(null);
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [justSaved, setJustSaved] = useState(false);
-  const savedTimer = useRef<number | null>(null);
-
-  useEffect(
-    () => () => {
-      if (savedTimer.current !== null) window.clearTimeout(savedTimer.current);
-    },
-    [],
-  );
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let active = true;
     void request<{ days: number }>('/api/motion-retention')
       .then((result) => {
-        if (!active) return;
-        setDays(result.days);
-        setSavedDays(result.days);
+        if (active) setDays(result.days);
       })
       .catch(() => {
-        if (active) setError('Motion retention could not be loaded.');
+        if (active) setError(true);
       });
     return () => {
       active = false;
     };
   }, []);
 
-  async function save() {
-    if (!days || saving) return;
-    setSaving(true);
-    setError('');
-    setJustSaved(false);
-    try {
-      const result = await request<{ days: number }>('/api/motion-retention', {
-        body: JSON.stringify({ days }),
-        method: 'PUT',
-      });
-      setDays(result.days);
-      setSavedDays(result.days);
-      setJustSaved(true);
-      if (savedTimer.current !== null) window.clearTimeout(savedTimer.current);
-      savedTimer.current = window.setTimeout(() => setJustSaved(false), 3_000);
-    } catch {
-      setError('Motion retention could not be saved. Try again.');
-    } finally {
-      setSaving(false);
-    }
+  function choose(nextDays: number) {
+    const previous = days;
+    setDays(nextDays);
+    run(async () => {
+      try {
+        const result = await request<{ days: number }>(
+          '/api/motion-retention',
+          { body: JSON.stringify({ days: nextDays }), method: 'PUT' },
+        );
+        setDays(result.days);
+      } catch (thrown) {
+        setDays(previous);
+        throw thrown;
+      }
+    });
   }
 
   return (
-    <SettingsCard
+    <SettingsRow
       title="Motion history"
-      description="Beacon stores motion time, camera name, and motion intensity, not recordings, images, or audio. Expired history is deleted automatically."
+      description="How long Beacon keeps motion event metadata."
     >
-      {error && (
-        <p role="alert" className="settings-card-inline-message">
-          {error}
-        </p>
-      )}
       {days === null ? (
-        !error && (
-          <p role="status" className="settings-card-inline-message">
-            Loading motion history settings…
-          </p>
-        )
+        <span className="settings-card-inline-message">
+          {error ? 'Could not load.' : 'Loading…'}
+        </span>
       ) : (
-        <form
-          aria-label="Motion history retention"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save();
-          }}
+        <div
+          className="retention-choices"
+          role="radiogroup"
+          aria-label="Keep motion history for"
         >
-          <SettingsFieldRow>
-            <SettingsField
-              label="Keep motion history for"
-              htmlFor="motion-retention-days"
+          {OPTIONS.map((option) => (
+            <button
+              key={option.days}
+              type="button"
+              role="radio"
+              aria-checked={days === option.days}
+              className={days === option.days ? 'on' : ''}
+              onClick={() => choose(option.days)}
             >
-              <select
-                id="motion-retention-days"
-                aria-label="Keep motion history for"
-                disabled={saving}
-                value={days}
-                onChange={(event) => {
-                  setJustSaved(false);
-                  setDays(Number(event.target.value));
-                }}
-              >
-                {OPTIONS.map((option) => (
-                  <option key={option.days} value={option.days}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </SettingsField>
-            <button type="submit" disabled={saving || days === savedDays}>
-              {saving ? 'Saving…' : 'Save changes'}
+              {option.label}
+              {option.days === RECOMMENDED_DAYS && (
+                <span className="retention-recommended">Recommended</span>
+              )}
             </button>
-            {justSaved && (
-              <p className="setting-saved" role="status">
-                ✓ Saved
-              </p>
-            )}
-          </SettingsFieldRow>
-        </form>
+          ))}
+        </div>
       )}
-    </SettingsCard>
+    </SettingsRow>
   );
 }

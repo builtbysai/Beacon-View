@@ -96,7 +96,12 @@ export function GoogleDriveSettings() {
 
   if (!status) {
     return error ? (
-      <p role="alert">{error}</p>
+      <p role="alert">
+        {error}{' '}
+        <button type="button" className="secondary" onClick={() => void load()}>
+          Retry
+        </button>
+      </p>
     ) : (
       <p role="status">Loading Google Drive…</p>
     );
@@ -105,57 +110,48 @@ export function GoogleDriveSettings() {
   return (
     <SettingsCard aria-label="Google Drive">
       <SettingsRow
-        title={
-          status.connected
-            ? 'Google Drive connected'
-            : 'Use Google Drive for Beacon data'
-        }
+        title="Google Drive"
         description={
-          <>
-            Private app data, plus recorded clips if you turn on cloud recording
-            below.
-            {status.providerEmail && (
-              <>
-                <br />
-                Connected account: {status.providerEmail}
-              </>
-            )}
-          </>
+          status.connected
+            ? status.providerEmail
+              ? `Connected as ${status.providerEmail}.`
+              : 'Connected.'
+            : 'Store Beacon app data and optional recordings in your Drive.'
         }
       >
-        {!status.connected && status.configured && (
-          <a
-            className="secondary button-link"
-            href="/api/drive/connect?purpose=recordings"
-          >
-            Connect Google Drive
-          </a>
-        )}
-        {!status.configured && (
-          <a
-            className="secondary button-link"
-            href="/api/drive/connect?purpose=recordings"
-          >
-            Retry setup
-          </a>
+        {status.connected ? (
+          <span className="pill pill-on">Connected</span>
+        ) : status.configured ? (
+          <>
+            <span className="pill">Not connected</span>
+            <a
+              className="secondary button-link"
+              href="/api/drive/connect?purpose=recordings"
+            >
+              Connect
+            </a>
+          </>
+        ) : (
+          <>
+            <span className="pill pill-warn">Unavailable</span>
+            <span>Google Drive is not configured on this Beacon server.</span>
+          </>
         )}
       </SettingsRow>
       {status.connected && (
         <SettingsRow
-          title={
-            status.recordingsConnected
-              ? 'Cloud recording is on'
-              : 'Turn on cloud recording'
-          }
+          title="Cloud recording"
           description={
             status.recordingsConnected
-              ? 'Recorded clips upload to your Google Drive.'
-              : 'Grant one more permission so recorded clips can upload to your Google Drive.'
+              ? 'Recorded clips upload to your Drive.'
+              : 'Grant one more permission to upload recorded clips.'
           }
         >
-          {!status.recordingsConnected && (
+          {status.recordingsConnected ? (
+            <span className="pill pill-on">On</span>
+          ) : (
             <a
-              className="button-link"
+              className="primary button-link"
               href="/api/drive/connect?purpose=recordings"
             >
               Turn on
@@ -164,28 +160,33 @@ export function GoogleDriveSettings() {
         </SettingsRow>
       )}
       {status.connected && (
-        <SettingsRow
-          title="Manage connection"
-          description="Verify Beacon can still reach Drive, or disconnect it."
-        >
+        <SettingsRow title="Connection">
           <button
             className="secondary"
             disabled={busy}
             onClick={() => void verify()}
           >
-            {busy ? 'Checking…' : 'Verify connection'}
+            {busy ? 'Checking…' : 'Verify'}
           </button>
           <button
             className="danger"
             disabled={busy}
             onClick={() => void disconnect()}
           >
-            Disconnect Drive
+            Disconnect
           </button>
         </SettingsRow>
       )}
-      {message && <p role="status">{message}</p>}
-      {error && <p role="alert">{error}</p>}
+      {message && (
+        <p role="status" className="settings-card-inline-message">
+          {message}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="settings-card-inline-message">
+          {error}
+        </p>
+      )}
     </SettingsCard>
   );
 }

@@ -41,8 +41,16 @@ const response = (body: unknown, ok = true) => ({
   json: () => Promise.resolve(body),
 });
 
+function motionToggle() {
+  return screen.getAllByRole('checkbox')[0]!;
+}
+
+function recordToggle() {
+  return screen.getAllByRole('checkbox')[1]!;
+}
+
 describe('MotionSettingsPanel', () => {
-  it('loads only when opened, chooses a camera, and saves an explicit per-camera change', async () => {
+  it('loads inline, chooses a camera, and saves an explicit per-camera change', async () => {
     document.cookie = 'beacon_csrf=test-csrf; path=/';
     const fetch = vi
       .fn()
@@ -60,8 +68,6 @@ describe('MotionSettingsPanel', () => {
     vi.stubGlobal('fetch', fetch);
     render(<MotionSettingsPanel deviceId="phone-1" cameras={cameras} />);
 
-    expect(fetch).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByText('Motion settings'));
     await screen.findByRole('form', { name: 'Camera motion settings' });
     expect(fetch.mock.calls[0]![0]).toBe(
       '/api/devices/phone-1/motion-settings',
@@ -69,7 +75,7 @@ describe('MotionSettingsPanel', () => {
     fireEvent.change(screen.getByLabelText('Motion settings camera'), {
       target: { value: front.cameraId },
     });
-    fireEvent.click(screen.getByLabelText('Detect motion on this camera'));
+    fireEvent.click(motionToggle());
     fireEvent.change(screen.getByLabelText('Sensitivity'), {
       target: { value: 'high' },
     });
@@ -112,14 +118,10 @@ describe('MotionSettingsPanel', () => {
       );
     vi.stubGlobal('fetch', fetch);
     render(<MotionSettingsPanel deviceId="phone-1" cameras={cameras} />);
-    fireEvent.click(screen.getByText('Motion settings'));
     await screen.findByRole('form', { name: 'Camera motion settings' });
 
-    const recordToggle = screen.getByLabelText(
-      'Record a short clip when motion is detected',
-    );
-    expect(recordToggle).not.toBeChecked();
-    fireEvent.click(recordToggle);
+    expect(recordToggle()).not.toBeChecked();
+    fireEvent.click(recordToggle());
     fireEvent.click(
       screen.getByRole('button', { name: 'Save motion settings' }),
     );
@@ -146,11 +148,8 @@ describe('MotionSettingsPanel', () => {
       );
     vi.stubGlobal('fetch', fetch);
     render(<MotionSettingsPanel deviceId="phone-1" cameras={cameras} />);
-    fireEvent.click(screen.getByText('Motion settings'));
     await screen.findByRole('form', { name: 'Camera motion settings' });
-    expect(
-      screen.getByLabelText('Record a short clip when motion is detected'),
-    ).toBeDisabled();
+    expect(recordToggle()).toBeDisabled();
   });
 
   it('keeps edits after a failed save and lets the owner retry', async () => {
@@ -163,7 +162,6 @@ describe('MotionSettingsPanel', () => {
       );
     vi.stubGlobal('fetch', fetch);
     render(<MotionSettingsPanel deviceId="phone-1" cameras={cameras} />);
-    fireEvent.click(screen.getByText('Motion settings'));
     await screen.findByRole('form', { name: 'Camera motion settings' });
     fireEvent.change(screen.getByLabelText('Sensitivity'), {
       target: { value: 'high' },
@@ -189,7 +187,6 @@ describe('MotionSettingsPanel', () => {
       .mockResolvedValueOnce(response({ cameras: [rear] }));
     vi.stubGlobal('fetch', fetch);
     render(<MotionSettingsPanel deviceId="phone-1" cameras={cameras} />);
-    fireEvent.click(screen.getByText('Motion settings'));
     await screen.findByRole('alert');
     fireEvent.click(
       screen.getByRole('button', { name: 'Retry motion settings' }),
@@ -208,13 +205,12 @@ describe('MotionSettingsPanel', () => {
         }),
       )
       .mockResolvedValueOnce(
-        response({ cameras: [{ ...rear, enabled: false }] }),
+        response({ cameras: [{ ...rear, enabled: false }, front] }),
       );
     vi.stubGlobal('fetch', fetch);
     const view = render(
       <MotionSettingsPanel deviceId="old-phone" cameras={cameras} />,
     );
-    fireEvent.click(screen.getByText('Motion settings'));
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     view.rerender(
       <MotionSettingsPanel deviceId="new-phone" cameras={cameras} />,

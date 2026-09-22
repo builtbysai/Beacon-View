@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { deliverHouseholdInvitation, ResendDeliveryError } from '../src/contact.js';
+import {
+  deliverHouseholdInvitation,
+  ResendDeliveryError,
+} from '../src/contact.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -40,7 +43,7 @@ describe('household invitation email delivery', () => {
     expect(body.text).not.toContain('household name');
   });
 
-  it('surfaces provider failures to the invitation route, with Resend\'s own reason for diagnosis', async () => {
+  it("surfaces provider failures to the invitation route, with Resend's own reason for diagnosis", async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>

@@ -26,7 +26,9 @@ const createGuestLinkSchema = z
   })
   .strict();
 const guestLinkParameterSchema = z.object({ guestLinkId: z.string().uuid() });
-const guestEnterSchema = z.object({ token: z.string().min(32).max(512) }).strict();
+const guestEnterSchema = z
+  .object({ token: z.string().min(32).max(512) })
+  .strict();
 
 export function registerGuestRoutes(
   app: FastifyInstance,

@@ -3,7 +3,6 @@ import { request } from './api';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Icon } from './Icon';
 import { browserOsLabel } from './naming';
-import { SettingsCard } from './SettingsUI';
 
 interface BrowserSession {
   createdAt: string;
@@ -14,12 +13,13 @@ interface BrowserSession {
   userAgent?: string | null;
 }
 
+const REVEAL_INITIAL = 4;
+
 function sessionLabel(session: BrowserSession): string {
-  const known = browserOsLabel(
+  return browserOsLabel(
     session.userAgent,
-    session.current ? 'This browser' : 'Signed-in browser',
+    session.current ? 'This device' : 'Signed-in device',
   );
-  return session.current ? `${known} (this session)` : known;
 }
 
 export function BrowserSessions({
@@ -30,6 +30,7 @@ export function BrowserSessions({
   const [sessions, setSessions] = useState<BrowserSession[] | null>(null);
   const [error, setError] = useState('');
   const [revoking, setRevoking] = useState('');
+  const [visible, setVisible] = useState(REVEAL_INITIAL);
   const [confirmSession, setConfirmSession] = useState<BrowserSession | null>(
     null,
   );
@@ -41,7 +42,7 @@ export function BrowserSessions({
         if (active) setSessions(result.sessions);
       })
       .catch(() => {
-        if (active) setError('Signed-in sessions could not be loaded.');
+        if (active) setError('Signed-in devices could not be loaded.');
       });
     return () => {
       active = false;
@@ -65,17 +66,23 @@ export function BrowserSessions({
         (items) => items?.filter((item) => item.id !== session.id) ?? null,
       );
     } catch {
-      setError('That session could not be revoked. Try again.');
+      setError('That device could not be revoked. Try again.');
     } finally {
       setRevoking('');
     }
   }
 
   return (
-    <SettingsCard
-      title="Signed-in browsers"
-      description="Revoke any browser you do not recognize. Only the browser and operating system are shown, never an IP address or device fingerprint."
+    <section
+      aria-label="Signed-in devices"
+      className="settings-subsection settings-security-block"
     >
+      <div className="settings-subsection-heading">
+        <div>
+          <h3>Signed-in devices</h3>
+          <p>Browsers and devices currently signed in to your account.</p>
+        </div>
+      </div>
       {error && (
         <p role="alert" className="settings-card-inline-message">
           {error}
@@ -83,52 +90,68 @@ export function BrowserSessions({
       )}
       {sessions === null && !error && (
         <p role="status" className="settings-card-inline-message">
-          Loading signed-in browsers…
+          Loading…
         </p>
       )}
       {sessions?.length === 0 && (
-        <p className="settings-card-empty">No active browser sessions.</p>
+        <p className="settings-card-empty">No signed-in devices.</p>
       )}
       {sessions && sessions.length > 0 && (
-        <ul className="session-list">
-          {sessions.map((session) => (
-            <li className="session-row" key={session.id}>
-              <span className="item-icon">
-                <Icon name="browser" />
+        <>
+          <ul className="session-list settings-list-card">
+            {sessions.slice(0, visible).map((session) => (
+              <li className="session-row" key={session.id}>
+                <span className="item-icon">
+                  <Icon name="browser" />
+                </span>
+                <div className="session-identity">
+                  <strong>{sessionLabel(session)}</strong>
+                  <span>
+                    {session.current
+                      ? 'This browser · active now'
+                      : `Last active ${new Date(session.lastSeenAt).toLocaleDateString()}`}
+                  </span>
+                </div>
+                {session.current ? (
+                  <span className="pill pill-on">Current</span>
+                ) : (
+                  <button
+                    className="secondary"
+                    disabled={Boolean(revoking)}
+                    onClick={() => setConfirmSession(session)}
+                    type="button"
+                  >
+                    {revoking === session.id ? 'Revoking…' : 'Revoke'}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          {sessions.length > visible && (
+            <div className="notification-reveal">
+              <span>
+                {visible} of {sessions.length} devices
               </span>
-              <div className="session-identity">
-                <strong>{sessionLabel(session)}</strong>
-                <time dateTime={session.lastSeenAt}>
-                  Last active {new Date(session.lastSeenAt).toLocaleString()}
-                </time>
-              </div>
-              {/* Current session already has its own "Sign out" action in
-                  Account — showing Revoke here too would be the same action
-                  under two names. */}
-              {!session.current && (
-                <button
-                  className="danger"
-                  disabled={Boolean(revoking)}
-                  onClick={() => setConfirmSession(session)}
-                  type="button"
-                >
-                  <Icon name="logout" />
-                  {revoking === session.id ? 'Revoking…' : 'Revoke'}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setVisible((count) => count + REVEAL_INITIAL)}
+              >
+                Load more devices
+              </button>
+            </div>
+          )}
+        </>
       )}
       {confirmSession && (
         <ConfirmDialog
-          title="Revoke this browser session?"
-          description="That browser will be signed out immediately and will need to sign in again to view cameras."
-          confirmLabel="Revoke session"
+          title="Revoke this device?"
+          description="It will be signed out immediately and will need to sign in again to view cameras."
+          confirmLabel="Revoke device"
           onConfirm={() => void revoke(confirmSession)}
           onCancel={() => setConfirmSession(null)}
         />
       )}
-    </SettingsCard>
+    </section>
   );
 }

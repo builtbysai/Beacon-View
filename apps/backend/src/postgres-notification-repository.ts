@@ -111,6 +111,7 @@ export class PostgresNotificationRepository {
 
   async listPreferences(
     userId: string,
+    householdId: string,
   ): Promise<NotificationPreferenceRecord[]> {
     const result = await this.pool.query<{
       deviceId: string;
@@ -126,11 +127,11 @@ export class PostgresNotificationRepository {
               coalesce(np.offline_enabled, false) AS "offlineEnabled",
               np.quiet_start_minute AS "quietStartMinute",
               np.quiet_end_minute AS "quietEndMinute", np.quiet_time_zone AS "quietTimeZone"
-       FROM households h JOIN cameras d ON d.household_id = h.id
-       LEFT JOIN notification_preferences np ON np.user_id = h.owner_id AND np.device_id = d.id
-       WHERE h.owner_id = $1 AND d.revoked_at IS NULL
+       FROM cameras d
+       LEFT JOIN notification_preferences np ON np.user_id = $1 AND np.device_id = d.id
+       WHERE d.household_id = $2 AND d.revoked_at IS NULL
        ORDER BY d.created_at, d.id`,
-      [userId],
+      [userId, householdId],
     );
     return result.rows.map((row) => ({
       deviceId: row.deviceId,
@@ -150,6 +151,7 @@ export class PostgresNotificationRepository {
 
   async updatePreference(input: {
     userId: string;
+    householdId: string;
     publicDeviceId: string;
     motionEnabled: boolean;
     offlineEnabled: boolean;
@@ -158,14 +160,15 @@ export class PostgresNotificationRepository {
     const result = await this.pool.query<{ id: string }>(
       `INSERT INTO notification_preferences
        (user_id, device_id, motion_enabled, offline_enabled, quiet_start_minute, quiet_end_minute, quiet_time_zone)
-       SELECT $1, d.id, $3, $4, $5, $6, $7 FROM cameras d JOIN households h ON h.id = d.household_id
-       WHERE d.public_device_id = $2 AND h.owner_id = $1 AND d.revoked_at IS NULL
+       SELECT $1, d.id, $4, $5, $6, $7, $8 FROM cameras d
+       WHERE d.public_device_id = $3 AND d.household_id = $2 AND d.revoked_at IS NULL
        ON CONFLICT (user_id, device_id) DO UPDATE SET motion_enabled = excluded.motion_enabled,
          offline_enabled = excluded.offline_enabled, quiet_start_minute = excluded.quiet_start_minute,
          quiet_end_minute = excluded.quiet_end_minute, quiet_time_zone = excluded.quiet_time_zone,
          updated_at = now() RETURNING device_id AS id`,
       [
         input.userId,
+        input.householdId,
         input.publicDeviceId,
         input.motionEnabled,
         input.offlineEnabled,
@@ -177,12 +180,12 @@ export class PostgresNotificationRepository {
     if (!result.rows[0]) return null;
     if (!input.offlineEnabled) {
       await this.pool.query(
-        'DELETE FROM notification_presence_state WHERE device_id = $1',
-        [result.rows[0].id],
+        'DELETE FROM notification_presence_state WHERE device_id = $1 AND user_id = $2',
+        [result.rows[0].id, input.userId],
       );
     }
     return (
-      (await this.listPreferences(input.userId)).find(
+      (await this.listPreferences(input.userId, input.householdId)).find(
         (item) => item.deviceId === input.publicDeviceId,
       ) ?? null
     );
@@ -194,43 +197,44 @@ export class PostgresNotificationRepository {
       motionEventId: string;
       sourceId: string;
       deviceId: string;
-      userId: string;
       now: Date;
     },
   ): Promise<void> {
     const preference = await client.query<{
+      userId: string;
       motionEnabled: boolean;
       quietStartMinute: number | null;
       quietEndMinute: number | null;
       quietTimeZone: string | null;
     }>(
-      `SELECT motion_enabled AS "motionEnabled", quiet_start_minute AS "quietStartMinute",
+      `SELECT user_id AS "userId", motion_enabled AS "motionEnabled", quiet_start_minute AS "quietStartMinute",
               quiet_end_minute AS "quietEndMinute", quiet_time_zone AS "quietTimeZone"
-       FROM notification_preferences WHERE user_id = $1 AND device_id = $2`,
-      [input.userId, input.deviceId],
+       FROM notification_preferences WHERE device_id = $1`,
+      [input.deviceId],
     );
-    const setting = preference.rows[0];
-    if (!setting?.motionEnabled) return;
-    if (
-      setting.quietStartMinute !== null &&
-      isQuietHoursActive(
-        {
-          start: minuteToTimeOfDay(setting.quietStartMinute),
-          end: minuteToTimeOfDay(setting.quietEndMinute!),
-          timeZone: setting.quietTimeZone!,
-        },
-        input.now,
+    for (const setting of preference.rows) {
+      if (!setting.motionEnabled) continue;
+      if (
+        setting.quietStartMinute !== null &&
+        isQuietHoursActive(
+          {
+            start: minuteToTimeOfDay(setting.quietStartMinute),
+            end: minuteToTimeOfDay(setting.quietEndMinute!),
+            timeZone: setting.quietTimeZone!,
+          },
+          input.now,
+        )
       )
-    )
-      return;
-    await this.#enqueueEvent(client, {
-      category: 'motion',
-      deduplicationKey: `motion:${input.motionEventId}`,
-      deviceId: input.deviceId,
-      sourceId: input.sourceId,
-      userId: input.userId,
-      now: input.now,
-    });
+        continue;
+      await this.#enqueueEvent(client, {
+        category: 'motion',
+        deduplicationKey: `motion:${input.motionEventId}`,
+        deviceId: input.deviceId,
+        sourceId: input.sourceId,
+        userId: setting.userId,
+        now: input.now,
+      });
+    }
   }
 
   async scanPresence(now: Date, graceSeconds: number): Promise<void> {
@@ -255,13 +259,13 @@ export class PostgresNotificationRepository {
         quietEndMinute: number | null;
         quietTimeZone: string | null;
       }>(
-        `SELECT d.id, h.owner_id AS "userId", d.last_seen_at AS "lastSeenAt",
+        `SELECT d.id, np.user_id AS "userId", d.last_seen_at AS "lastSeenAt",
                 nps.candidate_since AS "candidateSince", nps.offline_since AS "offlineSince",
                 nps.offline_event_id AS "offlineEventId", np.quiet_start_minute AS "quietStartMinute",
                 np.quiet_end_minute AS "quietEndMinute", np.quiet_time_zone AS "quietTimeZone"
-         FROM cameras d JOIN households h ON h.id = d.household_id
-         JOIN notification_preferences np ON np.device_id = d.id AND np.user_id = h.owner_id
-         LEFT JOIN notification_presence_state nps ON nps.device_id = d.id
+         FROM cameras d
+         JOIN notification_preferences np ON np.device_id = d.id
+         LEFT JOIN notification_presence_state nps ON nps.device_id = d.id AND nps.user_id = np.user_id
          WHERE np.offline_enabled = true AND d.last_seen_at IS NOT NULL AND d.enabled = true
            AND d.privacy_mode = false AND d.revoked_at IS NULL
            AND EXISTS (SELECT 1 FROM device_credentials dc WHERE dc.camera_id = d.id AND dc.revoked_at IS NULL)
@@ -283,16 +287,16 @@ export class PostgresNotificationRepository {
                   })
                 : null;
             await client.query(
-              `INSERT INTO notification_presence_state (device_id, offline_event_id, updated_at)
-               VALUES ($1,$2,$3) ON CONFLICT (device_id) DO UPDATE SET candidate_since = NULL,
-               offline_since = NULL, offline_event_id = $2, updated_at = $3`,
-              [device.id, eventId, now],
+              `INSERT INTO notification_presence_state (user_id, device_id, offline_event_id, updated_at)
+               VALUES ($1,$2,$3,$4) ON CONFLICT (user_id, device_id) DO UPDATE SET candidate_since = NULL,
+               offline_since = NULL, offline_event_id = $3, updated_at = $4`,
+              [device.userId, device.id, eventId, now],
             );
           } else {
             await client.query(
-              `INSERT INTO notification_presence_state (device_id, updated_at) VALUES ($1,$2)
-               ON CONFLICT (device_id) DO UPDATE SET candidate_since = NULL, updated_at = $2`,
-              [device.id, now],
+              `INSERT INTO notification_presence_state (user_id, device_id, updated_at) VALUES ($1,$2,$3)
+               ON CONFLICT (user_id, device_id) DO UPDATE SET candidate_since = NULL, updated_at = $3`,
+              [device.userId, device.id, now],
             );
           }
           continue;
@@ -314,15 +318,15 @@ export class PostgresNotificationRepository {
               });
           await client.query(
             `INSERT INTO notification_presence_state
-             (device_id, candidate_since, offline_event_id, offline_since, updated_at) VALUES ($1,$2,$3,$4,$4)
-             ON CONFLICT (device_id) DO UPDATE SET candidate_since=$2, offline_event_id=$3, offline_since=$4, updated_at=$4`,
-            [device.id, candidateSince, eventId, now],
+             (user_id, device_id, candidate_since, offline_event_id, offline_since, updated_at) VALUES ($1,$2,$3,$4,$5,$5)
+             ON CONFLICT (user_id, device_id) DO UPDATE SET candidate_since=$3, offline_event_id=$4, offline_since=$5, updated_at=$5`,
+            [device.userId, device.id, candidateSince, eventId, now],
           );
         } else if (!device.candidateSince) {
           await client.query(
-            `INSERT INTO notification_presence_state (device_id, candidate_since, updated_at) VALUES ($1,$2,$3)
-             ON CONFLICT (device_id) DO UPDATE SET candidate_since=$2, updated_at=$3`,
-            [device.id, candidateSince, now],
+            `INSERT INTO notification_presence_state (user_id, device_id, candidate_since, updated_at) VALUES ($1,$2,$3,$4)
+             ON CONFLICT (user_id, device_id) DO UPDATE SET candidate_since=$3, updated_at=$4`,
+            [device.userId, device.id, candidateSince, now],
           );
         }
       }
@@ -516,7 +520,7 @@ export class PostgresNotificationRepository {
     const inserted = await client.query<{ id: string }>(
       `INSERT INTO notification_events
        (id,user_id,device_id,camera_source_id,category,deduplication_key,safe_payload,occurred_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (deduplication_key) DO NOTHING RETURNING id`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (user_id, deduplication_key) DO NOTHING RETURNING id`,
       [
         eventId,
         input.userId,
@@ -531,8 +535,8 @@ export class PostgresNotificationRepository {
     const persistedId = inserted.rows[0]?.id;
     if (!persistedId) {
       const existing = await client.query<{ id: string }>(
-        'SELECT id FROM notification_events WHERE deduplication_key=$1',
-        [input.deduplicationKey],
+        'SELECT id FROM notification_events WHERE user_id=$1 AND deduplication_key=$2',
+        [input.userId, input.deduplicationKey],
       );
       return existing.rows[0]!.id;
     }

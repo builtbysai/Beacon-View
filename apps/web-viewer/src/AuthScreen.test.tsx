@@ -30,9 +30,7 @@ it('preserves OAuth collision guidance, password visibility, and registration gu
   );
   fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
   expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'text');
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Create a password account' }),
-  );
+  fireEvent.click(screen.getByRole('button', { name: 'Create an account' }));
   expect(onMode).toHaveBeenCalledOnce();
   view.rerender(<AuthScreen {...props} mode="register" />);
   expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password');
@@ -92,7 +90,7 @@ it('requests a password reset without revealing whether the email exists', async
     />,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
-  fireEvent.change(screen.getByPlaceholderText('Enter your account email'), {
+  fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
     target: { value: 'someone@example.com' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Send reset link' }));
@@ -105,7 +103,21 @@ it('requests a password reset without revealing whether the email exists', async
       }),
     ),
   );
-  expect(await screen.findByRole('status')).toHaveTextContent(
-    'If an account exists for that email, check your inbox',
+  expect(await screen.findByText(/If an account exists/i)).toBeVisible();
+});
+it('replaces the Google link when the backend reports authentication unavailable', () => {
+  render(
+    <AuthScreen
+      busy={false}
+      error=""
+      googleAvailable={false}
+      mode="login"
+      onMode={vi.fn()}
+      onSubmit={vi.fn()}
+    />,
   );
+  expect(
+    screen.queryByRole('link', { name: /Continue with Google/ }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByText('Google sign-in unavailable')).toBeVisible();
 });

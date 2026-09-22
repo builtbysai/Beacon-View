@@ -1,7 +1,12 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
 
-const css = readFileSync('src/styles.css', 'utf8');
+// The new design token architecture moved tokens here.
+const css = fs.readFileSync(
+  path.join(process.cwd(), 'src/styles/tokens.css'),
+  'utf8',
+);
 
 function luminance(hex: string) {
   const rgb = hex.match(/[a-f\d]{2}/gi)!.map((channel) => {
@@ -12,7 +17,12 @@ function luminance(hex: string) {
 }
 
 describe('semantic theme contrast', () => {
-  const blocks = [...css.matchAll(/:root\s*\{([^}]+)\}/g)];
+  // Find all theme definition blocks: :root (light defaults), [data-theme="light"], [data-theme="dark"], @media (prefers-color-scheme: dark) { :root ... }
+  const blocks = [
+    ...css.matchAll(
+      /(?::root|\[data-theme=['"].*?['"]\])(?:,\s*\[data-theme=['"].*?['"]\])*\s*\{([^}]+)\}/g,
+    ),
+  ];
   it('checks both light and dark palettes', () =>
     expect(blocks).toHaveLength(2));
   for (const [index, block] of blocks.entries()) {
@@ -21,19 +31,17 @@ describe('semantic theme contrast', () => {
       tokens[match[1]!] = match[2]!;
     }
     it(`keeps normal text and primary actions above 4.5:1 in ${index ? 'dark' : 'light'} mode`, () => {
-      const pairs = ['--surface', '--surface-2'].flatMap((surface) =>
+      const pairs = ['--bg-base', '--bg-surface'].flatMap((surface) =>
         [
-          '--text',
+          '--text-primary',
           '--text-secondary',
-          '--text-muted',
-          '--success',
-          '--live',
-          '--offline',
+          '--status-success',
+          '--status-error',
         ].map((text) => [text, surface]),
       );
       pairs.push(
-        ['--action-text', '--action-bg'],
-        ['--action-text', '--action-bg-hover'],
+        ['--action-text', '--action-base'],
+        ['--action-text', '--action-hover'],
       );
       for (const [foreground, background] of pairs) {
         const a = luminance(tokens[foreground!]!);

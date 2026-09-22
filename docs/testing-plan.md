@@ -164,3 +164,12 @@ migration execution, cloud Compose configuration validation, and Android
 against a dedicated PostgreSQL 18 `beacon_secureview_test` database, including the 37
 PostgreSQL-backed cases and notification persistence. Docker Desktop was unavailable, so
 the database ran in the local Ubuntu WSL environment and was stopped after validation.
+
+On September 22, 2026, the frontend/backend integration candidate passed Prettier,
+ESLint, web and backend typechecks, both production builds, all 178 web tests, and
+all 211 backend tests against a freshly migrated dedicated
+`beacon_secureview_test` database. All 27 migrations applied successfully. A
+web/PWA smoke pass covered 390x844, 768x1024, and 1440x900 layouts, a clean browser
+console with the local backend, the linked standalone manifest, all five manifest
+icons, and the service worker. Android was outside that integration pass because
+the candidate did not change its request/response contract.

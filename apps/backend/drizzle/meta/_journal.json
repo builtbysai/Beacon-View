@@ -183,6 +183,13 @@
       "when": 1789512844019,
       "tag": "0025_motion_record_enabled",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790294400000,
+      "tag": "0026_multi_user_notification_preferences",
+      "breakpoints": true
     }
   ]
 }

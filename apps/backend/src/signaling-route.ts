@@ -305,7 +305,9 @@ async function connectGuestViewer(
     eventType: admitted ? 'live_view_started' : 'live_view_rejected',
     householdId: camera.householdId,
     ipAddress: request.ip,
-    metadata: admitted ? { guest: 'true' } : { guest: 'true', reason: 'camera_offline' },
+    metadata: admitted
+      ? { guest: 'true' }
+      : { guest: 'true', reason: 'camera_offline' },
     success: admitted,
     ...(viewerSessionId ? { viewerSessionId } : {}),
   });

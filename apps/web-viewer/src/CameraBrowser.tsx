@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+
 import { cameraStatus, type CameraAvailability } from './camera-status';
 import { Icon } from './Icon';
 import { useRadioGroupKeyboardNav } from './useRadioGroupKeyboardNav';
+import './CameraBrowser.css';
 
 type Filter = 'all' | 'ready' | 'privacy' | 'attention';
 const filters = {
@@ -45,6 +47,7 @@ export function CameraBrowser<T extends SearchableCamera>({
         status.label !== 'Privacy on')
     );
   };
+  const [visibleLimit, setVisibleLimit] = useState(9);
   const visible = cameras.filter(
     (camera) =>
       matches(camera, filter) &&
@@ -66,6 +69,12 @@ export function CameraBrowser<T extends SearchableCamera>({
       `${url.pathname}${url.search}${url.hash}`,
     );
   }, [filter, query]);
+
+  useEffect(() => {
+    setVisibleLimit(9);
+  }, [filter, query]);
+
+  const paginatedVisible = visible.slice(0, visibleLimit);
 
   const resultsMessage = query.trim()
     ? `${visible.length} ${visible.length === 1 ? 'camera matches' : 'cameras match'} “${query.trim()}”.`
@@ -113,7 +122,26 @@ export function CameraBrowser<T extends SearchableCamera>({
         </div>
       )}
       {visible.length > 0 || cameras.length === 0 ? (
-        children(visible)
+        <>
+          {children(paginatedVisible)}
+          {visible.length > 0 && (
+            <div className="camera-loadarea">
+              <div className="progress">
+                {visible.length > paginatedVisible.length
+                  ? `Showing ${paginatedVisible.length} of ${visible.length}`
+                  : `All ${visible.length} cameras loaded`}
+              </div>
+              {visible.length > paginatedVisible.length && (
+                <button
+                  className="btn secondary"
+                  onClick={() => setVisibleLimit((limit) => limit + 9)}
+                >
+                  Load more
+                </button>
+              )}
+            </div>
+          )}
+        </>
       ) : (
         <div className="empty camera-no-results">
           <Icon name="search" />

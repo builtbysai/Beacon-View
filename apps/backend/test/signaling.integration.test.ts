@@ -356,7 +356,8 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
 
     let forThisAttempt: AccessHistoryRecord[] = [];
     await waitForCondition(async () => {
-      const history = await store!.listAccessHistory(owner.householdId);
+      const history = (await store!.listAccessHistory(owner.householdId))
+        .events;
       forThisAttempt = history.filter(
         (event) => event.viewerSessionId === viewerSessionId,
       );
@@ -378,7 +379,8 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
     expect(await nextClose(unlabeled)).toBe(4003);
     let unlabeledRows: AccessHistoryRecord[] = [];
     await waitForCondition(async () => {
-      const refreshed = await store!.listAccessHistory(owner.householdId);
+      const refreshed = (await store!.listAccessHistory(owner.householdId))
+        .events;
       unlabeledRows = refreshed.filter(
         (event) => event.viewerSessionId === null,
       );

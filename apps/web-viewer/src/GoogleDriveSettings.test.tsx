@@ -30,12 +30,12 @@ describe('GoogleDriveSettings', () => {
     render(<GoogleDriveSettings />);
 
     expect(
-      await screen.findByRole('link', { name: 'Connect Google Drive' }),
+      await screen.findByRole('link', { name: 'Connect' }),
     ).toHaveAttribute('href', '/api/drive/connect?purpose=recordings');
-    expect(screen.getByText(/turn on cloud recording below/i)).toBeVisible();
+    expect(screen.getByText('Not connected')).toBeVisible();
   });
 
-  it('turns unavailable-status recovery into a real OAuth setup link', async () => {
+  it('does not offer a dead OAuth link when Drive is unconfigured', async () => {
     vi.mocked(request).mockResolvedValue({
       connected: false,
       configured: false,
@@ -46,9 +46,33 @@ describe('GoogleDriveSettings', () => {
 
     render(<GoogleDriveSettings />);
 
+    expect(await screen.findByText('Unavailable')).toBeVisible();
     expect(
-      await screen.findByRole('link', { name: 'Retry setup' }),
-    ).toHaveAttribute('href', '/api/drive/connect?purpose=recordings');
+      screen.queryByRole('link', { name: 'Retry' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/not configured on this Beacon server/),
+    ).toBeVisible();
+  });
+
+  it('retries a failed Drive status request', async () => {
+    vi.mocked(request)
+      .mockRejectedValueOnce(new Error('Temporarily unavailable'))
+      .mockResolvedValueOnce({
+        connected: false,
+        configured: true,
+        recordingsConnected: false,
+        providerEmail: null,
+        updatedAt: null,
+      });
+
+    render(<GoogleDriveSettings />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Temporarily unavailable',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('link', { name: 'Connect' })).toBeVisible();
   });
 
   it('surfaces an OAuth callback result and cleans it from the URL', async () => {
@@ -87,7 +111,7 @@ describe('GoogleDriveSettings', () => {
     expect(
       await screen.findByRole('link', { name: 'Turn on' }),
     ).toHaveAttribute('href', '/api/drive/connect?purpose=recordings');
-    expect(screen.getByText('Turn on cloud recording')).toBeVisible();
+    expect(screen.getByText('Cloud recording')).toBeVisible();
   });
 
   it('can verify and disconnect an existing connection', async () => {
@@ -107,16 +131,16 @@ describe('GoogleDriveSettings', () => {
     });
 
     render(<GoogleDriveSettings />);
-    expect(await screen.findByText(/Connected account:/)).toHaveTextContent(
+    expect(await screen.findByText(/Connected as/)).toHaveTextContent(
       'drive@example.com',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Verify connection' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
     await waitFor(() =>
       expect(request).toHaveBeenCalledWith('/api/drive/verify', {
         method: 'POST',
       }),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Disconnect Drive' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
     await waitFor(() =>
       expect(request).toHaveBeenCalledWith('/api/drive/connection', {
         method: 'DELETE',

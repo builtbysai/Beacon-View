@@ -6,6 +6,7 @@ import type {
   CameraRecord,
   CameraSourceInput,
   DeviceRecord,
+  DeviceHeartbeatIdentity,
 } from './store-contract.js';
 
 export class PostgresDeviceRepository {
@@ -143,14 +144,13 @@ export class PostgresDeviceRepository {
       const rearSource = sources.find((source) => source.facing === 'rear');
       if (rearSource) {
         await client.query(
-          `UPDATE camera_sources SET source_key = $2,
-                  display_name = $3, updated_at = $4
+          `UPDATE camera_sources SET source_key = $2, updated_at = $3
            WHERE device_id = $1 AND source_key = 'legacy-default'
              AND NOT EXISTS (
                SELECT 1 FROM camera_sources
                WHERE device_id = $1 AND source_key = $2
              )`,
-          [deviceId, rearSource.sourceKey, rearSource.name, now],
+          [deviceId, rearSource.sourceKey, now],
         );
       }
       for (const source of sources) {
@@ -429,12 +429,15 @@ export class PostgresDeviceRepository {
 
   async findByCredential(
     credentialHash: string,
-  ): Promise<CameraIdentity | null> {
-    const result = await this.pool.query<CameraIdentity>(
+  ): Promise<DeviceHeartbeatIdentity | null> {
+    const result = await this.pool.query<DeviceHeartbeatIdentity>(
       `SELECT cs.id AS "cameraId", d.id AS "deviceId",
               d.household_id AS "householdId",
               cs.public_camera_id AS "publicCameraId",
-              d.public_device_id AS "publicDeviceId"
+              d.public_device_id AS "publicDeviceId",
+              d.last_seen_at AS "lastSeenAt",
+              d.battery_percent AS "batteryPercent",
+              d.battery_charging AS "batteryCharging"
        FROM cameras d
        JOIN device_credentials dc ON dc.camera_id = d.id
        JOIN LATERAL (
