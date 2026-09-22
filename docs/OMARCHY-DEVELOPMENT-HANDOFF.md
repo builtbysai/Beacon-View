@@ -7,7 +7,7 @@ Updated 22 September 2026. GitHub: <https://github.com/builtbysai/Beacon-SecureV
 | Purpose                                           | Ref at audit                                 | Commit                                     |
 | ------------------------------------------------- | -------------------------------------------- | ------------------------------------------ |
 | Frozen frontend visual source of truth            | `frontend-recovery-final-2026-09-17`         | `af28b03a20637290622a2518a43677faa85f2b09` |
-| Current frontend branch / migration documentation | `antigravity/recovery-checkpoint`            | `73191da` plus handoff commit (see GitHub) |
+| Current frontend branch / migration documentation | `antigravity/recovery-checkpoint`            | `abde4eceef51a15eafb160e366d86c8ffd7fb648` |
 | Next integration branch, created without merging  | `frontend-backend-integration`               | `af28b03a20637290622a2518a43677faa85f2b09` |
 | Backend reference branch                          | `backend-integration` remote                 | `e42f1ce738bf9ee2552a0ef6429e45e8efb4bda8` |
 | Default branch                                    | `main`                                       | `839f607961b09f2f9f355ded30b1fac9d70c2901` |
