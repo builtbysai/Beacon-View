@@ -600,7 +600,10 @@ export interface MilestoneStore {
     householdId: string,
     options?: HouseholdActivityOptions,
   ): Promise<HouseholdActivityPage>;
-  scanDevicePresenceActivity(now: Date, offlineAfterMs: number): Promise<number>;
+  scanDevicePresenceActivity(
+    now: Date,
+    offlineAfterMs: number,
+  ): Promise<number>;
   recordDeviceRecoveredIfOffline(input: {
     cameraId: string;
     householdId: string;

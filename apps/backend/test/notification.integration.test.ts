@@ -281,6 +281,60 @@ describe.skipIf(!store)('notification transport persistence', () => {
     ).toBe(1);
   });
 
+  it('records device presence activity once per offline and recovery transition', async () => {
+    const { device, now, owner } = await fixture();
+    await store!.pool.query('UPDATE cameras SET last_seen_at=$2 WHERE id=$1', [
+      device.id,
+      now,
+    ]);
+    expect(
+      await store!.scanDevicePresenceActivity(
+        new Date(now.getTime() + 119_999),
+        120_000,
+      ),
+    ).toBe(0);
+    const offlineAt = new Date(now.getTime() + 120_001);
+    expect(
+      (
+        await Promise.all([
+          store!.scanDevicePresenceActivity(offlineAt, 120_000),
+          store!.scanDevicePresenceActivity(offlineAt, 120_000),
+        ])
+      ).reduce((total, created) => total + created, 0),
+    ).toBe(1);
+    const recovery = {
+      cameraId: device.id,
+      householdId: owner.householdId,
+      publicDeviceId: device.publicDeviceId,
+      now: new Date(now.getTime() + 120_002),
+    };
+    expect(
+      (
+        await Promise.all([
+          store!.recordDeviceRecoveredIfOffline(recovery),
+          store!.recordDeviceRecoveredIfOffline(recovery),
+        ])
+      ).filter(Boolean),
+    ).toHaveLength(1);
+    await store!.pool.query('UPDATE cameras SET last_seen_at=$2 WHERE id=$1', [
+      device.id,
+      new Date(now.getTime() + 120_002),
+    ]);
+    expect(
+      await store!.scanDevicePresenceActivity(
+        new Date(now.getTime() + 240_004),
+        120_000,
+      ),
+    ).toBe(1);
+    expect(
+      (
+        await store!.listHouseholdActivity(owner.householdId, {
+          eventTypes: ['device_offline', 'device_recovered'],
+        })
+      ).events.map((event) => event.eventType),
+    ).toEqual(['device_offline', 'device_recovered', 'device_offline']);
+  });
+
   it('delivers a security event to every active subscription with no preference to disable it', async () => {
     const { now, owner, sessionId } = await fixture();
     await store!.upsertNotificationSubscription({

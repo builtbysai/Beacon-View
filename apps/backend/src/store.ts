@@ -645,7 +645,10 @@ export class PostgresStore implements MilestoneStore {
     return this.auditRepository.listHouseholdActivity(householdId, options);
   }
 
-  async scanDevicePresenceActivity(now: Date, offlineAfterMs: number): Promise<number> {
+  async scanDevicePresenceActivity(
+    now: Date,
+    offlineAfterMs: number,
+  ): Promise<number> {
     return this.auditRepository.scanDevicePresenceActivity(now, offlineAfterMs);
   }
 

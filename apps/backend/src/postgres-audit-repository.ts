@@ -58,10 +58,33 @@ export class PostgresAuditRepository {
     return result.rowCount ?? 0;
   }
 
+  private async withPresenceLock<T>(
+    work: (client: PoolClient) => Promise<T>,
+  ): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtext('beacon-device-presence'))",
+      );
+      const result = await work(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 
-  async scanDevicePresenceActivity(now: Date, offlineAfterMs: number): Promise<number> {
-    const result = await this.pool.query(
-      `INSERT INTO audit_events
+  async scanDevicePresenceActivity(
+    now: Date,
+    offlineAfterMs: number,
+  ): Promise<number> {
+    return this.withPresenceLock(async (client) => {
+      const result = await client.query(
+        `INSERT INTO audit_events
        (household_id, camera_id, event_type, success, metadata, occurred_at)
        SELECT d.household_id, d.id, 'device_offline', true,
               jsonb_build_object('deviceId', d.public_device_id::text, 'deviceName', d.name),
@@ -79,9 +102,10 @@ export class PostgresAuditRepository {
            WHERE ae.camera_id = d.id AND ae.event_type = 'device_offline'
              AND ae.occurred_at > d.last_seen_at
          )`,
-      [now, offlineAfterMs],
-    );
-    return result.rowCount ?? 0;
+        [now, offlineAfterMs],
+      );
+      return result.rowCount ?? 0;
+    });
   }
 
   async recordDeviceRecoveredIfOffline(input: {
@@ -90,8 +114,9 @@ export class PostgresAuditRepository {
     publicDeviceId: string;
     now: Date;
   }): Promise<boolean> {
-    const result = await this.pool.query(
-      `INSERT INTO audit_events
+    return this.withPresenceLock(async (client) => {
+      const result = await client.query(
+        `INSERT INTO audit_events
        (household_id, camera_id, event_type, success, metadata, occurred_at)
        SELECT $1, $2, 'device_recovered', true,
               jsonb_build_object('deviceId', $3::text), $4
@@ -105,9 +130,10 @@ export class PostgresAuditRepository {
                AND recovered.occurred_at > offline.occurred_at
            )
        )`,
-      [input.householdId, input.cameraId, input.publicDeviceId, input.now],
-    );
-    return (result.rowCount ?? 0) === 1;
+        [input.householdId, input.cameraId, input.publicDeviceId, input.now],
+      );
+      return (result.rowCount ?? 0) === 1;
+    });
   }
 
   async listHouseholdActivity(

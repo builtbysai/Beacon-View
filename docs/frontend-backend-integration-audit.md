@@ -66,3 +66,10 @@ recorded during the quiet window, and alert creation resumes outside it. The
 full web suite passes 172 tests and the full backend suite passes 205 tests
 against the dedicated test database. Admin notification policy and realtime
 configuration invalidation remain open.
+The backend now records offline/recovered device activity from a presence
+sweep and heartbeat recovery. A PostgreSQL advisory transaction lock prevents
+concurrent workers from duplicating those transitions; the dedicated database
+test covers concurrent sweeps and recoveries. The full backend suite passes
+206 tests. The presence sweep does not yet publish household realtime
+invalidation, while heartbeat still publishes on every report; targeted
+transition broadcasts remain open.
