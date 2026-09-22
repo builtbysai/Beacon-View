@@ -56,4 +56,7 @@ configured optional services; and motion history no longer invents object or
 sound detection labels from event IDs. Household activity is not yet wired into
 the Activity UI, and PostgreSQL-backed validation remains required.
 The three inherited frontend test failures were stale assertions/test setup;
-after aligning them with the approved UI, the frontend suite passes 170 tests.
+after aligning them with the approved UI, the frontend suite passes. Drive
+Settings now explains when the server reports Drive unconfigured and offers a
+retry when the status request fails, instead of linking to an unavailable OAuth
+flow.

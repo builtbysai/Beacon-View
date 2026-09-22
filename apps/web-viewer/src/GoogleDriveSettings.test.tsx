@@ -35,7 +35,7 @@ describe('GoogleDriveSettings', () => {
     expect(screen.getByText('Not connected')).toBeVisible();
   });
 
-  it('turns unavailable-status recovery into a real OAuth setup link', async () => {
+  it('does not offer a dead OAuth link when Drive is unconfigured', async () => {
     vi.mocked(request).mockResolvedValue({
       connected: false,
       configured: false,
@@ -46,10 +46,29 @@ describe('GoogleDriveSettings', () => {
 
     render(<GoogleDriveSettings />);
 
-    expect(
-      await screen.findByRole('link', { name: 'Retry' }),
-    ).toHaveAttribute('href', '/api/drive/connect?purpose=recordings');
-    expect(screen.getByText('Needs attention')).toBeVisible();
+    expect(await screen.findByText('Unavailable')).toBeVisible();
+    expect(screen.queryByRole('link', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(screen.getByText(/not configured on this Beacon server/)).toBeVisible();
+  });
+
+  it('retries a failed Drive status request', async () => {
+    vi.mocked(request)
+      .mockRejectedValueOnce(new Error('Temporarily unavailable'))
+      .mockResolvedValueOnce({
+        connected: false,
+        configured: true,
+        recordingsConnected: false,
+        providerEmail: null,
+        updatedAt: null,
+      });
+
+    render(<GoogleDriveSettings />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Temporarily unavailable',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('link', { name: 'Connect' })).toBeVisible();
   });
 
   it('surfaces an OAuth callback result and cleans it from the URL', async () => {

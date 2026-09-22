@@ -96,7 +96,12 @@ export function GoogleDriveSettings() {
 
   if (!status) {
     return error ? (
-      <p role="alert">{error}</p>
+      <p role="alert">
+        {error}{' '}
+        <button type="button" className="secondary" onClick={() => void load()}>
+          Retry
+        </button>
+      </p>
     ) : (
       <p role="status">Loading Google Drive…</p>
     );
@@ -128,13 +133,8 @@ export function GoogleDriveSettings() {
           </>
         ) : (
           <>
-            <span className="pill pill-warn">Needs attention</span>
-            <a
-              className="secondary button-link"
-              href="/api/drive/connect?purpose=recordings"
-            >
-              Retry
-            </a>
+            <span className="pill pill-warn">Unavailable</span>
+            <span>Google Drive is not configured on this Beacon server.</span>
           </>
         )}
       </SettingsRow>
