@@ -40,9 +40,47 @@ const props = {
   onCamera: vi.fn<(id: string) => void>(),
   filterStorageKey: 'motion-test',
   refreshRevision: 0,
+  includeHouseholdActivity: false,
 };
 
 describe('Activity timeline', () => {
+  it('shows structured household activity alongside motion without claiming object detection', async () => {
+    const occurredAt = new Date().toISOString();
+    const fetch = vi.fn((url: string) => Promise.resolve(
+      url.startsWith('/api/activity')
+        ? {
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({
+              events: [{
+                id: 'offline-event',
+                actorEmail: null,
+                deviceName: 'Hallway phone',
+                eventType: 'device_offline',
+                occurredAt,
+                success: true,
+                metadata: { deviceId: 'device-one' },
+              }],
+              total: 1,
+            }),
+          }
+        : response([event('motion-event', occurredAt)]),
+    ));
+    vi.stubGlobal('fetch', fetch);
+
+    render(<MotionEventList {...props} includeHouseholdActivity />);
+    expect(await screen.findByText('Device went offline')).toBeVisible();
+    expect(screen.getByText('Motion detected')).toBeVisible();
+    expect(screen.queryByText('Person detected')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Device went offline'));
+    const details = screen.getByRole('dialog');
+    expect(details).toHaveTextContent('Device went offline');
+    expect(details).not.toHaveTextContent('Motion intensity');
+    expect(details).not.toHaveTextContent('Open Hallway phone');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(fetch.mock.calls.map(([url]) => url)).toContain('/api/activity?limit=50&offset=0');
+  });
+
   it('labels motion from the API as motion regardless of its event ID', async () => {
     const fetch = vi.fn().mockResolvedValue(response([event('ab')]));
     vi.stubGlobal('fetch', fetch);
@@ -198,15 +236,15 @@ describe('Activity timeline', () => {
     render(<MotionEventList {...props} />);
     await screen.findByText('saved');
     fireEvent.click(
-      screen.getByRole('button', { name: 'Clear activity history' }),
+      screen.getByRole('button', { name: 'Clear motion history' }),
     );
     expect(
-      await screen.findByText(/permanently deletes the event metadata/),
+      await screen.findByText(/permanently deletes motion event metadata/),
     ).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(fetch).toHaveBeenCalledTimes(1);
     fireEvent.click(
-      screen.getByRole('button', { name: 'Clear activity history' }),
+      screen.getByRole('button', { name: 'Clear motion history' }),
     );
     fireEvent.click(
       await screen.findByRole('button', { name: 'Clear history' }),

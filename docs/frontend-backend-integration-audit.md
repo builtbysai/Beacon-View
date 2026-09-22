@@ -53,8 +53,10 @@ The one-time legacy source migration now preserves a user rename.
 Progress on this branch: Diagnostics now has a retryable error state; the
 owner/admin activity API reads `audit_events`; the capability endpoint reports
 configured optional services; and motion history no longer invents object or
-sound detection labels from event IDs. Household activity is not yet wired into
-the Activity UI, and PostgreSQL-backed validation remains required.
+sound detection labels from event IDs. The Activity timeline now combines real
+motion metadata with structured household activity, orders and searches both,
+and keeps deletion scoped to motion history because audit history has no delete
+contract. PostgreSQL-backed backend validation passes.
 The three inherited frontend test failures were stale assertions/test setup;
 after aligning them with the approved UI, the frontend suite passes. Drive
 Settings now explains when the server reports Drive unconfigured and offers a
@@ -73,4 +75,6 @@ test covers concurrent sweeps and recoveries. The full backend suite passes
 206 tests at that checkpoint. The presence sweep now publishes a single
 refresh per affected household, and heartbeat only publishes on stale-to-online
 or health changes. Route and job tests cover these triggers; the full backend
-suite passes 210 tests. Activity UI consumption of these events remains open.
+suite passes 210 tests. The Activity UI consumes the structured events and
+refreshes for management, pairing, credential, and membership broadcasts. The
+full web suite passes 173 tests; its typecheck and production build pass.

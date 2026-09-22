@@ -11,6 +11,24 @@ interface MotionEvent {
   deviceName: string;
   confidence: number;
   occurredAt: string;
+  eventType?: never;
+}
+
+interface HouseholdEvent {
+  id: string;
+  actorEmail: string | null;
+  deviceName: string | null;
+  eventType: string;
+  occurredAt: string;
+  success: boolean;
+  metadata: Record<string, string>;
+}
+
+type ActivityEvent = MotionEvent | HouseholdEvent;
+
+interface HouseholdEventPage {
+  events: HouseholdEvent[];
+  total: number;
 }
 
 interface EventPage {
@@ -47,17 +65,56 @@ function savedFilter(key: string, fallback: string): string {
 // detection labels require an explicit device-reported event type.
 const motionKind = 'motion';
 
-function formatKindLabel(kind: string) {
-  const map: Record<string, string> = {
-    motion: 'Motion detected',
-    person: 'Person detected',
-    package: 'Package detected',
-    vehicle: 'Vehicle detected',
-    animal: 'Animal detected',
-    sound: 'Sound detected',
-    ring: 'Doorbell pressed',
-  };
-  return map[kind] || 'Event detected';
+const activityLabels: Record<string, string> = {
+  camera_source_added: 'Camera source added',
+  camera_source_deleted: 'Camera source removed',
+  camera_source_updated: 'Camera source updated',
+  camera_updated: 'Camera updated',
+  device_paired: 'Device paired',
+  device_reconnected: 'Device reconnected',
+  device_offline: 'Device went offline',
+  device_recovered: 'Device recovered',
+  device_updated: 'Device updated',
+  device_deleted: 'Device removed',
+  device_credential_revoked: 'Device access revoked',
+  device_self_removed: 'Device removed itself',
+  device_self_disconnected: 'Device disconnected',
+  privacy_enabled: 'Privacy mode enabled',
+  privacy_disabled: 'Privacy mode disabled',
+  household_invitation_created: 'Invitation created',
+  household_invitation_resent: 'Invitation resent',
+  household_invitation_accepted: 'Invitation accepted',
+  household_invitation_revoked: 'Invitation revoked',
+  household_member_removed: 'Member removed',
+  household_member_revoked: 'Member access revoked',
+  household_camera_grants_changed: 'Camera access changed',
+  camera_access_left: 'Camera access left',
+  recording_requested: 'Recording requested',
+  recording_available: 'Recording available',
+  recording_failed: 'Recording failed',
+  recording_deleted: 'Recording deleted',
+  live_view_started: 'Live view started',
+  live_view_rejected: 'Live view rejected',
+  motion_settings_changed: 'Motion settings changed',
+  motion_history_cleared: 'Motion history cleared',
+  motion_retention_changed: 'Motion retention changed',
+  notification_preference_changed: 'Notification preferences changed',
+  notification_subscription_created: 'Notification delivery enabled',
+  notification_subscription_revoked: 'Notification delivery disabled',
+};
+
+function isMotionEvent(event: ActivityEvent): event is MotionEvent {
+  return event.eventType === undefined;
+}
+
+function activityLabel(event: ActivityEvent): string {
+  return isMotionEvent(event)
+    ? 'Motion detected'
+    : activityLabels[event.eventType] ?? event.eventType.replaceAll('_', ' ');
+}
+
+function activityDeviceName(event: ActivityEvent): string {
+  return event.deviceName || (!isMotionEvent(event) ? event.actorEmail : null) || 'Household';
 }
 
 export function MotionEventList({
@@ -66,24 +123,25 @@ export function MotionEventList({
   clearRevision = 0,
   cameras,
   onCamera,
-  onAddCamera,
+  includeHouseholdActivity = true,
 }: {
   filterStorageKey: string;
   refreshRevision: number;
   clearRevision?: number;
   cameras: CameraOption[];
   onCamera: (id: string) => void;
-  onAddCamera?: () => void;
+  includeHouseholdActivity?: boolean;
 }) {
-  const [events, setEvents] = useState<MotionEvent[] | null>(null);
+  const [events, setEvents] = useState<ActivityEvent[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
+  const [activityHasMore, setActivityHasMore] = useState(false);
   const [error, setError] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   
   const [clearing, setClearing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [drawerEvent, setDrawerEvent] = useState<MotionEvent | null>(null);
+  const [drawerEvent, setDrawerEvent] = useState<ActivityEvent | null>(null);
   const [showLearn, setShowLearn] = useState(false);
 
   const [search, setSearch] = useState('');
@@ -96,13 +154,16 @@ export function MotionEventList({
   const pending = useRef(false);
   const controller = useRef<AbortController | null>(null);
   const query = useRef('');
+  const activityOffset = useRef(0);
   const status = useRef<HTMLElement>(null);
 
   useEffect(() => {
     try {
       window.localStorage.setItem(`${filterStorageKey}:camera`, cameraFilter);
       window.localStorage.setItem(`${filterStorageKey}:time`, timeFilter);
-    } catch {}
+    } catch {
+      // Activity filters still work when browser storage is unavailable.
+    }
   }, [cameraFilter, filterStorageKey, timeFilter]);
 
   async function fetchPage(append: boolean, next: string | null = null) {
@@ -114,17 +175,32 @@ export function MotionEventList({
     setError('');
     setLoadFailed(false);
     try {
-      const result = await request<EventPage>(
-        `/api/motion-events?${query.current}${next ? `&cursor=${encodeURIComponent(next)}` : ''}`,
-        { signal: abort.signal }
-      );
+      const [motionPage, activityPage] = await Promise.all([
+        next !== null || !append || cursor !== null
+          ? request<EventPage>(
+              `/api/motion-events?${query.current}${next ? `&cursor=${encodeURIComponent(next)}` : ''}`,
+              { signal: abort.signal },
+            )
+          : Promise.resolve<EventPage>({ events: [], nextCursor: null }),
+        includeHouseholdActivity && (!append || activityHasMore)
+          ? request<HouseholdEventPage>(
+              `/api/activity?limit=50&offset=${append ? activityOffset.current : 0}`,
+              { signal: abort.signal },
+            )
+          : Promise.resolve<HouseholdEventPage>({ events: [], total: activityOffset.current }),
+      ]);
       if (active !== generation.current) return;
+      activityOffset.current = append
+        ? activityOffset.current + activityPage.events.length
+        : activityPage.events.length;
+      setActivityHasMore(activityOffset.current < activityPage.total);
+      const pageEvents: ActivityEvent[] = [...motionPage.events, ...activityPage.events];
       setEvents((previous) =>
         append
-          ? [...(previous ?? []), ...result.events.filter((event) => !previous?.some((item) => item.id === event.id))]
-          : result.events
+          ? [...(previous ?? []), ...pageEvents.filter((event) => !previous?.some((item) => item.id === event.id))]
+          : pageEvents
       );
-      setCursor(result.nextCursor ?? null);
+      setCursor(motionPage.nextCursor ?? null);
     } catch {
       if (active === generation.current) {
         setError('Activity could not be loaded. Your history is still saved.');
@@ -148,6 +224,8 @@ export function MotionEventList({
     query.current = filters.toString();
     setEvents(null);
     setCursor(null);
+    setActivityHasMore(false);
+    activityOffset.current = 0;
     void fetchPage(false);
     return () => {
       generation.current += 1;
@@ -163,7 +241,7 @@ export function MotionEventList({
     try {
       await request<void>('/api/motion-events', { method: 'DELETE' });
       if (active === generation.current) {
-        setEvents([]);
+        setEvents((previous) => previous?.filter((event) => !isMotionEvent(event)) ?? []);
         setCursor(null);
         status.current?.focus();
       }
@@ -177,27 +255,42 @@ export function MotionEventList({
   const filteredEvents = useMemo(() => {
     if (!events) return [];
     let result = events;
+    if (cameraFilter !== 'all') {
+      result = result.filter((event) =>
+        isMotionEvent(event)
+          ? event.cameraId === cameraFilter
+          : event.metadata.cameraId === cameraFilter,
+      );
+    }
+    if (timeFilter !== 'all') {
+      const since = Date.now() - (timeFilter === '24' ? 1 : 7) * 86_400_000;
+      result = result.filter((event) => isMotionEvent(event) || new Date(event.occurredAt).getTime() >= since);
+    }
     if (kindFilter !== 'all') {
-      result = result.filter(() => kindFilter === motionKind);
+      result = result.filter((event) => kindFilter === motionKind && isMotionEvent(event));
     }
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(
-        (e) => e.deviceName.toLowerCase().includes(q) || e.cameraName.toLowerCase().includes(q) || formatKindLabel(motionKind).toLowerCase().includes(q)
+        (e) => activityDeviceName(e).toLowerCase().includes(q) ||
+          (isMotionEvent(e) ? e.cameraName : e.actorEmail ?? '').toLowerCase().includes(q) ||
+          activityLabel(e).toLowerCase().includes(q)
       );
     }
     
     if (sortOrder === 'old') {
-      result = [...result].reverse();
+      result = [...result].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
     } else if (sortOrder === 'type') {
-      result = [...result].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+      result = [...result].sort((a, b) => activityLabel(a).localeCompare(activityLabel(b)) || b.occurredAt.localeCompare(a.occurredAt));
     } else if (sortOrder === 'device') {
-      result = [...result].sort((a, b) => a.deviceName.localeCompare(b.deviceName));
+      result = [...result].sort((a, b) => activityDeviceName(a).localeCompare(activityDeviceName(b)) || b.occurredAt.localeCompare(a.occurredAt));
+    } else {
+      result = [...result].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     }
     return result;
-  }, [events, kindFilter, search, sortOrder]);
+  }, [events, cameraFilter, timeFilter, kindFilter, search, sortOrder]);
 
-  const groups = new Map<string, MotionEvent[]>();
+  const groups = new Map<string, ActivityEvent[]>();
   for (const event of filteredEvents) {
     const day = new Date(event.occurredAt).toLocaleDateString(undefined, {
       weekday: 'long',
@@ -221,7 +314,7 @@ export function MotionEventList({
   // Calculate counts per kind
   const kindCounts = useMemo(() => {
     const counts: Record<string, number> = { all: events?.length ?? 0 };
-    counts[motionKind] = events?.length ?? 0;
+    counts[motionKind] = events?.filter(isMotionEvent).length ?? 0;
     return counts;
   }, [events]);
 
@@ -329,7 +422,7 @@ export function MotionEventList({
         <div className="activity-v3-empty">
           <i><Icon name="activity" /></i>
           <h3>{cameras.length === 0 ? 'No activity yet.' : 'No matching activity'}</h3>
-          <p>{cameras.length === 0 ? 'Motion events will appear here after you connect a camera.' : 'No activity matches these filters.'}</p>
+          <p>{cameras.length === 0 ? 'Activity will appear here after you connect a camera.' : 'No activity matches these filters.'}</p>
         </div>
       )}
 
@@ -338,9 +431,9 @@ export function MotionEventList({
           <h2 className="activity-v3-daytitle">{day}</h2>
           <div className="activity-v3-feed">
             {entries.map((event) => {
-              const kind = motionKind;
-              const label = formatKindLabel(kind);
-              const iconName = kinds.find(k => k.id === kind)?.icon || 'activity';
+              const kind = isMotionEvent(event) ? motionKind : 'system';
+              const label = activityLabel(event);
+              const iconName = 'activity';
               
               return (
                 <article 
@@ -348,7 +441,7 @@ export function MotionEventList({
                   className="activity-v3-event"
                   tabIndex={0}
                   role="button"
-                  aria-label={`View ${label} from ${event.deviceName}`}
+                  aria-label={`View ${label} from ${activityDeviceName(event)}`}
                   onClick={() => setDrawerEvent(event)}
                   onKeyDown={e => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -368,7 +461,12 @@ export function MotionEventList({
                       </time>
                     </div>
                     <div className="activity-v3-where">
-                      <b>{event.deviceName}</b> &middot; {event.cameraName}{kind === 'motion' ? ` &middot; ${Math.round(event.confidence * 100)}% intensity` : ''}
+                      <b>{activityDeviceName(event)}</b>
+                      {isMotionEvent(event)
+                        ? <> &middot; {event.cameraName} &middot; {Math.round(event.confidence * 100)}% intensity</>
+                        : event.metadata.cameraName
+                          ? <> &middot; {event.metadata.cameraName}</>
+                          : null}
                     </div>
                   </div>
                   <span className="activity-v3-chev" aria-hidden="true">&rsaquo;</span>
@@ -381,28 +479,30 @@ export function MotionEventList({
 
       {events && events.length > 0 && (
         <div className="activity-v3-bottom">
-          {cursor && (
+          {(cursor || activityHasMore) && (
             <button
               className="btn secondary activity-v3-loadmore"
-              onClick={() => fetchPage(true, cursor)}
+              onClick={() => void fetchPage(true, cursor)}
               disabled={busy}
             >
               {busy ? 'Loading…' : 'Load more'}
             </button>
           )}
-          <button className="activity-v3-clear" onClick={() => setConfirmClear(true)}>
-            Clear activity history
-          </button>
+          {events.some(isMotionEvent) && (
+            <button className="activity-v3-clear" onClick={() => setConfirmClear(true)}>
+              Clear motion history
+            </button>
+          )}
         </div>
       )}
 
       {confirmClear && (
         <ConfirmDialog
-          title="Clear activity history?"
-          description="This permanently deletes the event metadata shown in Activity. This action can't be undone."
+          title="Clear motion history?"
+          description="This permanently deletes motion event metadata. Household activity remains. This action can't be undone."
           confirmLabel="Clear history"
           busy={clearing}
-          onConfirm={clearHistory}
+          onConfirm={() => void clearHistory()}
           onCancel={() => setConfirmClear(false)}
         />
       )}
@@ -418,11 +518,11 @@ export function MotionEventList({
             </div>
             
             <div className="activity-v3-eventhero">
-              <div className={`activity-v3-evicon ${motionKind}`}>
+              <div className={`activity-v3-evicon ${isMotionEvent(drawerEvent) ? motionKind : 'system'}`}>
                 <Icon name="activity" />
               </div>
               <div>
-                <h2 id="detailTitle">{formatKindLabel(motionKind)}</h2>
+                <h2 id="detailTitle">{activityLabel(drawerEvent)}</h2>
                 <p>
                   {new Date(drawerEvent.occurredAt).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at {new Date(drawerEvent.occurredAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
                 </p>
@@ -432,31 +532,39 @@ export function MotionEventList({
             <div className="activity-v3-facts">
               <div className="activity-v3-fact">
                 <span>Device</span>
-                <span>{drawerEvent.deviceName}</span>
+                <span>{activityDeviceName(drawerEvent)}</span>
               </div>
-              <div className="activity-v3-fact">
-                <span>Source</span>
-                <span>{drawerEvent.cameraName}</span>
-              </div>
+              {(isMotionEvent(drawerEvent) || drawerEvent.metadata.cameraName) && (
+                <div className="activity-v3-fact">
+                  <span>Source</span>
+                  <span>{isMotionEvent(drawerEvent) ? drawerEvent.cameraName : drawerEvent.metadata.cameraName}</span>
+                </div>
+              )}
               <div className="activity-v3-fact">
                 <span>Event type</span>
-                <span>{formatKindLabel(motionKind).replace(' detected', '')}</span>
+                <span>{activityLabel(drawerEvent).replace(' detected', '')}</span>
               </div>
-              <div className="activity-v3-fact">
-                <span>Motion intensity</span>
-                <span>{Math.round(drawerEvent.confidence * 100)}%</span>
-              </div>
+              {isMotionEvent(drawerEvent) && (
+                <div className="activity-v3-fact">
+                  <span>Motion intensity</span>
+                  <span>{Math.round(drawerEvent.confidence * 100)}%</span>
+                </div>
+              )}
             </div>
             
-            <div className="activity-v3-explain">
-              Motion is based on visual changes in the camera view. Lighting, shadows, reflections, or moving objects can trigger it. A motion event does not mean Beacon identified a person or object.
-            </div>
+            {isMotionEvent(drawerEvent) && (
+              <div className="activity-v3-explain">
+                Motion is based on visual changes in the camera view. Lighting, shadows, reflections, or moving objects can trigger it. A motion event does not mean Beacon identified a person or object.
+              </div>
+            )}
             
             <div className="activity-v3-draweractions">
-              <button className="primary" onClick={() => {
-                setDrawerEvent(null);
-                onCamera(drawerEvent.cameraId);
-              }}>Open {drawerEvent.deviceName}</button>
+              {(isMotionEvent(drawerEvent) || drawerEvent.metadata.cameraId) && (
+                <button className="primary" onClick={() => {
+                  setDrawerEvent(null);
+                  onCamera(isMotionEvent(drawerEvent) ? drawerEvent.cameraId : drawerEvent.metadata.cameraId!);
+                }}>Open {activityDeviceName(drawerEvent)}</button>
+              )}
               <button className="secondary2" onClick={() => setDrawerEvent(null)}>Back to activity</button>
             </div>
           </aside>

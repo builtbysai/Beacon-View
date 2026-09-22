@@ -703,6 +703,11 @@ describe('App', () => {
           status: 200,
         })
         .mockResolvedValueOnce({
+          json: () => Promise.resolve({ events: [], total: 0 }),
+          ok: true,
+          status: 200,
+        })
+        .mockResolvedValueOnce({
           json: () =>
             Promise.resolve({
               events: [
@@ -716,6 +721,11 @@ describe('App', () => {
                 },
               ],
             }),
+          ok: true,
+          status: 200,
+        })
+        .mockResolvedValueOnce({
+          json: () => Promise.resolve({ events: [], total: 0 }),
           ok: true,
           status: 200,
         })
@@ -750,7 +760,7 @@ describe('App', () => {
       '24',
     );
     fireEvent.click(
-      screen.getByRole('button', { name: 'Clear activity history' }),
+      screen.getByRole('button', { name: 'Clear motion history' }),
     );
     fireEvent.click(
       await screen.findByRole('button', { name: 'Clear history' }),
@@ -786,6 +796,8 @@ describe('App', () => {
                           ],
                           nextCursor: null,
                         }
+                      : url.startsWith('/api/activity')
+                        ? { events: [], total: 0 }
                       : {
                           cameras: [
                             {

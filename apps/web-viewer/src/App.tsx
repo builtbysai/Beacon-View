@@ -382,6 +382,14 @@ export function App() {
           setMotionClearRevision((revision) => revision + 1);
         }
       }
+      if (
+        message.type === 'camera-paired' ||
+        message.type === 'device-credential-revoked' ||
+        message.type === 'device-management-changed' ||
+        message.type === 'household-membership-changed'
+      ) {
+        setMotionEventRevision((revision) => revision + 1);
+      }
       if (message.type === 'household-membership-changed') {
         setMembershipRevision((revision) => revision + 1);
       }
@@ -1336,7 +1344,6 @@ export function App() {
               const camera = cameras.find((item) => item.id === id);
               if (camera) openCamera(camera);
             }}
-            onAddCamera={() => navigate('camera mode')}
           />
         )}
         {page === 'diagnostics' && <Diagnostics />}
@@ -1408,4 +1415,3 @@ export function App() {
     </SidebarProvider>
   );
 }
-
