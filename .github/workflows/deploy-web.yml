@@ -114,12 +114,12 @@ jobs:
             --project-name beacon-secureview-cloud \
             "${env_files[@]}" \
             --file "$compose_file" \
-            run --rm backup
+            run --rm --interactive=false backup
           sudo docker compose \
             --project-name beacon-secureview-cloud \
             "${env_files[@]}" \
             --file "$compose_file" \
-            run --rm migrate
+            run --rm --interactive=false migrate
           sudo docker compose \
             --project-name beacon-secureview-cloud \
             "${env_files[@]}" \
