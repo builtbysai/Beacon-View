@@ -192,4 +192,14 @@ describe('NotificationSettings', () => {
     expect(await screen.findByText(/Pair a camera/)).toBeVisible();
     expect(request).toHaveBeenCalledTimes(2);
   });
+
+  it('does not offer a dead browser notification action when Web Push is unavailable', async () => {
+    render(
+      <SettingsAutosaveProvider>
+        <NotificationSettings webPushAvailable={false} />
+      </SettingsAutosaveProvider>,
+    );
+    expect(await screen.findByRole('button', { name: 'Unavailable' })).toBeDisabled();
+    expect(screen.getByText('Unavailable', { selector: '.pill' })).toBeVisible();
+  });
 });

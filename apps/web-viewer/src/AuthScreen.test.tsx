@@ -107,3 +107,17 @@ it('requests a password reset without revealing whether the email exists', async
   );
   expect(await screen.findByText(/If an account exists/i)).toBeVisible();
 });
+it('replaces the Google link when the backend reports authentication unavailable', () => {
+  render(
+    <AuthScreen
+      busy={false}
+      error=""
+      googleAvailable={false}
+      mode="login"
+      onMode={vi.fn()}
+      onSubmit={vi.fn()}
+    />,
+  );
+  expect(screen.queryByRole('link', { name: /Continue with Google/ })).not.toBeInTheDocument();
+  expect(screen.getByText('Google sign-in unavailable')).toBeVisible();
+});

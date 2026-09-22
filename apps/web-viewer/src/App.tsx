@@ -54,6 +54,10 @@ import { FavoriteCameraCard } from './FavoriteCameraCard';
 import { FavoritesEditor } from './FavoritesEditor';
 import { LatestActivityPreview } from './LatestActivityPreview';
 import { loadFavoriteDeviceIds, saveFavoriteDeviceIds } from './favorites';
+import {
+  isBackendCapabilities,
+  type BackendCapabilities,
+} from './capabilities';
 
 const SPLASH_SEEN_KEY = 'beacon.splash.seen.v1';
 
@@ -112,6 +116,9 @@ export function App() {
   const [motionClearRevision, setMotionClearRevision] = useState(0);
   const [membershipRevision, setMembershipRevision] = useState(0);
   const [driveRecordingReady, setDriveRecordingReady] = useState(false);
+  const [capabilities, setCapabilities] = useState<BackendCapabilities | null>(
+    null,
+  );
   // `null` means "no saved preference yet" -- Home falls back to a default
   // selection rather than showing zero favorites. See favorites.ts.
   const [favoriteDeviceIds, setFavoriteDeviceIds] = useState<string[] | null>(
@@ -248,6 +255,15 @@ export function App() {
       })
       .finally(() => setLoading(false));
   }, [loadCameras]);
+
+  useEffect(() => {
+    if (loading || capabilities || (user && page !== 'settings')) return;
+    void request<unknown>('/api/capabilities')
+      .then((result) => {
+        if (isBackendCapabilities(result)) setCapabilities(result);
+      })
+      .catch(() => setCapabilities(null));
+  }, [capabilities, loading, page, user]);
 
   // Account state (email verification, Google/Drive links, household role)
   // can change in another tab -- the verify-email and OAuth-callback pages
@@ -806,8 +822,15 @@ export function App() {
         returnLabel={user ? 'Back to Settings' : 'Return to Beacon'}
       />
     );
-  if (page === 'contact') return <ContactPage />;
-  if (page === 'account deletion') return <ContactPage accountDeletion />;
+  if (page === 'contact')
+    return <ContactPage available={capabilities?.contact !== false} />;
+  if (page === 'account deletion')
+    return (
+      <ContactPage
+        accountDeletion
+        available={capabilities?.contact !== false}
+      />
+    );
 
   if (loading)
     return (
@@ -837,6 +860,7 @@ export function App() {
         mode={mode}
         busy={authBusy}
         error={error}
+        googleAvailable={capabilities?.auth.google !== false}
         onSubmit={(event) => void authenticate(event)}
         onMode={() => {
           setError('');
@@ -1353,6 +1377,8 @@ export function App() {
             user={user}
             household={household!}
             membershipRevision={membershipRevision}
+            googleAvailable={capabilities?.auth.google !== false}
+            webPushAvailable={capabilities?.notifications.webPush !== false}
             requestedSection={settingsSection}
             onSectionChange={(section) => {
               pushRoute(`/settings?section=${section}`);

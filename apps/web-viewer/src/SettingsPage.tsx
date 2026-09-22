@@ -24,6 +24,8 @@ type SettingsPageProps = {
   household: HouseholdSession;
   cameras: Camera[];
   membershipRevision: number;
+  googleAvailable?: boolean;
+  webPushAvailable?: boolean;
   requestedSection: string | null;
   onSectionChange: (section: SettingsSection) => void;
   onDeleteAccount: () => void;
@@ -70,6 +72,8 @@ export function SettingsPage({
   household,
   cameras,
   membershipRevision,
+  googleAvailable = true,
+  webPushAvailable = true,
   requestedSection,
   onSectionChange,
   onDeleteAccount,
@@ -191,7 +195,7 @@ export function SettingsPage({
           {manager && (
             <section id="notifications" className="settings-section" ref={(element) => { sectionRefs.current.notifications = element; }}>
               <SectionHead title="Notifications">Control browser delivery and alerts from each camera.</SectionHead>
-              <NotificationSettings />
+              <NotificationSettings webPushAvailable={webPushAvailable} />
             </section>
           )}
 
@@ -224,7 +228,7 @@ export function SettingsPage({
               <div className="settings-account-methods">
                 <h3>Sign-in methods</h3>
                 {!user.hasPassword && <SetPassword onSet={onUserChanged} />}
-                <LinkGoogleAccount linked={Boolean(user.googleLinked)} />
+              <LinkGoogleAccount linked={Boolean(user.googleLinked)} available={googleAvailable} />
               </div>
             </div>
             <div className="settings-card settings-card-danger settings-danger-card">

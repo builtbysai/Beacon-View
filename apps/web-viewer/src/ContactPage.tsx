@@ -1,14 +1,16 @@
 import { useState, type FormEvent } from 'react';
 
 import { request } from './api';
-import { Brand, Icon } from './Icon';
+import { Icon } from './Icon';
 import { PublicHeader } from './PublicHeader';
 import './ContactPage.css';
 
 export function ContactPage({
   accountDeletion = false,
+  available = true,
 }: {
   accountDeletion?: boolean;
+  available?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -16,7 +18,7 @@ export function ContactPage({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || !available) return;
     setBusy(true);
     setError('');
     const formElement = event.currentTarget;
@@ -102,6 +104,11 @@ export function ContactPage({
               {error}
             </div>
           )}
+          {!available && !sent && (
+            <div className="auth-alert" role="alert">
+              Contact delivery is not configured on this Beacon server.
+            </div>
+          )}
 
           <div className={`form ${sent ? 'hide' : ''}`} id="form">
             <div className="cardhead">
@@ -114,18 +121,18 @@ export function ContactPage({
               <div className="twocol">
                 <div className="field">
                   <label htmlFor="name">Name <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>
-                  <input id="name" name="name" autoComplete="name" maxLength={100} disabled={busy} />
+                  <input id="name" name="name" autoComplete="name" maxLength={100} disabled={busy || !available} />
                 </div>
                 <div className="field">
                   <label htmlFor="email">Email</label>
-                  <input id="email" name="email" type="email" autoComplete="email" required disabled={busy} />
+                  <input id="email" name="email" type="email" autoComplete="email" required disabled={busy || !available} />
                 </div>
               </div>
               
               {!accountDeletion && (
                 <div className="field">
                   <label htmlFor="topic">What can we help with?</label>
-                  <select id="topic" required disabled={busy}>
+                  <select id="topic" required disabled={busy || !available}>
                     <option value="">Choose a topic</option>
                     <option>Product support</option>
                     <option>Account</option>
@@ -137,11 +144,11 @@ export function ContactPage({
               
               <div className="field">
                 <label htmlFor="subject">Subject</label>
-                <input id="subject" name="subject" required disabled={busy} defaultValue={accountDeletion ? 'Account deletion request' : ''} readOnly={accountDeletion} />
+                <input id="subject" name="subject" required disabled={busy || !available} defaultValue={accountDeletion ? 'Account deletion request' : ''} readOnly={accountDeletion} />
               </div>
               <div className="field">
                 <label htmlFor="message">Message</label>
-                <textarea id="message" name="message" required disabled={busy} placeholder="Tell us what happened or what you need help with."></textarea>
+                <textarea id="message" name="message" required disabled={busy || !available} placeholder="Tell us what happened or what you need help with."></textarea>
               </div>
               
               <div className="actions">
@@ -149,7 +156,7 @@ export function ContactPage({
                   <span style={{ display: 'grid', placeItems: 'center', width: 14, height: 14 }}><Icon name="shield" /></span>
                   <span>Don't include passwords, private media, or other sensitive information.</span>
                 </div>
-                <button className="send" disabled={busy}>{busy ? 'Sending…' : 'Send message'}</button>
+                <button className="send" disabled={busy || !available}>{busy ? 'Sending…' : available ? 'Send message' : 'Unavailable'}</button>
               </div>
             </form>
           </div>

@@ -87,3 +87,10 @@ full web suite passes 173 tests; its typecheck and production build pass.
 Notification preference load failures now render a retryable error instead of
 the misleading empty-camera state. The full web suite passes 174 tests after
 this fix.
+The frontend now consumes `/api/capabilities` only on pages that expose
+optional controls. Authoritative unavailable states remove Google sign-in and
+link actions, disable Web Push activation, and disable contact submission with
+an explanation. Google Drive continues to use its more specific status route.
+Malformed or unreachable capability responses preserve the existing controls
+and their feature-specific error handling. The full web suite passes 178 tests;
+typecheck and production build pass.

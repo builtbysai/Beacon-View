@@ -24,7 +24,13 @@ const RESULT_MESSAGES: Record<string, { text: string; ok: boolean }> = {
   },
 };
 
-export function LinkGoogleAccount({ linked }: { linked: boolean }) {
+export function LinkGoogleAccount({
+  linked,
+  available = true,
+}: {
+  linked: boolean;
+  available?: boolean;
+}) {
   const [notice, setNotice] = useState<{ text: string; ok: boolean } | null>(
     null,
   );
@@ -51,6 +57,17 @@ export function LinkGoogleAccount({ linked }: { linked: boolean }) {
         description="You can sign in with your password or with Google."
       >
         <span className="status-badge status-online">Linked</span>
+      </SettingsRow>
+    );
+  }
+
+  if (!available) {
+    return (
+      <SettingsRow
+        title="Link your Google account"
+        description="Google authentication is not configured on this Beacon server."
+      >
+        <span className="status-badge">Unavailable</span>
       </SettingsRow>
     );
   }

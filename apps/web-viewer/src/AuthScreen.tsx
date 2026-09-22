@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { request } from './api';
-import { Brand, Icon } from './Icon';
+import { Icon } from './Icon';
 import { PublicHeader } from './PublicHeader';
 import './AuthScreen.css';
 
@@ -8,12 +8,14 @@ export function AuthScreen({
   mode: initialMode,
   busy,
   error,
+  googleAvailable = true,
   onSubmit,
   onMode,
 }: {
   mode: 'login' | 'register';
   busy: boolean;
   error: string;
+  googleAvailable?: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onMode: () => void;
 }) {
@@ -51,6 +53,7 @@ export function AuthScreen({
         method: 'POST',
       });
     } catch {
+      // The response is intentionally identical whether the account exists.
     } finally {
       setLocalBusy(false);
       setResetSent(true);
@@ -119,7 +122,11 @@ export function AuthScreen({
                 <button className="primary" disabled={isBusy}>{isBusy ? 'Signing in…' : 'Sign in'}</button>
               </form>
               <div className="divider">or</div>
-              <a className="google" href={googleHref}><span className="g">G</span>Continue with Google</a>
+              {googleAvailable ? (
+                <a className="google" href={googleHref}><span className="g">G</span>Continue with Google</a>
+              ) : (
+                <span className="google" aria-disabled="true"><span className="g">G</span>Google sign-in unavailable</span>
+              )}
               <p className="switch">New to Beacon? <button onClick={() => { setView('register'); onMode(); }}>Create an account</button></p>
             </div>
           )}
@@ -163,7 +170,11 @@ export function AuthScreen({
                 <button className="primary" disabled={isBusy || confirmMismatch}>{isBusy ? 'Creating account…' : 'Create account'}</button>
               </form>
               <div className="divider">or</div>
-              <a className="google" href={googleHref}><span className="g">G</span>Continue with Google</a>
+              {googleAvailable ? (
+                <a className="google" href={googleHref}><span className="g">G</span>Continue with Google</a>
+              ) : (
+                <span className="google" aria-disabled="true"><span className="g">G</span>Google sign-in unavailable</span>
+              )}
               <p className="switch">Already have an account? <button onClick={() => { setView('login'); onMode(); }}>Sign in</button></p>
             </div>
           )}
@@ -174,7 +185,7 @@ export function AuthScreen({
                 <h2>Reset your password</h2>
                 <p>Enter your email and we'll send you a reset link.</p>
               </div>
-              <form aria-label="Request a password reset" onSubmit={onResetSubmit}>
+              <form aria-label="Request a password reset" onSubmit={(event) => void onResetSubmit(event)}>
                 <div className="field">
                   <div className="labelrow">
                     <label htmlFor="resetemail">Email</label>

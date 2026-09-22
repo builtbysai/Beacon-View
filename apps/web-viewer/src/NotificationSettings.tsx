@@ -52,7 +52,11 @@ export async function disableWebNotifications(): Promise<void> {
   localStorage.removeItem('beacon.notification.subscription.v1');
 }
 
-export function NotificationSettings() {
+export function NotificationSettings({
+  webPushAvailable = true,
+}: {
+  webPushAvailable?: boolean;
+}) {
   const { run } = useSettingsAutosave();
   const [preferences, setPreferences] = useState<Preference[] | null>(null);
   const [enabled, setEnabled] = useState(false);
@@ -208,15 +212,15 @@ export function NotificationSettings() {
         description="Receive private Beacon alerts on this browser."
       >
         <div className="notification-channel-action">
-          <span className={enabled ? 'pill pill-on' : 'pill'}>
-            {enabled ? 'On' : 'Off'}
+          <span className={enabled ? 'pill pill-on' : webPushAvailable ? 'pill' : 'pill pill-warn'}>
+            {enabled ? 'On' : webPushAvailable ? 'Off' : 'Unavailable'}
           </span>
           <button
             className="secondary"
-            disabled={channelBusy}
+            disabled={channelBusy || !webPushAvailable}
             onClick={() => void (enabled ? disableChannel() : enableChannel())}
           >
-            {channelBusy ? 'Updating…' : enabled ? 'Turn off' : 'Turn on'}
+            {channelBusy ? 'Updating…' : enabled ? 'Turn off' : webPushAvailable ? 'Turn on' : 'Unavailable'}
           </button>
         </div>
       </SettingsRow>
