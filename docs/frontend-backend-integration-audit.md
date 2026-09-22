@@ -1,96 +1,69 @@
 # Frontend/backend integration audit
 
-Verified September 22, 2026 against `frontend-backend-integration` at
-`af28b03` and `origin/backend-integration` at `e42f1ce`. This is an implementation
-inventory, not a release acceptance report.
+Verified September 22, 2026 on `frontend-backend-integration`. This is the
+merge-readiness record for the web/PWA and backend integration. Physical Android,
+media-path, provider, and network acceptance remain release evidence tracked in
+the roadmap.
 
-## Visual baseline and refs
+## Result
 
-`frontend-recovery-final-2026-09-17` resolves to `af28b03`, the same commit as
-`frontend-backend-integration`. The Settings width, responsive navigation,
-Notification Settings cards, Quiet Hours layout, modal stability, and header
-alignment commits are all ancestors of that tag. The recovery branch adds
-migration documents, a read-only environment script, and executable bits on
-Linux scripts after the tag; it adds no web viewer change. The existing tag is
-already on GitHub and serves as the visual checkpoint. Do not merge the recovery
-branch for frontend integration.
+The frontend/backend code integration is complete. The branch preserves the
+approved frontend recovery baseline while using the current backend contracts.
+No later backend milestone or older backend UI variant needs to be merged into
+this branch.
 
-## Verified feature map
+| Area                         | Integrated state                                                                                                                                                                                                                                                                               | Remaining boundary                                                                       |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Home                         | `/api/cameras` and `/api/devices` provide camera and attention state. The latest preview intentionally remains motion-only. Favorites are documented as a local browser preference.                                                                                                            | Synced favorites would require a future user preference contract.                        |
+| Cameras and sources          | Listing, rename, delete, activation, privacy, pairing, reconnect, health, and source metadata use backend routes. Source sync preserves user names and treats omission as non-authoritative per ADR 0054.                                                                                      | Physical source removal needs a future authoritative device contract.                    |
+| Activity                     | The owner/admin household activity API reads structured audit events. The approved timeline combines those records with real motion metadata and no longer invents object or sound labels. Realtime management, pairing, credential, membership, presence, and health events refresh the feed. | Viewer/guest access requires a future grant-filtered activity contract.                  |
+| Authentication and sharing   | Account, session, household switching, invitation, membership, grant, and guest flows use backend routes with household authorization.                                                                                                                                                         | Physical multi-account evidence remains a release gate.                                  |
+| Settings and notifications   | Quiet Hours, motion settings, retention, and personal owner/admin notification preferences persist through PostgreSQL. Load failures are retryable. Quiet Hours delivery and admin delivery are covered by database integration tests.                                                         | Viewer/guest notification preferences remain intentionally outside the manager contract. |
+| Optional services            | `/api/capabilities` controls Google authentication/linking, Web Push, and contact availability. Google Drive uses its specific status route. Failed capability discovery falls back to the feature endpoint's own error handling.                                                              | Provider acceptance remains deployment-specific.                                         |
+| Browser camera and live view | Browser registration, producer signaling, live WebRTC viewing, recording requests, and targeted household refresh are connected to backend contracts.                                                                                                                                          | Cross-network direct/TURN and audio acceptance remain release evidence.                  |
+| Diagnostics                  | The admin-only sanitized endpoint has a retryable frontend error state.                                                                                                                                                                                                                        | None for code integration.                                                               |
 
-| Area                                   | Current contract and status                                                                                                                                                                                                                                                                                 | Integration gap                                                                                                                                                                                                                                                                                                                                                            |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home                                   | `/api/cameras` and `/api/devices` drive current camera and attention states. Favorites are local preference. Latest activity uses `/api/motion-events?limit=4`.                                                                                                                                             | Latest activity is motion only, not household activity. Keep Home a small current-state preview.                                                                                                                                                                                                                                                                           |
-| Cameras and device sources             | Listing, rename, delete, activation, privacy, pairing, and reconnect use backend routes. Device health and source metadata are in device/source records. Search and filters are local or URL state.                                                                                                         | Physical source removal semantics are unproven. Do not infer deletion from an omitted Android sync entry.                                                                                                                                                                                                                                                                  |
-| Activity                               | `/api/motion-events` provides paged, real motion metadata; `/api/access-history` provides a separate, admin-only security history. `audit_events` already stores actions and structured metadata.                                                                                                           | Activity currently fabricates person/package/vehicle/animal/sound/doorbell kinds from event IDs. There is no household product activity feed on this branch. Add a permission-aware activity API using `audit_events`; never label motion as object detection without a producer claim.                                                                                    |
-| Authentication and household sharing   | `/api/auth/me`, password and Google flows, household switching, invitations, membership, grants, and guest routes exist. Settings calls the sharing API.                                                                                                                                                    | Verify every new activity/realtime read against owner/admin versus granted viewer/guest access. Physical multi-account acceptance remains open.                                                                                                                                                                                                                            |
-| Settings and Quiet Hours               | Notification preferences autosave through `PUT /api/notification-preferences/:deviceId`. `quietHours` uses time-of-day and IANA time zone validation, PostgreSQL columns, reload from GET, and motion/offline/recovered delivery suppression. Motion settings and retention have separate persisted routes. | Notification preference storage/query is owner-scoped while Settings renders Notifications for admins too; admin behavior needs a deliberate policy and test. Notification GET failure currently appears as an empty camera list. End-to-end delivery/reload and realtime behavior still need explicit verification. Preserve the current Settings layout and autosave UX. |
-| Security, sessions, Drive, recordings  | Browser sessions, access history, Drive connection and verification, and recording routes are backend-backed. Live recording availability is derived from Drive status for the owner.                                                                                                                       | Runtime capability detection is scattered. `origin/backend-integration` adds `/api/capabilities`, but the frontend does not consume it yet. Optional features need explicit unavailable states where relevant.                                                                                                                                                             |
-| Browser camera, live viewer, signaling | Browser device registration, producer signaling, live WebRTC viewer, and recording request paths exist. Household WebSocket events refresh current data.                                                                                                                                                    | Add targeted activity/configuration invalidation after the activity contract lands; avoid per-heartbeat broadcasts. Physical network/media acceptance remains separate.                                                                                                                                                                                                    |
-| Diagnostics                            | `/api/diagnostics` is admin-only and returns sanitized state.                                                                                                                                                                                                                                               | A rejected request left the page loading indefinitely; repair and test this without changing the normal layout.                                                                                                                                                                                                                                                            |
+## Decisions retained
 
-## Backend branch audit and safe integration order
+- Activity is owner/admin only until a grant-filtered viewer/guest contract exists.
+- Notification preferences are personal owner/admin settings scoped to the active
+  household, as recorded in ADR 0055.
+- Android source omission does not delete a source, and device sync does not
+  overwrite a user display name.
+- Home stays a concise current-state and recent-motion view; the complete
+  household audit timeline belongs on Activity.
+- The recovery tag `frontend-recovery-final-2026-09-17` remains the visual
+  baseline. The recovery branch itself is not an integration dependency.
 
-The backend branch adds household activity querying and event metadata, presence
-transitions, source synchronization behavior, and `/api/capabilities`. Its web
-file changes are older design variants and must not be merged into the approved
-frontend. Start with the activity query/route/authorization commits, then add
-device and pairing event metadata, test each group, and wire the approved UI to
-the resulting contract. Handle presence and source events only after their
-contracts are verified. The capability endpoint can be brought forward as a
-separate backend group. No new activity table is needed unless the existing
-`audit_events` retention or query model proves insufficient.
+## Merge-readiness validation
 
-Android calls `PUT /api/device/cameras` from `CameraForegroundService` startup
-using `CameraManager.cameraIdList`, but drops entries with unknown lens facing
-and supplies an `android:default` fallback if no recognized source remains.
-Therefore an omitted key does not reliably mean the source was removed. Android
-supplies generic hardware names, while web users can rename sources. Preserve
-user display names and only treat facing/capabilities as device-owned data.
-ADR 0054 records the resulting contract: `0cd4631` and its dependent source
-removal commits are withheld; the existing positive-observation sync remains.
-The one-time legacy source migration now preserves a user rename.
+The final pass completed the following checks:
 
-Progress on this branch: Diagnostics now has a retryable error state; the
-owner/admin activity API reads `audit_events`; the capability endpoint reports
-configured optional services; and motion history no longer invents object or
-sound detection labels from event IDs. The Activity timeline now combines real
-motion metadata with structured household activity, orders and searches both,
-and keeps deletion scoped to motion history because audit history has no delete
-contract. PostgreSQL-backed backend validation passes.
-The three inherited frontend test failures were stale assertions/test setup;
-after aligning them with the approved UI, the frontend suite passes. Drive
-Settings now explains when the server reports Drive unconfigured and offers a
-retry when the status request fails, instead of linking to an unavailable OAuth
-flow.
-Quiet Hours now has browser autosave/reload coverage and a PostgreSQL-backed
-delivery check: preferences persist with their IANA time zone, motion remains
-recorded during the quiet window, and alert creation resumes outside it. The
-full web suite passes 172 tests and the full backend suite passes 205 tests
-against the dedicated test database. Admin notification policy and realtime
-configuration invalidation were open at that checkpoint. ADR 0055 now defines
-notification preferences as personal owner/admin settings scoped to the active
-household. Migration 0026 makes delivery and presence state multi-user; an
-administrator persistence/delivery integration test passes. A clean temporary
-database applied all 27 migrations and contained both the motion-recording and
-multi-user notification schema. Viewer/guest notifications remain intentionally
-outside this manager-only contract.
-The backend now records offline/recovered device activity from a presence
-sweep and heartbeat recovery. A PostgreSQL advisory transaction lock prevents
-concurrent workers from duplicating those transitions; the dedicated database
-test covers concurrent sweeps and recoveries. The full backend suite passes
-206 tests at that checkpoint. The presence sweep now publishes a single
-refresh per affected household, and heartbeat only publishes on stale-to-online
-or health changes. Route and job tests cover these triggers; the full backend
-suite passes 210 tests. The Activity UI consumes the structured events and
-refreshes for management, pairing, credential, and membership broadcasts. The
-full web suite passes 173 tests; its typecheck and production build pass.
-Notification preference load failures now render a retryable error instead of
-the misleading empty-camera state. The full web suite passes 174 tests after
-this fix.
-The frontend now consumes `/api/capabilities` only on pages that expose
-optional controls. Authoritative unavailable states remove Google sign-in and
-link actions, disable Web Push activation, and disable contact submission with
-an explanation. Google Drive continues to use its more specific status route.
-Malformed or unreachable capability responses preserve the existing controls
-and their feature-specific error handling. The full web suite passes 178 tests;
-typecheck and production build pass.
+- Prettier check: passed.
+- ESLint: passed.
+- Web typecheck and production build: passed.
+- Web tests: 178 passed.
+- Backend typecheck and production build: passed.
+- Backend tests against the migrated dedicated PostgreSQL test database: 211
+  passed with no skipped database cases.
+- Database migrations: all 27 applied successfully to the dedicated test
+  database.
+- `git diff --check`: passed.
+- Responsive smoke check: the approved landing surface rendered at 390x844,
+  768x1024, and 1440x900 without horizontal document overflow. The browser
+  console was clean with the local backend running.
+- PWA smoke check: the manifest is linked, uses standalone display, has a start
+  URL and theme color, all five icons return HTTP 200, and the service worker
+  returns HTTP 200.
+
+Android validation was intentionally omitted from this pass because the final
+changes are web/PWA and backend integration changes and did not alter the Android
+request/response contract.
+
+## Remaining work after code integration
+
+Before merging to `main`, review the aggregate branch diff and choose the desired
+commit/PR merge strategy. Before broad release, complete the physical and
+provider acceptance items in [roadmap.md](roadmap.md) and
+[testing-plan.md](testing-plan.md), including multi-account, installed-PWA push,
+direct/TURN media, audio, and real-device accessibility evidence.

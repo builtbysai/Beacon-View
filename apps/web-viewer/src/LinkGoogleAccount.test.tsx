@@ -25,12 +25,18 @@ it('offers a Link Google action pointed at the backend flow when not linked', ()
 
 it('does not offer a dead link when Google authentication is unavailable', () => {
   render(<LinkGoogleAccount linked={false} available={false} />);
-  expect(screen.queryByRole('link', { name: 'Link Google' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('link', { name: 'Link Google' }),
+  ).not.toBeInTheDocument();
   expect(screen.getByText('Unavailable')).toBeVisible();
 });
 
 it('shows a success notice from a googleLink=success redirect and scrubs the URL', () => {
-  window.history.replaceState({}, '', '/settings?section=account&googleLink=success');
+  window.history.replaceState(
+    {},
+    '',
+    '/settings?section=account&googleLink=success',
+  );
   render(<LinkGoogleAccount linked={false} />);
   expect(screen.getByRole('status')).toHaveTextContent('Google account linked');
   expect(window.location.search).toBe('?section=account');

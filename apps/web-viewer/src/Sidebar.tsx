@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from './Avatar';
 import { Brand, Icon, type IconName } from './Icon';
@@ -17,7 +23,8 @@ const SidebarContext = createContext<SidebarContextType | null>(null);
 
 export function useSidebar() {
   const context = useContext(SidebarContext);
-  if (!context) throw new Error('useSidebar must be used within a SidebarProvider.');
+  if (!context)
+    throw new Error('useSidebar must be used within a SidebarProvider.');
   return context;
 }
 
@@ -28,7 +35,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     try {
       const stored = localStorage.getItem('beacon.sidebar.state');
       if (stored === 'collapsed') return 'collapsed';
-    } catch {}
+    } catch {
+      // Storage can be unavailable under restrictive browser policies.
+    }
     return 'expanded';
   });
 
@@ -47,12 +56,16 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       setState(next);
       try {
         localStorage.setItem('beacon.sidebar.state', next);
-      } catch {}
+      } catch {
+        // The in-memory preference still applies for this session.
+      }
     }
   };
 
   return (
-    <SidebarContext.Provider value={{ state, toggleSidebar, isMobile, mobileOpen, setMobileOpen }}>
+    <SidebarContext.Provider
+      value={{ state, toggleSidebar, isMobile, mobileOpen, setMobileOpen }}
+    >
       {children}
     </SidebarContext.Provider>
   );
@@ -61,9 +74,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 export function SidebarTrigger({ className = '' }: { className?: string }) {
   const { toggleSidebar } = useSidebar();
   return (
-    <button 
+    <button
       type="button"
-      className={`sidebar-trigger ${className}`} 
+      className={`sidebar-trigger ${className}`}
       onClick={toggleSidebar}
       aria-label="Toggle Sidebar"
     >
@@ -88,20 +101,32 @@ export function Sidebar({
   }[];
   onLogout: () => void;
 }) {
-  const { state, toggleSidebar, isMobile, mobileOpen, setMobileOpen } = useSidebar();
-  
+  const { state, toggleSidebar, isMobile, mobileOpen, setMobileOpen } =
+    useSidebar();
+
   const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPosition, setMenuPosition] = useState<{ bottom: number; left: number; width?: number } | null>(null);
-  
+  const [menuPosition, setMenuPosition] = useState<{
+    bottom: number;
+    left: number;
+    width?: number;
+  } | null>(null);
+
   const accountRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const [tip, setTip] = useState<{ label: string; top: number; left: number } | null>(null);
+  const [tip, setTip] = useState<{
+    label: string;
+    top: number;
+    left: number;
+  } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const [theme, setTheme] = useState<'system'|'light'|'dark'>(() => {
+  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
     try {
-      return (localStorage.getItem('beacon.theme') as ('system'|'light'|'dark')) || 'system';
+      return (
+        (localStorage.getItem('beacon.theme') as 'system' | 'light' | 'dark') ||
+        'system'
+      );
     } catch {
       return 'system';
     }
@@ -116,15 +141,18 @@ export function Sidebar({
     }
     try {
       localStorage.setItem('beacon.theme', theme);
-    } catch {}
+    } catch {
+      // The selected theme still applies for this session.
+    }
   }, [theme]);
+
+  const currentItemLabel = items.find((item) => item.current)?.label;
 
   useEffect(() => {
     if (isMobile && mobileOpen) {
       setMobileOpen(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.find(i => i.current)?.label, isMobile]);
+  }, [currentItemLabel, isMobile, mobileOpen, setMobileOpen]);
 
   function hideTip() {
     clearTimeout(timer.current);
@@ -136,19 +164,28 @@ export function Sidebar({
   }
   function showTip(target: EventTarget) {
     if (state !== 'collapsed' || isMobile) return;
-    const control = target instanceof Element ? target.closest<HTMLElement>('[data-tooltip]') : null;
+    const control =
+      target instanceof Element
+        ? target.closest<HTMLElement>('[data-tooltip]')
+        : null;
     if (!control) return;
     clearTimeout(timer.current);
     const rect = control.getBoundingClientRect();
     setTip({
       label: control.dataset.tooltip!,
-      top: Math.max(4, Math.min(rect.top + rect.height/2 - 12, window.innerHeight - 30)),
+      top: Math.max(
+        4,
+        Math.min(rect.top + rect.height / 2 - 12, window.innerHeight - 30),
+      ),
       left: rect.right + 8,
     });
   }
 
   useEffect(() => {
-    const dismiss = () => { clearTimeout(timer.current); setTip(null); };
+    const dismiss = () => {
+      clearTimeout(timer.current);
+      setTip(null);
+    };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         dismiss();
@@ -199,7 +236,10 @@ export function Sidebar({
     positionMenu();
     const dismissOutside = (event: PointerEvent) => {
       if (!(event.target instanceof Node)) return;
-      if (!accountRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) {
+      if (
+        !accountRef.current?.contains(event.target) &&
+        !menuRef.current?.contains(event.target)
+      ) {
         setMenuOpen(false);
       }
     };
@@ -216,10 +256,14 @@ export function Sidebar({
   return (
     <>
       {isMobile && mobileOpen && (
-        <div className="sidebar-overlay" onClick={() => setMobileOpen(false)} aria-hidden="true" />
+        <div
+          className="sidebar-overlay"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
       )}
-      <aside 
-        className="sidebar" 
+      <aside
+        className="sidebar"
         data-state={isMobile ? (mobileOpen ? 'expanded' : 'closed') : state}
         aria-label="Primary navigation"
         onFocus={(event) => showTip(event.target)}
@@ -229,19 +273,19 @@ export function Sidebar({
       >
         <div className="sidebar-header">
           <a className="sidebar-brand" href="/" aria-label="Beacon home">
-            {state === 'collapsed' && !isMobile ? (
-              <Brand compact />
-            ) : (
-              <Brand />
-            )}
+            {state === 'collapsed' && !isMobile ? <Brand compact /> : <Brand />}
           </a>
           {isMobile && (
-            <button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label="Close menu">
+            <button
+              className="sidebar-close"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Close menu"
+            >
               <Icon name="plus" />
             </button>
           )}
         </div>
-        
+
         <div className="sidebar-content">
           <nav aria-label="Main menu">
             {items.map((item) => (
@@ -278,9 +322,16 @@ export function Sidebar({
               setMenuOpen((o) => !o);
             }}
           >
-            <Avatar email={email} avatarUrl={avatarUrl} size="md" className="account-avatar" />
+            <Avatar
+              email={email}
+              avatarUrl={avatarUrl}
+              size="md"
+              className="account-avatar"
+            />
             <div className="account-details">
-              <span className="account-email" title={email}>{email}</span>
+              <span className="account-email" title={email}>
+                {email}
+              </span>
             </div>
             <Icon name="chevronRight" className="account-chevron" />
           </button>
@@ -296,74 +347,100 @@ export function Sidebar({
         )}
       </aside>
 
-      {menuOpen && menuPosition && createPortal(
-        <div ref={menuRef} className="account-menu" role="menu" style={menuPosition}>
-          <div className="account-menu-header">
-            <Avatar email={email} avatarUrl={avatarUrl} size="md" />
-            <div className="account-details-full">
-              <span className="account-email" title={email}>{email}</span>
-              <span className="account-label">Signed in</span>
-            </div>
-          </div>
-          
-          <div className="account-menu-item theme-section" role="none">
-            <div className="theme-label">Theme</div>
-            <div className="theme-toggle-group" role="group" aria-label="Theme preference">
-              <button 
-                type="button" 
-                className="theme-toggle-btn" 
-                aria-pressed={theme === 'light'} 
-                onClick={() => setTheme('light')}
-              >
-                <Icon name="sun" /> Light
-              </button>
-              <button 
-                type="button" 
-                className="theme-toggle-btn" 
-                aria-pressed={theme === 'system'} 
-                onClick={() => setTheme('system')}
-              >
-                <Icon name="browser" /> System
-              </button>
-              <button 
-                type="button" 
-                className="theme-toggle-btn" 
-                aria-pressed={theme === 'dark'} 
-                onClick={() => setTheme('dark')}
-              >
-                <Icon name="moon" /> Dark
-              </button>
-            </div>
-          </div>
-          
-          <a className="account-menu-item" role="menuitem" href="/trust" onClick={() => setMenuOpen(false)}>
-            <div className="account-menu-item-left">
-              <Icon name="shield" />
-              <span>Trust & privacy</span>
-            </div>
-          </a>
-          
-          <button
-            className="account-menu-item account-menu-logout"
-            role="menuitem"
-            type="button"
-            onClick={() => { setMenuOpen(false); onLogout(); }}
+      {menuOpen &&
+        menuPosition &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="account-menu"
+            role="menu"
+            style={menuPosition}
           >
-            <div className="account-menu-item-left">
-              <Icon name="logout" />
-              <span>Sign out</span>
+            <div className="account-menu-header">
+              <Avatar email={email} avatarUrl={avatarUrl} size="md" />
+              <div className="account-details-full">
+                <span className="account-email" title={email}>
+                  {email}
+                </span>
+                <span className="account-label">Signed in</span>
+              </div>
             </div>
-          </button>
-        </div>,
-        document.body
-      )}
 
-      {tip && createPortal(
-        <span className="sidebar-tooltip" role="tooltip" style={{ top: tip.top, left: tip.left }}>
-          {tip.label}
-        </span>,
-        document.body
-      )}
+            <div className="account-menu-item theme-section" role="none">
+              <div className="theme-label">Theme</div>
+              <div
+                className="theme-toggle-group"
+                role="group"
+                aria-label="Theme preference"
+              >
+                <button
+                  type="button"
+                  className="theme-toggle-btn"
+                  aria-pressed={theme === 'light'}
+                  onClick={() => setTheme('light')}
+                >
+                  <Icon name="sun" /> Light
+                </button>
+                <button
+                  type="button"
+                  className="theme-toggle-btn"
+                  aria-pressed={theme === 'system'}
+                  onClick={() => setTheme('system')}
+                >
+                  <Icon name="browser" /> System
+                </button>
+                <button
+                  type="button"
+                  className="theme-toggle-btn"
+                  aria-pressed={theme === 'dark'}
+                  onClick={() => setTheme('dark')}
+                >
+                  <Icon name="moon" /> Dark
+                </button>
+              </div>
+            </div>
+
+            <a
+              className="account-menu-item"
+              role="menuitem"
+              href="/trust"
+              onClick={() => setMenuOpen(false)}
+            >
+              <div className="account-menu-item-left">
+                <Icon name="shield" />
+                <span>Trust & privacy</span>
+              </div>
+            </a>
+
+            <button
+              className="account-menu-item account-menu-logout"
+              role="menuitem"
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                onLogout();
+              }}
+            >
+              <div className="account-menu-item-left">
+                <Icon name="logout" />
+                <span>Sign out</span>
+              </div>
+            </button>
+          </div>,
+          document.body,
+        )}
+
+      {tip &&
+        createPortal(
+          <span
+            className="sidebar-tooltip"
+            role="tooltip"
+            style={{ top: tip.top, left: tip.left }}
+          >
+            {tip.label}
+          </span>,
+          document.body,
+        )}
     </>
   );
 }

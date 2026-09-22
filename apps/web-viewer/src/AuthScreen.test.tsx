@@ -30,9 +30,7 @@ it('preserves OAuth collision guidance, password visibility, and registration gu
   );
   fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
   expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'text');
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Create an account' }),
-  );
+  fireEvent.click(screen.getByRole('button', { name: 'Create an account' }));
   expect(onMode).toHaveBeenCalledOnce();
   view.rerender(<AuthScreen {...props} mode="register" />);
   expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password');
@@ -118,6 +116,8 @@ it('replaces the Google link when the backend reports authentication unavailable
       onSubmit={vi.fn()}
     />,
   );
-  expect(screen.queryByRole('link', { name: /Continue with Google/ })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('link', { name: /Continue with Google/ }),
+  ).not.toBeInTheDocument();
   expect(screen.getByText('Google sign-in unavailable')).toBeVisible();
 });

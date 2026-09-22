@@ -25,7 +25,11 @@ function delivery(
 describe('runNotificationSweep', () => {
   it('logs a safe per-run summary broken down by outcome, channel and category', async () => {
     const deliveries: NotificationDelivery[] = [
-      delivery({ channel: 'fcm', id: 'd1', safePayload: { category: 'motion' } }),
+      delivery({
+        channel: 'fcm',
+        id: 'd1',
+        safePayload: { category: 'motion' },
+      }),
       delivery({
         channel: 'fcm',
         id: 'd2',
@@ -70,8 +74,20 @@ describe('runNotificationSweep', () => {
     expect(sender.send).toHaveBeenCalledTimes(4);
     expect(markDelivered).toHaveBeenCalledTimes(2);
     expect(markFailed).toHaveBeenCalledTimes(2);
-    expect(markFailed).toHaveBeenCalledWith('d2', 'subscription-id', now, false, undefined);
-    expect(markFailed).toHaveBeenCalledWith('d3', 'subscription-id', now, true, undefined);
+    expect(markFailed).toHaveBeenCalledWith(
+      'd2',
+      'subscription-id',
+      now,
+      false,
+      undefined,
+    );
+    expect(markFailed).toHaveBeenCalledWith(
+      'd3',
+      'subscription-id',
+      now,
+      true,
+      undefined,
+    );
 
     expect(info).toHaveBeenCalledTimes(1);
     const [summary, message] = info.mock.calls[0] as [
@@ -87,7 +103,9 @@ describe('runNotificationSweep', () => {
       failedPermanent: 1,
       failedRetryable: 1,
     });
-    expect(JSON.stringify(summary)).not.toContain('super-secret-provider-token');
+    expect(JSON.stringify(summary)).not.toContain(
+      'super-secret-provider-token',
+    );
   });
 
   it('does not log anything for an empty sweep', async () => {

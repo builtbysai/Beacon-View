@@ -15,12 +15,14 @@ function roleLabel(role: HouseholdRole): string {
 }
 
 function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('') || 'H';
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('') || 'H'
+  );
 }
 
 export function HouseholdSwitcher({
@@ -115,7 +117,9 @@ export function HouseholdSwitcher({
         <div className="household-metric">
           <span>People</span>
           <strong>{memberCount ?? '—'}</strong>
-          <small>{memberCount === null ? 'Loading membership' : 'In this household'}</small>
+          <small>
+            {memberCount === null ? 'Loading membership' : 'In this household'}
+          </small>
         </div>
         <div className="household-metric">
           <span>Cameras</span>
@@ -125,7 +129,9 @@ export function HouseholdSwitcher({
         <div className="household-metric">
           <span>Your role</span>
           <strong>{role}</strong>
-          <small>{isOwner ? 'Full household access' : 'Based on your membership'}</small>
+          <small>
+            {isOwner ? 'Full household access' : 'Based on your membership'}
+          </small>
         </div>
       </div>
 

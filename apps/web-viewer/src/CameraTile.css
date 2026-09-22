@@ -5,7 +5,9 @@
   border: 1px solid var(--border-default);
   border-radius: 14px;
   overflow: hidden;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
   position: relative;
 }
 
@@ -60,7 +62,7 @@
 }
 
 /* If tone is live, give it a darker preview background to match mockup */
-.camera-tile-placeholder[data-tone="live"] {
+.camera-tile-placeholder[data-tone='live'] {
   background-color: #172437;
   color: #dce5ef;
 }
@@ -160,8 +162,6 @@
   margin: 0;
 }
 
-
-
 .overflow-menu-container button[aria-haspopup] {
   width: 32px;
   height: 32px;
@@ -186,8 +186,6 @@
 .camera-tile-menu-danger:hover {
   background-color: var(--error-subtle) !important;
 }
-
-
 
 .camera-tile-identity-wrapper {
   background: none;

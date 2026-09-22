@@ -76,7 +76,6 @@ export function BrowserCameraMode({
   const wakeLockRef = useRef<{ release(): Promise<void> } | null>(null);
   const [inputs, setInputs] = useState<VideoInput[]>([]);
   const [sourceNames, setSourceNames] = useState<Record<string, string>>({});
-  const [registered, setRegistered] = useState<RegisteredSource[]>([]);
   const [selectedKey, setSelectedKey] = useState('');
   const [deviceName, setDeviceName] = useState(initialDeviceName);
   const [state, setState] = useState('offline');
@@ -178,7 +177,6 @@ export function BrowserCameraMode({
       );
       setDeviceName(normalizedDeviceName);
       rememberDeviceName(normalizedDeviceName);
-      setRegistered(result.cameras);
       const camera = result.cameras.find(
         (source) => source.sourceKey === `browser:${selected.deviceId}`,
       );
@@ -268,7 +266,6 @@ export function BrowserCameraMode({
     wakeLockRef.current = await manager.request('screen');
   }
 
-  
   if (state !== 'offline') {
     return (
       <main className="broadcast-stage">
@@ -307,9 +304,7 @@ export function BrowserCameraMode({
                   clip.state.status === 'available'
                 }
                 onClick={
-                  clip.state.status === 'recording'
-                    ? clip.stop
-                    : startRecording
+                  clip.state.status === 'recording' ? clip.stop : startRecording
                 }
                 type="button"
               >
@@ -383,34 +378,54 @@ export function BrowserCameraMode({
         <div className="local-mh">
           <div>
             <div className="local-eyebrow">Use this device</div>
-            <h2 id="localTitle">{inputs.length > 0 ? 'Choose a camera' : 'Use this device as a camera'}</h2>
+            <h2 id="localTitle">
+              {inputs.length > 0
+                ? 'Choose a camera'
+                : 'Use this device as a camera'}
+            </h2>
             <p id="localSub">
-              {inputs.length > 0 
+              {inputs.length > 0
                 ? 'Select the camera Beacon should use on this device.'
                 : 'Temporary monitoring. Keep Beacon open while the camera is active.'}
             </p>
           </div>
         </div>
-        
+
         <div className="local-steps">
           <span className="local-step on"></span>
-          <span className={`local-step ${inputs.length > 0 ? 'on' : ''}`}></span>
+          <span
+            className={`local-step ${inputs.length > 0 ? 'on' : ''}`}
+          ></span>
         </div>
 
-        {error && <p role="alert" style={{ color: 'var(--status-error)' }}>{error}</p>}
+        {error && (
+          <p role="alert" style={{ color: 'var(--status-error)' }}>
+            {error}
+          </p>
+        )}
 
         {inputs.length === 0 ? (
           <div id="permission">
             <div className="local-permission">
-              <div className="local-permission-icon"><Icon name="camera" /></div>
+              <div className="local-permission-icon">
+                <Icon name="camera" />
+              </div>
               <div>
                 <b>Camera access is required</b>
-                <p>Beacon needs permission to find cameras connected to this device. Your browser or operating system may show a permission prompt.</p>
+                <p>
+                  Beacon needs permission to find cameras connected to this
+                  device. Your browser or operating system may show a permission
+                  prompt.
+                </p>
               </div>
             </div>
             <div className="local-actions">
-              <button className="btn secondary" onClick={onBack}>Cancel</button>
-              <button className="btn primary" onClick={() => void discover()}>Allow camera access</button>
+              <button className="btn secondary" onClick={onBack}>
+                Cancel
+              </button>
+              <button className="btn primary" onClick={() => void discover()}>
+                Allow camera access
+              </button>
             </div>
           </div>
         ) : (
@@ -418,16 +433,20 @@ export function BrowserCameraMode({
             <div className="local-controls">
               <div className="local-field">
                 <label htmlFor="deviceName">Device name</label>
-                <input id="deviceName"
+                <input
+                  id="deviceName"
                   value={deviceName}
                   maxLength={100}
                   onChange={(event) => setDeviceName(event.target.value)}
                 />
-                <div className="local-hint">How this device appears in Beacon.</div>
+                <div className="local-hint">
+                  How this device appears in Beacon.
+                </div>
               </div>
               <div className="local-field">
                 <label htmlFor="cameraSelect">Camera</label>
-                <select id="cameraSelect"
+                <select
+                  id="cameraSelect"
                   value={selectedKey}
                   onChange={(event) => setSelectedKey(event.target.value)}
                 >
@@ -440,7 +459,8 @@ export function BrowserCameraMode({
               </div>
               <div className="local-field full">
                 <label htmlFor="cameraName">Camera name</label>
-                <input id="cameraName"
+                <input
+                  id="cameraName"
                   value={sourceNames[selectedKey] ?? ''}
                   maxLength={100}
                   onChange={(event) =>
@@ -466,13 +486,20 @@ export function BrowserCameraMode({
                       void acquireWakeLock();
                     }
                   }}
-                /> 
+                />
                 <span>Keep this device awake while Camera Mode is active</span>
               </label>
             </div>
             <div className="local-actions">
-              <button className="btn secondary" onClick={onBack}>Cancel</button>
-              <button className="btn primary" onClick={() => void registerAndStart()}>Start camera</button>
+              <button className="btn secondary" onClick={onBack}>
+                Cancel
+              </button>
+              <button
+                className="btn primary"
+                onClick={() => void registerAndStart()}
+              >
+                Start camera
+              </button>
             </div>
           </div>
         )}

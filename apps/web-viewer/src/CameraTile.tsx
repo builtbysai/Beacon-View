@@ -55,7 +55,9 @@ export function CameraTile({
   const canPreview = state.available && hoverCapable();
   const showRemove = Boolean(onDelete && camera.canRemove);
   const showLeave = Boolean(onLeave && camera.canLeave && !camera.canRemove);
-  const hasMenu = Boolean(onDevice || onReconnect || onRename || showRemove || showLeave);
+  const hasMenu = Boolean(
+    onDevice || onReconnect || onRename || showRemove || showLeave,
+  );
   const primaryName = groupedByHost ? camera.deviceName : camera.name;
   const secondaryStatus = state.available
     ? 'Online · ready to view'
@@ -112,7 +114,9 @@ export function CameraTile({
               aria-hidden="true"
             />
           )}
-          <span className={`camera-tile-status status-badge status-${state.tone}`}>
+          <span
+            className={`camera-tile-status status-badge status-${state.tone}`}
+          >
             {state.label}
           </span>
           {camera.viewerCount > 0 && (
@@ -153,13 +157,17 @@ export function CameraTile({
               </strong>
             )}
             <span className="camera-tile-secondary-status">
-              {camera.platform === 'android' ? 'Android device' : 'Browser'} · {secondaryStatus}
+              {camera.platform === 'android' ? 'Android device' : 'Browser'} ·{' '}
+              {secondaryStatus}
             </span>
           </span>
         </div>
 
         {hasMenu && (
-          <OverflowMenu anchorClassName="overflow-menu-container" label={`${primaryName} options`}>
+          <OverflowMenu
+            anchorClassName="overflow-menu-container"
+            label={`${primaryName} options`}
+          >
             {(close) => (
               <>
                 <button

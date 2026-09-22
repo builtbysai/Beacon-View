@@ -10,12 +10,7 @@ import {
 } from './recording-capture';
 
 export type ClipRecorderStatus =
-  | 'idle'
-  | 'starting'
-  | 'recording'
-  | 'uploading'
-  | 'available'
-  | 'failed';
+  'idle' | 'starting' | 'recording' | 'uploading' | 'available' | 'failed';
 
 export interface ClipRecorderState {
   status: ClipRecorderStatus;
@@ -82,10 +77,7 @@ export function useClipRecorder(cameraId: string): {
             method: 'POST',
           },
         );
-        const providerFileId = await uploadClipToDrive(
-          session.uploadUrl,
-          blob,
-        );
+        const providerFileId = await uploadClipToDrive(session.uploadUrl, blob);
         await request(`/api/recordings/${recordingId}/complete`, {
           body: JSON.stringify({ providerFileId }),
           method: 'POST',
@@ -106,14 +98,12 @@ export function useClipRecorder(cameraId: string): {
 
   const start = useCallback(
     (stream: MediaStream) => {
-      if (state.status === 'recording' || state.status === 'uploading')
-        return;
+      if (state.status === 'recording' || state.status === 'uploading') return;
       setState({ elapsedMs: 0, error: '', status: 'starting' });
       void (async () => {
         try {
           const mimeType = pickRecorderMimeType();
-          if (!mimeType)
-            throw new Error('This browser cannot record video.');
+          if (!mimeType) throw new Error('This browser cannot record video.');
           const created = await request<{ recording: { id: string } }>(
             '/api/recordings',
             { body: JSON.stringify({ cameraId }), method: 'POST' },
@@ -131,10 +121,7 @@ export function useClipRecorder(cameraId: string): {
                 : current,
             );
           }, 500);
-          autoStopRef.current = window.setTimeout(
-            stop,
-            MAX_CLIP_DURATION_MS,
-          );
+          autoStopRef.current = window.setTimeout(stop, MAX_CLIP_DURATION_MS);
         } catch (error) {
           setState({
             elapsedMs: 0,

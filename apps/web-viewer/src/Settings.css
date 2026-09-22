@@ -172,7 +172,9 @@
   border: none;
   text-align: left;
   cursor: pointer;
-  transition: background-color 0.2s, color 0.2s;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
 }
 
 .settings-jump-item svg {

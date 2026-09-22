@@ -21,8 +21,7 @@ const CANDIDATE_TYPES = [
 export function pickRecorderMimeType(): string | null {
   if (typeof MediaRecorder === 'undefined') return null;
   return (
-    CANDIDATE_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) ??
-    null
+    CANDIDATE_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) ?? null
   );
 }
 
@@ -41,7 +40,10 @@ export function formatClipTimer(elapsedMs: number): string {
 }
 
 export async function sha256Hex(blob: Blob): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    await blob.arrayBuffer(),
+  );
   return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');

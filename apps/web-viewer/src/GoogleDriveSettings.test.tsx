@@ -47,8 +47,12 @@ describe('GoogleDriveSettings', () => {
     render(<GoogleDriveSettings />);
 
     expect(await screen.findByText('Unavailable')).toBeVisible();
-    expect(screen.queryByRole('link', { name: 'Retry' })).not.toBeInTheDocument();
-    expect(screen.getByText(/not configured on this Beacon server/)).toBeVisible();
+    expect(
+      screen.queryByRole('link', { name: 'Retry' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/not configured on this Beacon server/),
+    ).toBeVisible();
   });
 
   it('retries a failed Drive status request', async () => {

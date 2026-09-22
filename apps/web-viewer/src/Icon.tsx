@@ -245,7 +245,6 @@ const shapes = {
       <path d="M13.7 21a2 2 0 0 1-3.4 0" />
     </>
   ),
-
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof shapes;
@@ -318,12 +317,10 @@ export function Brand({
       />
     </svg>
   );
-  
+
   if (compact) {
     return (
-      <div className={`brand-lockup brand-compact ${className}`}>
-        {mark}
-      </div>
+      <div className={`brand-lockup brand-compact ${className}`}>{mark}</div>
     );
   }
 

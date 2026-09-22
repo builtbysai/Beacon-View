@@ -31,7 +31,9 @@ export function PairingDialog({
       <section aria-labelledby="pair-title" className="pair-modal">
         {state === 'completed' ? (
           <div className="pair-success" role="status">
-            <span className="icon" aria-hidden="true"><Icon name="check" /></span>
+            <span className="icon" aria-hidden="true">
+              <Icon name="check" />
+            </span>
             <h2 id="pair-title">Camera connected</h2>
             <p>Taking you to Cameras...</p>
           </div>
@@ -50,7 +52,7 @@ export function PairingDialog({
                   : 'Scan the QR code with Beacon on Android, or share the one-time setup link.'}
               </p>
             </div>
-            
+
             {code ? (
               <div className="pairbody" role="status">
                 <div className="pair-qr">
@@ -69,10 +71,12 @@ export function PairingDialog({
                   <h3>One-time pairing code</h3>
                   <div className="big">{code}</div>
                   <p>Expires in 10 minutes</p>
-                  <button 
-                    className="btn secondary" 
+                  <button
+                    className="btn secondary"
                     onClick={() => {
-                      navigator.clipboard.writeText(pairingLink(code)).catch(onCopyError);
+                      navigator.clipboard
+                        .writeText(pairingLink(code))
+                        .catch(onCopyError);
                     }}
                   >
                     Copy setup link
@@ -81,22 +85,30 @@ export function PairingDialog({
               </div>
             ) : error ? (
               <div className="pair-error" role="alert">
-                <p><strong>Couldn't prepare pairing code</strong></p>
+                <p>
+                  <strong>Couldn't prepare pairing code</strong>
+                </p>
                 <p>{error}</p>
                 <div className="pair-modalfoot">
-                  <button className="btn secondary" onClick={onDismiss}>Cancel</button>
-                  <button className="btn primary" onClick={onRetry}>Try again</button>
+                  <button className="btn secondary" onClick={onDismiss}>
+                    Cancel
+                  </button>
+                  <button className="btn primary" onClick={onRetry}>
+                    Try again
+                  </button>
                 </div>
               </div>
             ) : (
-              <div className="pair-loading" aria-busy="true">
+              <div className="pair-loading" aria-busy={busy}>
                 <p>Preparing...</p>
               </div>
             )}
-            
+
             {!error && (
               <div className="pair-modalfoot">
-                <button className="btn secondary" onClick={onDismiss}>Cancel</button>
+                <button className="btn secondary" onClick={onDismiss}>
+                  Cancel
+                </button>
               </div>
             )}
           </>

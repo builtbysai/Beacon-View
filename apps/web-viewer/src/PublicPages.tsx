@@ -112,8 +112,8 @@ export function PublicTrustPage({
               <p className="eyebrow">Trust & privacy</p>
               <h1>Privacy is part of how Beacon works.</h1>
               <p className="lede">
-                Beacon connects your devices for live viewing without building
-                a cloud archive of your camera or microphone.
+                Beacon connects your devices for live viewing without building a
+                cloud archive of your camera or microphone.
               </p>
             </div>
             <div className="commitments">

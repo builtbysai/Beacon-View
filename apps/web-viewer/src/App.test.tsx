@@ -54,7 +54,9 @@ describe('App', () => {
       }),
     );
     render(<App />);
-    fireEvent.click((await screen.findAllByRole('button', { name: /Get started/ }))[0]!);
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: /Get started/ }))[0]!,
+    );
     expect(localStorage.getItem('beacon.splash.seen.v1')).toBe('true');
     expect(
       await screen.findByRole('heading', {
@@ -352,9 +354,7 @@ describe('App', () => {
       name: 'View live: Hallway phone',
     });
     expect(open).toHaveAttribute('aria-disabled', 'true');
-    expect(
-      screen.getByRole('heading', { name: 'Favorites' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Favorites' })).toBeVisible();
     fireEvent.click(
       screen.getByRole('button', { name: 'Hallway phone options' }),
     );
@@ -518,9 +518,7 @@ describe('App', () => {
     expect(
       screen.getByRole('button', { name: 'Close camera settings' }),
     ).toBeVisible();
-    expect(
-      screen.getByRole('heading', { name: 'Privacy' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Privacy' })).toBeVisible();
     const health = screen.getByLabelText('Device health');
     expect(within(health).getByText('Online')).toBeVisible();
     expect(within(health).getByText('2')).toBeVisible();
@@ -551,7 +549,9 @@ describe('App', () => {
         return url === '/api/devices/device-1' && options?.method === 'DELETE';
       }),
     ).toBe(false);
-    expect(screen.getByRole('switch', { name: 'Device privacy' })).toBeVisible();
+    expect(
+      screen.getByRole('switch', { name: 'Device privacy' }),
+    ).toBeVisible();
   });
 
   it('renames and removes a camera from the Cameras grid', async () => {
@@ -738,14 +738,16 @@ describe('App', () => {
     render(<App />);
     await screen.findByText('Add your first device');
     fireEvent.click(screen.getByRole('button', { name: 'Activity' }));
-    
-    expect(await screen.findByText('Hallway phone', { selector: 'b' })).toBeVisible();
+
+    expect(
+      await screen.findByText('Hallway phone', { selector: 'b' }),
+    ).toBeVisible();
     fireEvent.click(screen.getByText('Hallway phone', { selector: 'b' }));
     expect(screen.getAllByText(/42%/)[0]).toBeVisible();
     expect(screen.getByText(/A motion event does not mean/i)).toBeVisible();
     // The household currently has no paired cameras (these events are
     // historical), so there is nothing to build a camera picker from.
-    
+
     expect(screen.getByLabelText('Filter motion events by time')).toBeVisible();
     await act(async () => {
       TestSocket.instance?.emit({
@@ -755,7 +757,7 @@ describe('App', () => {
       await Promise.resolve();
     });
     expect(await screen.findByText('Kitchen phone')).toBeVisible();
-    
+
     expect(window.localStorage.getItem('beacon_motion_filters_1:time')).toBe(
       '24',
     );
@@ -798,23 +800,23 @@ describe('App', () => {
                         }
                       : url.startsWith('/api/activity')
                         ? { events: [], total: 0 }
-                      : {
-                          cameras: [
-                            {
-                              credentialRevoked: false,
-                              deviceId: 'phone-1',
-                              deviceName: 'Hallway phone',
-                              enabled: true,
-                              id: 'camera-1',
-                              lastSeenAt: null,
-                              name: 'Rear camera',
-                              online: true,
-                              privacyMode: false,
-                              streaming: false,
-                              viewerCount: 0,
-                            },
-                          ],
-                        },
+                        : {
+                            cameras: [
+                              {
+                                credentialRevoked: false,
+                                deviceId: 'phone-1',
+                                deviceName: 'Hallway phone',
+                                enabled: true,
+                                id: 'camera-1',
+                                lastSeenAt: null,
+                                name: 'Rear camera',
+                                online: true,
+                                privacyMode: false,
+                                streaming: false,
+                                viewerCount: 0,
+                              },
+                            ],
+                          },
             ),
           ok: true,
           status: 200,
@@ -824,7 +826,9 @@ describe('App', () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Activity' }));
-    fireEvent.click(await screen.findByText('Hallway phone', { selector: 'b' }));
+    fireEvent.click(
+      await screen.findByText('Hallway phone', { selector: 'b' }),
+    );
     fireEvent.click(
       await screen.findByRole('button', {
         name: 'Open Hallway phone',
@@ -838,7 +842,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
 
     expect((await screen.findAllByText('Activity')).length).toBeGreaterThan(0);
-    
+
     expect(window.location.pathname).toBe('/events');
   });
 
@@ -891,13 +895,9 @@ describe('App', () => {
     expect(
       await screen.findByRole('heading', { name: 'Household' }),
     ).toBeVisible();
-    expect(window.location.pathname + window.location.search).toBe(
-      '/settings',
-    );
+    expect(window.location.pathname + window.location.search).toBe('/settings');
 
-    fireEvent.click(
-      screen.getByRole('link', { name: /^Account$/ }),
-    );
+    fireEvent.click(screen.getByRole('link', { name: /^Account$/ }));
     expect(window.location.pathname + window.location.search).toBe(
       '/settings?section=account',
     );

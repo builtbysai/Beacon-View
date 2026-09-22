@@ -46,26 +46,31 @@ const props = {
 describe('Activity timeline', () => {
   it('shows structured household activity alongside motion without claiming object detection', async () => {
     const occurredAt = new Date().toISOString();
-    const fetch = vi.fn((url: string) => Promise.resolve(
-      url.startsWith('/api/activity')
-        ? {
-            ok: true,
-            status: 200,
-            json: () => Promise.resolve({
-              events: [{
-                id: 'offline-event',
-                actorEmail: null,
-                deviceName: 'Hallway phone',
-                eventType: 'device_offline',
-                occurredAt,
-                success: true,
-                metadata: { deviceId: 'device-one' },
-              }],
-              total: 1,
-            }),
-          }
-        : response([event('motion-event', occurredAt)]),
-    ));
+    const fetch = vi.fn((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/activity')
+          ? {
+              ok: true,
+              status: 200,
+              json: () =>
+                Promise.resolve({
+                  events: [
+                    {
+                      id: 'offline-event',
+                      actorEmail: null,
+                      deviceName: 'Hallway phone',
+                      eventType: 'device_offline',
+                      occurredAt,
+                      success: true,
+                      metadata: { deviceId: 'device-one' },
+                    },
+                  ],
+                  total: 1,
+                }),
+            }
+          : response([event('motion-event', occurredAt)]),
+      ),
+    );
     vi.stubGlobal('fetch', fetch);
 
     render(<MotionEventList {...props} includeHouseholdActivity />);
@@ -78,7 +83,9 @@ describe('Activity timeline', () => {
     expect(details).not.toHaveTextContent('Motion intensity');
     expect(details).not.toHaveTextContent('Open Hallway phone');
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(fetch.mock.calls.map(([url]) => url)).toContain('/api/activity?limit=50&offset=0');
+    expect(fetch.mock.calls.map(([url]) => url)).toContain(
+      '/api/activity?limit=50&offset=0',
+    );
   });
 
   it('labels motion from the API as motion regardless of its event ID', async () => {
@@ -111,10 +118,8 @@ describe('Activity timeline', () => {
     render(<MotionEventList {...props} />);
     await screen.findByText('newest');
     expect(screen.getAllByRole('option').length).toBeGreaterThan(0);
-    
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Load more' }),
-    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
     await screen.findByText('older');
     expect(screen.getAllByRole('region').length).toBeGreaterThan(0);
     const first = new URL(fetch.mock.calls[0]![0], 'https://beacon.test');
@@ -123,11 +128,9 @@ describe('Activity timeline', () => {
       first.searchParams.get('since'),
     );
     expect(second.searchParams.get('cursor')).toBe('page-two');
-    
+
     fireEvent.click(screen.getByText('newest'));
-    fireEvent.click(
-      screen.getAllByRole('button', { name: /Open / })[0]!,
-    );
+    fireEvent.click(screen.getAllByRole('button', { name: /Open / })[0]!);
     expect(props.onCamera).toHaveBeenCalledWith('camera-one');
   });
 
@@ -148,7 +151,7 @@ describe('Activity timeline', () => {
     view.rerender(<MotionEventList {...props} refreshRevision={1} />);
     await screen.findByText('new');
     expect(screen.queryByText('old')).not.toBeInTheDocument();
-    
+
     view.rerender(
       <MotionEventList {...props} refreshRevision={2} clearRevision={1} />,
     );
@@ -203,9 +206,7 @@ describe('Activity timeline', () => {
     vi.stubGlobal('fetch', fetch);
     render(<MotionEventList {...props} />);
     await screen.findByText('first');
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Load more' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
     await screen.findByRole('alert');
     expect(screen.getByText('first')).toBeVisible();
     fireEvent.click(

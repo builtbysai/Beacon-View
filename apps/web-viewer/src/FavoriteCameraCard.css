@@ -6,7 +6,9 @@
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 @media (hover: hover) {
@@ -236,7 +238,9 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .favorite-card-menu-anchor button[aria-haspopup] {
+  :root:not([data-theme='light'])
+    .favorite-card-menu-anchor
+    button[aria-haspopup] {
     background-color: rgba(24, 24, 27, 0.85);
   }
 }

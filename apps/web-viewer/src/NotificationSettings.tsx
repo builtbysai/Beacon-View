@@ -156,9 +156,10 @@ export function NotificationSettings({
     const current = previous?.find((item) => item.deviceId === deviceId);
     if (!current) return;
     const next = update(current);
-    setPreferences((items) =>
-      items?.map((item) => (item.deviceId === deviceId ? next : item)) ??
-      items,
+    setPreferences(
+      (items) =>
+        items?.map((item) => (item.deviceId === deviceId ? next : item)) ??
+        items,
     );
     run(async () => {
       try {
@@ -173,10 +174,11 @@ export function NotificationSettings({
             }),
           },
         );
-        setPreferences((items) =>
-          items?.map((item) =>
-            item.deviceId === deviceId ? result.preference : item,
-          ) ?? items,
+        setPreferences(
+          (items) =>
+            items?.map((item) =>
+              item.deviceId === deviceId ? result.preference : item,
+            ) ?? items,
         );
       } catch (error) {
         // Roll the switch back rather than leaving it showing a state the
@@ -212,7 +214,15 @@ export function NotificationSettings({
         description="Receive private Beacon alerts on this browser."
       >
         <div className="notification-channel-action">
-          <span className={enabled ? 'pill pill-on' : webPushAvailable ? 'pill' : 'pill pill-warn'}>
+          <span
+            className={
+              enabled
+                ? 'pill pill-on'
+                : webPushAvailable
+                  ? 'pill'
+                  : 'pill pill-warn'
+            }
+          >
             {enabled ? 'On' : webPushAvailable ? 'Off' : 'Unavailable'}
           </span>
           <button
@@ -220,7 +230,13 @@ export function NotificationSettings({
             disabled={channelBusy || !webPushAvailable}
             onClick={() => void (enabled ? disableChannel() : enableChannel())}
           >
-            {channelBusy ? 'Updating…' : enabled ? 'Turn off' : webPushAvailable ? 'Turn on' : 'Unavailable'}
+            {channelBusy
+              ? 'Updating…'
+              : enabled
+                ? 'Turn off'
+                : webPushAvailable
+                  ? 'Turn on'
+                  : 'Unavailable'}
           </button>
         </div>
       </SettingsRow>
@@ -312,7 +328,10 @@ function NotificationCameraRow({
           }
         />
       </span>
-      <span className="notification-table-cell notification-table-quiet" role="cell">
+      <span
+        className="notification-table-cell notification-table-quiet"
+        role="cell"
+      >
         <span className="notification-table-label notification-quiet-heading">
           <span>Quiet hours</span>
           <small>Pause alerts during this window</small>
@@ -328,8 +347,7 @@ function NotificationCameraRow({
                     start: '22:00',
                     end: '07:00',
                     timeZone:
-                      Intl.DateTimeFormat().resolvedOptions().timeZone ||
-                      'UTC',
+                      Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
                   }
                 : null,
             }))

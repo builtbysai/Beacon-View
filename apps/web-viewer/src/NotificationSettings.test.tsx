@@ -29,17 +29,19 @@ function renderNotificationSettings() {
 
 describe('NotificationSettings', () => {
   beforeEach(() => {
-    vi.mocked(request).mockReset().mockResolvedValue({
-      preferences: [
-        {
-          deviceId: '8dc18bea-7a3b-48ad-b48a-48d00f975f54',
-          deviceName: 'Hallway camera',
-          motionEnabled: false,
-          offlineEnabled: false,
-          quietHours: null,
-        },
-      ],
-    });
+    vi.mocked(request)
+      .mockReset()
+      .mockResolvedValue({
+        preferences: [
+          {
+            deviceId: '8dc18bea-7a3b-48ad-b48a-48d00f975f54',
+            deviceName: 'Hallway camera',
+            motionEnabled: false,
+            offlineEnabled: false,
+            quietHours: null,
+          },
+        ],
+      });
   });
 
   it('loads disabled-by-default preferences without prompting for permission', async () => {
@@ -199,7 +201,11 @@ describe('NotificationSettings', () => {
         <NotificationSettings webPushAvailable={false} />
       </SettingsAutosaveProvider>,
     );
-    expect(await screen.findByRole('button', { name: 'Unavailable' })).toBeDisabled();
-    expect(screen.getByText('Unavailable', { selector: '.pill' })).toBeVisible();
+    expect(
+      await screen.findByRole('button', { name: 'Unavailable' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText('Unavailable', { selector: '.pill' }),
+    ).toBeVisible();
   });
 });

@@ -69,9 +69,14 @@ export function ResetPasswordPage() {
         ) : (
           <>
             <h1 id="reset-password-title">Choose a new password.</h1>
-            <form onSubmit={(event) => void onSubmit(event)} className="flex-col gap-4">
+            <form
+              onSubmit={(event) => void onSubmit(event)}
+              className="flex-col gap-4"
+            >
               <div className="form-group">
-                <label className="form-label" htmlFor="reset-password">New password</label>
+                <label className="form-label" htmlFor="reset-password">
+                  New password
+                </label>
                 <input
                   id="reset-password"
                   name="password"
@@ -85,7 +90,9 @@ export function ResetPasswordPage() {
                 />
               </div>
               <div className="form-group">
-                <label className="form-label" htmlFor="reset-password-confirm">Confirm password</label>
+                <label className="form-label" htmlFor="reset-password-confirm">
+                  Confirm password
+                </label>
                 <input
                   id="reset-password-confirm"
                   name="confirmation"
@@ -98,8 +105,16 @@ export function ResetPasswordPage() {
                   className="input-field"
                 />
               </div>
-              {error && <p className="auth-alert" role="alert">{error}</p>}
-              <button className="btn-primary w-full mt-4" type="submit" disabled={busy}>
+              {error && (
+                <p className="auth-alert" role="alert">
+                  {error}
+                </p>
+              )}
+              <button
+                className="btn-primary w-full mt-4"
+                type="submit"
+                disabled={busy}
+              >
                 {busy ? 'Updating...' : 'Update password'}
               </button>
             </form>

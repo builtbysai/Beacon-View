@@ -131,8 +131,7 @@ export function HouseholdSharingSettings({
         sharing.members.filter((member) => member.status === 'active').length,
       );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sharing]);
+  }, [onMemberCountChange, sharing]);
 
   async function createInvitation(
     formData: FormData,
@@ -343,7 +342,10 @@ export function HouseholdSharingSettings({
       data,
       kind: 'invitation',
     })) ?? []),
-    ...guestLinks.map((data): OutstandingShare => ({ data, kind: 'guestLink' })),
+    ...guestLinks.map((data): OutstandingShare => ({
+      data,
+      kind: 'guestLink',
+    })),
   ].sort(
     (a, b) =>
       new Date(b.data.createdAt).getTime() -
@@ -591,7 +593,9 @@ function JoinHouseholdDialog({
       await onJoin(code.trim());
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Unable to accept invitation',
+        caught instanceof Error
+          ? caught.message
+          : 'Unable to accept invitation',
       );
       setBusy(false);
     }
@@ -663,7 +667,9 @@ function ResentInviteDialog({
 
   async function copy(value: string, label: string) {
     if (!navigator.clipboard) {
-      setError(`Clipboard access is unavailable. Select and copy the ${label}.`);
+      setError(
+        `Clipboard access is unavailable. Select and copy the ${label}.`,
+      );
       return;
     }
     try {
@@ -680,8 +686,7 @@ function ResentInviteDialog({
           <div>
             <h2 id="resent-invite-title">New invitation sent</h2>
             <p>
-              A fresh code was created for {email}; the old one no longer
-              works.
+              A fresh code was created for {email}; the old one no longer works.
             </p>
           </div>
           <button
@@ -780,7 +785,9 @@ function InvitePersonDialog({
 
   async function copy(value: string, label: string) {
     if (!navigator.clipboard) {
-      setError(`Clipboard access is unavailable. Select and copy the ${label}.`);
+      setError(
+        `Clipboard access is unavailable. Select and copy the ${label}.`,
+      );
       return;
     }
     try {
@@ -841,8 +848,7 @@ function InvitePersonDialog({
             </div>
             {result.kind === 'invite' && (
               <p className="invite-result-code">
-                Or share the code:{' '}
-                <code>{result.code}</code>{' '}
+                Or share the code: <code>{result.code}</code>{' '}
                 <button
                   type="button"
                   className="quiet-button"
@@ -1142,7 +1148,9 @@ function ManageMemberDialog({
       onDismiss();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Unable to save camera access',
+        caught instanceof Error
+          ? caught.message
+          : 'Unable to save camera access',
       );
     } finally {
       setSaving(false);

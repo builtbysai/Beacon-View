@@ -37,8 +37,8 @@ manually capture. Both devices should be able to capture and upload." Commit
 
 **What was actually broken.** Recording had never worked for the owner despite
 earlier attempts. Root cause: `POST /api/recordings`'s audit-log call passed
-`camera.cameraId` (the camera-*source* id) into `store.audit({ cameraId })`,
-which is FK'd to `cameras.id` (the *device* id) — every single recording
+`camera.cameraId` (the camera-_source_ id) into `store.audit({ cameraId })`,
+which is FK'd to `cameras.id` (the _device_ id) — every single recording
 request crashed with a 500 from the `audit_events_camera_id_fkey` violation,
 before any capture logic could ever run. Fixed in `bce74c5` (one line: use
 `camera.deviceId`). The rest of the HTTP lifecycle (`request` →
@@ -76,7 +76,7 @@ end on both platforms:
   `device-runtime-routes.ts`. This piggybacks on the existing motion-report
   round trip rather than adding a new server→device signaling channel. New
   "Record a short clip when motion is detected" checkbox in
-  `MotionSettingsPanel.tsx` — this UI control was *missing* on first pass
+  `MotionSettingsPanel.tsx` — this UI control was _missing_ on first pass
   (schema/API shipped with no way to turn it on) and was caught by a
   read-only verification subagent, then added.
 - **Android, capture + auto-record.** `CameraXVideoCapturer.kt` gained an
@@ -129,7 +129,7 @@ genuinely present in `drizzle.__drizzle_migrations` afterward. But the column
 did not exist: `SELECT column_name FROM information_schema.columns WHERE
 table_name='camera_sources' AND column_name='motion_record_enabled'` came back
 empty, confirmed by direct `psql`. I.e. drizzle-kit marked the migration as
-applied *without the DDL ever running against the database* — no error, no
+applied _without the DDL ever running against the database_ — no error, no
 partial-apply warning, nothing in the tool's own output to suggest anything
 was wrong. Both times, the workaround was the same: run the `ALTER TABLE`
 statement by hand (the tracking row already existed, so just the DDL, nothing
@@ -157,7 +157,7 @@ Please dig into why. Starting points, none confirmed:
   project's migration chain to trigger?
 - `docs/development-handoff.md`'s September 10 entry already flagged a
   related-but-distinct drizzle quirk (`drizzle/meta/` has no intermediate
-  snapshot JSON in *some* history, so a bare `generate` recreates every
+  snapshot JSON in _some_ history, so a bare `generate` recreates every
   table) — confirm whether that's the same root cause resurfacing
   differently, or a separate issue.
 - Whatever you find, the fix should make a bad apply loud (fail the command,

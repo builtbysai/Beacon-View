@@ -110,10 +110,7 @@ export function FavoriteCameraCard({
               deviceName={camera.deviceName}
             />
           ) : (
-            <span
-              className="favorite-card-placeholder"
-              data-tone={state.tone}
-            >
+            <span className="favorite-card-placeholder" data-tone={state.tone}>
               <CameraGlyph privacyMode={camera.privacyMode} />
             </span>
           )}

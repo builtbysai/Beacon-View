@@ -508,7 +508,10 @@ export class PostgresSharingRepository {
   async listGuestAccessibleCameras(
     tokenHash: string,
     now: Date,
-  ): Promise<{ householdId: string; cameras: AccessibleCameraRecord[] } | null> {
+  ): Promise<{
+    householdId: string;
+    cameras: AccessibleCameraRecord[];
+  } | null> {
     const link = await this.pool.query<{
       householdId: string;
       canListen: boolean;

@@ -121,7 +121,9 @@ describe('HouseholdSharingSettings', () => {
       await screen.findByRole('button', { name: 'Copy link' }),
     ).toBeVisible();
     expect(screen.getByText('fresh-one-time-code')).toBeVisible();
-    expect(screen.getByText(/A fresh code was created for guest@example\.com/)).toBeVisible();
+    expect(
+      screen.getByText(/A fresh code was created for guest@example\.com/),
+    ).toBeVisible();
   });
 
   it('saves explicit View and Listen grants without implicitly enabling Talk', async () => {
@@ -236,9 +238,7 @@ describe('HouseholdSharingSettings', () => {
     await screen.findByText('No household members.');
 
     fireEvent.click(screen.getByRole('button', { name: 'Invite person' }));
-    fireEvent.click(
-      await screen.findByRole('radio', { name: 'Guest link' }),
-    );
+    fireEvent.click(await screen.findByRole('radio', { name: 'Guest link' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Hallway phone' }));
     fireEvent.click(screen.getByLabelText('Listen'));
     fireEvent.click(screen.getByRole('button', { name: 'Create guest link' }));

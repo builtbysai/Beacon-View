@@ -86,10 +86,14 @@ export function MotionSettingsPanel({
             item.cameraId === cameraId ? result.settings : item,
           ) ?? null,
       );
-      setNotice('Saved. Your phone applies the settings on its next connection check.');
+      setNotice(
+        'Saved. Your phone applies the settings on its next connection check.',
+      );
     } catch {
       if (generation.current === current)
-        setError('Changes could not be saved. Your edits are still here to retry.');
+        setError(
+          'Changes could not be saved. Your edits are still here to retry.',
+        );
     } finally {
       if (generation.current === current) {
         pending.current = false;
@@ -99,22 +103,44 @@ export function MotionSettingsPanel({
   }
 
   return (
-    <section className="camera-settings-group camera-motion-settings" aria-labelledby={`${helpId}-title`}>
+    <section
+      className="camera-settings-group camera-motion-settings"
+      aria-labelledby={`${helpId}-title`}
+    >
       <div className="camera-settings-group-head">
         <div>
           <h3 id={`${helpId}-title`}>Motion</h3>
-          <p id={helpId}>Detection controls for this camera. Motion creates activity metadata only.</p>
+          <p id={helpId}>
+            Detection controls for this camera. Motion creates activity metadata
+            only.
+          </p>
         </div>
       </div>
 
-      {error && <p role="alert" className="camera-settings-form-message is-error">{error}</p>}
-      {!settings && !error && <p role="status" className="camera-settings-form-message">Loading motion settings…</p>}
+      {error && (
+        <p role="alert" className="camera-settings-form-message is-error">
+          {error}
+        </p>
+      )}
+      {!settings && !error && (
+        <p role="status" className="camera-settings-form-message">
+          Loading motion settings…
+        </p>
+      )}
       {!settings && error && (
-        <button type="button" className="secondary" onClick={() => setReload((value) => value + 1)}>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => setReload((value) => value + 1)}
+        >
           Retry motion settings
         </button>
       )}
-      {settings?.length === 0 && <p className="camera-settings-form-message">Motion settings are unavailable for this device.</p>}
+      {settings?.length === 0 && (
+        <p className="camera-settings-form-message">
+          Motion settings are unavailable for this device.
+        </p>
+      )}
 
       {active && (
         <form
@@ -127,7 +153,10 @@ export function MotionSettingsPanel({
         >
           {settings && settings.length > 1 && (
             <label className="camera-settings-form-row">
-              <span><strong>Camera</strong><small>Choose the source to configure.</small></span>
+              <span>
+                <strong>Camera</strong>
+                <small>Choose the source to configure.</small>
+              </span>
               <select
                 aria-label="Motion settings camera"
                 disabled={busy}
@@ -140,7 +169,8 @@ export function MotionSettingsPanel({
               >
                 {settings.map((item) => (
                   <option key={item.cameraId} value={item.cameraId}>
-                    {cameras.find((camera) => camera.id === item.cameraId)?.name ?? 'Camera'}
+                    {cameras.find((camera) => camera.id === item.cameraId)
+                      ?.name ?? 'Camera'}
                   </option>
                 ))}
               </select>
@@ -148,7 +178,10 @@ export function MotionSettingsPanel({
           )}
 
           <div className="camera-settings-form-row">
-            <span><strong>Motion detection</strong><small>Create motion events when activity is detected.</small></span>
+            <span>
+              <strong>Motion detection</strong>
+              <small>Create motion events when activity is detected.</small>
+            </span>
             <label className="camera-settings-switch-label">
               <input
                 aria-label="Detect motion on this camera"
@@ -159,17 +192,29 @@ export function MotionSettingsPanel({
                 onChange={(event) => change({ enabled: event.target.checked })}
                 aria-describedby={helpId}
               />
-              <span className={`camera-settings-switch ${active.enabled ? 'is-on' : ''}`}><span /></span>
+              <span
+                className={`camera-settings-switch ${active.enabled ? 'is-on' : ''}`}
+              >
+                <span />
+              </span>
             </label>
           </div>
 
           <label className="camera-settings-form-row">
-            <span><strong>Sensitivity</strong><small>How readily motion creates an event.</small></span>
+            <span>
+              <strong>Sensitivity</strong>
+              <small>How readily motion creates an event.</small>
+            </span>
             <select
               aria-label="Sensitivity"
               disabled={busy || !active.enabled}
               value={active.sensitivity}
-              onChange={(event) => change({ sensitivity: event.target.value as MotionSettings['sensitivity'] })}
+              onChange={(event) =>
+                change({
+                  sensitivity: event.target
+                    .value as MotionSettings['sensitivity'],
+                })
+              }
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -178,7 +223,10 @@ export function MotionSettingsPanel({
           </label>
 
           <div className="camera-settings-form-row">
-            <span><strong>Record on motion</strong><small>Save a short clip when motion is detected.</small></span>
+            <span>
+              <strong>Record on motion</strong>
+              <small>Save a short clip when motion is detected.</small>
+            </span>
             <label className="camera-settings-switch-label">
               <input
                 aria-label="Record a short clip when motion is detected"
@@ -186,19 +234,34 @@ export function MotionSettingsPanel({
                 type="checkbox"
                 checked={active.recordOnMotion}
                 disabled={busy || !active.enabled}
-                onChange={(event) => change({ recordOnMotion: event.target.checked })}
+                onChange={(event) =>
+                  change({ recordOnMotion: event.target.checked })
+                }
               />
-              <span className={`camera-settings-switch ${active.recordOnMotion ? 'is-on' : ''}`}><span /></span>
+              <span
+                className={`camera-settings-switch ${active.recordOnMotion ? 'is-on' : ''}`}
+              >
+                <span />
+              </span>
             </label>
           </div>
 
           <label className="camera-settings-form-row">
-            <span><strong>Time between events</strong><small>Minimum delay before another event can be created.</small></span>
+            <span>
+              <strong>Time between events</strong>
+              <small>Minimum delay before another event can be created.</small>
+            </span>
             <select
               aria-label="Time between events"
               disabled={busy || !active.enabled}
               value={active.cooldownSeconds}
-              onChange={(event) => change({ cooldownSeconds: Number(event.target.value) as MotionSettings['cooldownSeconds'] })}
+              onChange={(event) =>
+                change({
+                  cooldownSeconds: Number(
+                    event.target.value,
+                  ) as MotionSettings['cooldownSeconds'],
+                })
+              }
             >
               <option value={30}>30 seconds</option>
               <option value={60}>1 minute</option>
@@ -207,9 +270,15 @@ export function MotionSettingsPanel({
             </select>
           </label>
 
-          <fieldset className="camera-settings-quiet-hours" disabled={busy || !active.enabled}>
+          <fieldset
+            className="camera-settings-quiet-hours"
+            disabled={busy || !active.enabled}
+          >
             <div className="camera-settings-form-row">
-              <span><strong>Quiet hours</strong><small>Pause motion events on a daily schedule.</small></span>
+              <span>
+                <strong>Quiet hours</strong>
+                <small>Pause motion events on a daily schedule.</small>
+              </span>
               <label className="camera-settings-switch-label">
                 <input
                   aria-label="Quiet hours"
@@ -219,19 +288,75 @@ export function MotionSettingsPanel({
                   onChange={(event) =>
                     change({
                       quietHours: event.target.checked
-                        ? { start: '22:00', end: '07:00', timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }
+                        ? {
+                            start: '22:00',
+                            end: '07:00',
+                            timeZone:
+                              Intl.DateTimeFormat().resolvedOptions().timeZone,
+                          }
                         : null,
                     })
                   }
                 />
-                <span className={`camera-settings-switch ${active.quietHours ? 'is-on' : ''}`}><span /></span>
+                <span
+                  className={`camera-settings-switch ${active.quietHours ? 'is-on' : ''}`}
+                >
+                  <span />
+                </span>
               </label>
             </div>
             {active.quietHours && (
               <div className="camera-settings-time-grid">
-                <label>Start<input aria-label="Quiet hours start" type="time" required value={active.quietHours.start} onChange={(event) => change({ quietHours: { ...active.quietHours!, start: event.target.value } })} /></label>
-                <label>End<input aria-label="Quiet hours end" type="time" required value={active.quietHours.end} onChange={(event) => change({ quietHours: { ...active.quietHours!, end: event.target.value } })} /></label>
-                <label>Time zone<input aria-label="Quiet hours time zone" required value={active.quietHours.timeZone} onChange={(event) => change({ quietHours: { ...active.quietHours!, timeZone: event.target.value } })} /></label>
+                <label>
+                  Start
+                  <input
+                    aria-label="Quiet hours start"
+                    type="time"
+                    required
+                    value={active.quietHours.start}
+                    onChange={(event) =>
+                      change({
+                        quietHours: {
+                          ...active.quietHours!,
+                          start: event.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  End
+                  <input
+                    aria-label="Quiet hours end"
+                    type="time"
+                    required
+                    value={active.quietHours.end}
+                    onChange={(event) =>
+                      change({
+                        quietHours: {
+                          ...active.quietHours!,
+                          end: event.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Time zone
+                  <input
+                    aria-label="Quiet hours time zone"
+                    required
+                    value={active.quietHours.timeZone}
+                    onChange={(event) =>
+                      change({
+                        quietHours: {
+                          ...active.quietHours!,
+                          timeZone: event.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
               </div>
             )}
           </fieldset>

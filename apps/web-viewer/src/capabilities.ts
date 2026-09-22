@@ -10,7 +10,9 @@ export interface BackendCapabilities {
   recordings: boolean;
 }
 
-export function isBackendCapabilities(value: unknown): value is BackendCapabilities {
+export function isBackendCapabilities(
+  value: unknown,
+): value is BackendCapabilities {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<BackendCapabilities>;
   return (

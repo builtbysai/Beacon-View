@@ -18,7 +18,11 @@ function luminance(hex: string) {
 
 describe('semantic theme contrast', () => {
   // Find all theme definition blocks: :root (light defaults), [data-theme="light"], [data-theme="dark"], @media (prefers-color-scheme: dark) { :root ... }
-  const blocks = [...css.matchAll(/(?::root|\[data-theme=".*?"\])(?:,\s*\[data-theme=".*?"\])*\s*\{([^}]+)\}/g)];
+  const blocks = [
+    ...css.matchAll(
+      /(?::root|\[data-theme=['"].*?['"]\])(?:,\s*\[data-theme=['"].*?['"]\])*\s*\{([^}]+)\}/g,
+    ),
+  ];
   it('checks both light and dark palettes', () =>
     expect(blocks).toHaveLength(2));
   for (const [index, block] of blocks.entries()) {
