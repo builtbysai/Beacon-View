@@ -53,9 +53,14 @@ describe('App', () => {
         ok: false,
       }),
     );
-    const view = render(<App />);
-
-    
+    render(<App />);
+    fireEvent.click((await screen.findAllByRole('button', { name: /Get started/ }))[0]!);
+    expect(localStorage.getItem('beacon.splash.seen.v1')).toBe('true');
+    expect(
+      await screen.findByRole('heading', {
+        name: 'See what matters, from wherever you are.',
+      }),
+    ).toBeVisible();
   });
 
   it('shows the public trust page without requiring a session', async () => {
@@ -510,21 +515,16 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Camera settings' }));
 
     expect(screen.getByRole('heading', { name: 'Pixel' })).toBeInTheDocument();
-    expect(screen.getByText('Keep this camera ready')).toBeVisible();
     expect(
-      screen.getByText('Keep this camera ready').closest('details'),
-    ).not.toHaveAttribute('open');
-    expect(screen.getByText('Readiness tips')).toBeVisible();
-    expect(
-      screen.getByRole('button', { name: 'Back to cameras' }),
+      screen.getByRole('button', { name: 'Close camera settings' }),
     ).toBeVisible();
     expect(
-      screen.getByRole('heading', { name: 'Device privacy' }),
+      screen.getByRole('heading', { name: 'Privacy' }),
     ).toBeVisible();
     const health = screen.getByLabelText('Device health');
-    expect(within(health).getByText('Watching now')).toBeVisible();
-    expect(within(health).getByText('2 viewers')).toBeVisible();
-    expect(within(health).getByText('82% · charging')).toBeVisible();
+    expect(within(health).getByText('Online')).toBeVisible();
+    expect(within(health).getByText('2')).toBeVisible();
+    expect(screen.getByText('82% · charging')).toBeVisible();
     expect(screen.getByText('Rear camera')).toBeVisible();
     expect(window.location.pathname).toBe('/cameras/device-1/settings');
     expect(
@@ -536,8 +536,7 @@ describe('App', () => {
     expect(
       screen.queryByRole('button', { name: 'Revoke device' }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('Advanced'));
-    expect(screen.getByText(/Capabilities:/)).toBeVisible();
+    expect(screen.getByText('Capabilities')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Remove camera' }));
     expect(
       await screen.findByRole('heading', { name: 'Remove Pixel?' }),
@@ -546,8 +545,13 @@ describe('App', () => {
     expect(
       screen.queryByRole('heading', { name: 'Remove Pixel?' }),
     ).not.toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(screen.getByRole('button', { name: 'Pause' })).toBeVisible();
+    expect(
+      fetchMock.mock.calls.some(([url, init]) => {
+        const options = init as RequestInit | undefined;
+        return url === '/api/devices/device-1' && options?.method === 'DELETE';
+      }),
+    ).toBe(false);
+    expect(screen.getByRole('switch', { name: 'Device privacy' })).toBeVisible();
   });
 
   it('renames and removes a camera from the Cameras grid', async () => {
@@ -828,6 +832,7 @@ describe('App', () => {
 
   it('tracks the active Settings section in the URL so browser back steps between them', async () => {
     vi.stubGlobal('WebSocket', TestSocket);
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }));
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((url: string) =>

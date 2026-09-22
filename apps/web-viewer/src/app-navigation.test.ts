@@ -26,6 +26,6 @@ describe('application navigation', () => {
 
   it('keeps page width policy in the navigation module', () => {
     expect(contentWidthClass('cameras')).toBe('workspace-wide');
-    expect(contentWidthClass('settings')).toBe('');
+    expect(contentWidthClass('settings')).toBe('workspace-wide');
   });
 });

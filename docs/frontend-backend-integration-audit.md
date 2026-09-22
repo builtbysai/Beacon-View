@@ -52,3 +52,5 @@ owner/admin activity API reads `audit_events`; the capability endpoint reports
 configured optional services; and motion history no longer invents object or
 sound detection labels from event IDs. Household activity is not yet wired into
 the Activity UI, and PostgreSQL-backed validation remains required.
+The three inherited frontend test failures were stale assertions/test setup;
+after aligning them with the approved UI, the frontend suite passes 170 tests.
