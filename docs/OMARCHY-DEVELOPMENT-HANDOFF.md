@@ -4,15 +4,15 @@ Updated 22 September 2026. GitHub: <https://github.com/builtbysai/Beacon-SecureV
 
 ## State and branches
 
-| Purpose                                           | Ref at audit                                 | Commit                                     |
-| ------------------------------------------------- | -------------------------------------------- | ------------------------------------------ |
-| Frozen frontend visual source of truth            | `frontend-recovery-final-2026-09-17`         | `af28b03a20637290622a2518a43677faa85f2b09` |
-| Current frontend branch / migration documentation | `antigravity/recovery-checkpoint`            | `abde4eceef51a15eafb160e366d86c8ffd7fb648` |
-| Next integration branch, created without merging  | `frontend-backend-integration`               | `af28b03a20637290622a2518a43677faa85f2b09` |
-| Backend reference branch                          | `backend-integration` remote                 | `e42f1ce738bf9ee2552a0ef6429e45e8efb4bda8` |
-| Default branch                                    | `main`                                       | `839f607961b09f2f9f355ded30b1fac9d70c2901` |
-| Preserved unfinished second worktree              | `codex/windows-worktree-recovery-2026-09-22` | `dbab4dcc5bd3f6b4258ea810426a35348d2add8d` |
-| Preserved September 10 stash                      | `codex/windows-stash-recovery-2026-09-22`    | `41a03bb7fd5ed604d36d3f043d52949c9189469c` |
+| Purpose                                          | Ref at audit                                 | Commit                                     |
+| ------------------------------------------------ | -------------------------------------------- | ------------------------------------------ |
+| Frozen frontend visual source of truth           | `frontend-recovery-final-2026-09-17`         | `af28b03a20637290622a2518a43677faa85f2b09` |
+| Migration documentation base                     | `antigravity/recovery-checkpoint`            | `abde4eceef51a15eafb160e366d86c8ffd7fb648` |
+| Next integration branch, created without merging | `frontend-backend-integration`               | `af28b03a20637290622a2518a43677faa85f2b09` |
+| Backend reference branch                         | `backend-integration` remote                 | `e42f1ce738bf9ee2552a0ef6429e45e8efb4bda8` |
+| Default branch                                   | `main`                                       | `839f607961b09f2f9f355ded30b1fac9d70c2901` |
+| Preserved unfinished second worktree             | `codex/windows-worktree-recovery-2026-09-22` | `dbab4dcc5bd3f6b4258ea810426a35348d2add8d` |
+| Preserved September 10 stash                     | `codex/windows-stash-recovery-2026-09-22`    | `41a03bb7fd5ed604d36d3f043d52949c9189469c` |
 
 The intended next task is integrating the approved newer frontend design with backend state and APIs. Treat the frozen frontend as the visual source of truth. Extend backend/database state, metadata, and behavior to support it; audit and selectively cherry-pick useful `backend-integration` commits rather than blindly merging that branch. Do not merge during migration. The recovery worktree branch contains unfinished recording, Drive, notification, and Android changes; audit it before reuse. Existing `main` contains recording capture work and documents a Drizzle migration bug in `docs/development-handoff.md`.
 
