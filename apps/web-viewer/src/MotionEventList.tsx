@@ -43,13 +43,9 @@ function savedFilter(key: string, fallback: string): string {
   }
 }
 
-// Deterministic fake kind generator since backend doesn't return eventType yet
-function getFakeKind(id: string) {
-  const chars = id.charCodeAt(0) + id.charCodeAt(id.length - 1);
-  if (chars % 3 !== 0) return 'motion';
-  const kindsList = ['person', 'package', 'vehicle', 'animal', 'sound', 'ring'];
-  return kindsList[chars % kindsList.length]!;
-}
+// /api/motion-events currently reports visual motion only. More specific
+// detection labels require an explicit device-reported event type.
+const motionKind = 'motion';
 
 function formatKindLabel(kind: string) {
   const map: Record<string, string> = {
@@ -182,19 +178,19 @@ export function MotionEventList({
     if (!events) return [];
     let result = events;
     if (kindFilter !== 'all') {
-      result = result.filter((e) => getFakeKind(e.id) === kindFilter);
+      result = result.filter(() => kindFilter === motionKind);
     }
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(
-        (e) => e.deviceName.toLowerCase().includes(q) || e.cameraName.toLowerCase().includes(q) || formatKindLabel(getFakeKind(e.id)).toLowerCase().includes(q)
+        (e) => e.deviceName.toLowerCase().includes(q) || e.cameraName.toLowerCase().includes(q) || formatKindLabel(motionKind).toLowerCase().includes(q)
       );
     }
     
     if (sortOrder === 'old') {
       result = [...result].reverse();
     } else if (sortOrder === 'type') {
-      result = [...result].sort((a, b) => formatKindLabel(getFakeKind(a.id)).localeCompare(formatKindLabel(getFakeKind(b.id))));
+      result = [...result].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     } else if (sortOrder === 'device') {
       result = [...result].sort((a, b) => a.deviceName.localeCompare(b.deviceName));
     }
@@ -225,10 +221,7 @@ export function MotionEventList({
   // Calculate counts per kind
   const kindCounts = useMemo(() => {
     const counts: Record<string, number> = { all: events?.length ?? 0 };
-    events?.forEach(e => {
-      const k = getFakeKind(e.id);
-      counts[k] = (counts[k] ?? 0) + 1;
-    });
+    counts[motionKind] = events?.length ?? 0;
     return counts;
   }, [events]);
 
@@ -345,7 +338,7 @@ export function MotionEventList({
           <h2 className="activity-v3-daytitle">{day}</h2>
           <div className="activity-v3-feed">
             {entries.map((event) => {
-              const kind = getFakeKind(event.id);
+              const kind = motionKind;
               const label = formatKindLabel(kind);
               const iconName = kinds.find(k => k.id === kind)?.icon || 'activity';
               
@@ -425,11 +418,11 @@ export function MotionEventList({
             </div>
             
             <div className="activity-v3-eventhero">
-              <div className={`activity-v3-evicon ${getFakeKind(drawerEvent.id)}`}>
-                <Icon name={kinds.find(k => k.id === getFakeKind(drawerEvent.id))?.icon as any || 'activity'} />
+              <div className={`activity-v3-evicon ${motionKind}`}>
+                <Icon name="activity" />
               </div>
               <div>
-                <h2 id="detailTitle">{formatKindLabel(getFakeKind(drawerEvent.id))}</h2>
+                <h2 id="detailTitle">{formatKindLabel(motionKind)}</h2>
                 <p>
                   {new Date(drawerEvent.occurredAt).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at {new Date(drawerEvent.occurredAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
                 </p>
@@ -447,21 +440,16 @@ export function MotionEventList({
               </div>
               <div className="activity-v3-fact">
                 <span>Event type</span>
-                <span>{formatKindLabel(getFakeKind(drawerEvent.id)).replace(' detected', '')}</span>
+                <span>{formatKindLabel(motionKind).replace(' detected', '')}</span>
               </div>
-              {getFakeKind(drawerEvent.id) === 'motion' && (
-                <div className="activity-v3-fact">
-                  <span>Motion intensity</span>
-                  <span>{Math.round(drawerEvent.confidence * 100)}%</span>
-                </div>
-              )}
+              <div className="activity-v3-fact">
+                <span>Motion intensity</span>
+                <span>{Math.round(drawerEvent.confidence * 100)}%</span>
+              </div>
             </div>
             
             <div className="activity-v3-explain">
-              {getFakeKind(drawerEvent.id) === 'motion' 
-                ? "Motion is based on visual changes in the camera view. Lighting, shadows, reflections, or moving objects can trigger it. A motion event does not mean Beacon identified a person or object."
-                : "This event label was reported by a device or detection capability that supports this event type. Beacon stores event metadata rather than an event image or recording."
-              }
+              Motion is based on visual changes in the camera view. Lighting, shadows, reflections, or moving objects can trigger it. A motion event does not mean Beacon identified a person or object.
             </div>
             
             <div className="activity-v3-draweractions">

@@ -43,6 +43,20 @@ const props = {
 };
 
 describe('Activity timeline', () => {
+  it('labels motion from the API as motion regardless of its event ID', async () => {
+    const fetch = vi.fn().mockResolvedValue(response([event('ab')]));
+    vi.stubGlobal('fetch', fetch);
+
+    render(<MotionEventList {...props} />);
+
+    await screen.findByText('ab');
+    expect(screen.getByText('Motion detected')).toBeVisible();
+    expect(screen.queryByText('Animal detected')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('ab'));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Motion intensity');
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('Animal detected');
+  });
+
   it('loads older events with stable filters, groups by day, and opens the source camera', async () => {
     const fetch = vi
       .fn<

@@ -46,3 +46,9 @@ and supplies an `android:default` fallback if no recognized source remains.
 Therefore an omitted key does not reliably mean the source was removed. Android
 supplies generic hardware names, while web users can rename sources. Preserve
 user display names and only treat facing/capabilities as device-owned data.
+
+Progress on this branch: Diagnostics now has a retryable error state; the
+owner/admin activity API reads `audit_events`; the capability endpoint reports
+configured optional services; and motion history no longer invents object or
+sound detection labels from event IDs. Household activity is not yet wired into
+the Activity UI, and PostgreSQL-backed validation remains required.
