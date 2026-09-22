@@ -1,9 +1,18 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { request } from './api';
 import { NotificationSettings } from './NotificationSettings';
-import { AutosaveIndicator, SettingsAutosaveProvider } from './SettingsAutosave';
+import {
+  AutosaveIndicator,
+  SettingsAutosaveProvider,
+} from './SettingsAutosave';
 
 vi.mock('./api', () => ({ request: vi.fn() }));
 
@@ -100,5 +109,71 @@ describe('NotificationSettings', () => {
       ),
     );
     expect(await screen.findByText('Saved')).toBeVisible();
+  });
+
+  it('autosaves Quiet Hours and reloads the saved time zone and window', async () => {
+    type QuietHours = { start: string; end: string; timeZone: string };
+    let savedQuietHours: QuietHours | null = null;
+    vi.mocked(request).mockImplementation((path, options) => {
+      if (path === '/api/notification-preferences') {
+        return Promise.resolve({
+          preferences: [
+            {
+              deviceId: '8dc18bea-7a3b-48ad-b48a-48d00f975f54',
+              deviceName: 'Hallway camera',
+              motionEnabled: false,
+              offlineEnabled: false,
+              quietHours: savedQuietHours,
+            },
+          ],
+        });
+      }
+      if (
+        path.includes('/api/notification-preferences/') &&
+        options?.method === 'PUT'
+      ) {
+        if (typeof options.body !== 'string') {
+          throw new Error('Expected a serialized preference body');
+        }
+        const body = JSON.parse(options.body) as {
+          quietHours: QuietHours | null;
+        };
+        savedQuietHours = body.quietHours;
+        return Promise.resolve({
+          preference: {
+            deviceId: '8dc18bea-7a3b-48ad-b48a-48d00f975f54',
+            deviceName: 'Hallway camera',
+            motionEnabled: false,
+            offlineEnabled: false,
+            quietHours: savedQuietHours,
+          },
+        });
+      }
+      return Promise.reject(new Error(`Unexpected request: ${String(path)}`));
+    });
+
+    const first = renderNotificationSettings();
+    fireEvent.click(
+      await screen.findByRole('switch', {
+        name: 'Quiet hours for Hallway camera',
+      }),
+    );
+    await waitFor(() => expect(savedQuietHours).not.toBeNull());
+    expect(await screen.findByText('Saved')).toBeVisible();
+    expect(savedQuietHours).toMatchObject({ start: '22:00', end: '07:00' });
+
+    first.unmount();
+    renderNotificationSettings();
+    expect(
+      await screen.findByLabelText('Quiet hours start for Hallway camera'),
+    ).toHaveValue('22:00');
+    expect(
+      screen.getByLabelText('Quiet hours end for Hallway camera'),
+    ).toHaveValue('07:00');
+    expect(
+      screen.getByText(
+        `Time zone: ${savedQuietHours!.timeZone.replace(/_/g, ' ')}`,
+      ),
+    ).toBeVisible();
   });
 });

@@ -60,3 +60,9 @@ after aligning them with the approved UI, the frontend suite passes. Drive
 Settings now explains when the server reports Drive unconfigured and offers a
 retry when the status request fails, instead of linking to an unavailable OAuth
 flow.
+Quiet Hours now has browser autosave/reload coverage and a PostgreSQL-backed
+delivery check: preferences persist with their IANA time zone, motion remains
+recorded during the quiet window, and alert creation resumes outside it. The
+full web suite passes 172 tests and the full backend suite passes 205 tests
+against the dedicated test database. Admin notification policy and realtime
+configuration invalidation remain open.

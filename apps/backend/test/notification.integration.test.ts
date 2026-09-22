@@ -117,6 +117,57 @@ describe.skipIf(!store)('notification transport persistence', () => {
     ]);
   });
 
+  it('persists notification quiet hours and suppresses only alerts inside the selected time zone window', async () => {
+    const { device, now, owner, sessionId } = await fixture();
+    await store!.upsertNotificationSubscription({
+      channel: 'fcm',
+      consentedAt: now,
+      deviceLabel: 'Quiet hours test',
+      installationId: randomUUID(),
+      providerMaterial: 'quiet-hours-provider-token',
+      sessionId,
+      userId: owner.id,
+    });
+    const quietHours = {
+      start: '07:00',
+      end: '09:00',
+      timeZone: 'America/New_York',
+    };
+    await store!.updateNotificationPreference({
+      userId: owner.id,
+      publicDeviceId: device.publicDeviceId,
+      motionEnabled: true,
+      offlineEnabled: false,
+      quietHours,
+    });
+    expect(
+      (await store!.listNotificationPreferences(owner.id))[0]?.quietHours,
+    ).toEqual(quietHours);
+
+    await store!.createMotionEvent({
+      credentialHash: hashSecret('notification-device-credential'),
+      publicCameraId: device.publicCameraId,
+      confidence: 0.8,
+      now,
+    });
+    expect(
+      (await store!.pool.query('SELECT id FROM motion_events')).rowCount,
+    ).toBe(1);
+    expect(
+      (await store!.pool.query('SELECT id FROM notification_events')).rowCount,
+    ).toBe(0);
+
+    await store!.createMotionEvent({
+      credentialHash: hashSecret('notification-device-credential'),
+      publicCameraId: device.publicCameraId,
+      confidence: 0.8,
+      now: new Date(now.getTime() + 2 * 60 * 60 * 1_000),
+    });
+    expect(
+      (await store!.pool.query('SELECT id FROM notification_events')).rowCount,
+    ).toBe(1);
+  });
+
   it('atomically terminals an invalid delivery and revokes its provider registration', async () => {
     const { device, now, owner, sessionId } = await fixture();
     const subscriptionId = await store!.upsertNotificationSubscription({
