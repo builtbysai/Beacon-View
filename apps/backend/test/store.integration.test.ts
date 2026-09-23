@@ -475,6 +475,41 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
     await store!.updateCamera(owner.householdId, browserCamera.publicCameraId, {
       enabled: true,
     });
+    await store!.updateDevice(
+      owner.householdId,
+      browser.device.publicDeviceId,
+      {
+        name: 'My office camera',
+      },
+    );
+    const registeredAgain = await store!.registerBrowserDevice({
+      householdId: owner.householdId,
+      installationId,
+      name: 'Stale browser name',
+      now: new Date(),
+      sources: [
+        {
+          facing: 'front',
+          name: 'Stale webcam label',
+          sourceKey: 'browser:built-in',
+        },
+        {
+          facing: 'external',
+          name: 'USB webcam',
+          sourceKey: 'browser:usb',
+        },
+      ],
+    });
+    expect(registeredAgain.device.name).toBe('My office camera');
+    expect(
+      registeredAgain.cameras.find(
+        (camera) => camera.sourceKey === 'browser:built-in',
+      ),
+    ).toMatchObject({
+      deviceName: 'My office camera',
+      facing: 'front',
+      name: 'Desk camera',
+    });
     await expect(
       store!.revokeDevice(owner.householdId, browser.device.publicDeviceId),
     ).resolves.toBe(browser.device.id);
