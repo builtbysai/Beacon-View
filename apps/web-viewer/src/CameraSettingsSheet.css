@@ -110,6 +110,15 @@
   min-height: 0;
   overscroll-behavior: contain;
 }
+.camera-settings-error {
+  margin: 0 0 12px;
+  padding: 9px 11px;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  border-radius: 8px;
+  background: rgba(220, 38, 38, 0.06);
+  color: var(--status-error);
+  font-size: 11px;
+}
 .camera-settings-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -263,6 +272,18 @@
 .camera-settings-source-grid .camera-tile-identity span,
 .camera-settings-source-grid .camera-tile-secondary-status {
   font-size: 9.5px;
+}
+.camera-settings-source-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  margin: 5px 2px 0;
+  font-size: 9.5px;
+  color: var(--text-muted);
+}
+.camera-settings-source-meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .camera-settings-empty,
 .camera-settings-boundary,
