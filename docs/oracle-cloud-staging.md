@@ -43,16 +43,22 @@ path through OCI. Do not restore a public TCP 22 rule as a permanent workaround.
    secrets, and set permissions to owner-read only.
 3. Confirm the hostname resolves to `TURN_EXTERNAL_IP` before starting Caddy. Caddy
    obtains a public certificate over ports 80 and 443.
-4. Run the migration as a deliberate release step, then start only the long-running
-   services:
+4. Run the migration as a deliberate release step and independently verify the
+   resulting PostgreSQL catalog before starting long-running services:
 
    ```bash
    cd /opt/beacon/app/infrastructure/cloud
    sudo docker compose --env-file /etc/beacon/production.env run --rm migrate
+   sudo docker compose --env-file /etc/beacon/production.env run --rm migrate-verify
    sudo docker compose --env-file /etc/beacon/production.env up -d postgres backend coturn web
    ```
 
-5. Verify HTTPS, WSS, a direct WebRTC view, then a forced relay view. Check logs for
+5. `migrate-verify` checks every table, added column, named constraint, index,
+   extension, function, and trigger introduced by the checked-in additive migrations.
+   It must complete successfully; a migration ledger entry alone is not evidence that
+   its DDL exists. Update the verifier when a migration introduces a non-additive
+   invariant.
+6. Verify HTTPS, WSS, a direct WebRTC view, then a forced relay view. Check logs for
    redaction before creating a household or pairing a physical device.
 
 ## Encrypted off-VM backup and restore verification
