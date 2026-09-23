@@ -113,6 +113,54 @@ describe('NotificationSettings', () => {
     expect(await screen.findByText('Saved')).toBeVisible();
   });
 
+  it('serializes edits to one camera and keeps the latest controls visible', async () => {
+    const base = {
+      deviceId: '8dc18bea-7a3b-48ad-b48a-48d00f975f54',
+      deviceName: 'Hallway camera',
+      motionEnabled: false,
+      offlineEnabled: false,
+      quietHours: null,
+    };
+    let finishFirst: ((value: { preference: typeof base }) => void) | undefined;
+    const requests: string[] = [];
+    vi.mocked(request).mockImplementation((path, options) => {
+      if (path === '/api/notification-preferences')
+        return Promise.resolve({ preferences: [base] });
+      const body = options?.body as string;
+      requests.push(body);
+      if (requests.length === 1)
+        return new Promise((resolve) => {
+          finishFirst = resolve;
+        });
+      const updated = JSON.parse(body) as {
+        motionEnabled: boolean;
+        offlineEnabled: boolean;
+        quietHours: null;
+      };
+      return Promise.resolve({ preference: { ...base, ...updated } });
+    });
+    renderNotificationSettings();
+    const motion = await screen.findByRole('switch', {
+      name: 'Motion alerts for Hallway camera',
+    });
+    const offline = screen.getByRole('switch', {
+      name: 'Offline and recovery alerts for Hallway camera',
+    });
+    fireEvent.click(motion);
+    fireEvent.click(offline);
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(motion).toBeChecked();
+    expect(offline).toBeChecked();
+    finishFirst!({ preference: { ...base, motionEnabled: true } });
+    await waitFor(() => expect(requests).toHaveLength(2));
+    expect(JSON.parse(requests[1]!)).toMatchObject({
+      motionEnabled: true,
+      offlineEnabled: true,
+    });
+    expect(motion).toBeChecked();
+    expect(offline).toBeChecked();
+  });
+
   it('autosaves Quiet Hours and reloads the saved time zone and window', async () => {
     type QuietHours = { start: string; end: string; timeZone: string };
     let savedQuietHours: QuietHours | null = null;

@@ -229,7 +229,7 @@ export function registerCameraManagementRoutes(
       ipAddress: request.ip,
       metadata: {
         deviceId: parameters.data.deviceId,
-        ...(body.data.name !== undefined ? { name: body.data.name } : {}),
+        ...(body.data.name !== undefined ? { deviceName: body.data.name } : {}),
         ...(body.data.enabled !== undefined
           ? { enabled: String(body.data.enabled) }
           : {}),
@@ -343,7 +343,7 @@ export function registerCameraManagementRoutes(
       ipAddress: request.ip,
       metadata: {
         cameraId: parameters.data.cameraId,
-        ...(body.data.name !== undefined ? { name: body.data.name } : {}),
+        ...(body.data.name !== undefined ? { cameraName: body.data.name } : {}),
         ...(body.data.enabled !== undefined
           ? { enabled: String(body.data.enabled) }
           : {}),

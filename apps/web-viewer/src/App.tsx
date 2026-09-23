@@ -1398,6 +1398,9 @@ export function App() {
             {page === 'events' && (
               <MotionEventList
                 filterStorageKey={`beacon_motion_filters_${user.id}`}
+                includeHouseholdActivity={
+                  household?.role === 'owner' || household?.role === 'admin'
+                }
                 refreshRevision={motionEventRevision}
                 clearRevision={motionClearRevision}
                 cameras={cameras}

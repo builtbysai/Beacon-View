@@ -127,6 +127,7 @@ describe('mobile sidebar', () => {
     expect(onSelect).toHaveBeenCalledOnce();
     expect(sidebar).toHaveAttribute('data-state', 'closed');
     expect(sidebar).toHaveAttribute('inert');
+    expect(trigger).toHaveFocus();
   });
 
   it('closes on Escape and stays closed after crossing the desktop breakpoint', () => {
@@ -171,6 +172,25 @@ describe('mobile sidebar', () => {
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(sidebar).toHaveAttribute('data-state', 'expanded');
+  });
+
+  it('keeps Tab inside the account menu while the mobile drawer is open', () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 390,
+    });
+    render(<TestSidebar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /owner@example\.test/ }),
+    );
+    const theme = screen.getByRole('button', { name: 'Light' });
+    const signOut = screen.getByRole('menuitem', { name: /Sign out/ });
+    theme.focus();
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    expect(signOut).toHaveFocus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(theme).toHaveFocus();
   });
 });
 

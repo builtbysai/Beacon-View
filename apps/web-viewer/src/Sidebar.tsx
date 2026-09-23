@@ -201,6 +201,20 @@ export function Sidebar({
       setTip(null);
     };
     const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Tab' && isMobile && mobileOpen && menuOpen) {
+        const controls = menuRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled])',
+        );
+        const first = controls?.[0];
+        const last = controls?.[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
       if (event.key === 'Tab' && isMobile && mobileOpen && !menuOpen) {
         const controls = sidebarRef.current?.querySelectorAll<HTMLElement>(
           'a[href], button:not([disabled])',
@@ -335,7 +349,7 @@ export function Sidebar({
                 data-tooltip={item.label}
                 onClick={() => {
                   hideTip();
-                  if (isMobile) closeMobile(false);
+                  if (isMobile) closeMobile(item.current);
                   item.onSelect();
                 }}
               >

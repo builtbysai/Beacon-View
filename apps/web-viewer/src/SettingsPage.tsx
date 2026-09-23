@@ -114,7 +114,7 @@ export function SettingsPage({
       document.getElementById(target)?.scrollIntoView({ block: 'start' });
     }, 150);
     return () => clearTimeout(timer);
-  }, []);
+  }, [requestedSection]);
 
   useEffect(() => {
     const elements = sections

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { request } from './api';
 import { useSettingsAutosave } from './SettingsAutosave';
 import { SettingsRow } from './SettingsUI';
@@ -64,12 +64,22 @@ export function NotificationSettings({
   const [channelError, setChannelError] = useState('');
   const [preferencesError, setPreferencesError] = useState(false);
   const [visible, setVisible] = useState(REVEAL_INITIAL);
+  const latestPreferences = useRef<Preference[]>([]);
+  const confirmedPreferences = useRef(new Map<string, Preference>());
+  const saveChains = useRef(new Map<string, Promise<void>>());
+  const editVersions = useRef(new Map<string, number>());
 
   function loadPreferences() {
     setPreferencesError(false);
     setPreferences(null);
     void request<{ preferences: Preference[] }>('/api/notification-preferences')
-      .then((result) => setPreferences(result.preferences))
+      .then((result) => {
+        latestPreferences.current = result.preferences;
+        confirmedPreferences.current = new Map(
+          result.preferences.map((item) => [item.deviceId, item]),
+        );
+        setPreferences(result.preferences);
+      })
       .catch(() => {
         setPreferencesError(true);
         setPreferences([]);
@@ -152,39 +162,59 @@ export function NotificationSettings({
     deviceId: string,
     update: (preference: Preference) => Preference,
   ) {
-    const previous = preferences;
-    const current = previous?.find((item) => item.deviceId === deviceId);
+    const current = latestPreferences.current.find(
+      (item) => item.deviceId === deviceId,
+    );
     if (!current) return;
     const next = update(current);
-    setPreferences(
-      (items) =>
-        items?.map((item) => (item.deviceId === deviceId ? next : item)) ??
-        items,
+    const version = (editVersions.current.get(deviceId) ?? 0) + 1;
+    editVersions.current.set(deviceId, version);
+    latestPreferences.current = latestPreferences.current.map((item) =>
+      item.deviceId === deviceId ? next : item,
     );
+    setPreferences(latestPreferences.current);
     run(async () => {
-      try {
-        const result = await request<{ preference: Preference }>(
-          `/api/notification-preferences/${encodeURIComponent(deviceId)}`,
-          {
-            method: 'PUT',
-            body: JSON.stringify({
-              motionEnabled: next.motionEnabled,
-              offlineEnabled: next.offlineEnabled,
-              quietHours: next.quietHours,
-            }),
-          },
-        );
-        setPreferences(
-          (items) =>
-            items?.map((item) =>
+      const prior = saveChains.current.get(deviceId) ?? Promise.resolve();
+      const save = prior
+        .catch(() => undefined)
+        .then(async () => {
+          const result = await request<{ preference: Preference }>(
+            `/api/notification-preferences/${encodeURIComponent(deviceId)}`,
+            {
+              method: 'PUT',
+              body: JSON.stringify({
+                motionEnabled: next.motionEnabled,
+                offlineEnabled: next.offlineEnabled,
+                quietHours: next.quietHours,
+              }),
+            },
+          );
+          confirmedPreferences.current.set(deviceId, result.preference);
+          if (editVersions.current.get(deviceId) === version) {
+            latestPreferences.current = latestPreferences.current.map((item) =>
               item.deviceId === deviceId ? result.preference : item,
-            ) ?? items,
-        );
+            );
+            setPreferences(latestPreferences.current);
+          }
+        });
+      saveChains.current.set(deviceId, save);
+      try {
+        await save;
       } catch (error) {
-        // Roll the switch back rather than leaving it showing a state the
-        // server never confirmed.
-        setPreferences(previous ?? null);
+        if (editVersions.current.get(deviceId) === version) {
+          const confirmed = confirmedPreferences.current.get(deviceId);
+          if (confirmed) {
+            latestPreferences.current = latestPreferences.current.map((item) =>
+              item.deviceId === deviceId ? confirmed : item,
+            );
+            setPreferences(latestPreferences.current);
+          }
+        }
         throw error;
+      } finally {
+        if (saveChains.current.get(deviceId) === save) {
+          saveChains.current.delete(deviceId);
+        }
       }
     });
   }

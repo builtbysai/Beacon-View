@@ -207,10 +207,14 @@ export class PostgresNotificationRepository {
       quietEndMinute: number | null;
       quietTimeZone: string | null;
     }>(
-      `SELECT user_id AS "userId", motion_enabled AS "motionEnabled", quiet_start_minute AS "quietStartMinute",
+      `SELECT np.user_id AS "userId", np.motion_enabled AS "motionEnabled", np.quiet_start_minute AS "quietStartMinute",
               quiet_end_minute AS "quietEndMinute", quiet_time_zone AS "quietTimeZone"
-       FROM notification_preferences WHERE device_id = $1`,
-      [input.deviceId],
+       FROM notification_preferences np
+       JOIN cameras d ON d.id = np.device_id
+       JOIN household_members hm ON hm.household_id = d.household_id AND hm.user_id = np.user_id
+       WHERE np.device_id = $1 AND d.revoked_at IS NULL AND hm.status = 'active'
+         AND hm.role IN ('owner', 'admin') AND (hm.expires_at IS NULL OR hm.expires_at > $2)`,
+      [input.deviceId, input.now],
     );
     for (const setting of preference.rows) {
       if (!setting.motionEnabled) continue;
@@ -265,11 +269,15 @@ export class PostgresNotificationRepository {
                 np.quiet_end_minute AS "quietEndMinute", np.quiet_time_zone AS "quietTimeZone"
          FROM cameras d
          JOIN notification_preferences np ON np.device_id = d.id
+         JOIN household_members hm ON hm.household_id = d.household_id AND hm.user_id = np.user_id
          LEFT JOIN notification_presence_state nps ON nps.device_id = d.id AND nps.user_id = np.user_id
          WHERE np.offline_enabled = true AND d.last_seen_at IS NOT NULL AND d.enabled = true
            AND d.privacy_mode = false AND d.revoked_at IS NULL
+           AND hm.status = 'active' AND hm.role IN ('owner', 'admin')
+           AND (hm.expires_at IS NULL OR hm.expires_at > $1)
            AND EXISTS (SELECT 1 FROM device_credentials dc WHERE dc.camera_id = d.id AND dc.revoked_at IS NULL)
          FOR UPDATE OF d`,
+        [now],
       );
       for (const device of devices.rows) {
         const boundary = device.lastSeenAt.getTime() + CAMERA_ONLINE_WINDOW_MS;
@@ -379,10 +387,18 @@ export class PostgresNotificationRepository {
     }>(
       `WITH candidates AS (
          SELECT no.id FROM notification_outbox no JOIN notification_subscriptions ns ON ns.id = no.subscription_id
+         JOIN notification_events ne ON ne.id = no.event_id
          JOIN browser_sessions bs ON bs.id = ns.session_id
          WHERE no.delivered_at IS NULL AND no.terminal_at IS NULL AND no.next_attempt_at <= $1
            AND (no.claimed_until IS NULL OR no.claimed_until < $1) AND ns.revoked_at IS NULL
            AND bs.revoked_at IS NULL AND bs.idle_expires_at > $1 AND bs.absolute_expires_at > $1
+           AND (ne.category = 'security' OR EXISTS (
+             SELECT 1 FROM cameras d
+             JOIN household_members hm ON hm.household_id = d.household_id AND hm.user_id = ne.user_id
+             WHERE d.id = ne.device_id AND d.revoked_at IS NULL AND hm.status = 'active'
+               AND hm.role IN ('owner', 'admin')
+               AND (hm.expires_at IS NULL OR hm.expires_at > $1)
+           ))
          ORDER BY no.next_attempt_at, no.id FOR UPDATE OF no SKIP LOCKED LIMIT $2
        ) UPDATE notification_outbox no SET claimed_until = $1::timestamptz + interval '1 minute'
        FROM candidates c, notification_subscriptions ns WHERE no.id = c.id AND ns.id = no.subscription_id
