@@ -72,7 +72,11 @@ not considered complete.
       keys, so an attacker cycling through distinct emails/IPs against
       password-reset/login could grow it unboundedly for the process
       lifetime — added a periodic sweep (`rate-limit.test.ts`).
-- [ ] Wire verification/reset/reauth into the web UI (belongs with step 6).
+- [x] Wire verification, reset, and account-deletion reauthentication into
+      the web UI. Password reset and verification shipped in the frontend
+      integration baseline; account deletion now prompts for the existing
+      password reauthentication contract when its ten-minute window expires
+      (ADR 0062).
 - [ ] Non-silenceable push/in-app security alerts belong with step 1's
       notification outbox, not this step — email alerts ship here instead.
 

@@ -10,6 +10,7 @@ import { CameraTile } from './CameraTile';
 import { CameraSettings } from './CameraSettings';
 import { ModalDialog } from './ModalDialog';
 import { ConfirmDialog } from './ConfirmDialog';
+import { ReauthenticationDialog } from './ReauthenticationDialog';
 import { BrowserCameraMode } from './BrowserCameraMode';
 import { MotionEventList } from './MotionEventList';
 import { AuthScreen } from './AuthScreen';
@@ -78,6 +79,7 @@ export function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [error, setError] = useState('');
   const [pendingConfirmBusy, setPendingConfirmBusy] = useState(false);
+  const [reauthenticationOpen, setReauthenticationOpen] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string;
     description: string;
@@ -739,7 +741,7 @@ export function App() {
     setPendingConfirm({
       title: 'Sorry to see you go',
       description:
-        'Deleting your account permanently removes your Beacon household, paired cameras, settings, motion history, and camera activity. Live connections stop immediately. Encrypted backup copies expire on their normal schedule.',
+        'Deleting your account permanently removes your Beacon household, paired cameras, settings, motion history, and camera activity. Live connections stop immediately.',
       confirmLabel: 'Delete account',
       onConfirm: () => {
         setPendingConfirm(null);
@@ -762,16 +764,7 @@ export function App() {
       setPage('dashboard');
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 403) {
-        setPendingConfirm({
-          title: 'Confirm it’s you',
-          description:
-            'For security, account deletion requires a recent sign-in. Sign out, sign back in, then choose Delete account again.',
-          confirmLabel: 'Sign out',
-          onConfirm: () => {
-            setPendingConfirm(null);
-            void logout();
-          },
-        });
+        setReauthenticationOpen(true);
         return;
       }
       setError(
@@ -995,6 +988,15 @@ export function App() {
             busy={pendingConfirmBusy}
             onConfirm={pendingConfirm.onConfirm}
             onCancel={() => setPendingConfirm(null)}
+          />
+        )}
+        {reauthenticationOpen && (
+          <ReauthenticationDialog
+            onCancel={() => setReauthenticationOpen(false)}
+            onConfirmed={() => {
+              setReauthenticationOpen(false);
+              void deleteAccount();
+            }}
           />
         )}
       </>
@@ -1493,6 +1495,15 @@ export function App() {
             busy={pendingConfirmBusy}
             onConfirm={pendingConfirm.onConfirm}
             onCancel={() => setPendingConfirm(null)}
+          />
+        )}
+        {reauthenticationOpen && (
+          <ReauthenticationDialog
+            onCancel={() => setReauthenticationOpen(false)}
+            onConfirmed={() => {
+              setReauthenticationOpen(false);
+              void deleteAccount();
+            }}
           />
         )}
       </div>

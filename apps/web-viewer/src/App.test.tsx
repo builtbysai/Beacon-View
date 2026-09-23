@@ -941,4 +941,111 @@ describe('App', () => {
       ),
     );
   });
+
+  it('reauthenticates in place before retrying account deletion', async () => {
+    vi.stubGlobal('WebSocket', TestSocket);
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }));
+    let deletionAttempts = 0;
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        if (url === '/api/auth/me')
+          return Promise.resolve({
+            json: () =>
+              Promise.resolve({
+                user: { email: 'owner@example.com', id: '1' },
+              }),
+            ok: true,
+            status: 200,
+          });
+        if (url === '/api/cameras')
+          return Promise.resolve({
+            json: () => Promise.resolve({ cameras: [] }),
+            ok: true,
+            status: 200,
+          });
+        if (url === '/api/devices')
+          return Promise.resolve({
+            json: () => Promise.resolve({ devices: [] }),
+            ok: true,
+            status: 200,
+          });
+        if (url === '/api/account' && init?.method === 'DELETE') {
+          deletionAttempts += 1;
+          return Promise.resolve(
+            deletionAttempts === 1
+              ? {
+                  json: () =>
+                    Promise.resolve({ error: 'Recent sign-in required' }),
+                  ok: false,
+                  status: 403,
+                }
+              : {
+                  json: () => Promise.resolve(undefined),
+                  ok: true,
+                  status: 204,
+                },
+          );
+        }
+        if (url === '/api/account/reauth')
+          return Promise.resolve({
+            json: () => Promise.resolve(undefined),
+            ok: true,
+            status: 204,
+          });
+        const payload =
+          url === '/api/account/households'
+            ? { households: [] }
+            : url === '/api/household/sharing'
+              ? { invitations: [], members: [] }
+              : url === '/api/household/guest-links'
+                ? { guestLinks: [] }
+                : url === '/api/notification-preferences'
+                  ? { preferences: [] }
+                  : url === '/api/motion-retention'
+                    ? { days: 30 }
+                    : url === '/api/drive/status'
+                      ? {
+                          connected: false,
+                          configured: true,
+                          recordingsConnected: false,
+                        }
+                      : url === '/api/account/sessions'
+                        ? { sessions: [] }
+                        : url === '/api/access-history'
+                          ? { events: [] }
+                          : url.startsWith('/api/motion-events')
+                            ? { events: [], nextCursor: null }
+                            : { events: [], total: 0 };
+        return Promise.resolve({
+          json: () => Promise.resolve(payload),
+          ok: true,
+          status: 200,
+        });
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete account' }),
+    );
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: 'Delete account' }))[1]!,
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Confirm it’s you' }),
+    ).toBeVisible();
+
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'correct horse battery staple' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(deletionAttempts).toBe(2));
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/account/reauth',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
 });
