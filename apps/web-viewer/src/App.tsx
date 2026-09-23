@@ -421,6 +421,8 @@ export function App() {
   );
   const handleRefreshNeeded = useCallback(() => {
     void loadCameras();
+    setMotionEventRevision((revision) => revision + 1);
+    setMembershipRevision((revision) => revision + 1);
     void request<{ household: HouseholdSession; user: User }>('/api/auth/me')
       .then((result) => {
         setUser(result.user);
