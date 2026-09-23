@@ -75,6 +75,13 @@
 .confirm-modal-actions button {
   min-height: 40px;
 }
+.reauthentication-form {
+  display: grid;
+  gap: 8px;
+}
+.reauthentication-form input {
+  min-width: 0;
+}
 .confirm-modal-header {
   display: flex;
   align-items: center;
