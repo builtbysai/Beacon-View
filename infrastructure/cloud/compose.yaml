@@ -73,6 +73,20 @@ services:
     restart: 'no'
     logging: *bounded-logs
 
+  migrate-verify:
+    build:
+      context: ../..
+      dockerfile: infrastructure/cloud/Dockerfile.backend
+    entrypoint: []
+    working_dir: /app/apps/backend
+    command: ['node', 'scripts/verify-migration-schema.mjs']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: *backend-environment
+    restart: 'no'
+    logging: *bounded-logs
+
   backup:
     build:
       context: ../..

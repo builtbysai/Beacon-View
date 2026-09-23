@@ -67,8 +67,14 @@ jobs:
         run: pnpm --filter @beacon/backend db:check
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+      - name: Test migration schema contract extraction
+        run: pnpm --filter @beacon/backend db:verify:parser
       - name: Migrate the clean disposable database
         run: pnpm --filter @beacon/backend db:migrate
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+      - name: Verify the migrated schema independently
+        run: pnpm --filter @beacon/backend db:verify
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
       - name: Verify migration reruns are safe

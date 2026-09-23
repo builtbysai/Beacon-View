@@ -8,6 +8,8 @@
     "dev": "tsx watch src/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:verify": "node scripts/verify-migration-schema.mjs",
+    "db:verify:parser": "node --test scripts/verify-migration-schema-parser.mjs",
     "db:check": "node ../../tools/check-migration-journal.mjs && drizzle-kit check",
     "notifications:generate-secrets": "node scripts/generate-notification-secrets.mjs",
     "start": "node dist/index.js",
