@@ -39,7 +39,7 @@ export function registerActivityRoutes(
   app.get('/api/diagnostics', async (request, reply) => {
     const session = await authenticateHouseholdAdmin(request, reply);
     if (!session) return;
-    const [cameras, devices] = await Promise.all([
+    const [cameraResult, deviceResult] = await Promise.allSettled([
       store.listAccessibleCameras(
         session.householdId,
         session.userId,
@@ -51,8 +51,22 @@ export function registerActivityRoutes(
         session.role,
       ),
     ]);
+    if (
+      cameraResult.status === 'rejected' &&
+      deviceResult.status === 'rejected'
+    ) {
+      return reply.code(503).send({ error: 'Diagnostics unavailable' });
+    }
+    const unavailable = [
+      ...(cameraResult.status === 'rejected' ? ['cameras'] : []),
+      ...(deviceResult.status === 'rejected' ? ['devices'] : []),
+    ];
     return {
-      cameras: cameras.map((camera) => {
+      unavailable,
+      cameras: (cameraResult.status === 'fulfilled'
+        ? cameraResult.value
+        : []
+      ).map((camera) => {
         const status = signaling.cameraStatus(camera.publicCameraId);
         return {
           availability: status.producerConnected ? 'online' : 'offline',
@@ -67,7 +81,10 @@ export function registerActivityRoutes(
           viewerCount: status.viewerCount,
         };
       }),
-      devices: devices.map((device) => ({
+      devices: (deviceResult.status === 'fulfilled'
+        ? deviceResult.value
+        : []
+      ).map((device) => ({
         connectionState: device.revokedAt
           ? 'revoked'
           : !device.enabled
