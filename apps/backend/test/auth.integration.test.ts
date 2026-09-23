@@ -197,6 +197,21 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
        VALUES ($1,'Rear camera','rear','rear') RETURNING public_camera_id AS "cameraId"`,
       [device.rows[0]!.id],
     );
+    const ungrantedSource = await store!.pool.query<{ cameraId: string }>(
+      `INSERT INTO camera_sources (device_id, display_name, source_key, facing)
+       VALUES ($1,'Front camera','front','front') RETURNING public_camera_id AS "cameraId"`,
+      [device.rows[0]!.id],
+    );
+    for (const cameraId of [
+      source.rows[0]!.cameraId,
+      ungrantedSource.rows[0]!.cameraId,
+    ]) {
+      await store!.pool.query(
+        `INSERT INTO motion_events (camera_source_id, confidence, occurred_at)
+         SELECT id, 0.8, now() FROM camera_sources WHERE public_camera_id = $1`,
+        [cameraId],
+      );
+    }
 
     const memberRegistration = await app!.inject({
       method: 'POST',
@@ -295,6 +310,43 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     expect(cameras.json<{ cameras: Array<{ id: string }> }>().cameras).toEqual([
       expect.objectContaining({ id: source.rows[0]!.cameraId }),
     ]);
+    const history = (cookie: string, query = '') =>
+      app!.inject({
+        headers: { cookie },
+        method: 'GET',
+        url: `/api/motion-events${query}`,
+      });
+    const viewerHistory = await history(memberCredentials.cookie);
+    expect(viewerHistory.statusCode).toBe(200);
+    expect(
+      viewerHistory.json<{ events: Array<{ cameraId: string }> }>().events,
+    ).toEqual([
+      expect.objectContaining({ cameraId: source.rows[0]!.cameraId }),
+    ]);
+    const ungrantedHistory = await history(
+      memberCredentials.cookie,
+      `?cameraId=${ungrantedSource.rows[0]!.cameraId}`,
+    );
+    expect(ungrantedHistory.json<{ events: unknown[] }>().events).toEqual([]);
+    expect(
+      (await history(ownerCredentials.cookie)).json<{ events: unknown[] }>()
+        .events,
+    ).toHaveLength(2);
+    const removedGrant = await app!.inject({
+      headers: {
+        cookie: ownerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': ownerCredentials.csrf,
+      },
+      method: 'PUT',
+      payload: { grants: [] },
+      url: `/api/household/members/${member!.id}/grants`,
+    });
+    expect(removedGrant.statusCode).toBe(204);
+    expect(
+      (await history(memberCredentials.cookie)).json<{ events: unknown[] }>()
+        .events,
+    ).toEqual([]);
 
     const viewer = await store!.findUserByEmail('viewer@example.com');
     const ownerSession = await store!.pool.query<{ id: string }>(

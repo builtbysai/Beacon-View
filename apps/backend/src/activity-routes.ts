@@ -33,8 +33,11 @@ export function registerActivityRoutes(
   dependencies: ActivityRouteDependencies,
 ): void {
   const { auth, householdEvents, signaling, store } = dependencies;
-  const { authenticateHouseholdAdmin, authenticateHouseholdAdminStateChange } =
-    auth;
+  const {
+    authenticate,
+    authenticateHouseholdAdmin,
+    authenticateHouseholdAdminStateChange,
+  } = auth;
 
   app.get('/api/diagnostics', async (request, reply) => {
     const session = await authenticateHouseholdAdmin(request, reply);
@@ -265,13 +268,24 @@ export function registerActivityRoutes(
   });
 
   app.get('/api/motion-events', async (request, reply) => {
-    const session = await authenticateHouseholdAdmin(request, reply);
+    const session = await authenticate(request, reply);
     if (!session) return;
     const query = parseMotionHistoryQuery(request.query);
     if (!query)
       return reply.code(400).send({ error: 'Invalid motion history filters' });
+    const allowedCameraIds =
+      session.role === 'owner' || session.role === 'admin'
+        ? undefined
+        : (
+            await store.listAccessibleCameras(
+              session.householdId,
+              session.userId,
+              session.role,
+            )
+          ).map((camera) => camera.publicCameraId);
     const rows = await store.listMotionEvents(session.householdId, {
       ...query,
+      ...(allowedCameraIds === undefined ? {} : { allowedCameraIds }),
       limit: query.limit + 1,
     });
     const events = rows.slice(0, query.limit);

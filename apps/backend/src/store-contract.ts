@@ -314,6 +314,7 @@ export interface MotionEventRecord {
 
 export interface MotionEventOptions {
   cameraId?: string;
+  allowedCameraIds?: string[];
   since?: string;
   before?: { time: string; id: string };
   limit?: number;
