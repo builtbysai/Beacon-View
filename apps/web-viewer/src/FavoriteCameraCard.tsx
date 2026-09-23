@@ -42,6 +42,7 @@ function CameraGlyph({ privacyMode }: { privacyMode?: boolean | undefined }) {
 export function FavoriteCameraCard({
   camera,
   needsPairing,
+  canReconnect,
   onOpen,
   onDevice,
   onReconnect,
@@ -49,6 +50,7 @@ export function FavoriteCameraCard({
 }: {
   camera: TileCamera;
   needsPairing: boolean;
+  canReconnect: boolean;
   onOpen: (camera: TileCamera) => void;
   onDevice: (deviceId: string) => void;
   onReconnect: (deviceId: string) => void;
@@ -155,7 +157,7 @@ export function FavoriteCameraCard({
             className="favorite-card-cta"
             onClick={() => {
               if (state.available) onOpen(camera);
-              else if (needsPairing) onReconnect(camera.deviceId);
+              else if (canReconnect) onReconnect(camera.deviceId);
               else onDevice(camera.deviceId);
             }}
           >
@@ -194,7 +196,7 @@ export function FavoriteCameraCard({
               <Icon name="settings" />
               Camera settings
             </button>
-            {needsPairing && (
+            {canReconnect && (
               <button
                 role="menuitem"
                 type="button"

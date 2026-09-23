@@ -510,6 +510,15 @@ export function App() {
     );
   }
 
+  function cameraCanReconnect(camera: Camera): boolean {
+    return (
+      cameraNeedsPairing(camera) &&
+      Boolean(
+        devices.find((device) => device.id === camera.deviceId)?.canRemove,
+      )
+    );
+  }
+
   async function createPairingCode() {
     setError('');
     setPairingBusy(true);
@@ -789,6 +798,7 @@ export function App() {
   }
 
   function openCameraSettings(deviceId: string) {
+    setError('');
     pushRoute(`/cameras/${encodeURIComponent(deviceId)}/settings`);
     window.history.replaceState(
       {
@@ -904,6 +914,7 @@ export function App() {
             (camera) => camera.deviceId === selectedDeviceId,
           )}
           device={devices.find((device) => device.id === selectedDeviceId)}
+          error={error}
           onBack={closeCameraSettings}
           onLive={openCamera}
           onRename={(device, name) => void renameDevice(device, name)}
@@ -919,6 +930,9 @@ export function App() {
           onPrivacy={(device) => void setPrivacy(device)}
           onSwitchSource={(camera) => void switchSource(camera)}
           onReconnect={(device) => openPairing(device.id)}
+          canManageSettings={
+            household?.role === 'owner' || household?.role === 'admin'
+          }
         />
       </section>
     </ModalDialog>
@@ -1191,7 +1205,7 @@ export function App() {
                           </span>
                         )}
                         {attentionCount === 1 ? (
-                          cameraNeedsPairing(attentionCamera!) ? (
+                          cameraCanReconnect(attentionCamera!) ? (
                             <button
                               className="home-statuslink"
                               onClick={() =>
@@ -1252,6 +1266,7 @@ export function App() {
                                 key={camera.deviceId}
                                 camera={camera}
                                 needsPairing={cameraNeedsPairing(camera)}
+                                canReconnect={cameraCanReconnect(camera)}
                                 onOpen={openCamera}
                                 onDevice={openCameraSettings}
                                 onReconnect={(deviceId) =>
@@ -1370,15 +1385,19 @@ export function App() {
                             highlighted={highlightedCameraId === camera.id}
                             onOpen={openCamera}
                             onDevice={openCameraSettings}
-                            {...(cameraNeedsPairing(camera)
+                            {...(cameraCanReconnect(camera)
                               ? {
                                   onReconnect: (item: Camera) =>
                                     openPairing(item.deviceId),
                                 }
                               : {})}
-                            onRename={(item, name) =>
-                              renameHostCamera(item, name)
-                            }
+                            {...(household?.role === 'owner' ||
+                            household?.role === 'admin'
+                              ? {
+                                  onRename: (item: Camera, name: string) =>
+                                    renameHostCamera(item, name),
+                                }
+                              : {})}
                             onDelete={(item) => requestDeleteHostCamera(item)}
                             onLeave={(item) => requestLeaveHostCamera(item)}
                           />

@@ -22,3 +22,8 @@ handling; the shared modal preserves workspace scroll and restores trigger focus
 Direct settings links use the Cameras page as their background. Camera and device
 controls continue to use the existing API contracts. The separate compact live
 settings dialog is no longer opened by the live viewer.
+
+Settings controls follow the backend's authority boundaries: owner/admin actions
+such as rename and motion configuration require that household role, while
+source switching and privacy controls use the returned per-source grants.
+Reconnection is offered only to users allowed to remove or re-pair that device.
