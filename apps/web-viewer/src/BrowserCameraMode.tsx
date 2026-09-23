@@ -73,6 +73,8 @@ export function BrowserCameraMode({
   const previewRef = useRef<HTMLVideoElement>(null);
   const producerRef = useRef<BrowserProducer | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const activeSourceKey = useRef<string | null>(null);
+  const startGeneration = useRef(0);
   const wakeLockRef = useRef<{ release(): Promise<void> } | null>(null);
   const [inputs, setInputs] = useState<VideoInput[]>([]);
   const [sourceNames, setSourceNames] = useState<Record<string, string>>({});
@@ -107,6 +109,7 @@ export function BrowserCameraMode({
     const visibility = () => setBackgrounded(document.hidden);
     document.addEventListener('visibilitychange', visibility);
     return () => {
+      startGeneration.current += 1;
       document.removeEventListener('visibilitychange', visibility);
       producerRef.current?.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -168,6 +171,7 @@ export function BrowserCameraMode({
       setError('Enter a name for this browser camera.');
       return;
     }
+    const generation = ++startGeneration.current;
     setError('');
     try {
       const result = await request<{
@@ -185,6 +189,7 @@ export function BrowserCameraMode({
         }),
         method: 'POST',
       });
+      if (generation !== startGeneration.current) return;
       const registeredName = result.device?.name ?? normalizedDeviceName;
       setDeviceName(registeredName);
       rememberDeviceName(registeredName);
@@ -204,8 +209,6 @@ export function BrowserCameraMode({
         (source) => source.sourceKey === `browser:${selected.deviceId}`,
       );
       if (!camera) throw new Error('Camera registration was incomplete');
-      producerRef.current?.stop();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
@@ -215,14 +218,27 @@ export function BrowserCameraMode({
           width: { ideal: 1280, max: 1920 },
         },
       });
+      if (generation !== startGeneration.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      producerRef.current?.stop();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
       for (const track of stream.getVideoTracks()) track.contentHint = 'motion';
       streamRef.current = stream;
+      activeSourceKey.current = selected.deviceId;
+      setSelectedKey(selected.deviceId);
       setActiveCameraId(camera.id);
       if (previewRef.current) previewRef.current.srcObject = stream;
       producerRef.current = new BrowserProducer(
         camera.id,
         stream,
         (next, viewers, retries) => {
+          if (next === 'error') {
+            stop();
+            setError('Camera access was denied or revoked.');
+            return;
+          }
           setState(next);
           setViewerCount(viewers);
           setRetryCount(retries);
@@ -238,7 +254,9 @@ export function BrowserCameraMode({
       producerRef.current.start();
       if (wakeLockEnabled) await acquireWakeLock();
     } catch (caught) {
-      setState('error');
+      if (generation !== startGeneration.current) return;
+      if (!streamRef.current) setState('error');
+      else if (activeSourceKey.current) setSelectedKey(activeSourceKey.current);
       setError(
         caught instanceof Error ? caught.message : 'Unable to start camera',
       );
@@ -246,10 +264,12 @@ export function BrowserCameraMode({
   }
 
   function stop() {
+    startGeneration.current += 1;
     producerRef.current?.stop();
     producerRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    activeSourceKey.current = null;
     setActiveCameraId(null);
     if (previewRef.current) previewRef.current.srcObject = null;
     setState('offline');

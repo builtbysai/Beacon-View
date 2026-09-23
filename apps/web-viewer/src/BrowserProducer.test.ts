@@ -151,4 +151,28 @@ describe('BrowserProducer', () => {
     expect(FakeSocket.instances).toHaveLength(1);
     producer.stop();
   });
+
+  it('closes active peers and does not reconnect after authorization is lost', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('WebSocket', FakeSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    const states: Array<[string, number]> = [];
+    const producer = new BrowserProducer('camera', stream, (state, viewers) =>
+      states.push([state, viewers]),
+    );
+    producer.start();
+    const socket = FakeSocket.instances[0]!;
+    socket.emit({
+      connectionId: 'connection-one',
+      iceServers: [],
+      iceTransportPolicy: 'all',
+      type: 'viewer-ready',
+    });
+    await Promise.resolve();
+    socket.close(4003);
+    expect(FakePeer.instances[0]?.closed).toBe(true);
+    expect(states.at(-1)).toEqual(['error', 0]);
+    vi.runAllTimers();
+    expect(FakeSocket.instances).toHaveLength(1);
+  });
 });

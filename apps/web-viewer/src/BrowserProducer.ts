@@ -96,7 +96,11 @@ export class BrowserProducer {
     socket.onclose = (event) => {
       if (event.code === 4003) {
         this.#stopped = true;
-        this.onState('error', this.#peers.size, this.#retry);
+        this.#generation += 1;
+        this.#socket = null;
+        for (const peer of this.#peers.values()) peer.close();
+        this.#peers.clear();
+        this.onState('error', 0, this.#retry);
         return;
       }
       this.#reconnect('reconnecting');

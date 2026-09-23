@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -11,11 +12,15 @@ import { BrowserCameraMode } from './BrowserCameraMode';
 
 class CameraSocket {
   static OPEN = 1;
+  static instances: CameraSocket[] = [];
   onclose: ((event: CloseEvent) => void) | null = null;
   onerror: (() => void) | null = null;
   onmessage: ((event: MessageEvent) => void) | null = null;
   onopen: (() => void) | null = null;
   readyState = 1;
+  constructor() {
+    CameraSocket.instances.push(this);
+  }
   close() {}
   send() {}
 }
@@ -60,11 +65,217 @@ class FakeMediaRecorder {
 
 afterEach(() => {
   cleanup();
+  CameraSocket.instances = [];
   localStorage.clear();
   vi.unstubAllGlobals();
 });
 
 describe('BrowserCameraMode', () => {
+  it('stops a camera stream that resolves after the page closes', async () => {
+    Object.defineProperty(window, 'isSecureContext', {
+      configurable: true,
+      value: true,
+    });
+    const stopLateTrack = vi.fn();
+    const permissionStream = {
+      getTracks: () => [{ stop: vi.fn() }],
+    } as unknown as MediaStream;
+    const lateStream = {
+      getTracks: () => [{ stop: stopLateTrack }],
+      getVideoTracks: () => [{ id: 'track', contentHint: '' }],
+    } as unknown as MediaStream;
+    let resolveCapture!: (stream: MediaStream) => void;
+    const capture = new Promise<MediaStream>((resolve) => {
+      resolveCapture = resolve;
+    });
+    const getUserMedia = vi
+      .fn()
+      .mockResolvedValueOnce(permissionStream)
+      .mockReturnValueOnce(capture);
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: vi
+          .fn()
+          .mockResolvedValue([
+            { deviceId: 'built-in', kind: 'videoinput', label: 'Webcam' },
+          ]),
+        getUserMedia,
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            cameras: [
+              {
+                id: 'camera-one',
+                name: 'Webcam',
+                sourceKey: 'browser:built-in',
+              },
+            ],
+          }),
+        ok: true,
+        status: 201,
+      }),
+    );
+    vi.stubGlobal('WebSocket', CameraSocket);
+
+    const view = render(<BrowserCameraMode onBack={() => undefined} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Allow camera access' }),
+    );
+    await screen.findByText('Webcam');
+    fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+    view.unmount();
+    await act(async () => {
+      resolveCapture(lateStream);
+      await capture;
+    });
+    expect(stopLateTrack).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the current camera active when a source switch cannot capture', async () => {
+    Object.defineProperty(window, 'isSecureContext', {
+      configurable: true,
+      value: true,
+    });
+    const stopCurrentTrack = vi.fn();
+    const permissionStream = {
+      getTracks: () => [{ stop: vi.fn() }],
+    } as unknown as MediaStream;
+    const currentStream = {
+      getTracks: () => [{ stop: stopCurrentTrack }],
+      getVideoTracks: () => [{ id: 'track', contentHint: '' }],
+    } as unknown as MediaStream;
+    const getUserMedia = vi
+      .fn()
+      .mockResolvedValueOnce(permissionStream)
+      .mockResolvedValueOnce(currentStream)
+      .mockRejectedValueOnce(new Error('USB camera unavailable'));
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: vi.fn().mockResolvedValue([
+          { deviceId: 'built-in', kind: 'videoinput', label: 'Webcam' },
+          { deviceId: 'usb', kind: 'videoinput', label: 'USB camera' },
+        ]),
+        getUserMedia,
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            cameras: [
+              {
+                id: 'camera-one',
+                name: 'Webcam',
+                sourceKey: 'browser:built-in',
+              },
+              {
+                id: 'camera-two',
+                name: 'USB camera',
+                sourceKey: 'browser:usb',
+              },
+            ],
+          }),
+        ok: true,
+        status: 201,
+      }),
+    );
+    vi.stubGlobal('WebSocket', CameraSocket);
+
+    render(<BrowserCameraMode onBack={() => undefined} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Allow camera access' }),
+    );
+    await screen.findByText('USB camera');
+    fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
+    await screen.findByText('Camera Mode ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Camera' }), {
+      target: { value: 'usb' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Switch camera' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'USB camera unavailable',
+    );
+    expect(screen.getByText('Camera Mode ready')).toBeVisible();
+    expect(stopCurrentTrack).not.toHaveBeenCalled();
+    expect(screen.getByRole('combobox', { name: 'Camera' })).toHaveValue(
+      'built-in',
+    );
+  });
+
+  it('stops local capture when signaling revokes camera access', async () => {
+    Object.defineProperty(window, 'isSecureContext', {
+      configurable: true,
+      value: true,
+    });
+    const stopCapture = vi.fn();
+    const permissionStream = {
+      getTracks: () => [{ stop: vi.fn() }],
+    } as unknown as MediaStream;
+    const captureStream = {
+      getTracks: () => [{ stop: stopCapture }],
+      getVideoTracks: () => [{ id: 'track', contentHint: '' }],
+    } as unknown as MediaStream;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: vi
+          .fn()
+          .mockResolvedValue([
+            { deviceId: 'built-in', kind: 'videoinput', label: 'Webcam' },
+          ]),
+        getUserMedia: vi
+          .fn()
+          .mockResolvedValueOnce(permissionStream)
+          .mockResolvedValueOnce(captureStream),
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            cameras: [
+              {
+                id: 'camera-one',
+                name: 'Webcam',
+                sourceKey: 'browser:built-in',
+              },
+            ],
+          }),
+        ok: true,
+        status: 201,
+      }),
+    );
+    vi.stubGlobal('WebSocket', CameraSocket);
+
+    render(<BrowserCameraMode onBack={() => undefined} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Allow camera access' }),
+    );
+    await screen.findByText('Webcam');
+    fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
+    await screen.findByText('Camera Mode ready');
+    act(() => {
+      CameraSocket.instances[0]!.onclose?.({ code: 4003 } as CloseEvent);
+    });
+    expect(stopCapture).toHaveBeenCalledOnce();
+    expect(
+      await screen.findByRole('button', { name: 'Start camera' }),
+    ).toBeVisible();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Camera access was denied or revoked.',
+    );
+  });
+
   it('uses and persists a descriptive browser name', async () => {
     Object.defineProperty(navigator, 'userAgent', {
       configurable: true,
