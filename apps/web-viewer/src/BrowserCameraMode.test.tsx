@@ -352,6 +352,11 @@ describe('BrowserCameraMode', () => {
       name: /Recording,/,
     });
     expect(activeButton).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
+    expect(screen.getByRole('combobox', { name: 'Camera' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Switch camera' }),
+    ).toBeDisabled();
     fireEvent.click(activeButton);
     FakeMediaRecorder.instances[0]!.stop();
 

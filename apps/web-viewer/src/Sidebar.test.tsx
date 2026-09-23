@@ -185,10 +185,13 @@ describe('mobile sidebar', () => {
       screen.getByRole('button', { name: /owner@example\.test/ }),
     );
     const theme = screen.getByRole('button', { name: 'Light' });
+    const trust = screen.getByRole('menuitem', { name: /Trust & privacy/ });
     const signOut = screen.getByRole('menuitem', { name: /Sign out/ });
+    expect(trust).toHaveFocus();
+    expect(signOut).toHaveAttribute('tabindex', '-1');
     theme.focus();
     fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
-    expect(signOut).toHaveFocus();
+    expect(trust).toHaveFocus();
     fireEvent.keyDown(window, { key: 'Tab' });
     expect(theme).toHaveFocus();
   });
