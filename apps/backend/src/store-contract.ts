@@ -293,6 +293,8 @@ export interface HouseholdActivityOptions {
   limit?: number;
   offset?: number;
   eventTypes?: HouseholdActivityEventType[];
+  cameraSourceId?: string;
+  since?: Date;
 }
 
 export interface HouseholdActivityPage {

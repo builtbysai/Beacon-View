@@ -479,6 +479,17 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
       cameraSourceId: null,
       deviceName: 'Device snapshot',
     });
+    const filteredActivity = await store!.listHouseholdActivity(
+      owner.householdId,
+      {
+        cameraSourceId: front.publicCameraId,
+        eventTypes: ['camera_updated', 'device_updated'],
+      },
+    );
+    expect(filteredActivity.total).toBe(1);
+    expect(filteredActivity.events[0]?.cameraSourceId).toBe(
+      front.publicCameraId,
+    );
     expect(
       synchronized?.find((camera) => camera.sourceKey === 'android:0')?.name,
     ).toBe('My driveway camera');

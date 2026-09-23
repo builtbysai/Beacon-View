@@ -97,45 +97,47 @@ describe('Activity timeline', () => {
     expect(details).not.toHaveTextContent('Motion intensity');
     expect(details).not.toHaveTextContent('Open Hallway phone');
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(fetch.mock.calls.map(([url]) => url)).toContain(
-      '/api/activity?limit=50&offset=0',
-    );
+    expect(
+      fetch.mock.calls.some(
+        ([url]) =>
+          url.startsWith('/api/activity?limit=50&since=') &&
+          url.endsWith('&offset=0'),
+      ),
+    ).toBe(true);
   });
 
   it('filters and opens household activity by the structured source ID', async () => {
     const occurredAt = new Date().toISOString();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string) =>
-        Promise.resolve(
-          url.startsWith('/api/activity')
-            ? {
-                ok: true,
-                status: 200,
-                json: () =>
-                  Promise.resolve({
-                    events: [
-                      {
-                        id: 'renamed',
-                        actorEmail: 'owner@example.com',
-                        householdId: 'household-one',
-                        publicDeviceId: 'device-one',
-                        cameraSourceId: 'camera-one',
-                        deviceName: 'Hallway phone',
-                        sourceName: 'Entry view',
-                        eventType: 'camera_updated',
-                        occurredAt,
-                        success: true,
-                        metadata: {},
-                      },
-                    ],
-                    total: 1,
-                  }),
-              }
-            : response([]),
-        ),
+    const fetch = vi.fn((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/activity')
+          ? {
+              ok: true,
+              status: 200,
+              json: () =>
+                Promise.resolve({
+                  events: [
+                    {
+                      id: 'renamed',
+                      actorEmail: 'owner@example.com',
+                      householdId: 'household-one',
+                      publicDeviceId: 'device-one',
+                      cameraSourceId: 'camera-one',
+                      deviceName: 'Hallway phone',
+                      sourceName: 'Entry view',
+                      eventType: 'camera_updated',
+                      occurredAt,
+                      success: true,
+                      metadata: {},
+                    },
+                  ],
+                  total: 1,
+                }),
+            }
+          : response([]),
       ),
     );
+    vi.stubGlobal('fetch', fetch);
     const onCamera = vi.fn();
     render(
       <MotionEventList
@@ -148,6 +150,15 @@ describe('Activity timeline', () => {
     fireEvent.change(screen.getByLabelText('Filter activity by camera'), {
       target: { value: 'camera-one' },
     });
+    await waitFor(() =>
+      expect(
+        fetch.mock.calls.some(
+          ([url]) =>
+            url.startsWith('/api/activity?') &&
+            url.includes('cameraId=camera-one'),
+        ),
+      ).toBe(true),
+    );
     expect(await screen.findByText('Camera updated')).toBeVisible();
     fireEvent.click(screen.getByText('Camera updated'));
     expect(screen.getByRole('dialog')).toHaveTextContent('Entry view');

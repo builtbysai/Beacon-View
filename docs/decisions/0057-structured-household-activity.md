@@ -16,7 +16,8 @@ update device-reported facing and capabilities without creating Activity noise.
 Source removal records the captured public IDs and names. The Activity camera
 filter and navigation use the explicit source ID;
 navigation is offered only when that source is in the viewer's current camera
-list.
+list. Source and time filtering happen in the Activity query before pagination,
+so a filtered feed can find relevant events beyond the first page.
 
 ## Rationale
 

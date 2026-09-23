@@ -167,16 +167,32 @@ export class PostgresAuditRepository {
                 OR d.public_device_id::text = ae.metadata ->> 'deviceId')
          WHERE ae.household_id = $1
            AND ae.event_type = ANY($2::text[])
+           AND ($3::text IS NULL OR ae.metadata ->> 'cameraId' = $3)
+           AND ($4::timestamptz IS NULL OR ae.occurred_at >= $4)
          ORDER BY ae.occurred_at DESC, ae.id DESC
-         LIMIT $3 OFFSET $4`,
-        [householdId, requestedTypes, limit, offset],
+         LIMIT $5 OFFSET $6`,
+        [
+          householdId,
+          requestedTypes,
+          options.cameraSourceId ?? null,
+          options.since ?? null,
+          limit,
+          offset,
+        ],
       ),
       this.pool.query<{ count: string }>(
         `SELECT count(*)::text AS count
          FROM audit_events ae
          WHERE ae.household_id = $1
-           AND ae.event_type = ANY($2::text[])`,
-        [householdId, requestedTypes],
+           AND ae.event_type = ANY($2::text[])
+           AND ($3::text IS NULL OR ae.metadata ->> 'cameraId' = $3)
+           AND ($4::timestamptz IS NULL OR ae.occurred_at >= $4)`,
+        [
+          householdId,
+          requestedTypes,
+          options.cameraSourceId ?? null,
+          options.since ?? null,
+        ],
       ),
     ]);
     return { events: rows.rows, total: Number(count.rows[0]!.count) };

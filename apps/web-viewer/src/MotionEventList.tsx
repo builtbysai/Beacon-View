@@ -208,7 +208,7 @@ export function MotionEventList({
           : Promise.resolve<EventPage>({ events: [], nextCursor: null }),
         includeHouseholdActivity && (!append || activityHasMore)
           ? request<HouseholdEventPage>(
-              `/api/activity?limit=50&offset=${append ? activityOffset.current : 0}`,
+              `/api/activity?${query.current}&offset=${append ? activityOffset.current : 0}`,
               { signal: abort.signal },
             )
           : Promise.resolve<HouseholdEventPage>({
