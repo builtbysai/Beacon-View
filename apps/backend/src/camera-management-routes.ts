@@ -484,7 +484,12 @@ export function registerCameraManagementRoutes(
       eventType: 'camera_source_deleted',
       householdId: session.householdId,
       ipAddress: request.ip,
-      metadata: { cameraName: camera.name, deviceName: camera.deviceName },
+      metadata: {
+        cameraId: camera.publicCameraId,
+        cameraName: camera.name,
+        deviceId: camera.publicDeviceId,
+        deviceName: camera.deviceName,
+      },
       success: true,
       userId: session.userId,
     });

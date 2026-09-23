@@ -134,7 +134,11 @@ export function registerActivityRoutes(
       events: page.events.map((event) => ({
         id: event.id,
         actorEmail: event.actorEmail,
+        householdId: event.householdId,
+        publicDeviceId: event.publicDeviceId,
+        cameraSourceId: event.cameraSourceId,
         deviceName: event.deviceName,
+        sourceName: event.sourceName,
         eventType: event.eventType,
         occurredAt: event.occurredAt.toISOString(),
         success: event.success,

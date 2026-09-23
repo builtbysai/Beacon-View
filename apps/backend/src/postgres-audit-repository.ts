@@ -149,12 +149,22 @@ export class PostgresAuditRepository {
     const [rows, count] = await Promise.all([
       this.pool.query<HouseholdActivityPage['events'][number]>(
         `SELECT ae.id, u.email AS "actorEmail",
-                COALESCE(d.name, ae.metadata ->> 'deviceName') AS "deviceName",
+                ae.household_id AS "householdId",
+                COALESCE(ae.metadata ->> 'deviceId', d.public_device_id::text) AS "publicDeviceId",
+                COALESCE(ae.metadata ->> 'cameraId', cs.public_camera_id::text) AS "cameraSourceId",
+                COALESCE(ae.metadata ->> 'deviceName', d.name) AS "deviceName",
+                COALESCE(ae.metadata ->> 'cameraName', cs.display_name) AS "sourceName",
                 ae.event_type AS "eventType", ae.occurred_at AS "occurredAt",
                 ae.success, ae.metadata
          FROM audit_events ae
          LEFT JOIN users u ON u.id = ae.user_id
-         LEFT JOIN cameras d ON d.id = ae.camera_id
+         LEFT JOIN camera_sources cs ON cs.public_camera_id::text = ae.metadata ->> 'cameraId'
+           AND EXISTS (SELECT 1 FROM cameras source_device
+                       WHERE source_device.id = cs.device_id
+                         AND source_device.household_id = ae.household_id)
+         LEFT JOIN cameras d ON d.household_id = ae.household_id
+           AND (d.id = ae.camera_id OR d.id = cs.device_id
+                OR d.public_device_id::text = ae.metadata ->> 'deviceId')
          WHERE ae.household_id = $1
            AND ae.event_type = ANY($2::text[])
          ORDER BY ae.occurred_at DESC, ae.id DESC

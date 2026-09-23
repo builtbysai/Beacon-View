@@ -14,7 +14,11 @@ const listHouseholdActivity = vi.fn().mockResolvedValue({
     {
       id: 'event-1',
       actorEmail: 'owner@example.com',
+      householdId: 'household-1',
+      publicDeviceId: 'device-1',
+      cameraSourceId: 'source-1',
       deviceName: 'Hallway',
+      sourceName: 'Rear camera',
       eventType: 'device_updated',
       occurredAt: new Date('2026-09-22T12:00:00.000Z'),
       success: true,
@@ -67,7 +71,11 @@ it('returns structured household activity to an owner', async () => {
       {
         id: 'event-1',
         actorEmail: 'owner@example.com',
+        householdId: 'household-1',
+        publicDeviceId: 'device-1',
+        cameraSourceId: 'source-1',
         deviceName: 'Hallway',
+        sourceName: 'Rear camera',
         eventType: 'device_updated',
         occurredAt: '2026-09-22T12:00:00.000Z',
         success: true,

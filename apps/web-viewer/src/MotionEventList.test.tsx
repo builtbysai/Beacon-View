@@ -68,7 +68,11 @@ describe('Activity timeline', () => {
                     {
                       id: 'offline-event',
                       actorEmail: null,
+                      householdId: 'household-one',
+                      publicDeviceId: 'device-one',
+                      cameraSourceId: null,
                       deviceName: 'Hallway phone',
+                      sourceName: null,
                       eventType: 'device_offline',
                       occurredAt,
                       success: true,
@@ -96,6 +100,60 @@ describe('Activity timeline', () => {
     expect(fetch.mock.calls.map(([url]) => url)).toContain(
       '/api/activity?limit=50&offset=0',
     );
+  });
+
+  it('filters and opens household activity by the structured source ID', async () => {
+    const occurredAt = new Date().toISOString();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        Promise.resolve(
+          url.startsWith('/api/activity')
+            ? {
+                ok: true,
+                status: 200,
+                json: () =>
+                  Promise.resolve({
+                    events: [
+                      {
+                        id: 'renamed',
+                        actorEmail: 'owner@example.com',
+                        householdId: 'household-one',
+                        publicDeviceId: 'device-one',
+                        cameraSourceId: 'camera-one',
+                        deviceName: 'Hallway phone',
+                        sourceName: 'Entry view',
+                        eventType: 'camera_updated',
+                        occurredAt,
+                        success: true,
+                        metadata: {},
+                      },
+                    ],
+                    total: 1,
+                  }),
+              }
+            : response([]),
+        ),
+      ),
+    );
+    const onCamera = vi.fn();
+    render(
+      <MotionEventList
+        {...props}
+        onCamera={onCamera}
+        includeHouseholdActivity
+      />,
+    );
+    expect(await screen.findByText('Camera updated')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Filter activity by camera'), {
+      target: { value: 'camera-one' },
+    });
+    expect(await screen.findByText('Camera updated')).toBeVisible();
+    fireEvent.click(screen.getByText('Camera updated'));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Entry view');
+    expect(screen.getByRole('dialog')).toHaveTextContent('owner@example.com');
+    fireEvent.click(screen.getByRole('button', { name: 'Open Hallway phone' }));
+    expect(onCamera).toHaveBeenCalledWith('camera-one');
   });
 
   it('labels motion from the API as motion regardless of its event ID', async () => {
@@ -186,7 +244,7 @@ describe('Activity timeline', () => {
       .mockResolvedValueOnce(response([]));
     vi.stubGlobal('fetch', fetch);
     render(<MotionEventList {...props} />);
-    fireEvent.change(screen.getByLabelText('Filter motion events by camera'), {
+    fireEvent.change(screen.getByLabelText('Filter activity by camera'), {
       target: { value: 'camera-two' },
     });
     await screen.findByText(/No activity matches these filters./);
@@ -196,7 +254,7 @@ describe('Activity timeline', () => {
       await Promise.resolve();
     });
     expect(screen.queryByText('stale')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Filter motion events by camera')).toHaveValue(
+    expect(screen.getByLabelText('Filter activity by camera')).toHaveValue(
       'camera-two',
     );
     expect(fetch.mock.calls[1]![0]).toContain('cameraId=camera-two');
