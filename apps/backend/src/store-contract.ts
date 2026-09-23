@@ -278,7 +278,11 @@ export type HouseholdActivityEventType =
 export interface HouseholdActivityRecord {
   id: string;
   actorEmail: string | null;
+  householdId: string;
+  publicDeviceId: string | null;
+  cameraSourceId: string | null;
   deviceName: string | null;
+  sourceName: string | null;
   eventType: HouseholdActivityEventType;
   occurredAt: Date;
   success: boolean;
@@ -289,6 +293,8 @@ export interface HouseholdActivityOptions {
   limit?: number;
   offset?: number;
   eventTypes?: HouseholdActivityEventType[];
+  cameraSourceId?: string;
+  since?: Date;
 }
 
 export interface HouseholdActivityPage {

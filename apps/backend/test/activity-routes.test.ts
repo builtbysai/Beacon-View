@@ -14,7 +14,11 @@ const listHouseholdActivity = vi.fn().mockResolvedValue({
     {
       id: 'event-1',
       actorEmail: 'owner@example.com',
+      householdId: 'household-1',
+      publicDeviceId: 'device-1',
+      cameraSourceId: 'source-1',
       deviceName: 'Hallway',
+      sourceName: 'Rear camera',
       eventType: 'device_updated',
       occurredAt: new Date('2026-09-22T12:00:00.000Z'),
       success: true,
@@ -67,7 +71,11 @@ it('returns structured household activity to an owner', async () => {
       {
         id: 'event-1',
         actorEmail: 'owner@example.com',
+        householdId: 'household-1',
+        publicDeviceId: 'device-1',
+        cameraSourceId: 'source-1',
         deviceName: 'Hallway',
+        sourceName: 'Rear camera',
         eventType: 'device_updated',
         occurredAt: '2026-09-22T12:00:00.000Z',
         success: true,
@@ -76,4 +84,29 @@ it('returns structured household activity to an owner', async () => {
     ],
     total: 1,
   });
+});
+
+it('passes validated source and time filters to the activity store', async () => {
+  const cameraId = 'cd6390d8-e76d-46e3-9594-a882d483f19c';
+  const since = '2026-09-22T10:00:00.000Z';
+  const response = await app.inject({
+    method: 'GET',
+    url: `/api/activity?cameraId=${cameraId}&since=${since}`,
+  });
+  expect(response.statusCode).toBe(200);
+  expect(listHouseholdActivity).toHaveBeenCalledWith('household-1', {
+    cameraSourceId: cameraId,
+    since: new Date(since),
+  });
+});
+
+it('rejects malformed source and time filters', async () => {
+  for (const query of ['cameraId=invalid', 'since=invalid']) {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/activity?${query}`,
+    });
+    expect(response.statusCode).toBe(400);
+  }
+  expect(listHouseholdActivity).not.toHaveBeenCalled();
 });

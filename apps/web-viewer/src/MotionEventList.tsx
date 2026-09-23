@@ -17,7 +17,11 @@ interface MotionEvent {
 interface HouseholdEvent {
   id: string;
   actorEmail: string | null;
+  householdId: string;
+  publicDeviceId: string | null;
+  cameraSourceId: string | null;
   deviceName: string | null;
+  sourceName: string | null;
   eventType: string;
   occurredAt: string;
   success: boolean;
@@ -115,17 +119,22 @@ function isMotionEvent(event: ActivityEvent): event is MotionEvent {
 }
 
 function activityLabel(event: ActivityEvent): string {
-  return isMotionEvent(event)
-    ? 'Motion detected'
-    : (activityLabels[event.eventType] ?? event.eventType.replaceAll('_', ' '));
+  if (isMotionEvent(event)) return 'Motion detected';
+  if (event.eventType === 'camera_updated' && event.metadata.cameraName)
+    return 'Camera renamed';
+  if (event.eventType === 'device_updated' && event.metadata.deviceName)
+    return 'Device renamed';
+  return (
+    activityLabels[event.eventType] ?? event.eventType.replaceAll('_', ' ')
+  );
 }
 
 function activityDeviceName(event: ActivityEvent): string {
-  return (
-    event.deviceName ||
-    (!isMotionEvent(event) ? event.actorEmail : null) ||
-    'Household'
-  );
+  return event.deviceName || 'Household';
+}
+
+function activitySourceName(event: ActivityEvent): string | null {
+  return isMotionEvent(event) ? event.cameraName : event.sourceName;
 }
 
 export function MotionEventList({
@@ -199,7 +208,7 @@ export function MotionEventList({
           : Promise.resolve<EventPage>({ events: [], nextCursor: null }),
         includeHouseholdActivity && (!append || activityHasMore)
           ? request<HouseholdEventPage>(
-              `/api/activity?limit=50&offset=${append ? activityOffset.current : 0}`,
+              `/api/activity?${query.current}&offset=${append ? activityOffset.current : 0}`,
               { signal: abort.signal },
             )
           : Promise.resolve<HouseholdEventPage>({
@@ -292,7 +301,7 @@ export function MotionEventList({
       result = result.filter((event) =>
         isMotionEvent(event)
           ? event.cameraId === cameraFilter
-          : event.metadata.cameraId === cameraFilter,
+          : event.cameraSourceId === cameraFilter,
       );
     }
     if (timeFilter !== 'all') {
@@ -312,7 +321,8 @@ export function MotionEventList({
       result = result.filter(
         (e) =>
           activityDeviceName(e).toLowerCase().includes(q) ||
-          (isMotionEvent(e) ? e.cameraName : (e.actorEmail ?? ''))
+          (activitySourceName(e) ?? '').toLowerCase().includes(q) ||
+          (!isMotionEvent(e) ? (e.actorEmail ?? '') : '')
             .toLowerCase()
             .includes(q) ||
           activityLabel(e).toLowerCase().includes(q),
@@ -429,7 +439,7 @@ export function MotionEventList({
           value={cameraFilter}
           onChange={(e) => setCameraFilter(e.target.value)}
           disabled={clearing}
-          aria-label="Filter motion events by camera"
+          aria-label="Filter activity by camera"
         >
           <option value="all">All devices</option>
           {cameras.map((c) => (
@@ -444,7 +454,7 @@ export function MotionEventList({
           value={timeFilter}
           onChange={(e) => setTimeFilter(e.target.value)}
           disabled={clearing}
-          aria-label="Filter motion events by time"
+          aria-label="Filter activity by time"
         >
           <option value="24">Last 24 hours</option>
           <option value="7">Last 7 days</option>
@@ -565,8 +575,8 @@ export function MotionEventList({
                           &middot; {event.cameraName} &middot;{' '}
                           {Math.round(event.confidence * 100)}% intensity
                         </>
-                      ) : event.metadata.cameraName ? (
-                        <> &middot; {event.metadata.cameraName}</>
+                      ) : activitySourceName(event) ? (
+                        <> &middot; {activitySourceName(event)}</>
                       ) : null}
                     </div>
                   </div>
@@ -665,15 +675,16 @@ export function MotionEventList({
                 <span>Device</span>
                 <span>{activityDeviceName(drawerEvent)}</span>
               </div>
-              {(isMotionEvent(drawerEvent) ||
-                drawerEvent.metadata.cameraName) && (
+              {activitySourceName(drawerEvent) && (
                 <div className="activity-v3-fact">
                   <span>Source</span>
-                  <span>
-                    {isMotionEvent(drawerEvent)
-                      ? drawerEvent.cameraName
-                      : drawerEvent.metadata.cameraName}
-                  </span>
+                  <span>{activitySourceName(drawerEvent)}</span>
+                </div>
+              )}
+              {!isMotionEvent(drawerEvent) && drawerEvent.actorEmail && (
+                <div className="activity-v3-fact">
+                  <span>Actor</span>
+                  <span>{drawerEvent.actorEmail}</span>
                 </div>
               )}
               <div className="activity-v3-fact">
@@ -700,7 +711,10 @@ export function MotionEventList({
 
             <div className="activity-v3-draweractions">
               {(isMotionEvent(drawerEvent) ||
-                drawerEvent.metadata.cameraId) && (
+                (drawerEvent.cameraSourceId &&
+                  cameras.some(
+                    (camera) => camera.id === drawerEvent.cameraSourceId,
+                  ))) && (
                 <button
                   className="primary"
                   onClick={() => {
@@ -708,7 +722,7 @@ export function MotionEventList({
                     onCamera(
                       isMotionEvent(drawerEvent)
                         ? drawerEvent.cameraId
-                        : drawerEvent.metadata.cameraId!,
+                        : drawerEvent.cameraSourceId!,
                     );
                   }}
                 >

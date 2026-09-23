@@ -423,6 +423,73 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
     expect(synchronized?.every((camera) => camera.deviceId === paired.id)).toBe(
       true,
     );
+    const front = synchronized?.find(
+      (camera) => camera.sourceKey === 'android:1',
+    );
+    if (!front) throw new Error('Expected front source');
+    const addedAfterSync = await store!.listHouseholdActivity(
+      owner.householdId,
+      {
+        eventTypes: ['camera_source_added'],
+      },
+    );
+    expect(addedAfterSync.events).toMatchObject([
+      {
+        cameraSourceId: front.publicCameraId,
+        publicDeviceId: paired.publicDeviceId,
+        sourceName: 'Front',
+      },
+    ]);
+    await store!.audit({
+      cameraId: paired.id,
+      eventType: 'camera_updated',
+      householdId: owner.householdId,
+      success: true,
+      metadata: {
+        cameraId: front.publicCameraId,
+        cameraName: 'Front snapshot',
+      },
+    });
+    await store!.audit({
+      eventType: 'device_updated',
+      householdId: owner.householdId,
+      success: true,
+      metadata: {
+        deviceId: paired.publicDeviceId,
+        deviceName: 'Device snapshot',
+      },
+    });
+    const activity = await store!.listHouseholdActivity(owner.householdId, {
+      eventTypes: ['camera_updated', 'device_updated'],
+    });
+    expect(activity.events).toHaveLength(2);
+    expect(
+      activity.events.find((event) => event.eventType === 'camera_updated'),
+    ).toMatchObject({
+      householdId: owner.householdId,
+      publicDeviceId: paired.publicDeviceId,
+      cameraSourceId: front.publicCameraId,
+      deviceName: 'Pixel device',
+      sourceName: 'Front snapshot',
+    });
+    expect(
+      activity.events.find((event) => event.eventType === 'device_updated'),
+    ).toMatchObject({
+      publicDeviceId: paired.publicDeviceId,
+      cameraSourceId: null,
+      deviceName: 'Device snapshot',
+    });
+    const filteredActivity = await store!.listHouseholdActivity(
+      owner.householdId,
+      {
+        cameraSourceId: front.publicCameraId,
+        eventTypes: ['camera_updated', 'device_updated'],
+      },
+    );
+    expect(filteredActivity.total).toBe(1);
+    expect(filteredActivity.events[0]?.cameraSourceId).toBe(
+      front.publicCameraId,
+    );
     expect(
       synchronized?.find((camera) => camera.sourceKey === 'android:0')?.name,
     ).toBe('My driveway camera');
@@ -431,6 +498,13 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
       [{ facing: 'rear', name: 'Rear camera', sourceKey: 'android:0' }],
       new Date(),
     );
+    expect(
+      (
+        await store!.listHouseholdActivity(owner.householdId, {
+          eventTypes: ['camera_source_added'],
+        })
+      ).total,
+    ).toBe(1);
     expect(await store!.listCameras(owner.householdId)).toMatchObject([
       { name: 'My driveway camera', sourceKey: 'android:0' },
       { sourceKey: 'android:1' },
@@ -457,6 +531,13 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
       ],
     });
     expect(browser.cameras).toHaveLength(2);
+    expect(
+      (
+        await store!.listHouseholdActivity(owner.householdId, {
+          eventTypes: ['camera_source_added'],
+        })
+      ).total,
+    ).toBe(3);
     const browserCamera = browser.cameras[0]!;
     await expect(
       store!.updateCamera(other.householdId, browserCamera.publicCameraId, {
@@ -501,6 +582,13 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
       ],
     });
     expect(registeredAgain.device.name).toBe('My office camera');
+    expect(
+      (
+        await store!.listHouseholdActivity(owner.householdId, {
+          eventTypes: ['camera_source_added'],
+        })
+      ).total,
+    ).toBe(3);
     expect(
       registeredAgain.cameras.find(
         (camera) => camera.sourceKey === 'browser:built-in',

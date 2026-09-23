@@ -780,7 +780,7 @@ describe('App', () => {
     // The household currently has no paired cameras (these events are
     // historical), so there is nothing to build a camera picker from.
 
-    expect(screen.getByLabelText('Filter motion events by time')).toBeVisible();
+    expect(screen.getByLabelText('Filter activity by time')).toBeVisible();
     await act(async () => {
       TestSocket.instance?.emit({
         cameraId: 'camera-2',

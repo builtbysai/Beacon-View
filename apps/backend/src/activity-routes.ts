@@ -92,6 +92,8 @@ export function registerActivityRoutes(
       limit?: string;
       offset?: string;
       eventType?: string | string[];
+      cameraId?: string;
+      since?: string;
     };
     const limit = query.limit ? Number(query.limit) : undefined;
     const offset = query.offset ? Number(query.offset) : undefined;
@@ -113,6 +115,16 @@ export function registerActivityRoutes(
     if (requestedTypes?.some((eventType) => !allowedTypes.has(eventType))) {
       return reply.code(400).send({ error: 'Invalid activity event type' });
     }
+    const camera = query.cameraId
+      ? cameraParameterSchema.safeParse({ cameraId: query.cameraId })
+      : null;
+    const since = query.since ? new Date(query.since) : null;
+    if (
+      (camera && !camera.success) ||
+      (since && Number.isNaN(since.getTime()))
+    ) {
+      return reply.code(400).send({ error: 'Invalid activity filter' });
+    }
 
     // Activity contains household-wide security and membership metadata.
     // Keep the unfiltered feed aligned with /api/events and /api/access-history
@@ -129,12 +141,18 @@ export function registerActivityRoutes(
       ...(requestedTypes
         ? { eventTypes: requestedTypes as HouseholdActivityEventType[] }
         : {}),
+      ...(camera?.success ? { cameraSourceId: camera.data.cameraId } : {}),
+      ...(since ? { since } : {}),
     });
     return {
       events: page.events.map((event) => ({
         id: event.id,
         actorEmail: event.actorEmail,
+        householdId: event.householdId,
+        publicDeviceId: event.publicDeviceId,
+        cameraSourceId: event.cameraSourceId,
         deviceName: event.deviceName,
+        sourceName: event.sourceName,
         eventType: event.eventType,
         occurredAt: event.occurredAt.toISOString(),
         success: event.success,
