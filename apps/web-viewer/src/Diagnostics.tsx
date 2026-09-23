@@ -5,6 +5,7 @@ import { Icon } from './Icon';
 import './Diagnostics.css';
 
 interface DiagnosticSnapshot {
+  unavailable?: Array<'cameras' | 'devices'>;
   cameras: Array<{
     cameraId: string;
     captureState: string;
@@ -43,8 +44,12 @@ export function Diagnostics() {
 
   function retry() {
     setError(false);
+    setDiagnostics(null);
     setRequestRevision((revision) => revision + 1);
   }
+
+  const camerasUnavailable = diagnostics?.unavailable?.includes('cameras');
+  const devicesUnavailable = diagnostics?.unavailable?.includes('devices');
 
   return (
     <div className="view-body">
@@ -65,10 +70,22 @@ export function Diagnostics() {
           <p>Loading sanitized connection diagnostics...</p>
         ) : (
           <>
+            {(camerasUnavailable || devicesUnavailable) && (
+              <p role="alert">
+                Some diagnostics could not be loaded.{' '}
+                <button type="button" className="secondary" onClick={retry}>
+                  Retry
+                </button>
+              </p>
+            )}
             <section className="diagnostic-section">
               <h3>Devices</h3>
               <ul className="diagnostic-list">
-                {diagnostics.devices.length === 0 ? (
+                {devicesUnavailable ? (
+                  <li className="text-muted">
+                    Device diagnostics unavailable.
+                  </li>
+                ) : diagnostics.devices.length === 0 ? (
                   <li className="text-muted">No devices connected.</li>
                 ) : (
                   diagnostics.devices.map((device) => (
@@ -85,7 +102,11 @@ export function Diagnostics() {
             <section className="diagnostic-section">
               <h3>Camera Sessions</h3>
               <ul className="diagnostic-list">
-                {diagnostics.cameras.length === 0 ? (
+                {camerasUnavailable ? (
+                  <li className="text-muted">
+                    Camera diagnostics unavailable.
+                  </li>
+                ) : diagnostics.cameras.length === 0 ? (
                   <li className="text-muted">No active camera sessions.</li>
                 ) : (
                   diagnostics.cameras.map((camera) => (
