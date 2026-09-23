@@ -67,6 +67,8 @@ afterEach(() => {
   cleanup();
   CameraSocket.instances = [];
   localStorage.clear();
+  Reflect.deleteProperty(navigator, 'wakeLock');
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -277,6 +279,12 @@ describe('BrowserCameraMode', () => {
   });
 
   it('uses and persists a descriptive browser name', async () => {
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: {
+        request: vi.fn().mockResolvedValue({ release: vi.fn() }),
+      },
+    });
     Object.defineProperty(navigator, 'userAgent', {
       configurable: true,
       value:
@@ -326,6 +334,11 @@ describe('BrowserCameraMode', () => {
     await screen.findByText('Webcam');
     const name = screen.getByRole('textbox', { name: 'Device name' });
     expect(name).toHaveValue('Chrome on Windows');
+    const keepAwake = screen.getByRole('checkbox', {
+      name: 'Keep this device awake while Camera Mode is active',
+    });
+    fireEvent.click(keepAwake);
+    expect(localStorage.getItem('beacon_browser_keep_awake')).toBe('true');
     fireEvent.change(name, { target: { value: '  Kitchen laptop  ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
 
@@ -347,6 +360,51 @@ describe('BrowserCameraMode', () => {
     expect(screen.getByRole('textbox', { name: 'Device name' })).toHaveValue(
       'Renamed in Cameras',
     );
+    expect(
+      screen.getByRole('checkbox', {
+        name: 'Keep this device awake while Camera Mode is active',
+      }),
+    ).toBeChecked();
+  });
+
+  it('keeps setup available when browser storage blocks stable registration', async () => {
+    Object.defineProperty(window, 'isSecureContext', {
+      configurable: true,
+      value: true,
+    });
+    const stream = {
+      getTracks: () => [{ stop: vi.fn() }],
+    } as unknown as MediaStream;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: vi
+          .fn()
+          .mockResolvedValue([
+            { deviceId: 'built-in', kind: 'videoinput', label: 'Webcam' },
+          ]),
+        getUserMedia: vi.fn().mockResolvedValue(stream),
+      },
+    });
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => {
+      if (key === 'beacon_browser_device_id')
+        throw new DOMException('Storage blocked', 'SecurityError');
+      return null;
+    });
+
+    render(<BrowserCameraMode onBack={() => undefined} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Allow camera access' }),
+    );
+    await screen.findByText('Webcam');
+    fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Enable browser storage to keep this camera connected.',
+    );
+    expect(screen.getByRole('button', { name: 'Start camera' })).toBeVisible();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('requires explicit permission and registers all discovered sources', async () => {
