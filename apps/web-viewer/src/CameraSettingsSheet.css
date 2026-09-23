@@ -1,31 +1,18 @@
-.camera-settings-panel {
-  position: fixed !important;
-  top: 70px;
-  right: 0;
-  bottom: 0;
-  width: min(520px, 100vw) !important;
-  max-width: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  z-index: 80;
+.modal-backdrop.camera-settings-dialog {
+  padding: 70px 0 0 !important;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+.modal-backdrop.camera-settings-dialog > .camera-settings-panel {
+  box-sizing: border-box;
+  width: min(520px, 100%);
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
   background: var(--bg-surface);
   box-shadow: -18px 0 48px rgba(15, 23, 42, 0.18);
   overflow: hidden;
-}
-.camera-settings-panel::before {
-  content: '';
-  position: fixed;
-  inset: 70px 0 0 0;
-  background: rgba(15, 23, 42, 0.28);
-  backdrop-filter: blur(1.5px);
-  z-index: -2;
-}
-.camera-settings-panel::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--bg-surface);
-  z-index: -1;
 }
 .camera-settings-sheet {
   height: 100%;
@@ -484,15 +471,14 @@
   color: var(--text-secondary);
 }
 @media (max-width: 680px) {
-  .camera-settings-panel {
-    top: auto !important;
-    bottom: 0;
-    height: min(92dvh, 760px) !important;
-    width: 100% !important;
-    border-radius: 18px 18px 0 0;
+  .modal-backdrop.camera-settings-dialog {
+    padding: 0 !important;
+    align-items: flex-end !important;
   }
-  .camera-settings-panel::before {
-    inset: 0;
+  .modal-backdrop.camera-settings-dialog > .camera-settings-panel {
+    height: min(92dvh, 760px);
+    width: 100%;
+    border-radius: 18px 18px 0 0;
   }
   .camera-settings-sheet-head {
     min-height: 62px;

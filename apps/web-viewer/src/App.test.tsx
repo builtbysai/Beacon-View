@@ -505,6 +505,10 @@ describe('App', () => {
     render(<App />);
 
     await screen.findByText('Pixel');
+    fireEvent.click(screen.getByRole('button', { name: 'Cameras' }));
+    const catalog = screen.getByLabelText('Your cameras');
+    const search = screen.getByRole('searchbox', { name: 'Search cameras' });
+    fireEvent.change(search, { target: { value: 'Pixel' } });
     expect(
       screen.getByRole('button', { name: 'Pixel options' }),
     ).toBeInTheDocument();
@@ -514,6 +518,15 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pixel options' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Camera settings' }));
 
+    expect(screen.getByRole('dialog', { name: 'Pixel' })).toBeVisible();
+    expect(screen.getByLabelText('Your cameras')).toBe(catalog);
+    expect(screen.getByRole('searchbox', { name: 'Search cameras' })).toBe(
+      search,
+    );
+    expect(search).toHaveValue('Pixel');
+    expect(
+      screen.getByRole('button', { name: 'View live: Pixel' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Pixel' })).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Close camera settings' }),
@@ -552,6 +565,25 @@ describe('App', () => {
     expect(
       screen.getByRole('switch', { name: 'Device privacy' }),
     ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close camera settings' }),
+    );
+    await waitFor(() => expect(window.location.pathname).toBe('/cameras'));
+    expect(screen.queryByRole('dialog', { name: 'Pixel' })).toBeNull();
+    expect(screen.getByLabelText('Your cameras')).toBe(catalog);
+    expect(search).toHaveValue('Pixel');
+    fireEvent.click(screen.getByRole('button', { name: 'View live: Pixel' }));
+    const liveView = screen.getByRole('main');
+    fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
+    expect(screen.getByRole('dialog', { name: 'Pixel' })).toBeVisible();
+    expect(screen.getByRole('main')).toBe(liveView);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close camera settings' }),
+    );
+    await waitFor(() =>
+      expect(window.location.pathname).toBe('/cameras/rear-camera'),
+    );
+    expect(screen.getByRole('main')).toBe(liveView);
   });
 
   it('renames and removes a camera from the Cameras grid', async () => {

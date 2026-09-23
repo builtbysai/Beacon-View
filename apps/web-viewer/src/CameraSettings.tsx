@@ -45,7 +45,7 @@ export function CameraSettings({
   if (!device) {
     return (
       <div className="camera-settings-missing">
-        <h3>Camera not found</h3>
+        <h3 id="camera-settings-title">Camera not found</h3>
         <p>This camera is unavailable or does not belong to your household.</p>
         <button className="secondary" onClick={onBack}>
           Back to Cameras
@@ -119,20 +119,25 @@ export function CameraSettings({
             {deviceKindLabel(device)}
           </span>
           {renamingDevice ? (
-            <InlineRename
-              value={device.name}
-              ariaLabel="Rename this camera"
-              className="inline-rename-heading"
-              explicitActions
-              onSubmit={(name) => {
-                setRenamingDevice(false);
-                onRename(device, name);
-              }}
-              onCancel={() => setRenamingDevice(false)}
-            />
+            <>
+              <h2 id="camera-settings-title" className="visually-hidden">
+                {device.name} settings
+              </h2>
+              <InlineRename
+                value={device.name}
+                ariaLabel="Rename this camera"
+                className="inline-rename-heading"
+                explicitActions
+                onSubmit={(name) => {
+                  setRenamingDevice(false);
+                  onRename(device, name);
+                }}
+                onCancel={() => setRenamingDevice(false)}
+              />
+            </>
           ) : (
             <div className="camera-settings-titleline">
-              <h2>{device.name}</h2>
+              <h2 id="camera-settings-title">{device.name}</h2>
               <button
                 type="button"
                 className="camera-settings-rename"

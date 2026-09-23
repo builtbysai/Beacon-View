@@ -6,9 +6,9 @@ import { nextPairingState } from './lifecycle';
 import { cameraStatus } from './camera-status';
 import type { PairingLifecycle } from './lifecycle';
 import { LiveVideo } from './LiveVideo';
-import { LiveCameraSettingsDialog } from './LiveCameraSettingsDialog';
 import { CameraTile } from './CameraTile';
 import { CameraSettings } from './CameraSettings';
+import { ModalDialog } from './ModalDialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import { BrowserCameraMode } from './BrowserCameraMode';
 import { MotionEventList } from './MotionEventList';
@@ -97,14 +97,6 @@ export function App() {
   const [pairingState, setPairingState] = useState<PairingLifecycle>('pending');
   const [browserCameraActive, setBrowserCameraActive] = useState(false);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
-  const [liveSettingsOpen, setLiveSettingsOpen] = useState(false);
-  // When Camera settings is opened from the live viewer's own overflow menu,
-  // its Back button should return to that viewer rather than the Cameras
-  // grid. Cleared on every other path into Camera settings so a stale
-  // reference never sends Back somewhere the user didn't come from.
-  const [settingsReturnCameraId, setSettingsReturnCameraId] = useState<
-    string | null
-  >(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(
     deviceSettingsIdFromPath,
   );
@@ -155,22 +147,33 @@ export function App() {
     setPage(next);
     setSelectedDeviceId(null);
     setSelectedCamera(null);
-    setLiveSettingsOpen(false);
     setBrowserCameraActive(false);
     setSettingsSection(new URLSearchParams(search).get('section'));
   }, []);
 
   useEffect(() => {
     const onPopState = () => {
-      setPage(pageFromPath());
+      const settingsId = deviceSettingsIdFromPath();
+      const overlayState = window.history.state as {
+        cameraSettingsBackgroundPage?: Page;
+        cameraSettingsBackgroundCameraId?: string;
+      } | null;
+      setPage(
+        settingsId
+          ? (overlayState?.cameraSettingsBackgroundPage ?? 'cameras')
+          : pageFromPath(),
+      );
       const cameraMatch =
         window.location.pathname.match(/^\/cameras\/([^/]+)$/);
-      setSelectedDeviceId(deviceSettingsIdFromPath());
+      setSelectedDeviceId(settingsId);
+      const cameraId = settingsId
+        ? overlayState?.cameraSettingsBackgroundCameraId
+        : cameraMatch
+          ? decodeURIComponent(cameraMatch[1]!)
+          : null;
       setSelectedCamera(
-        cameraMatch
-          ? (cameras.find(
-              (camera) => camera.id === decodeURIComponent(cameraMatch[1]!),
-            ) ?? null)
+        cameraId
+          ? (cameras.find((camera) => camera.id === cameraId) ?? null)
           : null,
       );
       setSettingsSection(
@@ -785,16 +788,32 @@ export function App() {
     }
   }
 
-  function openCameraSettings(deviceId: string, returnCameraId?: string) {
+  function openCameraSettings(deviceId: string) {
     pushRoute(`/cameras/${encodeURIComponent(deviceId)}/settings`);
-    setPage('cameras');
+    window.history.replaceState(
+      {
+        ...window.history.state,
+        cameraSettingsBackgroundPage: page,
+        cameraSettingsBackgroundCameraId: selectedCamera?.id,
+      },
+      '',
+      window.location.href,
+    );
     setSelectedDeviceId(deviceId);
-    setSelectedCamera(null);
-    setSettingsReturnCameraId(returnCameraId ?? null);
+  }
+
+  function closeCameraSettings() {
+    setSelectedDeviceId(null);
+    goBack(() => {
+      replaceRoute('/cameras');
+      setPage('cameras');
+      setSelectedCamera(null);
+    });
   }
 
   function openCamera(camera: Camera) {
     pushRoute(`/cameras/${encodeURIComponent(camera.id)}`);
+    setSelectedDeviceId(null);
     setSelectedCamera(camera);
   }
 
@@ -873,6 +892,38 @@ export function App() {
       />
     );
 
+  const cameraSettingsOverlay = selectedDeviceId && (
+    <ModalDialog
+      className="camera-settings-dialog"
+      labelledBy="camera-settings-title"
+      onDismiss={closeCameraSettings}
+    >
+      <section className="camera-settings-panel">
+        <CameraSettings
+          cameras={cameras.filter(
+            (camera) => camera.deviceId === selectedDeviceId,
+          )}
+          device={devices.find((device) => device.id === selectedDeviceId)}
+          onBack={closeCameraSettings}
+          onLive={openCamera}
+          onRename={(device, name) => void renameDevice(device, name)}
+          onDelete={(device) => requestDeleteDevice(device)}
+          onLeave={(device) =>
+            requestLeaveHostCamera(
+              cameras.find((camera) => camera.deviceId === device.id)!,
+            )
+          }
+          onCameraRename={(camera, name) => void renameCamera(camera, name)}
+          onCameraDelete={(camera) => requestDeleteCamera(camera)}
+          onCameraLeave={(camera) => requestLeaveCamera(camera)}
+          onPrivacy={(device) => void setPrivacy(device)}
+          onSwitchSource={(camera) => void switchSource(camera)}
+          onReconnect={(device) => openPairing(device.id)}
+        />
+      </section>
+    </ModalDialog>
+  );
+
   if (selectedCamera) {
     const liveDevice = devices.find(
       (device) => device.id === selectedCamera.deviceId,
@@ -910,7 +961,7 @@ export function App() {
             openCamera(sibling);
           }}
           siblingCameras={siblings}
-          onDevice={() => setLiveSettingsOpen(true)}
+          onDevice={() => openCameraSettings(selectedCamera.deviceId)}
           canRecord={household?.role === 'owner'}
           recordingReady={driveRecordingReady}
           onConnectDriveForRecording={() =>
@@ -919,17 +970,7 @@ export function App() {
           canFlip={selectedCamera.canFlip ?? true}
           canPause={selectedCamera.canPause ?? true}
         />
-        {liveSettingsOpen && liveDevice && (
-          <LiveCameraSettingsDialog
-            camera={selectedCamera}
-            device={liveDevice}
-            sources={siblings}
-            onDismiss={() => setLiveSettingsOpen(false)}
-            onPrivacy={() => setPrivacy(liveDevice)}
-            onRename={(name) => renameHostCamera(selectedCamera, name)}
-            onSwitch={(camera) => switchSource(camera)}
-          />
-        )}
+        {cameraSettingsOverlay}
         {pendingConfirm && (
           <ConfirmDialog
             title={pendingConfirm.title}
@@ -954,9 +995,7 @@ export function App() {
   );
   // The header and body share one page-container primitive, so they must
   // resolve to the same width tier -- computed once and reused by both.
-  const pageWidthClass = selectedDeviceId
-    ? 'workspace-medium'
-    : contentWidthClass(page);
+  const pageWidthClass = contentWidthClass(page);
   return (
     <SidebarProvider>
       <div className="app-shell">
@@ -997,7 +1036,6 @@ export function App() {
               </div>
               <div className="app-topbar-actions">
                 {pagesWithAddCamera.has(page) &&
-                  !selectedDeviceId &&
                   household?.role !== 'viewer' &&
                   household?.role !== 'guest' && (
                     <button
@@ -1305,96 +1343,52 @@ export function App() {
                 );
               })()}
 
-            {page === 'cameras' &&
-              (selectedDeviceId ? (
-                <section className="camera-settings-panel">
-                  <CameraSettings
-                    cameras={cameras.filter(
-                      (camera) => camera.deviceId === selectedDeviceId,
-                    )}
-                    device={devices.find(
-                      (device) => device.id === selectedDeviceId,
-                    )}
-                    onBack={() => {
-                      const returnCamera = settingsReturnCameraId
-                        ? cameras.find(
-                            (camera) => camera.id === settingsReturnCameraId,
-                          )
-                        : undefined;
-                      setSettingsReturnCameraId(null);
-                      setSelectedDeviceId(null);
-                      if (returnCamera) {
-                        openCamera(returnCamera);
-                        return;
-                      }
-                      goBack(() => pushRoute('/cameras'));
-                    }}
-                    onLive={openCamera}
-                    onRename={(device, name) => void renameDevice(device, name)}
-                    onDelete={(device) => requestDeleteDevice(device)}
-                    onLeave={(device) =>
-                      requestLeaveHostCamera(
-                        cameras.find(
-                          (camera) => camera.deviceId === device.id,
-                        )!,
-                      )
-                    }
-                    onCameraRename={(camera, name) =>
-                      void renameCamera(camera, name)
-                    }
-                    onCameraDelete={(camera) => requestDeleteCamera(camera)}
-                    onCameraLeave={(camera) => requestLeaveCamera(camera)}
-                    onPrivacy={(device) => void setPrivacy(device)}
-                    onSwitchSource={(camera) => void switchSource(camera)}
-                    onReconnect={(device) => openPairing(device.id)}
-                  />
-                </section>
-              ) : (
-                <section className="camera-catalog" aria-label="Your cameras">
-                  {pendingDevices.length > 0 && (
-                    <ul className="pending-device-list">
-                      {pendingDevices.map((device) => (
-                        <PendingDeviceRow
-                          key={device.id}
-                          device={device}
-                          onOpen={() => openCameraSettings(device.id)}
-                        />
-                      ))}
-                    </ul>
-                  )}
-                  <CameraBrowser cameras={hostCameras} key={user.id}>
-                    {(items) =>
-                      items.length === 0 && pendingDevices.length === 0 ? (
-                        <p className="empty">No cameras yet.</p>
-                      ) : (
-                        <div className="camera-tile-grid">
-                          {items.map((camera) => (
-                            <CameraTile
-                              key={camera.deviceId}
-                              camera={camera}
-                              groupedByHost
-                              highlighted={highlightedCameraId === camera.id}
-                              onOpen={openCamera}
-                              onDevice={openCameraSettings}
-                              {...(cameraNeedsPairing(camera)
-                                ? {
-                                    onReconnect: (item: Camera) =>
-                                      openPairing(item.deviceId),
-                                  }
-                                : {})}
-                              onRename={(item, name) =>
-                                renameHostCamera(item, name)
-                              }
-                              onDelete={(item) => requestDeleteHostCamera(item)}
-                              onLeave={(item) => requestLeaveHostCamera(item)}
-                            />
-                          ))}
-                        </div>
-                      )
-                    }
-                  </CameraBrowser>
-                </section>
-              ))}
+            {page === 'cameras' && (
+              <section className="camera-catalog" aria-label="Your cameras">
+                {pendingDevices.length > 0 && (
+                  <ul className="pending-device-list">
+                    {pendingDevices.map((device) => (
+                      <PendingDeviceRow
+                        key={device.id}
+                        device={device}
+                        onOpen={() => openCameraSettings(device.id)}
+                      />
+                    ))}
+                  </ul>
+                )}
+                <CameraBrowser cameras={hostCameras} key={user.id}>
+                  {(items) =>
+                    items.length === 0 && pendingDevices.length === 0 ? (
+                      <p className="empty">No cameras yet.</p>
+                    ) : (
+                      <div className="camera-tile-grid">
+                        {items.map((camera) => (
+                          <CameraTile
+                            key={camera.deviceId}
+                            camera={camera}
+                            groupedByHost
+                            highlighted={highlightedCameraId === camera.id}
+                            onOpen={openCamera}
+                            onDevice={openCameraSettings}
+                            {...(cameraNeedsPairing(camera)
+                              ? {
+                                  onReconnect: (item: Camera) =>
+                                    openPairing(item.deviceId),
+                                }
+                              : {})}
+                            onRename={(item, name) =>
+                              renameHostCamera(item, name)
+                            }
+                            onDelete={(item) => requestDeleteHostCamera(item)}
+                            onLeave={(item) => requestLeaveHostCamera(item)}
+                          />
+                        ))}
+                      </div>
+                    )
+                  }
+                </CameraBrowser>
+              </section>
+            )}
             {page === 'events' && (
               <MotionEventList
                 filterStorageKey={`beacon_motion_filters_${user.id}`}
@@ -1469,6 +1463,7 @@ export function App() {
             onRetry={() => void createPairingCode()}
           />
         )}
+        {cameraSettingsOverlay}
         {pendingConfirm && (
           <ConfirmDialog
             title={pendingConfirm.title}

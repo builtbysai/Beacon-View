@@ -3,10 +3,12 @@ import './ModalDialog.css';
 
 export function ModalDialog({
   children,
+  className,
   labelledBy,
   onDismiss,
 }: {
   children: ReactNode;
+  className?: string;
   labelledBy: string;
   onDismiss: () => void;
 }) {
@@ -54,7 +56,7 @@ export function ModalDialog({
   return (
     <dialog
       ref={ref}
-      className="modal-backdrop"
+      className={`modal-backdrop${className ? ` ${className}` : ''}`}
       aria-labelledby={labelledBy}
       onCancel={(event) => {
         event.preventDefault();

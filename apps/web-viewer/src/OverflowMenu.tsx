@@ -111,7 +111,10 @@ export function OverflowMenu({
                 : { visibility: 'hidden', top: 0, left: 0 }),
             }}
           >
-            {children(() => setOpen(false))}
+            {children(() => {
+              setOpen(false);
+              triggerRef.current?.focus({ preventScroll: true });
+            })}
           </div>,
           document.body,
         )}
