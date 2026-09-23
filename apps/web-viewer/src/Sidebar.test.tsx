@@ -7,6 +7,10 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   vi.restoreAllMocks();
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: 1024,
+  });
 });
 
 const items = [
@@ -78,6 +82,95 @@ describe('desktop sidebar preference', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Home' }));
     expect(items[0]!.onSelect).toHaveBeenCalledOnce();
+  });
+});
+
+describe('mobile sidebar', () => {
+  it('stays open until navigation and keeps the closed panel out of keyboard navigation', () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 390,
+    });
+    const onSelect = vi.fn();
+    const { container } = render(
+      <SidebarProvider>
+        <SidebarTrigger />
+        <Sidebar
+          email="owner@example.test"
+          items={[{ label: 'Home', icon: 'home', current: true, onSelect }]}
+          onLogout={vi.fn()}
+        />
+      </SidebarProvider>,
+    );
+    const sidebar = container.querySelector('#primary-sidebar')!;
+    const trigger = screen.getByRole('button', { name: 'Toggle Sidebar' });
+    expect(sidebar).toHaveAttribute('data-state', 'closed');
+    expect(sidebar).toHaveAttribute('inert');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(trigger);
+    expect(sidebar).toHaveAttribute('data-state', 'expanded');
+    expect(sidebar).not.toHaveAttribute('inert');
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Close menu' })).toHaveFocus();
+    expect(sidebar).toHaveAttribute('aria-modal', 'true');
+
+    screen.getByRole('link', { name: 'Beacon home' }).focus();
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    expect(
+      screen.getByRole('button', { name: /owner@example\.test/ }),
+    ).toHaveFocus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(screen.getByRole('link', { name: 'Beacon home' })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Home' }));
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(sidebar).toHaveAttribute('data-state', 'closed');
+    expect(sidebar).toHaveAttribute('inert');
+  });
+
+  it('closes on Escape and stays closed after crossing the desktop breakpoint', () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 390,
+    });
+    const { container } = render(<TestSidebar />);
+    const sidebar = container.querySelector('#primary-sidebar')!;
+    const trigger = screen.getByRole('button', { name: 'Toggle Sidebar' });
+
+    fireEvent.click(trigger);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(sidebar).toHaveAttribute('data-state', 'closed');
+    expect(trigger).toHaveFocus();
+
+    fireEvent.click(trigger);
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1024,
+    });
+    fireEvent.resize(window);
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 390,
+    });
+    fireEvent.resize(window);
+    expect(sidebar).toHaveAttribute('data-state', 'closed');
+  });
+
+  it('closes the account menu before closing the drawer on Escape', () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 390,
+    });
+    const { container } = render(<TestSidebar />);
+    const sidebar = container.querySelector('#primary-sidebar')!;
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /owner@example\.test/ }),
+    );
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(sidebar).toHaveAttribute('data-state', 'expanded');
   });
 });
 

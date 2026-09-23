@@ -29,7 +29,9 @@ export function useSidebar() {
 }
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth <= 768,
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [state, setState] = useState<'expanded' | 'collapsed'>(() => {
     try {
@@ -42,7 +44,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
+    const checkMobile = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+      if (!mobile) setMobileOpen(false);
+    };
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
@@ -72,13 +78,15 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function SidebarTrigger({ className = '' }: { className?: string }) {
-  const { toggleSidebar } = useSidebar();
+  const { state, toggleSidebar, isMobile, mobileOpen } = useSidebar();
   return (
     <button
       type="button"
       className={`sidebar-trigger ${className}`}
       onClick={toggleSidebar}
       aria-label="Toggle Sidebar"
+      aria-controls="primary-sidebar"
+      aria-expanded={isMobile ? mobileOpen : state === 'expanded'}
     >
       <Icon name="list" />
     </button>
@@ -112,6 +120,8 @@ export function Sidebar({
   } | null>(null);
 
   const accountRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const [tip, setTip] = useState<{
@@ -146,13 +156,17 @@ export function Sidebar({
     }
   }, [theme]);
 
-  const currentItemLabel = items.find((item) => item.current)?.label;
-
   useEffect(() => {
-    if (isMobile && mobileOpen) {
-      setMobileOpen(false);
+    if (isMobile && mobileOpen) closeRef.current?.focus();
+    if (isMobile && !mobileOpen) setMenuOpen(false);
+  }, [isMobile, mobileOpen]);
+
+  function closeMobile(restoreFocus = true) {
+    setMobileOpen(false);
+    if (restoreFocus) {
+      document.querySelector<HTMLButtonElement>('.sidebar-trigger')?.focus();
     }
-  }, [currentItemLabel, isMobile, mobileOpen, setMobileOpen]);
+  }
 
   function hideTip() {
     clearTimeout(timer.current);
@@ -187,13 +201,28 @@ export function Sidebar({
       setTip(null);
     };
     const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Tab' && isMobile && mobileOpen && !menuOpen) {
+        const controls = sidebarRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled])',
+        );
+        const first = controls?.[0];
+        const last = controls?.[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
       if (event.key === 'Escape') {
+        if (event.defaultPrevented) return;
         dismiss();
         if (menuOpen) {
           setMenuOpen(false);
           accountRef.current?.focus();
         } else if (isMobile && mobileOpen) {
-          setMobileOpen(false);
+          closeMobile();
         }
       }
       if (
@@ -258,14 +287,20 @@ export function Sidebar({
       {isMobile && mobileOpen && (
         <div
           className="sidebar-overlay"
-          onClick={() => setMobileOpen(false)}
+          onClick={() => closeMobile()}
           aria-hidden="true"
         />
       )}
       <aside
+        ref={sidebarRef}
+        id="primary-sidebar"
         className="sidebar"
         data-state={isMobile ? (mobileOpen ? 'expanded' : 'closed') : state}
         aria-label="Primary navigation"
+        aria-hidden={isMobile && !mobileOpen}
+        aria-modal={isMobile && mobileOpen ? true : undefined}
+        inert={isMobile && !mobileOpen}
+        role={isMobile && mobileOpen ? 'dialog' : undefined}
         onFocus={(event) => showTip(event.target)}
         onBlur={deferHideTip}
         onPointerOver={(event) => showTip(event.target)}
@@ -277,8 +312,10 @@ export function Sidebar({
           </a>
           {isMobile && (
             <button
+              ref={closeRef}
+              type="button"
               className="sidebar-close"
-              onClick={() => setMobileOpen(false)}
+              onClick={() => closeMobile()}
               aria-label="Close menu"
             >
               <Icon name="plus" />
@@ -298,6 +335,7 @@ export function Sidebar({
                 data-tooltip={item.label}
                 onClick={() => {
                   hideTip();
+                  if (isMobile) closeMobile(false);
                   item.onSelect();
                 }}
               >
