@@ -41,14 +41,16 @@ export class PostgresMotionRepository {
          AND ($2::uuid IS NULL OR cs.public_camera_id = $2)
          AND ($3::timestamptz IS NULL OR me.occurred_at >= $3)
          AND ($4::timestamptz IS NULL OR (me.occurred_at, me.id) < ($4, $5::uuid))
+         AND ($6::uuid[] IS NULL OR cs.public_camera_id = ANY($6::uuid[]))
        ORDER BY me.occurred_at DESC, me.id DESC
-       LIMIT $6`,
+       LIMIT $7`,
       [
         householdId,
         options.cameraId ?? null,
         options.since ?? null,
         options.before?.time ?? null,
         options.before?.id ?? null,
+        options.allowedCameraIds ?? null,
         options.limit ?? 100,
       ],
     );

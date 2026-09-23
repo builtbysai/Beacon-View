@@ -321,6 +321,11 @@
   color: var(--text-muted);
 }
 
+.latest-activity-message .btn {
+  display: block;
+  margin: var(--space-3) auto 0;
+}
+
 .latest-activity-list {
   list-style: none;
   margin: 0;
