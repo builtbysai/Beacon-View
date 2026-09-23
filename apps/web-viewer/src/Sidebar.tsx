@@ -202,11 +202,13 @@ export function Sidebar({
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Tab' && isMobile && mobileOpen && menuOpen) {
-        const controls = menuRef.current?.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled])',
-        );
-        const first = controls?.[0];
-        const last = controls?.[controls.length - 1];
+        const controls = Array.from(
+          menuRef.current?.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled])',
+          ) ?? [],
+        ).filter((control) => control.tabIndex >= 0);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
         if (event.shiftKey && document.activeElement === first) {
           event.preventDefault();
           last?.focus();

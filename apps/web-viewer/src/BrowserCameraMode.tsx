@@ -87,6 +87,12 @@ export function BrowserCameraMode({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
   const clip = useClipRecorder(activeCameraId ?? '');
+  const clipBusy =
+    clip.state.status === 'starting' ||
+    clip.state.status === 'recording' ||
+    clip.state.status === 'uploading';
+  const clipBusyRef = useRef(clipBusy);
+  clipBusyRef.current = clipBusy;
 
   // The preview <video> element lives in different branches of the returned
   // JSX (setup card vs. full-bleed broadcast stage) and gets remounted when
@@ -151,6 +157,10 @@ export function BrowserCameraMode({
   }
 
   async function registerAndStart(requestedKey = selectedKey) {
+    if (streamRef.current && clipBusyRef.current) {
+      setError('Finish the current recording before switching cameras.');
+      return;
+    }
     const selected = inputs.find((input) => input.deviceId === requestedKey);
     if (!selected) return;
     const normalizedDeviceName = deviceName.trim();
@@ -359,6 +369,7 @@ export function BrowserCameraMode({
               id="activeCameraSelect"
               value={selectedKey}
               onChange={(event) => setSelectedKey(event.target.value)}
+              disabled={clipBusy}
             >
               {inputs.map((input) => (
                 <option key={input.deviceId} value={input.deviceId}>
@@ -367,7 +378,11 @@ export function BrowserCameraMode({
               ))}
             </select>
             <div className="heading-actions">
-              <button type="button" onClick={() => void registerAndStart()}>
+              <button
+                type="button"
+                onClick={() => void registerAndStart()}
+                disabled={clipBusy}
+              >
                 Switch camera
               </button>
               <button className="secondary" onClick={onBack} type="button">
