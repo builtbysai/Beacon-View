@@ -457,6 +457,33 @@ describe.skipIf(!store)('notification transport persistence', () => {
         )
       ).rows,
     ).toEqual([{ userId: owner.id }]);
+
+    // The admin still has an active session and subscription in their own
+    // household. Revoking this household must stop both queued and new alerts.
+    await store!.pool.query(
+      `UPDATE household_members SET status='revoked', revoked_at=$3
+       WHERE household_id=$1 AND user_id=$2`,
+      [owner.householdId, admin.id, now],
+    );
+    await store!.pool.query(
+      'UPDATE notification_outbox SET next_attempt_at=$1',
+      [now],
+    );
+    expect(await store!.claimNotificationDeliveries(now)).toEqual([]);
+    await store!.createMotionEvent({
+      credentialHash: hashSecret('notification-device-credential'),
+      publicCameraId: device.publicCameraId,
+      confidence: 0.8,
+      now: new Date(now.getTime() + 1000),
+    });
+    expect(
+      (
+        await store!.pool.query(
+          'SELECT id FROM notification_events WHERE user_id=$1',
+          [admin.id],
+        )
+      ).rowCount,
+    ).toBe(1);
   });
 
   it('records a security event that reaches no subscriber without error', async () => {

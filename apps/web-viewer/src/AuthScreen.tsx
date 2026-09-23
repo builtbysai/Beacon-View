@@ -110,6 +110,12 @@ export function AuthScreen({
               </div>
             )}
 
+            {googleResult === 'failed' && view !== 'forgot-password' && (
+              <div className="auth-alert auth-error-block" role="alert">
+                Google sign-in could not be completed. Please try again.
+              </div>
+            )}
+
             {error && view !== 'forgot-password' && (
               <div className="auth-alert auth-error-block" role="alert">
                 {error}

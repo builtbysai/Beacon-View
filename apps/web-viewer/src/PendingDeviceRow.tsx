@@ -1,6 +1,7 @@
 import { deviceGuidance } from './device-guidance';
 import type { Device } from './domain';
 import { Icon } from './Icon';
+import './PendingDeviceRow.css';
 
 /** A paired device that has not reported a usable camera yet remains visible
  * and reachable without pretending that it has a camera tile. */

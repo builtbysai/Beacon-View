@@ -61,6 +61,13 @@ function savedFilter(key: string, fallback: string): string {
   }
 }
 
+function savedTimeFilter(key: string): string {
+  const value = savedFilter(key, '24');
+  if (value === 'day') return '24';
+  if (value === 'week') return '7';
+  return ['24', '7', 'all'].includes(value) ? value : '24';
+}
+
 // /api/motion-events currently reports visual motion only. More specific
 // detection labels require an explicit device-reported event type.
 const motionKind = 'motion';
@@ -153,7 +160,7 @@ export function MotionEventList({
     savedFilter(`${filterStorageKey}:camera`, 'all'),
   );
   const [timeFilter, setTimeFilter] = useState(() =>
-    savedFilter(`${filterStorageKey}:time`, '24'),
+    savedTimeFilter(`${filterStorageKey}:time`),
   );
   const [kindFilter, setKindFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('new');

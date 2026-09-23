@@ -354,9 +354,20 @@ export function BrowserCameraMode({
             role="dialog"
             aria-label="Camera settings"
           >
-            {/* settings fields omitted for brevity if needed later */}
+            <label htmlFor="activeCameraSelect">Camera</label>
+            <select
+              id="activeCameraSelect"
+              value={selectedKey}
+              onChange={(event) => setSelectedKey(event.target.value)}
+            >
+              {inputs.map((input) => (
+                <option key={input.deviceId} value={input.deviceId}>
+                  {input.label}
+                </option>
+              ))}
+            </select>
             <div className="heading-actions">
-              <button onClick={() => void registerAndStart()}>
+              <button type="button" onClick={() => void registerAndStart()}>
                 Switch camera
               </button>
               <button className="secondary" onClick={onBack} type="button">

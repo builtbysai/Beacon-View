@@ -1,5 +1,5 @@
 .auth {
-  min-height: 100dvh;
+  min-height: calc(100dvh - 68px);
   display: grid;
   grid-template-rows: auto 1fr auto;
   padding: clamp(16px, 2.5dvh, 28px) clamp(16px, 4vw, 48px);
@@ -395,6 +395,12 @@
   .auth .foot {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 420px) {
+  .auth {
+    min-height: calc(100dvh - 62px);
   }
 }
 

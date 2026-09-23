@@ -193,7 +193,7 @@ export class PostgresAuditRepository {
          LEFT JOIN cameras d ON d.id = ae.camera_id
          WHERE ae.household_id = $1
             AND ae.event_type = ANY($2::text[])
-         ORDER BY ae.occurred_at DESC
+         ORDER BY ae.occurred_at DESC, ae.id DESC
          LIMIT $3 OFFSET $4`,
         [householdId, ACCESS_HISTORY_EVENT_TYPES, limit, offset],
       ),

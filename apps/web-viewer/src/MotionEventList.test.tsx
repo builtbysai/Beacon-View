@@ -44,6 +44,16 @@ const props = {
 };
 
 describe('Activity timeline', () => {
+  it('restores a saved legacy week filter as seven days', async () => {
+    localStorage.setItem('motion-test:time', 'week');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response([])));
+    render(<MotionEventList {...props} />);
+    expect(await screen.findByRole('combobox', { name: /time/i })).toHaveValue(
+      '7',
+    );
+    expect(localStorage.getItem('motion-test:time')).toBe('7');
+  });
+
   it('shows structured household activity alongside motion without claiming object detection', async () => {
     const occurredAt = new Date().toISOString();
     const fetch = vi.fn((url: string) =>

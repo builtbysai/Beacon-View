@@ -1,8 +1,19 @@
 # Beacon SecureView development handoff
 
-Updated September 16, 2026. This is the shortest reliable orientation for a new
+Updated September 23, 2026. This is the shortest reliable orientation for a new
 development session. GitHub is canonical; the maintained local checkout is
 `C:\Dev\Beacon-SecureView`.
+
+## September 23 development data reset
+
+At the owner's request, all application data and accounts in the Oracle PostgreSQL
+`public` schema were cleared. The 27 Drizzle migration ledger rows were preserved.
+All Restic snapshots were forgotten and pruned; the repository currently has zero
+snapshots. The `beacon-backup.timer` and `beacon-backup-check.timer` systemd units
+are disabled and inactive so the backup set remains empty during development.
+Re-enable backups before relying on this VM for retained user data. OCI bucket
+object versioning was not independently checked, so historical object versions
+are not covered by the Restic verification.
 
 ## Read this first: check for other active work before developing
 

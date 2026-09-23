@@ -677,7 +677,8 @@ export const notificationEvents = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex('notification_events_deduplication_key_unique').on(
+    uniqueIndex('notification_events_user_deduplication_unique').on(
+      table.userId,
       table.deduplicationKey,
     ),
     check(
@@ -727,9 +728,12 @@ export const notificationOutbox = pgTable(
 export const notificationPresenceState = pgTable(
   'notification_presence_state',
   {
-    deviceId: uuid('device_id')
-      .primaryKey()
-      .references(() => devices.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id').references(() => devices.id, {
+      onDelete: 'cascade',
+    }),
     candidateSince: timestamp('candidate_since', { withTimezone: true }),
     offlineEventId: uuid('offline_event_id').references(
       () => notificationEvents.id,
@@ -740,6 +744,7 @@ export const notificationPresenceState = pgTable(
       .notNull()
       .defaultNow(),
   },
+  (table) => [primaryKey({ columns: [table.userId, table.deviceId] })],
 );
 
 // A guest link is the third, distinct kind of household access alongside
