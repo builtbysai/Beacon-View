@@ -93,10 +93,11 @@ describe('BrowserCameraMode', () => {
     const fetch = vi.fn().mockResolvedValue({
       json: () =>
         Promise.resolve({
+          device: { name: 'Renamed in Cameras' },
           cameras: [
             {
               id: 'camera-one',
-              name: 'Webcam',
+              name: 'Saved webcam name',
               sourceKey: 'browser:built-in',
             },
           ],
@@ -123,7 +124,7 @@ describe('BrowserCameraMode', () => {
       name: 'Kitchen laptop',
     });
     expect(localStorage.getItem('beacon_browser_camera_name')).toBe(
-      'Kitchen laptop',
+      'Renamed in Cameras',
     );
 
     rendered.unmount();
@@ -133,7 +134,7 @@ describe('BrowserCameraMode', () => {
     );
     await screen.findByText('Webcam');
     expect(screen.getByRole('textbox', { name: 'Device name' })).toHaveValue(
-      'Kitchen laptop',
+      'Renamed in Cameras',
     );
   });
 

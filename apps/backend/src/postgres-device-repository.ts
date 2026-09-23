@@ -212,7 +212,7 @@ export class PostgresDeviceRepository {
             last_seen_at, updated_at, paired_by_user_id)
          VALUES ($1, $2, $3, 'browser', 'browser', $4, $4, $5)
          ON CONFLICT (installation_id) DO UPDATE SET
-           name = EXCLUDED.name, last_seen_at = EXCLUDED.last_seen_at,
+           last_seen_at = EXCLUDED.last_seen_at,
            updated_at = EXCLUDED.updated_at
          WHERE cameras.household_id = EXCLUDED.household_id
            AND cameras.platform = 'browser'
@@ -249,7 +249,6 @@ export class PostgresDeviceRepository {
               last_seen_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6, $6)
            ON CONFLICT (device_id, source_key) DO UPDATE SET
-             display_name = EXCLUDED.display_name,
              facing = EXCLUDED.facing,
              capabilities = EXCLUDED.capabilities,
              last_seen_at = EXCLUDED.last_seen_at,

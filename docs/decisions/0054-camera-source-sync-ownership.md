@@ -16,6 +16,11 @@ The backend branch's proposed topology sync (`0cd4631`) overwrites display
 names on every request and marks every omitted source removed. Those semantics
 are not justified by the Android caller.
 
+Browser Camera Mode also calls `POST /api/browser-devices` on start and source
+switch. Its installation ID makes this an upsert. Re-registering the same
+installation must not replace names changed later in Camera Settings with stale
+browser-local labels.
+
 ## Decision
 
 - Treat `sourceKey`, facing, and reported capabilities as device-owned.
@@ -27,6 +32,11 @@ are not justified by the Android caller.
   implicit source removal or display-name overwrite from the backend branch.
 - Preserve the display name when converting `legacy-default` to a real Android
   source key.
+- Treat browser registration names as initial suggestions for a new device or
+  source. On an existing installation, preserve user-owned device and source
+  display names while refreshing reported facing, capabilities, and presence.
+- Return the canonical device and source names to Browser Camera Mode after
+  registration so its local display follows names saved in Camera Settings.
 
 ## Consequences
 

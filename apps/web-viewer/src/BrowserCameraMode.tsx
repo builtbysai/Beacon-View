@@ -170,23 +170,36 @@ export function BrowserCameraMode({
     }
     setError('');
     try {
-      const result = await request<{ cameras: RegisteredSource[] }>(
-        '/api/browser-devices',
-        {
-          body: JSON.stringify({
-            installationId: installationId(),
-            name: normalizedDeviceName,
-            sources: inputs.map((input) => ({
-              facing: 'external',
-              name: sourceNames[input.deviceId] || input.label,
-              sourceKey: `browser:${input.deviceId}`,
-            })),
-          }),
-          method: 'POST',
-        },
+      const result = await request<{
+        cameras: RegisteredSource[];
+        device?: { name: string };
+      }>('/api/browser-devices', {
+        body: JSON.stringify({
+          installationId: installationId(),
+          name: normalizedDeviceName,
+          sources: inputs.map((input) => ({
+            facing: 'external',
+            name: sourceNames[input.deviceId] || input.label,
+            sourceKey: `browser:${input.deviceId}`,
+          })),
+        }),
+        method: 'POST',
+      });
+      const registeredName = result.device?.name ?? normalizedDeviceName;
+      setDeviceName(registeredName);
+      rememberDeviceName(registeredName);
+      setSourceNames((current) =>
+        Object.fromEntries(
+          inputs.map((input) => [
+            input.deviceId,
+            result.cameras.find(
+              (source) => source.sourceKey === `browser:${input.deviceId}`,
+            )?.name ??
+              current[input.deviceId] ??
+              input.label,
+          ]),
+        ),
       );
-      setDeviceName(normalizedDeviceName);
-      rememberDeviceName(normalizedDeviceName);
       const camera = result.cameras.find(
         (source) => source.sourceKey === `browser:${selected.deviceId}`,
       );
