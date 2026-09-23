@@ -22,6 +22,24 @@ interface VideoInput {
 
 const INSTALLATION_KEY = 'beacon_browser_device_id';
 const CAMERA_NAME_KEY = 'beacon_browser_camera_name';
+const WAKE_LOCK_KEY = 'beacon_browser_keep_awake';
+
+function initialWakeLockEnabled(): boolean {
+  try {
+    return localStorage.getItem(WAKE_LOCK_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function wakeLockSupported(): boolean {
+  const manager = (
+    navigator as Navigator & {
+      wakeLock?: { request(type: 'screen'): Promise<unknown> };
+    }
+  ).wakeLock;
+  return typeof manager?.request === 'function';
+}
 
 function initialDeviceName(): string {
   try {
@@ -54,11 +72,15 @@ function broadcastStatusLabel(state: string, viewerCount: number): string {
 }
 
 function installationId(): string {
-  const existing = localStorage.getItem(INSTALLATION_KEY);
-  if (existing) return existing;
-  const created = crypto.randomUUID();
-  localStorage.setItem(INSTALLATION_KEY, created);
-  return created;
+  try {
+    const existing = localStorage.getItem(INSTALLATION_KEY);
+    if (existing) return existing;
+    const created = crypto.randomUUID();
+    localStorage.setItem(INSTALLATION_KEY, created);
+    return created;
+  } catch {
+    throw new Error('Enable browser storage to keep this camera connected.');
+  }
 }
 
 export function BrowserCameraMode({
@@ -85,7 +107,11 @@ export function BrowserCameraMode({
   const [retryCount, setRetryCount] = useState(0);
   const [error, setError] = useState('');
   const [backgrounded, setBackgrounded] = useState(document.hidden);
-  const [wakeLockEnabled, setWakeLockEnabled] = useState(false);
+  const [wakeLockEnabled, setWakeLockEnabled] = useState(
+    initialWakeLockEnabled,
+  );
+  const wakeLockEnabledRef = useRef(wakeLockEnabled);
+  wakeLockEnabledRef.current = wakeLockEnabled;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
   const clip = useClipRecorder(activeCameraId ?? '');
@@ -255,7 +281,7 @@ export function BrowserCameraMode({
       if (wakeLockEnabled) await acquireWakeLock();
     } catch (caught) {
       if (generation !== startGeneration.current) return;
-      if (!streamRef.current) setState('error');
+      if (!streamRef.current) setState('offline');
       else if (activeSourceKey.current) setSelectedKey(activeSourceKey.current);
       setError(
         caught instanceof Error ? caught.message : 'Unable to start camera',
@@ -306,7 +332,29 @@ export function BrowserCameraMode({
       }
     ).wakeLock;
     if (!manager || document.hidden) return;
-    wakeLockRef.current = await manager.request('screen');
+    const generation = startGeneration.current;
+    try {
+      const lock = await manager.request('screen');
+      if (
+        generation !== startGeneration.current ||
+        !wakeLockEnabledRef.current ||
+        document.hidden
+      ) {
+        await lock.release();
+        return;
+      }
+      wakeLockRef.current = lock;
+    } catch {
+      if (generation !== startGeneration.current) return;
+      wakeLockEnabledRef.current = false;
+      setWakeLockEnabled(false);
+      try {
+        localStorage.setItem(WAKE_LOCK_KEY, 'false');
+      } catch {
+        // The setting remains session-only when storage is unavailable.
+      }
+      setError('Keep awake is unavailable in this browser.');
+    }
   }
 
   if (state !== 'offline') {
@@ -531,23 +579,33 @@ export function BrowserCameraMode({
                 />
                 <div className="local-hint">You can rename it later.</div>
               </div>
-              <label className="local-check full">
-                <input
-                  checked={wakeLockEnabled}
-                  type="checkbox"
-                  onChange={(event) => {
-                    const enabled = event.target.checked;
-                    setWakeLockEnabled(enabled);
-                    if (!enabled) {
-                      void wakeLockRef.current?.release();
-                      wakeLockRef.current = null;
-                    } else if (state !== 'offline') {
-                      void acquireWakeLock();
-                    }
-                  }}
-                />
-                <span>Keep this device awake while Camera Mode is active</span>
-              </label>
+              {wakeLockSupported() && (
+                <label className="local-check full">
+                  <input
+                    checked={wakeLockEnabled}
+                    type="checkbox"
+                    onChange={(event) => {
+                      const enabled = event.target.checked;
+                      wakeLockEnabledRef.current = enabled;
+                      setWakeLockEnabled(enabled);
+                      try {
+                        localStorage.setItem(WAKE_LOCK_KEY, String(enabled));
+                      } catch {
+                        // Camera Mode still works with a session-only preference.
+                      }
+                      if (!enabled) {
+                        void wakeLockRef.current?.release();
+                        wakeLockRef.current = null;
+                      } else if (state !== 'offline') {
+                        void acquireWakeLock();
+                      }
+                    }}
+                  />
+                  <span>
+                    Keep this device awake while Camera Mode is active
+                  </span>
+                </label>
+              )}
             </div>
             <div className="local-actions">
               <button className="btn secondary" onClick={onBack}>
