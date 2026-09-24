@@ -23,6 +23,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -81,7 +83,10 @@ private fun BeaconNavButton(
         }
     androidx.compose.material3.TextButton(
         onClick = onClick,
-        modifier = modifier.height(58.dp),
+        modifier =
+            modifier
+                .height(58.dp)
+                .semantics { this.selected = selected },
         colors = colors,
         shape = RoundedCornerShape(12.dp),
     ) {
