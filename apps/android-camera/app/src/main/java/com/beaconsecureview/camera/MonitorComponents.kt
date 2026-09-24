@@ -4,12 +4,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,7 +32,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -314,9 +313,9 @@ private fun MonitorCameraCard(
     Column(
         modifier =
             modifier
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(18.dp))
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(18.dp))
-                .clip(RoundedCornerShape(18.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(14.dp))
                 .clickable(
                     enabled = available,
                     onClickLabel = "View ${camera.name} live",
@@ -336,8 +335,8 @@ private fun MonitorCameraCard(
         Box(
             modifier =
                 Modifier.fillMaxWidth()
-                    .height(180.dp)
-                    .background(Brush.linearGradient(listOf(Color(0xFF143553), BeaconHero))),
+                    .aspectRatio(16f / 9f)
+                    .background(Color(0xFF172437)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -362,11 +361,20 @@ private fun MonitorCameraCard(
                 Modifier.align(Alignment.TopStart).padding(10.dp),
             )
             if (camera.viewerCount > 0) {
-                BeaconStatusPill(
-                    camera.viewerCount.toString(),
-                    Color.White,
-                    Modifier.align(Alignment.TopEnd).padding(10.dp),
-                )
+                Surface(
+                    modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+                    shape = RoundedCornerShape(999.dp),
+                    color = Color.Black.copy(alpha = 0.65f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.Visibility, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                        Text(camera.viewerCount.toString(), color = Color.White, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
         }
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -383,16 +391,14 @@ private fun MonitorCameraCard(
                 }
             }
             Text(camera.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                when {
-                    camera.privacyMode -> "Open settings to turn privacy mode off."
-                    !camera.online -> "Waiting for camera to reconnect."
-                    else -> "Tap to open secure live view."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 5.dp),
-            )
+            if (!available) {
+                Text(
+                    if (camera.privacyMode) "Open settings to turn privacy mode off." else "Waiting for camera to reconnect.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 5.dp),
+                )
+            }
         if (reordering) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
