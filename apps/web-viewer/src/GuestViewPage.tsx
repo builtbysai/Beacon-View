@@ -5,7 +5,7 @@ import { LiveVideo } from './LiveVideo';
 import type { Camera } from './domain';
 import './GuestViewPage.css';
 
-type Status = 'entering' | 'invalid' | 'empty' | 'ready';
+type Status = 'entering' | 'invalid' | 'unavailable' | 'empty' | 'ready';
 
 /** The public, no-account counterpart to the signed-in live view: opening
  * /g/:token redeems the guest link for a scoped cookie (see POST
@@ -16,9 +16,12 @@ export function GuestViewPage() {
   const [status, setStatus] = useState<Status>('entering');
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [refreshError, setRefreshError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setStatus('entering');
     void (async () => {
       try {
         await request('/api/guest/enter', {
@@ -30,19 +33,24 @@ export function GuestViewPage() {
         );
         if (cancelled) return;
         setCameras(result.cameras);
+        setRefreshError(false);
         setStatus(result.cameras.length === 0 ? 'empty' : 'ready');
         if (result.cameras.length === 1) setSelectedId(result.cameras[0]!.id);
       } catch (error) {
         if (!cancelled) {
-          setStatus('invalid');
-          if (!(error instanceof ApiError)) console.error(error);
+          setStatus(
+            error instanceof ApiError &&
+              [401, 403, 404, 410].includes(error.status)
+              ? 'invalid'
+              : 'unavailable',
+          );
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, attempt]);
 
   useEffect(() => {
     if (status !== 'ready' && status !== 'empty') return;
@@ -55,6 +63,7 @@ export function GuestViewPage() {
         );
         if (!active) return;
         setCameras(result.cameras);
+        setRefreshError(false);
         setSelectedId((current) =>
           current && result.cameras.some((camera) => camera.id === current)
             ? current
@@ -69,6 +78,8 @@ export function GuestViewPage() {
         ) {
           setStatus('invalid');
           setSelectedId(null);
+        } else if (active) {
+          setRefreshError(true);
         }
       }
     };
@@ -122,6 +133,29 @@ export function GuestViewPage() {
       </main>
     );
 
+  if (status === 'unavailable')
+    return (
+      <main className="shell trust-shell pair-link-shell">
+        <section className="trust-page" aria-labelledby="guest-view-title">
+          <a className="trust-brand" href="/" aria-label="Beacon home">
+            <Brand />
+          </a>
+          <p className="eyebrow">Shared camera</p>
+          <h1 id="guest-view-title">Couldn’t connect right now.</h1>
+          <p className="trust-lead">
+            Check your connection and try again. Your link may still be valid.
+          </p>
+          <button
+            className="btn secondary"
+            type="button"
+            onClick={() => setAttempt((current) => current + 1)}
+          >
+            Try again
+          </button>
+        </section>
+      </main>
+    );
+
   if (status === 'empty')
     return (
       <main className="shell trust-shell pair-link-shell">
@@ -132,8 +166,11 @@ export function GuestViewPage() {
           <p className="eyebrow">Shared camera</p>
           <h1 id="guest-view-title">Nothing to show right now.</h1>
           <p className="trust-lead">
-            The cameras on this link aren’t available at the moment.
+            No cameras are shared on this link. Ask the owner to update access.
           </p>
+          {refreshError && (
+            <p role="status">Connection interrupted. Trying again…</p>
+          )}
           <button
             type="button"
             className="btn secondary"
@@ -174,6 +211,11 @@ export function GuestViewPage() {
         </button>
       </header>
       <div className="guest-camera-grid">
+        {refreshError && (
+          <p className="guest-refresh-warning" role="status">
+            Connection interrupted. Camera information may be out of date.
+          </p>
+        )}
         {cameras.map((camera) => (
           <button
             key={camera.id}

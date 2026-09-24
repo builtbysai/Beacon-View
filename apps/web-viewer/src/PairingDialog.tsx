@@ -1,6 +1,6 @@
 import { QRCodeSVG } from 'qrcode.react';
 import { ModalDialog } from './ModalDialog';
-import { pairingLink } from './app-navigation';
+import { browserCameraSetupLink, pairingLink } from './app-navigation';
 import type { PairingLifecycle } from './lifecycle';
 import { Icon } from './Icon';
 import './PairingDialog.css';
@@ -81,6 +81,25 @@ export function PairingDialog({
                   >
                     Copy setup link
                   </button>
+                  {!reconnecting && (
+                    <button
+                      className="btn secondary"
+                      onClick={() => {
+                        navigator.clipboard
+                          .writeText(browserCameraSetupLink(code))
+                          .catch(onCopyError);
+                      }}
+                    >
+                      Copy browser camera link
+                    </button>
+                  )}
+                  {!reconnecting && (
+                    <p className="pair-link-hint">
+                      Send the browser camera link to a device you own. It opens
+                      Camera Mode without signing in; the one-time code pairs it
+                      to your account.
+                    </p>
+                  )}
                 </div>
               </div>
             ) : error ? (

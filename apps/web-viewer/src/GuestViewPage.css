@@ -24,6 +24,17 @@
   gap: 12px;
 }
 
+.guest-refresh-warning {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  font-size: 12px;
+}
+
 .guest-camera-card {
   appearance: none;
   min-width: 0;

@@ -95,6 +95,33 @@ export function pairingLink(code: string): string {
   return url.toString();
 }
 
+export function browserCameraSetupLink(code: string): string {
+  const url = new URL('/camera-mode/setup', window.location.origin);
+  url.searchParams.set('code', code);
+  return url.toString();
+}
+
+/** Only accept a pairing code or a Beacon setup URL from this origin. */
+export function pairingCodeFromScan(value: string): string | null {
+  const trimmed = value.trim();
+  const code = /^[A-HJ-NP-Z2-9]{10}$/i.test(trimmed)
+    ? trimmed
+    : (() => {
+        try {
+          const url = new URL(trimmed);
+          if (
+            url.origin !== window.location.origin ||
+            !['/pair', '/camera-mode/setup'].includes(url.pathname)
+          )
+            return null;
+          return url.searchParams.get('code');
+        } catch {
+          return null;
+        }
+      })();
+  return code && /^[A-HJ-NP-Z2-9]{10}$/i.test(code) ? code.toUpperCase() : null;
+}
+
 export function eventsUrl(): string {
   const url = new URL('/api/events', window.location.href);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';

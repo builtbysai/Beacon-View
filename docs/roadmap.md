@@ -52,6 +52,12 @@ September 15 recording/FCM port described in
 worktree referenced by earlier revisions of this paragraph has been fully absorbed and
 should not be treated as an active or authoritative source going forward.
 
+September 24 browser pairing follow-up: ADR 0067 adds a direct browser camera
+setup link, QR scanning with a manual-code fallback, and clearer guest connection
+errors. A shared device-integration type contract begins the IoT design; no IoT
+adapter is enabled. The first adapter still requires a separate protocol, privacy,
+credential, household-authorization, and hardware acceptance review.
+
 Notification Transport v1 is implemented through its Chrome Web Push baseline; native
 FCM and the remaining physical acceptance matrix remain external evidence gates. On
 September 12 the owner explicitly approved a bounded interface-reliability follow-up:
