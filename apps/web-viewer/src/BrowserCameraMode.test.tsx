@@ -73,6 +73,76 @@ afterEach(() => {
 });
 
 describe('BrowserCameraMode', () => {
+  it('pairs a signed-out browser with a one-time code and then restores it without a code', async () => {
+    Object.defineProperty(window, 'isSecureContext', {
+      configurable: true,
+      value: true,
+    });
+    const stream = {
+      getTracks: () => [{ stop: vi.fn() }],
+      getVideoTracks: () => [{ id: 'track', contentHint: '' }],
+    } as unknown as MediaStream;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: vi
+          .fn()
+          .mockResolvedValue([
+            { deviceId: 'built-in', kind: 'videoinput', label: 'Webcam' },
+          ]),
+        getUserMedia: vi.fn().mockResolvedValue(stream),
+      },
+    });
+    const fetch = vi.fn().mockResolvedValue({
+      json: () =>
+        Promise.resolve({
+          device: { id: 'local-device', name: 'Webcam host' },
+          cameras: [
+            { id: 'camera-one', name: 'Webcam', sourceKey: 'browser:built-in' },
+          ],
+        }),
+      ok: true,
+      status: 201,
+    });
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('WebSocket', CameraSocket);
+    window.history.replaceState(null, '', '/camera-mode/setup?code=ABCDEFGH23');
+    const view = render(
+      <BrowserCameraMode standalone onBack={() => undefined} />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Allow camera access' }),
+    );
+    await screen.findByText('Webcam');
+    expect(screen.getByRole('textbox', { name: 'Pairing code' })).toHaveValue(
+      'ABCDEFGH23',
+    );
+    expect(window.location.search).toBe('');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Pair and start camera' }),
+    );
+    await screen.findByText('Camera Mode ready');
+    expect(fetch.mock.calls[0]![0]).toBe('/api/browser-devices/pair');
+    const pairedBody = JSON.parse(
+      (fetch.mock.calls[0]![1] as RequestInit).body as string,
+    ) as { pairingCode: string };
+    expect(pairedBody.pairingCode).toBe('ABCDEFGH23');
+    expect(localStorage.getItem('beacon_browser_camera_device_id')).toBe(
+      'local-device',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Stop Camera Mode' }));
+    view.unmount();
+
+    render(<BrowserCameraMode standalone onBack={() => undefined} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Allow camera access' }),
+    );
+    await screen.findByText('Webcam');
+    fireEvent.click(screen.getByRole('button', { name: 'Resume camera' }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(fetch.mock.calls[1]![0]).toBe('/api/browser-devices/restore');
+    window.history.replaceState(null, '', '/');
+  });
   it('stops a camera stream that resolves after the page closes', async () => {
     Object.defineProperty(window, 'isSecureContext', {
       configurable: true,

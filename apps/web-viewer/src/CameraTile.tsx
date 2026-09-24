@@ -37,6 +37,7 @@ export function CameraTile({
   onRename,
   onDelete,
   onLeave,
+  onContinueCamera,
   previewOnHover = true,
   conciseStatus = false,
 }: {
@@ -49,6 +50,7 @@ export function CameraTile({
   onRename?: (camera: TileCamera, name: string) => void;
   onDelete?: (camera: TileCamera) => void;
   onLeave?: (camera: TileCamera) => void;
+  onContinueCamera?: () => void;
   previewOnHover?: boolean;
   conciseStatus?: boolean;
 }) {
@@ -64,10 +66,14 @@ export function CameraTile({
   );
   const primaryName = groupedByHost ? camera.deviceName : camera.name;
   const secondaryStatus = state.available
-    ? 'Online · ready to view'
+    ? onContinueCamera
+      ? 'Camera running in this browser'
+      : 'Online · ready to view'
     : state.label === 'Privacy on'
       ? 'Online · privacy on'
-      : 'Offline · reconnect required';
+      : onContinueCamera
+        ? 'Stopped here · open Camera Mode to continue'
+        : 'Offline · check camera device';
 
   useEffect(
     () => () => {
@@ -260,6 +266,16 @@ export function CameraTile({
           </OverflowMenu>
         )}
       </div>
+      {onContinueCamera && (
+        <button
+          className="camera-tile-resume"
+          type="button"
+          onClick={onContinueCamera}
+        >
+          <Icon name="camera" />{' '}
+          {state.available ? 'Open Camera Mode' : 'Continue as camera'}
+        </button>
+      )}
     </article>
   );
 }

@@ -105,6 +105,7 @@ export function buildApp(
   });
   registerEnrollmentRoutes(app, {
     auth: sessionAuth,
+    config,
     householdEvents,
     limiter,
     signaling,

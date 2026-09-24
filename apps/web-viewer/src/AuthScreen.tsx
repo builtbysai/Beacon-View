@@ -201,6 +201,9 @@ export function AuthScreen({
                     Create an account
                   </button>
                 </p>
+                <p className="switch">
+                  <a href="/camera-mode/setup">Use this browser as a camera</a>
+                </p>
               </div>
             )}
 

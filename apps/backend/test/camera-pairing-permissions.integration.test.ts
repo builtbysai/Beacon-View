@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import WebSocket from 'ws';
 
 import { buildApp } from '../src/app.js';
 import type { AppConfig } from '../src/config.js';
@@ -160,6 +161,9 @@ async function pairCamera(
 describe.skipIf(!app || !store)(
   'camera pairing and removal permissions',
   () => {
+    beforeAll(async () => {
+      await app!.listen({ host: '127.0.0.1', port: 0 });
+    });
     beforeEach(async () => {
       await resetTestDatabase(store!.pool);
     });
@@ -260,6 +264,129 @@ describe.skipIf(!app || !store)(
         url: '/api/pairing-codes',
       });
       expect(attempt.statusCode).toBe(403);
+    });
+
+    it('pairs an unsigned browser with an owner code, restores it, and rejects a revoked credential', async () => {
+      const owner = await registerAndSignIn(
+        'browser-pair-owner@example.com',
+        '10.0.6.1',
+      );
+      const created = await app!.inject({
+        method: 'POST',
+        url: '/api/pairing-codes',
+        headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      });
+      expect(created.statusCode).toBe(201);
+      const code = created.json<{ code: string }>().code;
+      const installationId = randomUUID();
+      const payload = {
+        installationId,
+        name: 'Spare browser',
+        pairingCode: code,
+        sources: [
+          { sourceKey: 'browser:webcam', name: 'Webcam', facing: 'external' },
+        ],
+      };
+      const wrongOrigin = await app!.inject({
+        method: 'POST',
+        url: '/api/browser-devices/pair',
+        headers: { origin: 'https://untrusted.example' },
+        payload,
+      });
+      expect(wrongOrigin.statusCode).toBe(403);
+      const paired = await app!.inject({
+        method: 'POST',
+        url: '/api/browser-devices/pair',
+        headers: { origin: config!.WEB_ORIGIN },
+        payload,
+      });
+      expect(paired.statusCode).toBe(201);
+      const body = paired.json<{
+        cameras: Array<{ id: string }>;
+        device: { id: string };
+      }>();
+      expect(body.cameras).toHaveLength(1);
+      const cookieHeader = paired.headers['set-cookie'];
+      const cookie = (
+        Array.isArray(cookieHeader) ? cookieHeader : [cookieHeader]
+      ).find(
+        (value) =>
+          typeof value === 'string' &&
+          value.startsWith('beacon_browser_camera='),
+      );
+      expect(cookie).toContain('HttpOnly');
+      expect(cookie).toContain('SameSite=Strict');
+      const cookiePair = cookie!.split(';')[0]!;
+      const restored = await app!.inject({
+        method: 'POST',
+        url: '/api/browser-devices/restore',
+        headers: { origin: config!.WEB_ORIGIN, cookie: cookiePair },
+        payload: {
+          installationId,
+          name: 'Spare browser',
+          sources: payload.sources,
+        },
+      });
+      expect(restored.statusCode).toBe(200);
+      expect(
+        restored.json<{ cameras: Array<{ id: string }> }>().cameras[0]?.id,
+      ).toBe(body.cameras[0]?.id);
+      const reused = await app!.inject({
+        method: 'POST',
+        url: '/api/browser-devices/pair',
+        headers: { origin: config!.WEB_ORIGIN },
+        payload: { ...payload, installationId: randomUUID() },
+      });
+      expect(reused.statusCode).toBe(400);
+      const address = app!.server.address();
+      if (!address || typeof address === 'string')
+        throw new Error('Expected TCP address');
+      const socket = new WebSocket(
+        `ws://127.0.0.1:${address.port}/api/signaling?role=producer&cameraId=${body.cameras[0]!.id}`,
+        { headers: { origin: config!.WEB_ORIGIN, cookie: cookiePair } },
+      );
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error('Producer connection timeout')),
+          2_000,
+        );
+        socket.once('message', (raw) => {
+          clearTimeout(timer);
+          try {
+            if (!Buffer.isBuffer(raw))
+              throw new Error('Expected producer message buffer');
+            expect(JSON.parse(raw.toString('utf8'))).toMatchObject({
+              type: 'device-ready',
+            });
+            resolve();
+          } catch (error) {
+            reject(
+              error instanceof Error
+                ? error
+                : new Error('Invalid producer response'),
+            );
+          }
+        });
+        socket.once('error', reject);
+      });
+      socket.close();
+      const deleted = await app!.inject({
+        method: 'DELETE',
+        url: `/api/devices/${body.device.id}`,
+        headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      });
+      expect(deleted.statusCode).toBe(204);
+      const revoked = await app!.inject({
+        method: 'POST',
+        url: '/api/browser-devices/restore',
+        headers: { origin: config!.WEB_ORIGIN, cookie: cookiePair },
+        payload: {
+          installationId,
+          name: 'Spare browser',
+          sources: payload.sources,
+        },
+      });
+      expect(revoked.statusCode).toBe(401);
     });
 
     it('lets a viewer leave a camera an admin shared with them, without unpairing it', async () => {

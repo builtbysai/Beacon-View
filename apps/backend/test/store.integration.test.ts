@@ -207,6 +207,60 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
     await expect(redeem(randomUUID(), 'credential-three')).resolves.toBeNull();
   });
 
+  it('pairs a browser camera with scoped sources and rejects reuse of its code', async () => {
+    const owner = await store!.createAccount(
+      'browser-owner@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    const code = 'ABCDEFGH23';
+    await store!.createPairingCode(
+      owner.householdId,
+      hashSecret(code),
+      new Date(Date.now() + 60_000),
+    );
+    const credentialHash = hashSecret('browser-credential');
+    const input = {
+      codeHash: hashSecret(code),
+      credentialHash,
+      installationId: randomUUID(),
+      ipAddress: '127.0.0.1',
+      name: 'Hallway browser',
+      now: new Date(),
+      browserSources: [
+        {
+          sourceKey: 'browser:front',
+          name: 'Front lens',
+          facing: 'front' as const,
+        },
+        {
+          sourceKey: 'browser:rear',
+          name: 'Rear lens',
+          facing: 'rear' as const,
+        },
+      ],
+    };
+    const paired = await store!.redeemPairingCode(input);
+    expect(paired).toMatchObject({ name: 'Hallway browser' });
+    if (!paired || paired === 'device_registration_rate_limited')
+      throw new Error('Expected browser pairing to succeed');
+    const identity = await store!.findDeviceByCredential(credentialHash);
+    expect(identity).toMatchObject({
+      platform: 'browser',
+      installationId: input.installationId,
+    });
+    const cameras = (await store!.listCameras(owner.householdId)).filter(
+      (camera) => camera.publicDeviceId === paired?.publicDeviceId,
+    );
+    expect(cameras.map((camera) => camera.sourceKey).sort()).toEqual([
+      'browser:front',
+      'browser:rear',
+    ]);
+    await expect(
+      store!.redeemPairingCode({ ...input, installationId: randomUUID() }),
+    ).resolves.toBeNull();
+  });
+
   it('rejects expired and invalid pairing codes without creating cameras', async () => {
     const owner = await store!.createAccount(
       'owner@example.com',

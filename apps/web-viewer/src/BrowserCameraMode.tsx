@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { request } from './api';
+import { ApiError, request } from './api';
 import { BrowserProducer } from './BrowserProducer';
-import { Icon } from './Icon';
+import { Brand, Icon } from './Icon';
 import { ModalDialog } from './ModalDialog';
 import './BrowserCameraModeSetup.css';
 import { browserOsLabel, friendlyDeviceLabel } from './naming';
 import { formatClipTimer } from './recording-capture';
 import { useClipRecorder } from './useClipRecorder';
+import { rememberLocalBrowserDevice } from './browser-camera-local';
 
 interface RegisteredSource {
   id: string;
@@ -86,8 +87,10 @@ function installationId(): string {
 export function BrowserCameraMode({
   onBack,
   canRecord = false,
+  standalone = false,
 }: {
   onBack: () => void;
+  standalone?: boolean;
   /** Only the household owner can request recordings (see POST
    * /api/recordings) -- matches the same live-viewer gate in LiveVideo. */
   canRecord?: boolean;
@@ -113,6 +116,11 @@ export function BrowserCameraMode({
   const wakeLockEnabledRef = useRef(wakeLockEnabled);
   wakeLockEnabledRef.current = wakeLockEnabled;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pairingCode, setPairingCode] = useState(
+    () =>
+      new URLSearchParams(window.location.search).get('code')?.toUpperCase() ??
+      '',
+  );
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
   const clip = useClipRecorder(activeCameraId ?? '');
   const clipBusy =
@@ -127,6 +135,12 @@ export function BrowserCameraMode({
   // `state` flips away from 'offline', which drops whatever srcObject was
   // assigned directly in registerAndStart. Re-sync after every render so the
   // newly-mounted node always reflects the current stream.
+  useEffect(() => {
+    if (standalone && window.location.search.includes('code=')) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, [standalone]);
+
   useEffect(() => {
     if (previewRef.current) previewRef.current.srcObject = streamRef.current;
   });
@@ -200,13 +214,21 @@ export function BrowserCameraMode({
     const generation = ++startGeneration.current;
     setError('');
     try {
+      const path = standalone
+        ? pairingCode.trim()
+          ? '/api/browser-devices/pair'
+          : '/api/browser-devices/restore'
+        : '/api/browser-devices';
       const result = await request<{
         cameras: RegisteredSource[];
-        device?: { name: string };
-      }>('/api/browser-devices', {
+        device?: { id: string; name: string };
+      }>(path, {
         body: JSON.stringify({
           installationId: installationId(),
           name: normalizedDeviceName,
+          ...(standalone && pairingCode.trim()
+            ? { pairingCode: pairingCode.trim() }
+            : {}),
           sources: inputs.map((input) => ({
             facing: 'external',
             name: sourceNames[input.deviceId] || input.label,
@@ -217,6 +239,8 @@ export function BrowserCameraMode({
       });
       if (generation !== startGeneration.current) return;
       const registeredName = result.device?.name ?? normalizedDeviceName;
+      if (result.device?.id) rememberLocalBrowserDevice(result.device.id);
+      if (standalone) setPairingCode('');
       setDeviceName(registeredName);
       rememberDeviceName(registeredName);
       setSourceNames((current) =>
@@ -284,7 +308,11 @@ export function BrowserCameraMode({
       if (!streamRef.current) setState('offline');
       else if (activeSourceKey.current) setSelectedKey(activeSourceKey.current);
       setError(
-        caught instanceof Error ? caught.message : 'Unable to start camera',
+        standalone && caught instanceof ApiError && caught.status === 401
+          ? 'Enter a fresh pairing code from a signed-in Beacon account.'
+          : caught instanceof Error
+            ? caught.message
+            : 'Unable to start camera',
       );
     }
   }
@@ -426,6 +454,44 @@ export function BrowserCameraMode({
             </button>
           </div>
         </div>
+        <div className="broadcast-footer">
+          <div className="broadcast-identity">
+            <span className="broadcast-eyebrow">THIS DEVICE IS A CAMERA</span>
+            <strong>{deviceName}</strong>
+            <span>
+              {viewerCount === 1 ? '1 viewer' : `${viewerCount} viewers`} · Keep
+              this tab open
+            </span>
+          </div>
+          <div className="broadcast-controls">
+            {inputs.length > 1 && (
+              <button
+                className="broadcast-icon-button"
+                type="button"
+                aria-label="Switch to next camera"
+                disabled={clipBusy}
+                onClick={() => {
+                  const index = inputs.findIndex(
+                    (input) => input.deviceId === activeSourceKey.current,
+                  );
+                  void registerAndStart(
+                    inputs[(index + 1) % inputs.length]!.deviceId,
+                  );
+                }}
+              >
+                <Icon name="refresh" />
+              </button>
+            )}
+            <button
+              className="broadcast-stop"
+              aria-label="Stop Camera Mode"
+              onClick={stop}
+              type="button"
+            >
+              <Icon name="camera" /> Stop camera
+            </button>
+          </div>
+        </div>
         {backgrounded && (
           <p className="broadcast-warning" role="status">
             This tab is backgrounded. Capture or networking may be throttled.
@@ -472,155 +538,200 @@ export function BrowserCameraMode({
             </div>
           </div>
         )}
-        <button className="broadcast-stop" onClick={stop} type="button">
-          Stop Camera Mode
-        </button>
       </main>
     );
   }
 
-  return (
-    <ModalDialog labelledBy="localTitle" onDismiss={onBack}>
-      <section className="local-modal" role="dialog" aria-modal="true">
-        <div className="local-mh">
-          <div>
-            <div className="local-eyebrow">Use this device</div>
-            <h2 id="localTitle">
-              {inputs.length > 0
-                ? 'Choose a camera'
-                : 'Use this device as a camera'}
-            </h2>
-            <p id="localSub">
-              {inputs.length > 0
-                ? 'Select the camera Beacon should use on this device.'
-                : 'Temporary monitoring. Keep Beacon open while the camera is active.'}
-            </p>
-          </div>
-        </div>
-
-        <div className="local-steps">
-          <span className="local-step on"></span>
-          <span
-            className={`local-step ${inputs.length > 0 ? 'on' : ''}`}
-          ></span>
-        </div>
-
-        {error && (
-          <p role="alert" style={{ color: 'var(--status-error)' }}>
-            {error}
+  const setup = (
+    <section
+      className="local-modal"
+      role={standalone ? undefined : 'dialog'}
+      aria-modal={standalone ? undefined : true}
+    >
+      <div className="local-mh">
+        <div>
+          <div className="local-eyebrow">Use this device</div>
+          <h2 id="localTitle">
+            {inputs.length > 0
+              ? 'Choose a camera'
+              : 'Use this device as a camera'}
+          </h2>
+          <p id="localSub">
+            {inputs.length > 0
+              ? standalone
+                ? 'Enter a one-time code from a signed-in Beacon account, then choose this camera.'
+                : 'Select the camera Beacon should use on this device.'
+              : 'Keep this browser open while the camera is active. A Beacon account is needed to pair it.'}
           </p>
-        )}
+        </div>
+      </div>
 
-        {inputs.length === 0 ? (
-          <div id="permission">
-            <div className="local-permission">
-              <div className="local-permission-icon">
-                <Icon name="camera" />
-              </div>
-              <div>
-                <b>Camera access is required</b>
-                <p>
-                  Beacon needs permission to find cameras connected to this
-                  device. Your browser or operating system may show a permission
-                  prompt.
-                </p>
-              </div>
+      <div className="local-steps">
+        <span className="local-step on"></span>
+        <span className={`local-step ${inputs.length > 0 ? 'on' : ''}`}></span>
+      </div>
+
+      {error && (
+        <p role="alert" style={{ color: 'var(--status-error)' }}>
+          {error}
+        </p>
+      )}
+
+      {inputs.length === 0 ? (
+        <div id="permission">
+          <div className="local-permission">
+            <div className="local-permission-icon">
+              <Icon name="camera" />
             </div>
-            <div className="local-actions">
-              <button className="btn secondary" onClick={onBack}>
-                Cancel
-              </button>
-              <button className="btn primary" onClick={() => void discover()}>
-                Allow camera access
-              </button>
+            <div>
+              <b>Camera access is required</b>
+              <p>
+                Beacon needs permission to find cameras connected to this
+                device. Your browser or operating system may show a permission
+                prompt.
+              </p>
             </div>
           </div>
-        ) : (
-          <div id="configure">
-            <div className="local-controls">
-              <div className="local-field">
-                <label htmlFor="deviceName">Device name</label>
+          <div className="local-actions">
+            <button className="btn secondary" onClick={onBack}>
+              Cancel
+            </button>
+            <button className="btn primary" onClick={() => void discover()}>
+              Allow camera access
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div id="configure">
+          <div className="local-controls">
+            {standalone && (
+              <div className="local-field full">
+                <label htmlFor="browserPairingCode">Pairing code</label>
                 <input
-                  id="deviceName"
-                  value={deviceName}
-                  maxLength={100}
-                  onChange={(event) => setDeviceName(event.target.value)}
+                  id="browserPairingCode"
+                  autoComplete="off"
+                  inputMode="text"
+                  maxLength={32}
+                  value={pairingCode}
+                  onChange={(event) =>
+                    setPairingCode(event.target.value.toUpperCase())
+                  }
+                  placeholder="Code from the account owner's Add camera screen"
                 />
                 <div className="local-hint">
-                  How this device appears in Beacon.
+                  Already paired in this browser? Leave the code blank to
+                  resume.
                 </div>
               </div>
-              <div className="local-field">
-                <label htmlFor="cameraSelect">Camera</label>
-                <select
-                  id="cameraSelect"
-                  value={selectedKey}
-                  onChange={(event) => setSelectedKey(event.target.value)}
-                >
-                  {inputs.map((input) => (
-                    <option key={input.deviceId} value={input.deviceId}>
-                      {input.label}
-                    </option>
-                  ))}
-                </select>
+            )}
+            <div className="local-field">
+              <label htmlFor="deviceName">Device name</label>
+              <input
+                id="deviceName"
+                value={deviceName}
+                maxLength={100}
+                onChange={(event) => setDeviceName(event.target.value)}
+              />
+              <div className="local-hint">
+                How this device appears in Beacon.
               </div>
-              <div className="local-field full">
-                <label htmlFor="cameraName">Camera name</label>
-                <input
-                  id="cameraName"
-                  value={sourceNames[selectedKey] ?? ''}
-                  maxLength={100}
-                  onChange={(event) =>
-                    setSourceNames((current) => ({
-                      ...current,
-                      [selectedKey]: event.target.value,
-                    }))
-                  }
-                />
-                <div className="local-hint">You can rename it later.</div>
-              </div>
-              {wakeLockSupported() && (
-                <label className="local-check full">
-                  <input
-                    checked={wakeLockEnabled}
-                    type="checkbox"
-                    onChange={(event) => {
-                      const enabled = event.target.checked;
-                      wakeLockEnabledRef.current = enabled;
-                      setWakeLockEnabled(enabled);
-                      try {
-                        localStorage.setItem(WAKE_LOCK_KEY, String(enabled));
-                      } catch {
-                        // Camera Mode still works with a session-only preference.
-                      }
-                      if (!enabled) {
-                        void wakeLockRef.current?.release();
-                        wakeLockRef.current = null;
-                      } else if (state !== 'offline') {
-                        void acquireWakeLock();
-                      }
-                    }}
-                  />
-                  <span>
-                    Keep this device awake while Camera Mode is active
-                  </span>
-                </label>
-              )}
             </div>
-            <div className="local-actions">
-              <button className="btn secondary" onClick={onBack}>
-                Cancel
-              </button>
-              <button
-                className="btn primary"
-                onClick={() => void registerAndStart()}
+            <div className="local-field">
+              <label htmlFor="cameraSelect">Camera</label>
+              <select
+                id="cameraSelect"
+                value={selectedKey}
+                onChange={(event) => setSelectedKey(event.target.value)}
               >
-                Start camera
-              </button>
+                {inputs.map((input) => (
+                  <option key={input.deviceId} value={input.deviceId}>
+                    {input.label}
+                  </option>
+                ))}
+              </select>
             </div>
+            <div className="local-field full">
+              <label htmlFor="cameraName">Camera name</label>
+              <input
+                id="cameraName"
+                value={sourceNames[selectedKey] ?? ''}
+                maxLength={100}
+                onChange={(event) =>
+                  setSourceNames((current) => ({
+                    ...current,
+                    [selectedKey]: event.target.value,
+                  }))
+                }
+              />
+              <div className="local-hint">You can rename it later.</div>
+            </div>
+            {wakeLockSupported() && (
+              <label className="local-check full">
+                <input
+                  checked={wakeLockEnabled}
+                  type="checkbox"
+                  onChange={(event) => {
+                    const enabled = event.target.checked;
+                    wakeLockEnabledRef.current = enabled;
+                    setWakeLockEnabled(enabled);
+                    try {
+                      localStorage.setItem(WAKE_LOCK_KEY, String(enabled));
+                    } catch {
+                      // Camera Mode still works with a session-only preference.
+                    }
+                    if (!enabled) {
+                      void wakeLockRef.current?.release();
+                      wakeLockRef.current = null;
+                    } else if (state !== 'offline') {
+                      void acquireWakeLock();
+                    }
+                  }}
+                />
+                <span>Keep this device awake while Camera Mode is active</span>
+              </label>
+            )}
           </div>
-        )}
-      </section>
+          <div className="local-actions">
+            <button className="btn secondary" onClick={onBack}>
+              Cancel
+            </button>
+            <button
+              className="btn primary"
+              onClick={() => void registerAndStart()}
+            >
+              {standalone
+                ? pairingCode.trim()
+                  ? 'Pair and start camera'
+                  : 'Resume camera'
+                : 'Start camera'}
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+  if (standalone)
+    return (
+      <main className="broadcast-setup-page">
+        <div className="broadcast-setup-wrap">
+          <a
+            href="/"
+            aria-label="Beacon home"
+            className="broadcast-setup-brand"
+          >
+            <Brand />
+          </a>
+          {setup}
+          <p className="broadcast-setup-note">
+            Camera use remains visible in your browser. Stop Camera Mode
+            whenever you want to stop capture.
+          </p>
+        </div>
+      </main>
+    );
+  return (
+    <ModalDialog labelledBy="localTitle" onDismiss={onBack}>
+      {setup}
     </ModalDialog>
   );
 }

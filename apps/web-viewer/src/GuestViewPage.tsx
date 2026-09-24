@@ -44,6 +44,51 @@ export function GuestViewPage() {
     };
   }, [token]);
 
+  useEffect(() => {
+    if (status !== 'ready' && status !== 'empty') return;
+    let active = true;
+    const refresh = async () => {
+      if (document.hidden) return;
+      try {
+        const result = await request<{ cameras: Camera[] }>(
+          '/api/guest/cameras',
+        );
+        if (!active) return;
+        setCameras(result.cameras);
+        setSelectedId((current) =>
+          current && result.cameras.some((camera) => camera.id === current)
+            ? current
+            : null,
+        );
+        setStatus(result.cameras.length ? 'ready' : 'empty');
+      } catch (error) {
+        if (
+          active &&
+          error instanceof ApiError &&
+          (error.status === 401 || error.status === 403)
+        ) {
+          setStatus('invalid');
+          setSelectedId(null);
+        }
+      }
+    };
+    const timer = window.setInterval(() => void refresh(), 30_000);
+    const onVisibility = () => {
+      void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [status]);
+
+  async function leaveGuestView() {
+    await request('/api/guest/exit', { method: 'POST' }).catch(() => undefined);
+    window.location.assign('/');
+  }
+
   if (status === 'entering')
     return (
       <main className="shell trust-shell pair-link-shell">
@@ -89,6 +134,13 @@ export function GuestViewPage() {
           <p className="trust-lead">
             The cameras on this link aren’t available at the moment.
           </p>
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={() => void leaveGuestView()}
+          >
+            Leave shared view
+          </button>
         </section>
       </main>
     );
@@ -102,7 +154,7 @@ export function GuestViewPage() {
         privacyMode={selected.privacyMode}
         deviceName={selected.deviceName}
         viewerCount={selected.viewerCount}
-        {...(cameras.length > 1 ? { onBack: () => setSelectedId(null) } : {})}
+        onBack={() => setSelectedId(null)}
         canFlip={false}
         canPause={false}
       />
@@ -113,6 +165,13 @@ export function GuestViewPage() {
       <header className="guest-picker-header">
         <Brand />
         <p className="eyebrow">Shared cameras</p>
+        <button
+          type="button"
+          className="btn secondary"
+          onClick={() => void leaveGuestView()}
+        >
+          Leave shared view
+        </button>
       </header>
       <div className="guest-camera-grid">
         {cameras.map((camera) => (

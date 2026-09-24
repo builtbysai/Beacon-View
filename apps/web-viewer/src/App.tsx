@@ -59,6 +59,7 @@ import {
   isBackendCapabilities,
   type BackendCapabilities,
 } from './capabilities';
+import { isLocalBrowserCamera } from './browser-camera-local';
 
 const SPLASH_SEEN_KEY = 'beacon.splash.seen.v1';
 
@@ -836,6 +837,13 @@ export function App() {
   }
 
   if (window.location.pathname.startsWith('/g/')) return <GuestViewPage />;
+  if (window.location.pathname === '/camera-mode/setup')
+    return (
+      <BrowserCameraMode
+        standalone
+        onBack={() => window.location.assign('/')}
+      />
+    );
   if (window.location.pathname === '/pair') return <PairLinkPage />;
   if (window.location.pathname === '/auth/mobile')
     return <MobileAuthReturnPage />;
@@ -1155,9 +1163,13 @@ export function App() {
                   'Multiple cameras are offline or need to be reconnected.';
                 if (attentionCount === 1) {
                   attentionTitle = `${attentionCamera!.deviceName} needs attention`;
-                  attentionDesc = cameraNeedsPairing(attentionCamera!)
-                    ? 'Camera needs to be paired.'
-                    : 'Camera is offline. Reconnect it to restore live viewing.';
+                  attentionDesc = isLocalBrowserCamera(
+                    attentionCamera!.deviceId,
+                  )
+                    ? 'This browser was used as the camera. Open Camera Mode here to start it again.'
+                    : cameraNeedsPairing(attentionCamera!)
+                      ? 'Camera needs to be paired.'
+                      : 'Camera is offline. Reconnect it to restore live viewing.';
                 } else if (attentionCount > 1 && attentionCount <= 4) {
                   const offlineNames = attentionCameras
                     .filter((camera) => !cameraNeedsPairing(camera))
@@ -1209,7 +1221,17 @@ export function App() {
                           </span>
                         )}
                         {attentionCount === 1 ? (
-                          cameraCanReconnect(attentionCamera!) ? (
+                          isLocalBrowserCamera(attentionCamera!.deviceId) ? (
+                            <button
+                              className="home-statuslink"
+                              onClick={() => {
+                                navigate('camera mode');
+                                setBrowserCameraActive(true);
+                              }}
+                            >
+                              Continue camera mode &rarr;
+                            </button>
+                          ) : cameraCanReconnect(attentionCamera!) ? (
                             <button
                               className="home-statuslink"
                               onClick={() =>
@@ -1279,6 +1301,14 @@ export function App() {
                                 onRemoveFavorite={(deviceId) =>
                                   toggleFavorite(deviceId, defaultFavoriteIds)
                                 }
+                                {...(isLocalBrowserCamera(camera.deviceId)
+                                  ? {
+                                      onContinueCamera: () => {
+                                        navigate('camera mode');
+                                        setBrowserCameraActive(true);
+                                      },
+                                    }
+                                  : {})}
                               />
                             ))}
                           </div>
@@ -1395,6 +1425,14 @@ export function App() {
                                     openPairing(item.deviceId),
                                 }
                               : {})}
+                            {...(isLocalBrowserCamera(camera.deviceId)
+                              ? {
+                                  onContinueCamera: () => {
+                                    navigate('camera mode');
+                                    setBrowserCameraActive(true);
+                                  },
+                                }
+                              : {})}
                             {...(household?.role === 'owner' ||
                             household?.role === 'admin'
                               ? {
@@ -1457,21 +1495,34 @@ export function App() {
                 }}
               />
             )}
-            {page === 'camera mode' && (
-              <>
-                <AddCameraPage
-                  onBack={() => navigate('dashboard')}
-                  onPairAndroid={() => openPairing()}
-                  onUseBrowser={() => setBrowserCameraActive(true)}
-                />
-                {browserCameraActive && (
-                  <BrowserCameraMode
-                    canRecord={household?.role === 'owner'}
-                    onBack={() => setBrowserCameraActive(false)}
+            {page === 'camera mode' &&
+              (household?.role === 'guest' ? (
+                <section className="add-device-page">
+                  <h2>Camera setup needs a household member</h2>
+                  <p>
+                    Guest access is for viewing shared cameras. Ask a household
+                    member to create a one-time pairing code if you want to set
+                    up this browser as a camera.
+                  </p>
+                  <a className="btn secondary" href="/camera-mode/setup">
+                    Set up with a pairing code
+                  </a>
+                </section>
+              ) : (
+                <>
+                  <AddCameraPage
+                    onBack={() => navigate('dashboard')}
+                    onPairAndroid={() => openPairing()}
+                    onUseBrowser={() => setBrowserCameraActive(true)}
                   />
-                )}
-              </>
-            )}
+                  {browserCameraActive && (
+                    <BrowserCameraMode
+                      canRecord={household?.role === 'owner'}
+                      onBack={() => setBrowserCameraActive(false)}
+                    />
+                  )}
+                </>
+              ))}
           </div>
         </main>
         {pairingOpen && (

@@ -147,6 +147,9 @@ export interface CameraIdentity {
 }
 
 export interface DeviceHeartbeatIdentity extends CameraIdentity {
+  name: string;
+  platform: 'android' | 'browser';
+  installationId: string;
   lastSeenAt: Date | null;
   batteryPercent: number | null;
   batteryCharging: boolean | null;
@@ -681,6 +684,7 @@ export interface MilestoneStore {
     name: string;
     ipAddress: string;
     now: Date;
+    browserSources?: CameraSourceInput[];
   }): Promise<PairingRedemptionResult>;
   listCameras(householdId: string): Promise<CameraRecord[]>;
   listDevices(householdId: string): Promise<DeviceRecord[]>;

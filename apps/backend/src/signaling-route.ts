@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
 import { GUEST_LINK_COOKIE } from './guest-routes.js';
+import { BROWSER_CAMERA_COOKIE } from './enrollment-routes.js';
 import { hashSecret } from './security.js';
 import type { HouseholdEventHub } from './household-events.js';
 import type { IceServer } from './signaling.js';
@@ -93,6 +94,37 @@ export function registerSignaling(
             ),
           );
           return;
+        }
+
+        if (
+          query.data.role === 'producer' &&
+          request.headers.origin === config.WEB_ORIGIN
+        ) {
+          const credential = request.cookies[BROWSER_CAMERA_COOKIE];
+          const camera = credential
+            ? await store.findCameraForDeviceCredential(
+                hashSecret(credential),
+                query.data.cameraId,
+              )
+            : null;
+          if (camera) {
+            hub.connectDevice(
+              camera.cameraId,
+              camera.publicCameraId,
+              socket,
+              camera.householdId,
+            );
+            const credentialHash = hashSecret(credential!);
+            monitorAuthorization(socket, async () =>
+              Boolean(
+                await store.findCameraForDeviceCredential(
+                  credentialHash,
+                  query.data.cameraId,
+                ),
+              ),
+            );
+            return;
+          }
         }
 
         const bearerToken = bearerSessionToken(request);

@@ -759,6 +759,7 @@ export class PostgresStore implements MilestoneStore {
     name: string;
     ipAddress: string;
     now: Date;
+    browserSources?: CameraSourceInput[];
   }): Promise<PairingRedemptionResult> {
     return this.pairing.redeem(input);
   }
