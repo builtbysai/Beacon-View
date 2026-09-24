@@ -437,8 +437,7 @@ internal fun MonitorHome(
                 title = "Welcome to Beacon",
                 supportingText = "Sign in to access your cameras and live views.",
             )
-            BeaconTrustLine("Private by design. No cloud recordings.")
-            BeaconPanel(modifier = Modifier.fillMaxWidth(), contentPadding = 0) {
+            BeaconPanel(modifier = Modifier.fillMaxWidth(), contentPadding = 20) {
                 Button(
                     enabled = !busy,
                     onClick = onGoogleSignIn,
@@ -449,7 +448,6 @@ internal fun MonitorHome(
                     Text("Continue with Google", modifier = Modifier.padding(start = 12.dp).weight(1f))
                     Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, modifier = Modifier.size(18.dp))
                 }
-            }
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -498,9 +496,10 @@ internal fun MonitorHome(
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 ) { Text(if (busy) "Signing in…" else "Sign in securely") }
                 BeaconTrustLine(
-                    "Camera and microphone capture stays visible on the camera device.",
+                    "Cloud recording is optional. Camera capture stays visible on the device.",
                     modifier = Modifier.padding(top = 10.dp),
                 )
+            }
         } else {
             // A stable snapshot, not repeated `session!!` reads: this branch
             // only runs while session is non-null, but the callbacks below
@@ -670,13 +669,9 @@ internal fun MonitorHome(
                     BeaconPageHeader(
                         eyebrow = "Beacon / account",
                         title = "Settings",
-                        supportingText = "Manage this app and your secure session.",
+                        supportingText = "Manage alerts, household data, and your account.",
                     )
-                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("ACCOUNT", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                        Text(currentSession.email ?: "Beacon account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-                        Text("This session", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    BeaconSectionHeader("Notifications", "Control private alerts from this phone.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("NOTIFICATIONS", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         Text("Private camera alerts", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
@@ -711,10 +706,11 @@ internal fun MonitorHome(
                         notificationPreferences.forEach { preference ->
                             Text(preference.deviceName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text("Motion alerts")
+                                Text("Motion alerts", modifier = Modifier.weight(1f))
                                 Switch(
                                     checked = preference.motionEnabled,
                                     enabled = !notificationBusy,
+                                    modifier = Modifier.semantics { contentDescription = "Motion alerts for ${preference.deviceName}" },
                                     onCheckedChange = { checked ->
                                         val changed = preference.copy(motionEnabled = checked)
                                         notificationPreferences = notificationPreferences.map { if (it.deviceId == changed.deviceId) changed else it }
@@ -729,10 +725,11 @@ internal fun MonitorHome(
                                 )
                             }
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text("Offline and recovery alerts")
+                                Text("Offline and recovery alerts", modifier = Modifier.weight(1f))
                                 Switch(
                                     checked = preference.offlineEnabled,
                                     enabled = !notificationBusy,
+                                    modifier = Modifier.semantics { contentDescription = "Offline and recovery alerts for ${preference.deviceName}" },
                                     onCheckedChange = { checked ->
                                         val changed = preference.copy(offlineEnabled = checked)
                                         notificationPreferences = notificationPreferences.map { if (it.deviceId == changed.deviceId) changed else it }
@@ -748,6 +745,7 @@ internal fun MonitorHome(
                             }
                         }
                     }
+                    BeaconSectionHeader("This device", "Use this phone as a visible Beacon camera.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("Use this device", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text("Switch this phone into visible Camera mode.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -756,11 +754,7 @@ internal fun MonitorHome(
                             Text("Open Camera mode", modifier = Modifier.padding(start = 7.dp))
                         }
                     }
-                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("Privacy", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        BeaconTrustLine("Cloud recording is off unless you turn it on for a camera. Camera and microphone use always stays visible on the camera device.")
-                    }
-                    Text("Recent camera access", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    BeaconSectionHeader("Security", "Review recent access to your cameras.")
                     if (!accessHistoryLoaded) Text("Loading access history…")
                     if (accessHistoryLoaded && accessEvents.isEmpty()) {
                         Text("No recent camera access.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -790,6 +784,7 @@ internal fun MonitorHome(
                             }
                         }
                     }
+                    BeaconSectionHeader("Data & storage", "Choose how long motion metadata is kept.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("CAMERA & MOTION", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         Text("Motion history", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
@@ -801,14 +796,22 @@ internal fun MonitorHome(
                             Text("Loading retention setting…", modifier = Modifier.padding(top = 12.dp))
                         } else {
                             Text("Keep motion history for", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 14.dp, bottom = 8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                listOf(1, 7, 30, 90).forEach { days ->
-                                    androidx.compose.material3.FilterChip(
-                                        selected = motionRetentionDays == days,
-                                        enabled = !savingMotionRetention,
-                                        onClick = { motionRetentionDays = days },
-                                        label = { Text(if (days == 1) "1 day" else "$days days") },
-                                    )
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                listOf(1, 7, 30, 90).chunked(2).forEach { options ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        options.forEach { days ->
+                                            androidx.compose.material3.FilterChip(
+                                                selected = motionRetentionDays == days,
+                                                enabled = !savingMotionRetention,
+                                                onClick = { motionRetentionDays = days },
+                                                label = { Text(if (days == 1) "1 day" else "$days days") },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        }
+                                    }
                                 }
                             }
                             Button(
@@ -829,6 +832,11 @@ internal fun MonitorHome(
                                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                             ) { Text(if (savingMotionRetention) "Saving…" else "Save changes") }
                         }
+                    }
+                    BeaconSectionHeader("Account", "Manage your signed-in session and data.")
+                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+                        Text("SIGNED IN", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text(currentSession.email ?: "Beacon account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                     }
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("ACCOUNT", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
@@ -864,6 +872,11 @@ internal fun MonitorHome(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text("Sign out") }
+                    BeaconSectionHeader("Privacy", "Understand the capture and storage defaults.")
+                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+                        BeaconTrustLine("Cloud recording is off unless you turn it on for a camera.")
+                        BeaconTrustLine("Camera and microphone use always stays visible on the camera device.")
+                    }
                 }
             }
         }

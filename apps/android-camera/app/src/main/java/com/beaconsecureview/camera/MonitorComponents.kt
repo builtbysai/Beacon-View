@@ -66,33 +66,21 @@ internal fun MonitorDeviceSettings(
         supportingText = "Manage this device and choose which camera is active.",
     )
     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("DEVICE STATUS", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    when {
-                        privacyMode -> "Privacy mode is on"
-                        online -> "Ready to view"
-                        else -> "Camera is offline"
-                    },
-                    modifier = Modifier.padding(top = 7.dp),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    "${sources.size} camera ${if (sources.size == 1) "source" else "sources"} · ${sources.sumOf { it.viewerCount }} watching",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            BeaconStatusPill(
-                if (privacyMode) "PRIVACY" else if (online) "ONLINE" else "OFFLINE",
-                if (privacyMode) Color(0xFFA78BFA) else if (online) BeaconOnline else BeaconOffline,
-            )
-        }
+        Text("DEVICE STATUS", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        Text(
+            when {
+                privacyMode -> "Privacy mode is on"
+                online -> "Ready to view"
+                else -> "Camera is offline"
+            },
+            modifier = Modifier.padding(top = 7.dp),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            "${sources.size} camera ${if (sources.size == 1) "source" else "sources"} · ${sources.sumOf { it.viewerCount }} watching",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Button(
             enabled = online && !privacyMode && !busy,
             onClick = { onView(activeSource) },

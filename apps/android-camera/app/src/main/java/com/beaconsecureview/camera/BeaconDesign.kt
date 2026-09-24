@@ -139,6 +139,25 @@ internal fun BeaconPageHeader(
 }
 
 @Composable
+internal fun BeaconSectionHeader(
+    title: String,
+    supportingText: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth().padding(top = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+        Text(
+            supportingText,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 internal fun BeaconHeroPanel(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
