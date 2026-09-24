@@ -133,7 +133,7 @@ describe('encryptClip', () => {
     const plaintext = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: decode(encrypted.iv) },
       key,
-      await encrypted.blob.arrayBuffer(),
+      new Uint8Array(await encrypted.blob.arrayBuffer()),
     );
     expect(new TextDecoder().decode(plaintext)).toBe('private clip');
   });
