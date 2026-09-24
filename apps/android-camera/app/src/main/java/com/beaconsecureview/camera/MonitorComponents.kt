@@ -20,11 +20,13 @@ import androidx.compose.material.icons.outlined.Cameraswitch
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -263,6 +265,38 @@ internal fun MotionEventRow(event: BeaconApi.MotionEvent) {
             friendlyAccessTime(event.occurredAt),
             modifier = Modifier.padding(top = 10.dp),
             style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+internal fun MotionEventPreviewRow(event: BeaconApi.MotionEvent) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+            Icon(
+                Icons.Outlined.Visibility,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(8.dp).size(18.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Motion detected", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text(
+                "${event.deviceName} · ${event.cameraName}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+        Text(
+            friendlyAccessTime(event.occurredAt),
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
