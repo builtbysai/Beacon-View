@@ -69,10 +69,13 @@ export async function encryptClip(blob: Blob): Promise<EncryptedClip> {
     ['encrypt'],
   );
   const iv = crypto.getRandomValues(new Uint8Array(12));
+  // A typed view is accepted by WebCrypto in browsers and avoids a cross-realm
+  // ArrayBuffer rejection when JSDOM's Blob is paired with Node WebCrypto.
+  const plaintext = new Uint8Array(await blob.arrayBuffer());
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
-    await blob.arrayBuffer(),
+    plaintext,
   );
   return {
     blob: new Blob([ciphertext], { type: 'application/octet-stream' }),
