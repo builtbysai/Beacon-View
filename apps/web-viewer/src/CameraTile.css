@@ -216,3 +216,25 @@
 .camera-tile-open:disabled {
   cursor: default;
 }
+.camera-tile-resume {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 12px 12px;
+  min-height: 38px;
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+  background: var(--bg-canvas-hover);
+  color: var(--text-primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+.camera-tile-resume svg {
+  width: 16px;
+  height: 16px;
+}
+.camera-tile-resume:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 2px;
+}

@@ -49,7 +49,7 @@ export function PairingDialog({
               <p>
                 {reconnecting
                   ? 'On the disconnected Android camera, scan this code to restore its existing settings.'
-                  : 'Scan the QR code with Beacon on Android, or share the one-time setup link.'}
+                  : 'Open this one-time setup link on an Android device or any browser with a camera.'}
               </p>
             </div>
 
@@ -63,7 +63,7 @@ export function PairingDialog({
                     level="M"
                     marginSize={0}
                     size={180}
-                    title="Scan with Beacon on Android"
+                    title="Open on the camera device"
                     value={pairingLink(code)}
                   />
                 </div>

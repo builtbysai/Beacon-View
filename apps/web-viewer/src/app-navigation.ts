@@ -79,6 +79,7 @@ export function deviceSettingsIdFromPath(
 }
 
 export function pageFromPath(pathname = window.location.pathname): Page {
+  if (pathname === '/camera-mode/setup') return 'camera mode';
   if (pathname.startsWith('/devices/') || pathname.startsWith('/cameras/')) {
     return 'cameras';
   }

@@ -47,6 +47,7 @@ export function FavoriteCameraCard({
   onDevice,
   onReconnect,
   onRemoveFavorite,
+  onContinueCamera,
 }: {
   camera: TileCamera;
   needsPairing: boolean;
@@ -55,6 +56,7 @@ export function FavoriteCameraCard({
   onDevice: (deviceId: string) => void;
   onReconnect: (deviceId: string) => void;
   onRemoveFavorite: (deviceId: string) => void;
+  onContinueCamera?: () => void;
 }) {
   const state = cameraStatus(camera);
   const [previewing, setPreviewing] = useState(false);
@@ -83,9 +85,11 @@ export function FavoriteCameraCard({
     ? 'Ready to view'
     : state.label === 'Privacy on'
       ? 'Privacy on'
-      : needsPairing
-        ? 'Needs pairing'
-        : 'Reconnect required';
+      : onContinueCamera
+        ? 'Camera stopped here'
+        : needsPairing
+          ? 'Needs pairing'
+          : 'Reconnect required';
 
   return (
     <article
@@ -157,11 +161,16 @@ export function FavoriteCameraCard({
             className="favorite-card-cta"
             onClick={() => {
               if (state.available) onOpen(camera);
+              else if (onContinueCamera) onContinueCamera();
               else if (canReconnect) onReconnect(camera.deviceId);
               else onDevice(camera.deviceId);
             }}
           >
-            {state.available ? 'Open live' : 'Review'}
+            {state.available
+              ? 'Open live'
+              : onContinueCamera
+                ? 'Resume camera'
+                : 'Review'}
             <Icon name="chevronRight" />
           </button>
         </div>
@@ -207,6 +216,18 @@ export function FavoriteCameraCard({
               >
                 <Icon name="refresh" />
                 Reconnect camera
+              </button>
+            )}
+            {onContinueCamera && (
+              <button
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  close();
+                  onContinueCamera();
+                }}
+              >
+                <Icon name="camera" /> Continue as camera
               </button>
             )}
             <button

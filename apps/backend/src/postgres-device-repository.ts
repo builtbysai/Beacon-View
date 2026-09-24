@@ -487,6 +487,7 @@ export class PostgresDeviceRepository {
               d.household_id AS "householdId",
               cs.public_camera_id AS "publicCameraId",
               d.public_device_id AS "publicDeviceId",
+              d.name, d.platform, d.installation_id AS "installationId",
               d.last_seen_at AS "lastSeenAt",
               d.battery_percent AS "batteryPercent",
               d.battery_charging AS "batteryCharging"

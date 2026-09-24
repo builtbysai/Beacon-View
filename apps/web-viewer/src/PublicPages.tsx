@@ -24,7 +24,8 @@ export function PairLinkPage() {
           <>
             <p className="trust-lead">
               Beacon opens automatically when it is installed. Otherwise, open
-              the Beacon Android app and enter this one-time code.
+              the Beacon Android app and enter this one-time code, or use this
+              browser as the camera.
             </p>
             <p
               className="pair-link-code"
@@ -36,6 +37,12 @@ export function PairLinkPage() {
               Only use this link on a device you own or are authorized to set
               up. It expires in 10 minutes.
             </p>
+            <a
+              className="btn-secondary w-full"
+              href={`/camera-mode/setup?code=${validCode}`}
+            >
+              Use this browser as camera
+            </a>
           </>
         ) : (
           <p className="trust-lead">
