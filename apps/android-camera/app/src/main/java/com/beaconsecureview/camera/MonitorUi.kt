@@ -312,6 +312,7 @@ internal fun MonitorHome(
     LaunchedEffect(session, monitorPage) {
         val active = session ?: return@LaunchedEffect
         when (monitorPage) {
+            MonitorPage.Home,
             MonitorPage.Activity -> {
                 val result = withContext(Dispatchers.IO) { runCatching { api.motionEvents(active.token) } }
                 result.onSuccess {
@@ -533,6 +534,26 @@ internal fun MonitorHome(
                             cameras = orderedCameras.take(2),
                             onView = { selectedCameraId = it.id },
                         )
+                    }
+                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("Latest activity", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            androidx.compose.material3.TextButton(onClick = { monitorPage = MonitorPage.Activity }) {
+                                Text("See all")
+                            }
+                        }
+                        when {
+                            !motionEventsLoaded -> Text("Loading activity…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            motionEvents.isEmpty() -> Text(
+                                "Motion events will appear here after you connect a camera.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            else -> motionEvents.take(3).forEach { event -> MotionEventPreviewRow(event) }
+                        }
                     }
                 }
                 MonitorPage.Cameras -> {
