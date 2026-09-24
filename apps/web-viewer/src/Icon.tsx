@@ -315,8 +315,21 @@ export function Brand({
         fill="none"
         opacity="0.9"
       />
-      <path d="M20 28 17.5 38M24 28 26.5 38M14 38h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="22" cy="20" r="7.5" fill="#0284c7" stroke="#38bdf8" strokeWidth="1.5" />
+      <path
+        d="M20 28 17.5 38M24 28 26.5 38M14 38h16"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle
+        cx="22"
+        cy="20"
+        r="7.5"
+        fill="#0284c7"
+        stroke="#38bdf8"
+        strokeWidth="1.5"
+      />
       <circle cx="22" cy="20" r="4.25" fill="#0b1727" />
       <circle cx="22" cy="20" r="2" fill="#f0f9ff" />
     </svg>
