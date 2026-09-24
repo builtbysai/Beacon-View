@@ -29,9 +29,12 @@ These strengths do not replace production operations or real-world acceptance.
   Mobile navigation, focus movement, and semantic text contrast have regression
   coverage; Chrome was checked at 320 CSS pixels with 44-pixel navigation targets.
 - CI now defines PostgreSQL integration, clean/repeated migration, Android unit/lint/
-  debug/unsigned-release compilation, and fully redacted history secret-scanning jobs.
-  Hosted execution is unverified until an authorized push. Production signing,
-  populated prior-version migration acceptance, SBOMs, and branch protections remain.
+  debug/unsigned-release compilation, fully redacted history secret scanning, and a
+  90-day retained CycloneDX SBOM artifact generated from the frozen pnpm dependency
+  graph without lifecycle scripts. Production signing and populated prior-version
+  migration acceptance remain. GitHub branch protection is unavailable for this private
+  repository on its current plan, confirmed by the GitHub API on September 24; protect
+  `main` before any public release if the hosting plan changes.
 - Generic redacted scans of 20 git commits and the working source found no leaks. The
   household owner confirmed the previously exposed GitHub token was revoked on
   September 6, 2026. Keep it absent from source, logs, shell history, CI variables,
