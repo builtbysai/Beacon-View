@@ -854,7 +854,7 @@ export function LiveVideo({
         {!compact && (quality || othersWatching > 0) && (
           <button
             aria-expanded={statsOpen}
-            aria-label={`Stream info: ${othersWatching} other ${
+            aria-label={`Stream details: ${othersWatching} other ${
               othersWatching === 1 ? 'viewer' : 'viewers'
             }${quality ? `, ${quality.path}` : ''}`}
             className={`video-stats-toggle${
@@ -863,14 +863,12 @@ export function LiveVideo({
             onClick={() => setStatsOpen((open) => !open)}
             type="button"
           >
-            <Icon name="eye" />
-            {othersWatching}
-            {quality && (
-              <>
-                <Icon name="signal" />
-                {quality.path}
-              </>
-            )}
+            <Icon name={othersWatching > 0 ? 'eye' : 'signal'} />
+            <span>
+              {othersWatching > 0
+                ? `${othersWatching} other ${othersWatching === 1 ? 'viewer' : 'viewers'}`
+                : 'Stream details'}
+            </span>
           </button>
         )}
         {!compact && statsOpen && (

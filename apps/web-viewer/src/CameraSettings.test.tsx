@@ -36,7 +36,7 @@ it('shows source metadata without offering controls the viewer cannot use', () =
     canPause: false,
     capabilities: facing === 'rear' ? { zoom: true } : {},
   }));
-  render(
+  const { container } = render(
     <CameraSettings
       cameras={cameras}
       device={device}
@@ -64,4 +64,6 @@ it('shows source metadata without offering controls the viewer cannot use', () =
     screen.queryByRole('button', { name: 'Rename this camera' }),
   ).toBeNull();
   expect(screen.queryByRole('button', { name: /Switch camera/ })).toBeNull();
+  expect(screen.getAllByText('Online')).toHaveLength(1);
+  expect(container.querySelector('.video-frame')).toBeNull();
 });

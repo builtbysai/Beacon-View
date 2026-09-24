@@ -257,11 +257,20 @@
   border-radius: 11px;
 }
 .camera-settings-source-grid .camera-tile-frame {
-  aspect-ratio: 16/7;
-  min-height: 96px;
+  aspect-ratio: 16/6;
+  min-height: 0;
+  max-height: 180px;
 }
 .camera-settings-source-grid .camera-tile-placeholder {
-  font-size: 22px;
+  color: var(--text-muted);
+}
+.camera-settings-source-grid .camera-tile-placeholder svg {
+  width: 32px;
+  height: 32px;
+}
+.camera-settings-source-grid .camera-tile-placeholder[data-tone='live'] {
+  background: var(--bg-surface-hover);
+  color: var(--accent-base);
 }
 .camera-settings-source-grid .camera-tile-footer {
   padding: 9px 11px;
@@ -517,7 +526,7 @@
     grid-column: 1/-1;
   }
   .camera-settings-source-grid .camera-tile-frame {
-    aspect-ratio: 16/8;
+    aspect-ratio: 16/7;
   }
   .camera-settings-sheet-foot span {
     max-width: 65%;
