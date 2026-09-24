@@ -746,7 +746,7 @@ internal fun MonitorHome(
                     }
                     BeaconSectionHeader("This device", "Use this phone as a visible Beacon camera.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("Use this device", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Camera mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text("Switch this phone into visible Camera mode.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Button(onClick = onCameraMode, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
                             Icon(Icons.Outlined.Smartphone, null, modifier = Modifier.size(18.dp))
@@ -785,8 +785,7 @@ internal fun MonitorHome(
                     }
                     BeaconSectionHeader("Data & storage", "Choose how long motion metadata is kept.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("CAMERA & MOTION", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                        Text("Motion history", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        Text("Motion history", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
                             "Beacon stores motion time, camera name, and intensity—not recordings, images, or audio.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -808,6 +807,10 @@ internal fun MonitorHome(
                                                 onClick = { motionRetentionDays = days },
                                                 label = { Text(if (days == 1) "1 day" else "$days days") },
                                                 modifier = Modifier.weight(1f),
+                                                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                ),
                                             )
                                         }
                                     }
@@ -838,8 +841,7 @@ internal fun MonitorHome(
                         Text(currentSession.email ?: "Beacon account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                     }
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("ACCOUNT", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                        Text("Delete account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        Text("Delete account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
                             "Permanently remove your Beacon household and its data.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

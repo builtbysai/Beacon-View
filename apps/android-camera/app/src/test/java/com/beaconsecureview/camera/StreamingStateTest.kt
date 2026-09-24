@@ -377,6 +377,10 @@ class StreamingStateTest {
 
     @Test
     fun accessHistoryPresentsPrivacyDeletionAndRejectionEvents() {
+        assertEquals("VIEWED", accessEventStatus("live_view_started"))
+        assertEquals("PAUSED", accessEventStatus("privacy_enabled"))
+        assertEquals("RESUMED", accessEventStatus("privacy_disabled"))
+        assertEquals("REVOKED", accessEventStatus("device_credential_revoked"))
         assertEquals("Privacy mode enabled", accessEventLabel("privacy_enabled"))
         assertEquals("Camera deleted", accessEventLabel("camera_source_deleted"))
         assertEquals("Access rejected", accessEventLabel("live_view_rejected"))
