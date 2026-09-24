@@ -251,7 +251,7 @@ internal fun WelcomeScreen(
             Text("Sign in to view cameras already on your account.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
             OutlinedButton(onClick = onMonitor, modifier = Modifier.fillMaxWidth()) { Text("Open Monitor") }
         }
-        BeaconTrustLine("Private by design. No cloud recordings.")
+        BeaconTrustLine("Cloud recording is optional and off by default.")
     }
 }
 
