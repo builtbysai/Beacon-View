@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 const shapes = {
   chevronLeft: <path d="m15 18-6-6 6-6" />,
@@ -282,6 +282,7 @@ export function Brand({
   compact = false,
   className = '',
 }: { compact?: boolean; className?: string } = {}) {
+  const glowId = `beacon-glow-${useId().replace(/:/g, '')}`;
   const mark = (
     <svg
       className="brand-mark"
@@ -292,29 +293,45 @@ export function Brand({
       aria-label="Beacon"
       style={{ width: 'auto', height: '100%' }}
     >
+      <defs>
+        <radialGradient id={glowId} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <circle cx="22" cy="20" r="14" fill={`url(#${glowId})`} />
       <path
-        d="M11 11.5C5.5 16.2 5.5 23.8 11 28.5M33 11.5c5.5 4.7 5.5 12.3 0 17"
+        d="M11.39 9.39A15 15 0 0 0 11.39 30.61M32.61 9.39A15 15 0 0 1 32.61 30.61"
         stroke="#38bdf8"
-        strokeWidth="2.6"
+        strokeWidth="2.4"
         strokeLinecap="round"
         fill="none"
       />
       <path
-        d="M15 15.5c-2.8 2.5-2.8 6.5 0 9M29 15.5c2.8 2.5 2.8 6.5 0 9"
+        d="M14.12 13.84A10 10 0 0 0 14.12 26.16M29.88 13.84A10 10 0 0 1 29.88 26.16"
         stroke="#7dd3fc"
-        strokeWidth="2.3"
+        strokeWidth="2"
         strokeLinecap="round"
         fill="none"
+        opacity="0.9"
       />
-      <circle cx="22" cy="20" r="9" fill="#0ea5e9" />
-      <circle cx="22" cy="20" r="5.2" fill="#071b31" />
-      <circle cx="22" cy="20" r="2" fill="#e0f2fe" />
       <path
-        d="M22 29v7M15 38h14"
+        d="M20 28 17.5 38M24 28 26.5 38M14 38h16"
         stroke="currentColor"
-        strokeWidth="2.8"
+        strokeWidth="2"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
+      <circle
+        cx="22"
+        cy="20"
+        r="7.5"
+        fill="#0284c7"
+        stroke="#38bdf8"
+        strokeWidth="1.5"
+      />
+      <circle cx="22" cy="20" r="4.25" fill="#0b1727" />
+      <circle cx="22" cy="20" r="2" fill="#f0f9ff" />
     </svg>
   );
 
