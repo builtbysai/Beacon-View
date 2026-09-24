@@ -33,6 +33,7 @@ class AndroidViewerSession(
     sessionToken: String,
     private val renderer: SurfaceViewRenderer,
     private val onState: (StreamingState) -> Unit,
+    private val onCanListen: (Boolean) -> Unit,
     private val onAuthorizationLost: () -> Unit,
 ) {
     private val main = Handler(Looper.getMainLooper())
@@ -43,8 +44,9 @@ class AndroidViewerSession(
     private var peer: PeerConnection? = null
     private var connectionId: String? = null
     private var remoteTrack: VideoTrack? = null
-    private var remoteAudioTrack: AudioTrack? = null
-    private var listening = false
+    @Volatile private var remoteAudioTrack: AudioTrack? = null
+    @Volatile private var canListen = false
+    @Volatile private var listening = false
     private val pendingIce = mutableListOf<IceCandidate>()
     @Volatile
     private var closed = false
@@ -70,9 +72,10 @@ class AndroidViewerSession(
     }
 
     @Synchronized
-    fun setListening(enabled: Boolean) {
-        listening = enabled
-        remoteAudioTrack?.setEnabled(enabled)
+    fun setListening(enabled: Boolean): Boolean {
+        listening = enabled && canListen
+        remoteAudioTrack?.setEnabled(listening)
+        return listening
     }
 
     fun close() {
@@ -178,6 +181,15 @@ class AndroidViewerSession(
                 when (message.getString("type")) {
                     "ready" -> {
                         connectionId = message.getString("connectionId")
+                        val allowed = message.optBoolean("canListen", false)
+                        synchronized(this@AndroidViewerSession) {
+                            canListen = allowed
+                            if (!allowed) {
+                                listening = false
+                                remoteAudioTrack?.setEnabled(false)
+                            }
+                        }
+                        main.post { if (!closed) onCanListen(allowed) }
                         createPeer(message)
                     }
                     "offer" -> applyOffer(message)
@@ -241,7 +253,7 @@ class AndroidViewerSession(
                 }
                 is AudioTrack -> {
                     remoteAudioTrack = track
-                    track.setEnabled(listening)
+                    track.setEnabled(listening && canListen)
                 }
             }
         }

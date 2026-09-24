@@ -120,6 +120,14 @@ class StreamingStateTest {
     }
 
     @Test
+    fun liveViewerCountExcludesThisSession() {
+        assertEquals(0, otherViewerCount(viewerCount = 0, connected = true))
+        assertEquals(0, otherViewerCount(viewerCount = 1, connected = true))
+        assertEquals(2, otherViewerCount(viewerCount = 3, connected = true))
+        assertEquals(2, otherViewerCount(viewerCount = 2, connected = false))
+    }
+
+    @Test
     fun microphoneDenialKeepsVideoAvailableWithoutAudioCapture() {
         assertEquals(false, shouldCaptureAudio(microphonePermissionGranted = false))
         assertEquals(true, shouldCaptureAudio(microphonePermissionGranted = true))

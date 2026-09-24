@@ -17,10 +17,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Cameraswitch
 import androidx.compose.material.icons.outlined.Fullscreen
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.MicOff
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Button
@@ -73,11 +73,13 @@ internal fun AndroidLiveView(
     }
     var viewerGeneration by remember(camera.id) { mutableStateOf(0) }
     var reconnectAttempt by remember(camera.id) { mutableStateOf(0) }
+    var canListen by remember(camera.id) { mutableStateOf(false) }
     var listening by remember(camera.id) { mutableStateOf(false) }
     var fullscreen by remember(camera.id) { mutableStateOf(false) }
     var viewerSession by remember(camera.id) { mutableStateOf<AndroidViewerSession?>(null) }
     val renderer = remember(camera.id, viewerGeneration) { SurfaceViewRenderer(context) }
     var state by remember(camera.id) { mutableStateOf(StreamingState.Connecting) }
+    val othersWatching = otherViewerCount(camera.viewerCount, state == StreamingState.Connected)
 
     DisposableEffect(lifecycleOwner) {
         val observer =
@@ -101,6 +103,8 @@ internal fun AndroidLiveView(
         viewerGeneration,
         lifecycleStarted,
     ) {
+        canListen = false
+        listening = false
         val viewer =
             if (shouldRunNativeViewer(lifecycleStarted)) {
                 state = StreamingState.Connecting
@@ -111,9 +115,12 @@ internal fun AndroidLiveView(
                     sessionToken = sessionToken,
                     renderer = renderer,
                     onState = { state = it },
+                    onCanListen = { allowed ->
+                        canListen = allowed
+                        if (!allowed) listening = false
+                    },
                     onAuthorizationLost = onAuthorizationLost,
                 ).also {
-                    it.setListening(listening)
                     viewerSession = it
                 }
             } else {
@@ -164,7 +171,7 @@ internal fun AndroidLiveView(
             ) {
                 Text(camera.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${camera.viewerCount} ${if (camera.viewerCount == 1) "viewer" else "viewers"}",
+                    "$othersWatching other ${if (othersWatching == 1) "viewer" else "viewers"}",
                     color = Color.White,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -177,15 +184,16 @@ internal fun AndroidLiveView(
                         .padding(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OutlinedButton(
-                    enabled = state == StreamingState.Connected,
-                    onClick = {
-                        listening = !listening
-                        viewerSession?.setListening(listening)
-                    },
-                ) {
-                    Icon(if (listening) Icons.Outlined.MicOff else Icons.Outlined.Mic, null, modifier = Modifier.size(19.dp))
-                    Text(if (listening) "Mute" else "Listen")
+                if (canListen) {
+                    OutlinedButton(
+                        enabled = state == StreamingState.Connected,
+                        onClick = {
+                            listening = viewerSession?.setListening(!listening) ?: false
+                        },
+                    ) {
+                        Icon(if (listening) Icons.AutoMirrored.Outlined.VolumeUp else Icons.AutoMirrored.Outlined.VolumeOff, null, modifier = Modifier.size(19.dp))
+                        Text(if (listening) "Mute" else "Listen")
+                    }
                 }
                 Button(onClick = { fullscreen = false }) {
                     Icon(Icons.Outlined.Fullscreen, null, modifier = Modifier.size(19.dp))
@@ -260,15 +268,16 @@ internal fun AndroidLiveView(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
-                    IconButton(
-                        enabled = state == StreamingState.Connected,
-                        onClick = {
-                            listening = !listening
-                            viewerSession?.setListening(listening)
-                        },
-                    ) {
-                        Icon(if (listening) Icons.Outlined.MicOff else Icons.Outlined.Mic, if (listening) "Mute" else "Listen", tint = Color.White)
+                if (canListen) {
+                    Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
+                        IconButton(
+                            enabled = state == StreamingState.Connected,
+                            onClick = {
+                                listening = viewerSession?.setListening(!listening) ?: false
+                            },
+                        ) {
+                            Icon(if (listening) Icons.AutoMirrored.Outlined.VolumeUp else Icons.AutoMirrored.Outlined.VolumeOff, if (listening) "Mute" else "Listen", tint = Color.White)
+                        }
                     }
                 }
                 if (onFlip != null) {
@@ -290,7 +299,7 @@ internal fun AndroidLiveView(
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Previous camera", tint = Color.White)
                 }
                 Text(
-                    "${camera.viewerCount} ${if (camera.viewerCount == 1) "viewer" else "viewers"} · ${if (listening) "Listening" else "Audio off"}",
+                    "$othersWatching other ${if (othersWatching == 1) "viewer" else "viewers"} · ${if (listening) "Listening" else "Audio off"}",
                     color = BeaconVideoMuted,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.align(Alignment.CenterVertically),
