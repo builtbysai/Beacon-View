@@ -511,11 +511,11 @@ internal fun MonitorHome(
             val currentSession = session!!
             when (monitorPage) {
                 MonitorPage.Home -> {
-                    BeaconHeroPanel(modifier = Modifier.fillMaxWidth().height(238.dp)) {
+                    BeaconHeroPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("HOME", color = BeaconActionBright, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         Text(homeHeadline(cameras), color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
                         Text(homeSupportingText(cameras), color = BeaconHeroSupporting)
-                        Spacer(Modifier.weight(1f))
+                        Spacer(Modifier.height(16.dp))
                         Button(
                             onClick = { monitorPage = MonitorPage.Cameras },
                             modifier = Modifier.fillMaxWidth(),
@@ -673,8 +673,7 @@ internal fun MonitorHome(
                     )
                     BeaconSectionHeader("Notifications", "Control private alerts from this phone.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("NOTIFICATIONS", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                        Text("Private camera alerts", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        Text("Private camera alerts", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
                             "Motion and availability alerts never include camera names, images, or recordings.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
