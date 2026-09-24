@@ -144,6 +144,9 @@ export class PostgresRecordingRepository {
     byteSize: number;
     checksumSha256: string;
     durationMs: number;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
     householdId: string;
     mimeType: 'video/mp4' | 'video/webm';
     recordingId: string;
@@ -152,6 +155,8 @@ export class PostgresRecordingRepository {
     const result = await this.pool.query<RecordingUploadClaim>(
       `UPDATE recordings SET status='uploading', byte_size=$4,
               duration_ms=$5, checksum_sha256=$6, mime_type=$7,
+              encryption_version=1, encryption_iv=$8,
+              encryption_data_key_ciphertext=$9, encryption_data_key_iv=$10,
               updated_at=now()
        WHERE id=$3 AND household_id=$1 AND created_by_user_id=$2
          AND deleted_at IS NULL AND status IN ('requested', 'failed')
@@ -165,6 +170,9 @@ export class PostgresRecordingRepository {
         input.durationMs,
         input.checksumSha256,
         input.mimeType,
+        input.encryptionIv,
+        input.encryptionDataKeyCiphertext,
+        input.encryptionDataKeyIv,
       ],
     );
     return result.rows[0] ?? null;

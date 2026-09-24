@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ClipRecorder,
+  encryptClip,
   formatClipTimer,
   pickRecorderMimeType,
   recordingContainerType,
@@ -104,6 +105,37 @@ describe('sha256Hex', () => {
     expect(await sha256Hex(new Blob([]))).toBe(
       'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
     );
+  });
+});
+
+describe('encryptClip', () => {
+  it('uses a fresh AES-GCM key and IV to produce an opaque Drive payload', async () => {
+    const source = new Blob(['private clip'], { type: 'video/webm' });
+    const encrypted = await encryptClip(source);
+
+    expect(encrypted.blob.type).toBe('application/octet-stream');
+    expect(await encrypted.blob.text()).not.toBe('private clip');
+    expect(encrypted.iv).toHaveLength(16);
+    expect(encrypted.dataKey).toHaveLength(43);
+
+    const decode = (value: string) =>
+      Uint8Array.from(
+        atob(value.replaceAll('-', '+').replaceAll('_', '/')),
+        (c) => c.charCodeAt(0),
+      );
+    const key = await crypto.subtle.importKey(
+      'raw',
+      decode(encrypted.dataKey),
+      'AES-GCM',
+      false,
+      ['decrypt'],
+    );
+    const plaintext = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: decode(encrypted.iv) },
+      key,
+      await encrypted.blob.arrayBuffer(),
+    );
+    expect(new TextDecoder().decode(plaintext)).toBe('private clip');
   });
 });
 

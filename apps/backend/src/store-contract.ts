@@ -370,6 +370,9 @@ export interface MilestoneStore {
     byteSize: number;
     checksumSha256: string;
     durationMs: number;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
     householdId: string;
     mimeType: 'video/mp4' | 'video/webm';
     recordingId: string;

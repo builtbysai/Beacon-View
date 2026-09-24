@@ -97,15 +97,13 @@ not considered complete.
       commit `314ff37` — see
       [development-handoff.md](development-handoff.md)'s September 16 entry
       for the full breakdown and what's still unverified.
-- [ ] Store only metadata and opaque provider IDs in Beacon (done — media
-      never transits Beacon's server). Media must be encrypted before
-      leaving the camera and must not be persisted by Beacon: the
-      "must not be persisted by Beacon" half holds; **the "encrypted before
-      leaving the camera" half does not yet** — neither the browser nor the
-      Android capture path encrypts a clip before the resumable upload PUT to
-      Drive. This is a real deviation from ADR 0051's stated scope, not an
-      oversight to silently close — flag before calling recording
-      release-ready.
+- [~] Store only metadata and opaque provider IDs in Beacon (media never
+  transits Beacon's server). Web/PWA clips now use a unique AES-GCM
+  envelope before the direct Drive upload; the backend stores ciphertext
+  metadata and an encrypted per-clip key (ADR 0065). The unupdated Android
+  route fails closed with `409`, preventing plaintext export. Authorized
+  ciphertext download/local decryption playback and the Android envelope
+  remain required before recording can be called release-ready.
 - [x] Use a separate Google OAuth grant with the least-privileged
       `drive.file` scope for user-visible recording files, kept separate
       from the existing `drive.appdata` connection.
