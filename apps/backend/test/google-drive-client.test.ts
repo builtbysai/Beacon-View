@@ -75,7 +75,7 @@ describe('Google Drive OAuth client', () => {
       initiateDriveRecordingUpload({
         accessToken: 'private-access-token',
         byteSize: 1_024,
-        mimeType: 'video/webm',
+        mimeType: 'application/octet-stream',
         recordingId: '8aedbca1-6d5a-47b6-8c31-d20da64eb670',
       }),
     ).resolves.toBe(location);
@@ -106,7 +106,7 @@ describe('Google Drive OAuth client', () => {
               recordingId: '8aedbca1-6d5a-47b6-8c31-d20da64eb670',
             },
             id: 'drive-file-id',
-            mimeType: 'video/webm',
+            mimeType: 'application/octet-stream',
             size: '1024',
             trashed: false,
           }),
@@ -118,7 +118,7 @@ describe('Google Drive OAuth client', () => {
       verifyDriveRecordingFile({
         accessToken: 'recording-token',
         byteSize: 1_024,
-        mimeType: 'video/webm',
+        mimeType: 'application/octet-stream',
         providerFileId: 'drive-file-id',
         recordingId: '8aedbca1-6d5a-47b6-8c31-d20da64eb670',
       }),
@@ -136,7 +136,7 @@ describe('Google Drive OAuth client', () => {
               recordingId: 'different-recording',
             },
             id: 'drive-file-id',
-            mimeType: 'video/webm',
+            mimeType: 'application/octet-stream',
             size: '12',
             trashed: false,
           }),
@@ -148,7 +148,7 @@ describe('Google Drive OAuth client', () => {
       verifyDriveRecordingFile({
         accessToken: 'recording-token',
         byteSize: 1_024,
-        mimeType: 'video/webm',
+        mimeType: 'application/octet-stream',
         providerFileId: 'drive-file-id',
         recordingId: '8aedbca1-6d5a-47b6-8c31-d20da64eb670',
       }),

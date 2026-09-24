@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, request } from './api';
 import {
   ClipRecorder,
+  encryptClip,
   MAX_CLIP_DURATION_MS,
   pickRecorderMimeType,
   recordingContainerType,
@@ -64,20 +65,29 @@ export function useClipRecorder(cameraId: string): {
     void (async () => {
       try {
         const { blob, durationMs } = await recorder.stop();
-        const checksumSha256 = await sha256Hex(blob);
+        const encrypted = await encryptClip(blob);
+        const checksumSha256 = await sha256Hex(encrypted.blob);
         const session = await request<{ uploadUrl: string }>(
           `/api/recordings/${recordingId}/upload-session`,
           {
             body: JSON.stringify({
-              byteSize: blob.size,
+              byteSize: encrypted.blob.size,
               checksumSha256,
               durationMs: Math.min(Math.max(durationMs, 1_000), 600_000),
               mimeType: recordingContainerType(recorder.mimeType),
+              encryption: {
+                dataKey: encrypted.dataKey,
+                iv: encrypted.iv,
+                version: 1,
+              },
             }),
             method: 'POST',
           },
         );
-        const providerFileId = await uploadClipToDrive(session.uploadUrl, blob);
+        const providerFileId = await uploadClipToDrive(
+          session.uploadUrl,
+          encrypted.blob,
+        );
         await request(`/api/recordings/${recordingId}/complete`, {
           body: JSON.stringify({ providerFileId }),
           method: 'POST',

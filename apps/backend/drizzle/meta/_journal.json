@@ -190,6 +190,13 @@
       "when": 1790294400000,
       "tag": "0026_multi_user_notification_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790380800000,
+      "tag": "0027_encrypted_recordings",
+      "breakpoints": true
     }
   ]
 }

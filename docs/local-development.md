@@ -41,6 +41,13 @@ role-specific viewer/device STUN and TURN UDP/TCP URLs,
 required. Local example values are not deployment credentials. Do not commit a
 real `.env`.
 
+Encrypted recording uploads additionally require `RECORDING_ENCRYPTION_KEY`: a
+separate 32-byte base64url application key. The browser encrypts each clip with
+a unique AES-GCM key before the direct Drive upload; the backend encrypts that
+per-clip key before storing its metadata. Do not reuse the Drive-token or
+notification keys. The Android camera uploader is deliberately blocked until
+its own encryption implementation is available, so it cannot export plaintext.
+
 ## Migrations
 
 Set `DATABASE_URL` or copy the example file, then use:

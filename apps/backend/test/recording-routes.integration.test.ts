@@ -39,6 +39,12 @@ const { GOOGLE_DRIVE_RECORDING_SCOPE, GOOGLE_DRIVE_SCOPE } = drive;
 
 const databaseUrl = testDatabaseUrl();
 const driveTokenKey = randomBytes(32).toString('base64url');
+const recordingKey = randomBytes(32).toString('base64url');
+const encryption = {
+  dataKey: randomBytes(32).toString('base64url'),
+  iv: randomBytes(12).toString('base64url'),
+  version: 1 as const,
+};
 const store = databaseUrl
   ? new PostgresStore(
       databaseUrl,
@@ -75,6 +81,7 @@ const config: AppConfig | null = databaseUrl
       GOOGLE_OAUTH_REDIRECT_URI:
         'http://127.0.0.1:5173/api/auth/google/callback',
       GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY: driveTokenKey,
+      RECORDING_ENCRYPTION_KEY: recordingKey,
     }
   : null;
 const app = store && config ? buildApp(config, store) : null;
@@ -342,6 +349,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
         checksumSha256: 'a'.repeat(64),
         durationMs: 15_000,
         mimeType: 'video/webm',
+        encryption,
       },
       url: `/api/recordings/${recording.id}/upload-session`,
     });
@@ -352,7 +360,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
       expect.objectContaining({
         accessToken: 'fake-drive-access-token',
         byteSize: 1_048_576,
-        mimeType: 'video/webm',
+        mimeType: 'application/octet-stream',
         recordingId: recording.id,
       }),
     );
@@ -376,7 +384,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
     expect(vi.mocked(drive.verifyDriveRecordingFile)).toHaveBeenCalledWith(
       expect.objectContaining({
         byteSize: 1_048_576,
-        mimeType: 'video/webm',
+        mimeType: 'application/octet-stream',
         providerFileId: 'drive-file-abc',
         recordingId: recording.id,
       }),
@@ -427,6 +435,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
         checksumSha256: 'b'.repeat(64),
         durationMs: 5_000,
         mimeType: 'video/mp4',
+        encryption,
       },
       url: `/api/recordings/${recording.id}/upload-session`,
     });
@@ -455,7 +464,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
     device.close();
   });
 
-  it('lets the camera itself complete a device-initiated recording with only its bearer credential', async () => {
+  it('blocks legacy device upload routes so they cannot export plaintext clips', async () => {
     const owner = await registerAndSignIn(
       'device-driven@example.com',
       '10.2.0.8',
@@ -496,7 +505,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
       },
       url: `/api/device/recordings/${recording.id}/upload-session`,
     });
-    expect(session.statusCode).toBe(201);
+    expect(session.statusCode).toBe(409);
 
     const completed = await app!.inject({
       headers: { Authorization: `Bearer ${camera.credential}` },
@@ -504,7 +513,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
       payload: { providerFileId: 'drive-file-device' },
       url: `/api/device/recordings/${recording.id}/complete`,
     });
-    expect(completed.statusCode).toBe(204);
+    expect(completed.statusCode).toBe(409);
 
     const listed = await app!.inject({
       headers: { cookie: owner.cookie },
@@ -513,7 +522,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
     });
     expect(
       listed.json<{ recordings: { status: string }[] }>().recordings,
-    ).toEqual([expect.objectContaining({ status: 'available' })]);
+    ).toEqual([expect.objectContaining({ status: 'requested' })]);
 
     device.close();
   });

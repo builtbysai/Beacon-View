@@ -11,13 +11,19 @@ import {
   verifyDriveRecordingFile,
 } from './google-drive-client.js';
 import type { RecordingRecord } from './recording-types.js';
-import { hashSecret } from './security.js';
+import { RecordingKeyCipher } from './recording-crypto.js';
 import { unauthorized, type SessionAuth } from './session-auth.js';
 import type { SignalingHub } from './signaling.js';
 import type { MilestoneStore } from './store.js';
 
 const createSchema = z.object({ cameraId: z.string().uuid() }).strict();
 const parametersSchema = z.object({ recordingId: z.string().uuid() });
+const base64urlBytes = (length: number) =>
+  z
+    .string()
+    .regex(/^[A-Za-z0-9_-]+$/u)
+    .refine((value) => Buffer.from(value, 'base64url').length === length);
+
 const uploadSchema = z
   .object({
     byteSize: z
@@ -32,6 +38,13 @@ const uploadSchema = z
       .min(1_000)
       .max(10 * 60 * 1_000),
     mimeType: z.enum(['video/mp4', 'video/webm']),
+    encryption: z
+      .object({
+        dataKey: base64urlBytes(32),
+        iv: base64urlBytes(12),
+        version: z.literal(1),
+      })
+      .strict(),
   })
   .strict();
 const completeSchema = z
@@ -48,6 +61,9 @@ export function registerRecordingRoutes(
   },
 ): void {
   const { auth, config, signaling, store } = dependencies;
+  const recordingKeyCipher = config.RECORDING_ENCRYPTION_KEY
+    ? new RecordingKeyCipher(config.RECORDING_ENCRYPTION_KEY)
+    : null;
   const recordingAccessToken = async (userId: string): Promise<string> => {
     if (!config.GOOGLE_OAUTH_CLIENT_ID)
       throw new Error('Google Drive is unavailable');
@@ -89,6 +105,10 @@ export function registerRecordingRoutes(
     if (!session) return;
     if (session.role !== 'owner')
       return reply.code(403).send({ error: 'Household owner access required' });
+    if (!recordingKeyCipher)
+      return reply
+        .code(503)
+        .send({ error: 'Encrypted recording storage is unavailable' });
     const body = createSchema.safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ error: 'Invalid recording request' });
@@ -196,8 +216,21 @@ export function registerRecordingRoutes(
       const body = uploadSchema.safeParse(request.body);
       if (!parameters.success || !body.success)
         return reply.code(400).send({ error: 'Invalid recording upload' });
+      if (!recordingKeyCipher)
+        return reply
+          .code(503)
+          .send({ error: 'Encrypted recording storage is unavailable' });
+      const wrappedDataKey = recordingKeyCipher.wrap(
+        Buffer.from(body.data.encryption.dataKey, 'base64url'),
+      );
       const claim = await store.beginOwnerRecordingUpload({
-        ...body.data,
+        byteSize: body.data.byteSize,
+        checksumSha256: body.data.checksumSha256,
+        durationMs: body.data.durationMs,
+        mimeType: body.data.mimeType,
+        encryptionDataKeyCiphertext: wrappedDataKey.ciphertext,
+        encryptionDataKeyIv: wrappedDataKey.iv,
+        encryptionIv: Buffer.from(body.data.encryption.iv, 'base64url'),
         householdId: session.householdId,
         recordingId: parameters.data.recordingId,
         userId: session.userId,
@@ -209,7 +242,7 @@ export function registerRecordingRoutes(
         const uploadUrl = await initiateDriveRecordingUpload({
           accessToken,
           byteSize: claim.byteSize,
-          mimeType: claim.mimeType,
+          mimeType: 'application/octet-stream',
           recordingId: claim.recordingId,
         });
         reply.header('Cache-Control', 'no-store');
@@ -255,7 +288,7 @@ export function registerRecordingRoutes(
       await verifyDriveRecordingFile({
         accessToken,
         byteSize: claim.byteSize,
-        mimeType: claim.mimeType,
+        mimeType: 'application/octet-stream',
         providerFileId,
         recordingId: claim.recordingId,
       });
@@ -320,23 +353,11 @@ export function registerRecordingRoutes(
       const token = authorization?.startsWith('Bearer ')
         ? authorization.slice('Bearer '.length)
         : '';
-      const parameters = parametersSchema.safeParse(request.params);
-      const body = completeSchema.safeParse(request.body);
       if (!token) return unauthorized(reply);
-      if (!parameters.success || !body.success)
-        return reply.code(400).send({ error: 'Invalid recording result' });
-      const claim = await store.getRecordingUploadClaimByCredential(
-        hashSecret(token),
-        parameters.data.recordingId,
-      );
-      if (!claim)
-        return reply.code(404).send({ error: 'Recording upload unavailable' });
-      return finalizeRecordingUpload(
-        request,
-        reply,
-        claim,
-        body.data.providerFileId,
-      );
+      return reply.code(409).send({
+        error:
+          'This camera needs an update before it can upload encrypted recordings',
+      });
     },
   );
 
@@ -347,50 +368,11 @@ export function registerRecordingRoutes(
       const token = authorization?.startsWith('Bearer ')
         ? authorization.slice('Bearer '.length)
         : '';
-      const parameters = parametersSchema.safeParse(request.params);
-      const body = uploadSchema.safeParse(request.body);
       if (!token) return unauthorized(reply);
-      if (!parameters.success || !body.success)
-        return reply.code(400).send({ error: 'Invalid recording upload' });
-      if (!config.GOOGLE_OAUTH_CLIENT_ID)
-        return reply.code(503).send({ error: 'Google Drive is unavailable' });
-      const claim = await store.beginRecordingUpload({
-        byteSize: body.data.byteSize,
-        checksumSha256: body.data.checksumSha256,
-        credentialHash: hashSecret(token),
-        durationMs: body.data.durationMs,
-        mimeType: body.data.mimeType,
-        recordingId: parameters.data.recordingId,
+      return reply.code(409).send({
+        error:
+          'This camera needs an update before it can upload encrypted recordings',
       });
-      if (!claim)
-        return reply.code(404).send({ error: 'Recording request unavailable' });
-      try {
-        const accessToken = await recordingAccessToken(claim.userId);
-        const uploadUrl = await initiateDriveRecordingUpload({
-          accessToken,
-          byteSize: claim.byteSize,
-          mimeType: claim.mimeType,
-          recordingId: claim.recordingId,
-        });
-        reply.header('Cache-Control', 'no-store');
-        return reply.code(201).send({
-          expiresInSeconds: 6 * 24 * 60 * 60,
-          recordingId: claim.recordingId,
-          uploadUrl,
-        });
-      } catch (error) {
-        await store.markRecordingUploadFailed(claim.recordingId);
-        app.log.warn(
-          {
-            errorName: error instanceof Error ? error.name : 'UnknownError',
-            recordingId: claim.recordingId,
-          },
-          'recording upload session failed',
-        );
-        return reply
-          .code(503)
-          .send({ error: 'Recording upload is temporarily unavailable' });
-      }
     },
   );
 }

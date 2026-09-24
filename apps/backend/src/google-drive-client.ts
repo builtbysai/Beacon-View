@@ -81,7 +81,7 @@ export async function verifyDriveRecordingAccess(
 export async function initiateDriveRecordingUpload(input: {
   accessToken: string;
   byteSize: number;
-  mimeType: 'video/mp4' | 'video/webm';
+  mimeType: 'application/octet-stream';
   recordingId: string;
 }): Promise<string> {
   const parameters = new URLSearchParams({
@@ -94,7 +94,7 @@ export async function initiateDriveRecordingUpload(input: {
       body: JSON.stringify({
         appProperties: { beacon: 'recording', recordingId: input.recordingId },
         mimeType: input.mimeType,
-        name: `Beacon-recording-${input.recordingId}.${input.mimeType === 'video/mp4' ? 'mp4' : 'webm'}`,
+        name: `Beacon-recording-${input.recordingId}.beacon`,
       }),
       headers: {
         Authorization: `Bearer ${input.accessToken}`,
@@ -125,7 +125,7 @@ export async function initiateDriveRecordingUpload(input: {
 export async function verifyDriveRecordingFile(input: {
   accessToken: string;
   byteSize: number;
-  mimeType: 'video/mp4' | 'video/webm';
+  mimeType: 'application/octet-stream';
   providerFileId: string;
   recordingId: string;
 }): Promise<void> {

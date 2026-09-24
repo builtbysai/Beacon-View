@@ -1,9 +1,8 @@
-// Short-clip capture and direct-to-Drive upload, shared by the live viewer
-// (capturing the received WebRTC stream) and browser camera mode (capturing
-// its own local getUserMedia stream). Beacon never sees the media itself --
-// the browser records locally and PUTs straight to the Google Drive
-// resumable-upload session the backend hands back; only metadata (size,
-// duration, checksum, the resulting Drive file id) ever reaches the server.
+// Short-clip capture and encrypted direct-to-Drive upload, shared by the live
+// viewer (capturing the received WebRTC stream) and browser camera mode
+// (capturing its own local getUserMedia stream). Beacon never sees the media
+// itself: the browser encrypts locally and PUTs ciphertext to the Google Drive
+// resumable-upload session; only ciphertext metadata reaches the server.
 
 /** Well under the backend's 10-minute cap -- a manual clip auto-stops here
  * so a forgotten recording doesn't run indefinitely. */
@@ -45,6 +44,46 @@ export async function sha256Hex(blob: Blob): Promise<string> {
   return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
+}
+
+function base64url(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary)
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replaceAll('=', '');
+}
+
+export interface EncryptedClip {
+  blob: Blob;
+  dataKey: string;
+  iv: string;
+}
+
+/** Encrypts the completed media locally before the direct Drive upload. */
+export async function encryptClip(blob: Blob): Promise<EncryptedClip> {
+  const key = await crypto.subtle.generateKey(
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt'],
+  );
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  // A typed view is accepted by WebCrypto in browsers and avoids a cross-realm
+  // ArrayBuffer rejection when JSDOM's Blob is paired with Node WebCrypto.
+  const plaintext = new Uint8Array(await blob.arrayBuffer());
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    plaintext,
+  );
+  return {
+    blob: new Blob([ciphertext], { type: 'application/octet-stream' }),
+    dataKey: base64url(
+      new Uint8Array(await crypto.subtle.exportKey('raw', key)),
+    ),
+    iv: base64url(iv),
+  };
 }
 
 export class ClipRecorder {

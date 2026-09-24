@@ -58,6 +58,7 @@ export function buildApp(
           'req.body.token',
           'req.body.fid',
           'req.body.subscription',
+          'req.body.encryption.dataKey',
           'res.headers["set-cookie"]',
         ],
         censor: '[REDACTED]',
