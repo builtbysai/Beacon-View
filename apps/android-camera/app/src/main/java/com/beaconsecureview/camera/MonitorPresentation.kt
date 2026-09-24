@@ -67,6 +67,9 @@ internal fun monitorColumnCount(widthDp: Float): Int =
         else -> 1
     }
 
+internal fun otherViewerCount(viewerCount: Int, connected: Boolean): Int =
+    (viewerCount - if (connected) 1 else 0).coerceAtLeast(0)
+
 internal data class MonitorHealth(
     val cameras: Int,
     val online: Int,

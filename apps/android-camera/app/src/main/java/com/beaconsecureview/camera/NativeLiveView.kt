@@ -79,6 +79,7 @@ internal fun AndroidLiveView(
     var viewerSession by remember(camera.id) { mutableStateOf<AndroidViewerSession?>(null) }
     val renderer = remember(camera.id, viewerGeneration) { SurfaceViewRenderer(context) }
     var state by remember(camera.id) { mutableStateOf(StreamingState.Connecting) }
+    val othersWatching = otherViewerCount(camera.viewerCount, state == StreamingState.Connected)
 
     DisposableEffect(lifecycleOwner) {
         val observer =
@@ -170,7 +171,7 @@ internal fun AndroidLiveView(
             ) {
                 Text(camera.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${camera.viewerCount} ${if (camera.viewerCount == 1) "viewer" else "viewers"}",
+                    "$othersWatching other ${if (othersWatching == 1) "viewer" else "viewers"}",
                     color = Color.White,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -298,7 +299,7 @@ internal fun AndroidLiveView(
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Previous camera", tint = Color.White)
                 }
                 Text(
-                    "${camera.viewerCount} ${if (camera.viewerCount == 1) "viewer" else "viewers"} · ${if (listening) "Listening" else "Audio off"}",
+                    "$othersWatching other ${if (othersWatching == 1) "viewer" else "viewers"} · ${if (listening) "Listening" else "Audio off"}",
                     color = BeaconVideoMuted,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.align(Alignment.CenterVertically),
