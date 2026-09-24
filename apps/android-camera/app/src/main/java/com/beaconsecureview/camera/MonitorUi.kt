@@ -867,7 +867,7 @@ internal fun MonitorHome(
                         Text("Deleting your account permanently removes:")
                         Text("• Your Beacon household\n• Paired cameras and settings\n• Motion and camera activity history")
                         Text(
-                            "Live connections stop immediately. Encrypted backup copies expire on their normal schedule.",
+                            "Live connections stop immediately.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
