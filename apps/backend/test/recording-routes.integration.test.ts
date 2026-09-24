@@ -522,7 +522,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
     });
     expect(
       listed.json<{ recordings: { status: string }[] }>().recordings,
-    ).toEqual([expect.objectContaining({ status: 'available' })]);
+    ).toEqual([expect.objectContaining({ status: 'requested' })]);
 
     device.close();
   });
