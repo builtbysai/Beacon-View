@@ -43,8 +43,11 @@ internal fun accessEventLabel(eventType: String): String =
 
 internal fun accessEventStatus(eventType: String): String =
     when (eventType) {
-        "live_view_started", "privacy_disabled" -> "READY"
-        "live_view_rejected", "device_credential_revoked" -> "REVIEW"
+        "live_view_started" -> "VIEWED"
+        "privacy_enabled" -> "PAUSED"
+        "privacy_disabled" -> "RESUMED"
+        "live_view_rejected" -> "REVIEW"
+        "device_credential_revoked" -> "REVOKED"
         "camera_source_deleted", "device_deleted", "device_self_removed" -> "REMOVED"
         else -> "UPDATED"
     }

@@ -292,6 +292,7 @@ internal fun MotionEventPreviewRow(event: BeaconApi.MotionEvent) {
 private fun accessEventColor(eventType: String): Color =
     when (eventType) {
         "live_view_started", "privacy_disabled" -> BeaconOnline
+        "privacy_enabled" -> BeaconPrivacy
         "live_view_rejected", "device_credential_revoked" -> BeaconWarning
         "camera_source_deleted", "device_deleted", "device_self_removed" -> BeaconLive
         else -> BeaconOffline
