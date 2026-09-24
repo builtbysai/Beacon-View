@@ -514,7 +514,7 @@ internal fun MonitorHome(
                     BeaconHeroPanel(modifier = Modifier.fillMaxWidth().height(238.dp)) {
                         Text("HOME", color = BeaconActionBright, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         Text(homeHeadline(cameras), color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-                        Text(homeSupportingText(cameras), color = Color(0xFFB7C6DE))
+                        Text(homeSupportingText(cameras), color = BeaconHeroSupporting)
                         Spacer(Modifier.weight(1f))
                         Button(
                             onClick = { monitorPage = MonitorPage.Cameras },

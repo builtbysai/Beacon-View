@@ -15,8 +15,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Typography
@@ -464,40 +462,8 @@ private fun BeaconTheme(
     content: @Composable () -> Unit,
 ) {
     val useDarkColors = darkCameraSurface || isSystemInDarkTheme()
-    val light =
-        lightColorScheme(
-            primary = Color(0xFF0369A1),
-            onPrimary = Color.White,
-            primaryContainer = Color(0xFFE0F2FE),
-            onPrimaryContainer = Color(0xFF075985),
-            secondary = Color(0xFF475569),
-            background = Color(0xFFF5F7FB),
-            surface = Color.White,
-            surfaceVariant = Color(0xFFF1F5F9),
-            onSurface = Color(0xFF0F172A),
-            onSurfaceVariant = Color(0xFF48566B),
-            outline = Color(0xFFCBD3DD),
-            outlineVariant = Color(0xFFE3E8F0),
-            error = Color(0xFFB91C1C),
-        )
-    val dark =
-        darkColorScheme(
-            primary = Color(0xFF38BDF8),
-            onPrimary = Color(0xFF04101C),
-            primaryContainer = Color(0xFF0C4A6E),
-            onPrimaryContainer = Color(0xFFBAE6FD),
-            secondary = Color(0xFFA7B3C8),
-            background = Color(0xFF090D16),
-            surface = Color(0xFF111A2C),
-            surfaceVariant = Color(0xFF152035),
-            onSurface = Color(0xFFEEF2F8),
-            onSurfaceVariant = Color(0xFFA7B3C8),
-            outline = Color(0xFF2C3D5C),
-            outlineVariant = Color(0xFF21304A),
-            error = Color(0xFFF87171),
-        )
     MaterialTheme(
-        colorScheme = if (useDarkColors) dark else light,
+        colorScheme = if (useDarkColors) BeaconDarkColorScheme else BeaconLightColorScheme,
         typography =
             Typography(
                 headlineLarge = MaterialTheme.typography.headlineLarge.copy(lineHeight = 38.sp),

@@ -213,18 +213,18 @@ internal fun AndroidLiveView(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(shape = RoundedCornerShape(999.dp), color = Color(0xAA09111F)) {
+            Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoOverlay) {
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to cameras", tint = Color.White)
                 }
             }
             BeaconStatusPill(
                 if (state == StreamingState.Connected) "LIVE" else "CONNECTING",
-                if (state == StreamingState.Connected) Color(0xFFF87171) else Color(0xFFB7C6DE),
+                if (state == StreamingState.Connected) BeaconDarkColorScheme.error else BeaconVideoMuted,
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(camera.deviceName, color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(camera.name, color = Color(0xFFB7C6DE), style = MaterialTheme.typography.bodySmall)
+                Text(camera.name, color = BeaconVideoMuted, style = MaterialTheme.typography.bodySmall)
             }
             IconButton(onClick = onFavorite) {
                 Icon(
@@ -246,21 +246,21 @@ internal fun AndroidLiveView(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
-                Text(viewerStatusText(state, reconnectAttempt), color = Color(0xFFB7C6DE))
+                Text(viewerStatusText(state, reconnectAttempt), color = BeaconVideoMuted)
             }
         }
         Column(
             modifier =
                 Modifier.align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(Color(0xD909111F))
+                    .background(BeaconVideoOverlay)
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Surface(shape = RoundedCornerShape(999.dp), color = Color(0xFF111A2C)) {
+                Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
                     IconButton(
                         enabled = state == StreamingState.Connected,
                         onClick = {
@@ -272,14 +272,14 @@ internal fun AndroidLiveView(
                     }
                 }
                 if (onFlip != null) {
-                    Surface(shape = RoundedCornerShape(999.dp), color = Color(0xFF111A2C)) {
+                    Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
                         IconButton(
                             onClick = onFlip,
                             modifier = Modifier.semantics { contentDescription = "Switch to ${flipLabel ?: "other camera"}" },
                         ) { Icon(Icons.Outlined.Cameraswitch, null, tint = Color.White) }
                     }
                 }
-                Surface(shape = RoundedCornerShape(999.dp), color = Color(0xFF111A2C)) {
+                Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
                     IconButton(enabled = state == StreamingState.Connected, onClick = { fullscreen = true }) {
                         Icon(Icons.Outlined.Fullscreen, "Full screen", tint = Color.White)
                     }
@@ -291,7 +291,7 @@ internal fun AndroidLiveView(
                 }
                 Text(
                     "${camera.viewerCount} ${if (camera.viewerCount == 1) "viewer" else "viewers"} · ${if (listening) "Listening" else "Audio off"}",
-                    color = Color(0xFFB7C6DE),
+                    color = BeaconVideoMuted,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.align(Alignment.CenterVertically),
                 )
@@ -300,7 +300,7 @@ internal fun AndroidLiveView(
                 }
             }
             if (reconnectAttempt > 0 && state != StreamingState.Connected) {
-                Text("Reconnect attempt $reconnectAttempt", style = MaterialTheme.typography.bodySmall, color = Color(0xFFB7C6DE))
+                Text("Reconnect attempt $reconnectAttempt", style = MaterialTheme.typography.bodySmall, color = BeaconVideoMuted)
             }
         }
     }
