@@ -17,6 +17,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,16 +29,56 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+// These semantic values mirror the web viewer tokens so the Monitor keeps the
+// same visual language without depending on the web implementation.
+internal val BeaconLightColorScheme =
+    lightColorScheme(
+        primary = Color(0xFF2563EB),
+        onPrimary = Color.White,
+        primaryContainer = Color(0xFFEFF6FF),
+        onPrimaryContainer = Color(0xFF1D4ED8),
+        secondary = Color(0xFF4B5563),
+        background = Color(0xFFF9FAFB),
+        surface = Color.White,
+        surfaceVariant = Color(0xFFF3F4F6),
+        onSurface = Color(0xFF111827),
+        onSurfaceVariant = Color(0xFF4B5563),
+        outline = Color(0xFFD1D5DB),
+        outlineVariant = Color(0xFFE5E7EB),
+        error = Color(0xFFDC2626),
+    )
+
+internal val BeaconDarkColorScheme =
+    darkColorScheme(
+        primary = Color(0xFF3B82F6),
+        onPrimary = Color.White,
+        primaryContainer = Color(0xFF172A4D),
+        onPrimaryContainer = Color(0xFF60A5FA),
+        secondary = Color(0xFFA1A1AA),
+        background = Color(0xFF09090B),
+        surface = Color(0xFF18181B),
+        surfaceVariant = Color(0xFF27272A),
+        onSurface = Color(0xFFF9FAFB),
+        onSurfaceVariant = Color(0xFFA1A1AA),
+        outline = Color(0xFF52525B),
+        outlineVariant = Color(0xFF3F3F46),
+        error = Color(0xFFF87171),
+    )
+
 internal val BeaconLive = Color(0xFFDC2626)
 internal val BeaconOnline = Color(0xFF047857)
 internal val BeaconPrivacy = Color(0xFF7C3AED)
 internal val BeaconWarning = Color(0xFFB45309)
 internal val BeaconOffline = Color(0xFF64748B)
-internal val BeaconHero = Color(0xFF0B1B31)
-internal val BeaconHeroEnd = Color(0xFF102A45)
-internal val BeaconCanvas = Color(0xFF04070D)
-internal val BeaconAction = Color(0xFF0EA5E9)
-internal val BeaconActionBright = Color(0xFF38BDF8)
+internal val BeaconHero = Color(0xFF18181B)
+internal val BeaconHeroEnd = Color(0xFF27272A)
+internal val BeaconCanvas = Color(0xFF09090B)
+internal val BeaconAction = Color(0xFF2563EB)
+internal val BeaconActionBright = Color(0xFF60A5FA)
+internal val BeaconHeroSupporting = Color(0xFFA1A1AA)
+internal val BeaconVideoOverlay = Color(0xE009090B)
+internal val BeaconVideoControl = Color(0xFF27272A)
+internal val BeaconVideoMuted = Color(0xFFA1A1AA)
 
 @Composable
 internal fun BeaconWordmark(
@@ -106,10 +148,10 @@ internal fun BeaconHeroPanel(
             modifier
                 .background(
                     Brush.linearGradient(listOf(BeaconHeroEnd, BeaconHero)),
-                    RoundedCornerShape(24.dp),
+                    RoundedCornerShape(16.dp),
                 )
-                .border(1.dp, Color(0xFF23415F), RoundedCornerShape(24.dp))
-                .padding(24.dp),
+                .border(1.dp, Color(0xFF3F3F46), RoundedCornerShape(16.dp))
+                .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         content()
@@ -123,8 +165,8 @@ internal fun BeaconPanel(
     content: @Composable () -> Unit,
 ) {
     Surface(
-        modifier = modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
+        modifier = modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 1.dp,
     ) {
@@ -159,8 +201,8 @@ internal fun BeaconMetric(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp)),
-        shape = RoundedCornerShape(14.dp),
+        modifier = modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
