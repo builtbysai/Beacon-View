@@ -161,11 +161,6 @@ export function CameraSettings({
             </div>
           )}
         </div>
-        <span
-          className={`camera-settings-status ${healthy ? 'is-online' : 'is-attention'}`}
-        >
-          {connectionLabel}
-        </span>
       </header>
 
       <div className="camera-settings-sheet-body">
@@ -276,6 +271,8 @@ export function CameraSettings({
                   <CameraTile
                     camera={camera}
                     onOpen={onLive}
+                    previewOnHover={false}
+                    conciseStatus
                     {...(needsReconnect && onReconnect
                       ? { onReconnect: () => onReconnect(device) }
                       : {})}

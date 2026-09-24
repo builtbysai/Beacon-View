@@ -537,7 +537,7 @@ describe('LiveVideo', () => {
     // Now connected: the backend's count of 1 is just this session, so
     // "others watching" is 0 -- the badge should stay hidden, not show 1.
     expect(
-      screen.queryByRole('button', { name: /Stream info/ }),
+      screen.queryByRole('button', { name: /Stream details/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -566,8 +566,9 @@ describe('LiveVideo', () => {
       await Promise.resolve();
     });
 
-    const statsToggle = screen.getByRole('button', { name: /Stream info/ });
-    expect(statsToggle).toHaveAccessibleName('Stream info: 1 other viewer');
+    const statsToggle = screen.getByRole('button', { name: /Stream details/ });
+    expect(statsToggle).toHaveAccessibleName('Stream details: 1 other viewer');
+    expect(statsToggle).toHaveTextContent('1 other viewer');
     fireEvent.click(statsToggle);
     expect(screen.getByText('Watching now')).toBeVisible();
     expect(screen.getByText('You')).toBeVisible();

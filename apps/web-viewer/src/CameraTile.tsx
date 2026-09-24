@@ -37,6 +37,8 @@ export function CameraTile({
   onRename,
   onDelete,
   onLeave,
+  previewOnHover = true,
+  conciseStatus = false,
 }: {
   camera: TileCamera;
   highlighted?: boolean;
@@ -47,12 +49,14 @@ export function CameraTile({
   onRename?: (camera: TileCamera, name: string) => void;
   onDelete?: (camera: TileCamera) => void;
   onLeave?: (camera: TileCamera) => void;
+  previewOnHover?: boolean;
+  conciseStatus?: boolean;
 }) {
   const state = cameraStatus(camera);
   const [previewing, setPreviewing] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const hoverTimer = useRef<number | null>(null);
-  const canPreview = state.available && hoverCapable();
+  const canPreview = previewOnHover && state.available && hoverCapable();
   const showRemove = Boolean(onDelete && camera.canRemove);
   const showLeave = Boolean(onLeave && camera.canLeave && !camera.canRemove);
   const hasMenu = Boolean(
@@ -112,7 +116,9 @@ export function CameraTile({
               className="camera-tile-placeholder"
               data-tone={state.tone}
               aria-hidden="true"
-            />
+            >
+              {conciseStatus && <Icon name="camera" />}
+            </span>
           )}
           <span
             className={`camera-tile-status status-badge status-${state.tone}`}
@@ -157,8 +163,8 @@ export function CameraTile({
               </strong>
             )}
             <span className="camera-tile-secondary-status">
-              {camera.platform === 'android' ? 'Android device' : 'Browser'} ·{' '}
-              {secondaryStatus}
+              {camera.platform === 'android' ? 'Android device' : 'Browser'}
+              {!conciseStatus && <> · {secondaryStatus}</>}
             </span>
           </span>
         </div>
