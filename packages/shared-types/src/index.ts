@@ -4,6 +4,12 @@ export interface HealthResponse {
   timestamp: string;
 }
 
+export type {
+  DeviceCapability,
+  DeviceIntegrationDefinition,
+  DeviceTransport,
+} from './device-integration.js';
+
 export type DevicePlatform = 'android' | 'browser';
 export type ProducerConnectionState =
   'offline' | 'reconnecting' | 'online' | 'error';

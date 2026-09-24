@@ -4,6 +4,7 @@ import { ApiError, request } from './api';
 import { BrowserProducer } from './BrowserProducer';
 import { Brand, Icon } from './Icon';
 import { ModalDialog } from './ModalDialog';
+import { PairingCodeScanner } from './PairingCodeScanner';
 import './BrowserCameraModeSetup.css';
 import { browserOsLabel, friendlyDeviceLabel } from './naming';
 import { formatClipTimer } from './recording-capture';
@@ -121,6 +122,7 @@ export function BrowserCameraMode({
       new URLSearchParams(window.location.search).get('code')?.toUpperCase() ??
       '',
   );
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
   const clip = useClipRecorder(activeCameraId ?? '');
   const clipBusy =
@@ -200,6 +202,7 @@ export function BrowserCameraMode({
   }
 
   async function registerAndStart(requestedKey = selectedKey) {
+    setScannerOpen(false);
     if (streamRef.current && clipBusyRef.current) {
       setError('Finish the current recording before switching cameras.');
       return;
@@ -622,6 +625,24 @@ export function BrowserCameraMode({
                   Already paired in this browser? Leave the code blank to
                   resume.
                 </div>
+                {!scannerOpen && (
+                  <button
+                    className="btn secondary local-scan-button"
+                    type="button"
+                    onClick={() => setScannerOpen(true)}
+                  >
+                    Scan pairing QR code
+                  </button>
+                )}
+                {scannerOpen && (
+                  <PairingCodeScanner
+                    onCode={(code) => {
+                      setPairingCode(code);
+                      setScannerOpen(false);
+                    }}
+                    onClose={() => setScannerOpen(false)}
+                  />
+                )}
               </div>
             )}
             <div className="local-field">
