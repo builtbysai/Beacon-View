@@ -542,6 +542,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
         byteSize: 4_096,
         checksumSha256: 'c'.repeat(64),
         durationMs: 6_000,
+        encryption,
         mimeType: 'video/mp4',
       },
       url: `/api/device/recordings/${recording.id}/upload-session`,
