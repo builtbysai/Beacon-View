@@ -60,7 +60,8 @@ credential, household-authorization, and hardware acceptance review.
 
 The recording completion batches add owner-only web/PWA playback (ADR 0068),
 Android's streaming AES-GCM upload envelope (ADR 0069), and bounded recording
-failure recovery (ADR 0070). Beacon relays encrypted bytes from Drive, and the
+failure recovery (ADR 0070). Web/PWA also retains a failed encrypted clip in
+memory for actionable provider-specific retry (ADR 0071). Beacon relays encrypted bytes from Drive, and the
 browser checks and decrypts them locally. Clients now report terminal failures,
 an hourly job releases stale work, and owners can remove failed entries.
 Provider-specific retry guidance and real-account Android-to-browser playback

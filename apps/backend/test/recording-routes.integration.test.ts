@@ -537,6 +537,13 @@ describe.skipIf(!app || !store)('recording routes', () => {
       url: `/api/device/recordings/${recording.id}/fail`,
     });
     expect(failed.statusCode).toBe(204);
+    const repeatedFailure = await app!.inject({
+      headers: { Authorization: `Bearer ${camera.credential}` },
+      method: 'POST',
+      payload: { reason: 'upload_failed' },
+      url: `/api/device/recordings/${recording.id}/fail`,
+    });
+    expect(repeatedFailure.statusCode).toBe(204);
     const afterFailure = await app!.inject({
       headers: { cookie: owner.cookie },
       method: 'GET',

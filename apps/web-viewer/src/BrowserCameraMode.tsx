@@ -344,11 +344,10 @@ export function BrowserCameraMode({
   // Clears a finished clip's status back to the plain record control a few
   // seconds after it lands, matching the live viewer's own record button.
   useEffect(() => {
-    if (clip.state.status !== 'available' && clip.state.status !== 'failed')
-      return;
+    if (clip.state.status !== 'available') return;
     const timer = window.setTimeout(() => clip.reset(), 6_000);
     return () => window.clearTimeout(timer);
-  }, [clip, clip.state.status]);
+  }, [clip.reset, clip.state.status]);
 
   useEffect(() => {
     if (clip.state.error) setError(clip.state.error);
@@ -417,7 +416,7 @@ export function BrowserCameraMode({
                   clip.state.status === 'recording'
                     ? `Recording… ${formatClipTimer(clip.state.elapsedMs)} · tap to stop`
                     : clip.state.status === 'failed'
-                      ? 'Recording failed · try again'
+                      ? 'Retry encrypted upload'
                       : 'Record a short clip'
                 }
                 disabled={
@@ -426,7 +425,14 @@ export function BrowserCameraMode({
                   clip.state.status === 'available'
                 }
                 onClick={
-                  clip.state.status === 'recording' ? clip.stop : startRecording
+                  clip.state.status === 'recording'
+                    ? clip.stop
+                    : clip.state.status === 'failed'
+                      ? () => {
+                          setError('');
+                          clip.retry();
+                        }
+                      : startRecording
                 }
                 type="button"
               >
@@ -441,7 +447,7 @@ export function BrowserCameraMode({
                         : clip.state.status === 'available'
                           ? 'Recording saved'
                           : clip.state.status === 'failed'
-                            ? 'Recording failed, try again'
+                            ? 'Retry encrypted recording upload'
                             : 'Record a short clip'}
                 </span>
               </button>
@@ -502,7 +508,19 @@ export function BrowserCameraMode({
         )}
         {error && (
           <p className="broadcast-warning" role="alert">
-            {error}
+            {error}{' '}
+            {clip.state.status === 'failed' && (
+              <button
+                className="link"
+                onClick={() => {
+                  clip.reset();
+                  setError('');
+                }}
+                type="button"
+              >
+                Discard clip
+              </button>
+            )}
           </p>
         )}
         <p className="visually-hidden" role="status">

@@ -113,9 +113,11 @@ not considered complete.
       `verifyDriveRecordingFile` before trusting the client's completion
       claim). Explicit browser/Android failure reporting, credential-scoped
       device transitions, an hourly stale-request/upload recovery sweep, and
-      owner cleanup for failed entries ship in ADR 0070. Resuming partial
-      uploads, quota/full-disk guidance, and provider-disconnect reconnection
-      are not separately exercised yet. Owner-only
+      owner cleanup for failed entries ship in ADR 0070. Web/PWA now retains
+      failed encrypted clips in memory for explicit retry and distinguishes
+      quota, authorization, expired-session, and temporary Drive failures
+      (ADR 0071). Background retry and real-provider recovery still need
+      acceptance evidence. Owner-only
       playback now verifies Drive metadata and decrypts in the browser; its
       real-account Drive path still needs acceptance evidence.
 

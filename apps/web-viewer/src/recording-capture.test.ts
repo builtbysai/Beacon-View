@@ -166,7 +166,34 @@ describe('uploadClipToDrive', () => {
     );
     await expect(
       uploadClipToDrive('https://example.com/upload', new Blob(['x'])),
-    ).rejects.toThrow('Upload to Google Drive failed');
+    ).rejects.toThrow('Google Drive is temporarily unavailable');
+  });
+
+  it('explains when Drive storage is full', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: { errors: [{ reason: 'storageQuotaExceeded' }] },
+          }),
+          { status: 403 },
+        ),
+      ),
+    );
+    await expect(
+      uploadClipToDrive('https://example.com/upload', new Blob(['x'])),
+    ).rejects.toThrow('Google Drive is out of storage');
+  });
+
+  it('distinguishes an expired Drive upload session', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(null, { status: 410 })),
+    );
+    await expect(
+      uploadClipToDrive('https://example.com/upload', new Blob(['x'])),
+    ).rejects.toThrow('upload session expired');
   });
 
   it('rejects when Drive omits a file id', async () => {
