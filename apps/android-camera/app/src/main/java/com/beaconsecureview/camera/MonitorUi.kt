@@ -117,7 +117,9 @@ import org.webrtc.SurfaceViewRenderer
 internal fun MonitorHome(
     api: BeaconApi,
     sessionStore: AccountSessionStore,
+    cameraPaired: Boolean,
     onCameraMode: () -> Unit,
+    onSetUpThisDevice: (String) -> Unit,
     onAccountDeleted: () -> Unit,
     inboundGoogleAuthCode: String?,
     onInboundGoogleAuthCodeHandled: () -> Unit,
@@ -634,7 +636,10 @@ internal fun MonitorHome(
                             BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                                 Text("No cameras yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("Use Camera mode on a phone, tablet, laptop, or browser to add one.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Button(onClick = onCameraMode, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) { Text("Set up this device") }
+                                Button(
+                                    onClick = { onSetUpThisDevice(currentSession.token) },
+                                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                                ) { Text(if (cameraPaired) "Open Camera mode" else "Set up this device") }
                             }
                         }
                         MonitorCameraGrid(
@@ -748,9 +753,15 @@ internal fun MonitorHome(
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("Camera mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text("Switch this phone into visible Camera mode.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Button(onClick = onCameraMode, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                        Button(
+                            onClick = { onSetUpThisDevice(currentSession.token) },
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                        ) {
                             Icon(Icons.Outlined.Smartphone, null, modifier = Modifier.size(18.dp))
-                            Text("Open Camera mode", modifier = Modifier.padding(start = 7.dp))
+                            Text(
+                                if (cameraPaired) "Open Camera mode" else "Set up this device",
+                                modifier = Modifier.padding(start = 7.dp),
+                            )
                         }
                     }
                     BeaconSectionHeader("Security", "Review recent access to your cameras.")

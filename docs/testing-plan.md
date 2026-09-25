@@ -124,6 +124,24 @@ camera/microphone indicators stop, restart the process, restore connectivity, an
 confirm only an authorized Resume restarts capture. Repeat without microphone and
 notification permission and with a late viewer connection.
 
+September 25, 2026 partial N1 evidence — Pixel 7a `34171JEHN07672`, Android 16,
+production-targeted debug build from `codex/android-signed-in-camera-setup`, open
+`amzn-internet` Wi-Fi after captive-portal validation. Signed-in setup created and
+consumed the existing one-time pairing code and entered visible Camera mode. With
+Wi-Fi disabled, local **Pause** immediately showed `PRIVACY ON`, CameraX disconnected,
+`dumpsys media.camera` reported no active client, and the foreground-service type
+dropped from camera+microphone (`0xC0`) to camera-only (`0x40`). A process stop and
+restart while offline stayed paused with no camera client. Restoring Wi-Fi produced a
+validated network, synchronized the pending privacy state, and did not resume capture.
+An explicit **Resume** reopened CameraX. Six consecutive front/rear switches alternated
+camera IDs without an app exception or stuck state, and backgrounding the Activity kept
+the declared foreground service and camera client active. Pixel camera HAL TNR/flush
+warnings occurred during intentional source teardown; Beacon logged no fatal or
+CameraX exception. Still open: repeat privacy with an active Listen viewer so a real
+microphone source is released, verify remote frame delivery after every switch, late
+viewer rejection, denied microphone/notification permissions, and the remaining N2
+audio/TURN matrix.
+
 Activity regression tests cover server-side camera/time filters, household isolation,
 bounded cursor validation, more than 100 rows, equal timestamps, and PostgreSQL
 microsecond precision. Web tests cover day grouping, source-camera navigation,

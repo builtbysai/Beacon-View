@@ -58,6 +58,13 @@ errors. A shared device-integration type contract begins the IoT design; no IoT
 adapter is enabled. The first adapter still requires a separate protocol, privacy,
 credential, household-authorization, and hardware acceptance review.
 
+September 25 Android parity follow-up: ADR 0072 lets a signed-in Android Monitor
+set up the same phone as a camera by creating and immediately consuming the
+existing short-lived pairing code. Backend authorization, rate limits, auditing,
+installation binding, and credential issuance remain unchanged. Physical N1
+privacy and recovery evidence remains open until the installed build completes
+the device matrix.
+
 The recording completion batches add owner-only web/PWA playback (ADR 0068),
 Android's streaming AES-GCM upload envelope (ADR 0069), and bounded recording
 failure recovery (ADR 0070). Web/PWA also retains a failed encrypted clip in
@@ -119,6 +126,14 @@ credential while retaining the device for repair. Camera/device availability is
 derived from the authenticated producer socket instead of stale heartbeat
 presence. The backend fix and matching Pixel build are live; physical disconnect,
 reconnect, and repeated camera-flip acceptance remain open.
+
+September 25 partial N1 evidence: the connected Pixel completed signed-in camera
+setup, offline local privacy, offline process restart, validated-network recovery,
+explicit resume, six front/rear switches, and foreground-service background survival.
+CameraX released during privacy and did not restart before Resume. The active-Listen
+microphone release, remote frame verification after every switch, denied-permission,
+late-viewer, and N2 audio/TURN cases remain open; details are in
+[testing-plan.md](testing-plan.md).
 
 | ID / priority | Action and owner                                                                     | Acceptance evidence / decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
