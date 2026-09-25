@@ -15,6 +15,7 @@ import {
 import type { RecordingRecord } from './recording-types.js';
 import { RecordingKeyCipher } from './recording-crypto.js';
 import type { RateLimiter } from './rate-limit.js';
+import { hashSecret } from './security.js';
 import { unauthorized, type SessionAuth } from './session-auth.js';
 import type { SignalingHub } from './signaling.js';
 import type { MilestoneStore } from './store.js';
@@ -427,10 +428,22 @@ export function registerRecordingRoutes(
         ? authorization.slice('Bearer '.length)
         : '';
       if (!token) return unauthorized(reply);
-      return reply.code(409).send({
-        error:
-          'This camera needs an update before it can upload encrypted recordings',
-      });
+      const parameters = parametersSchema.safeParse(request.params);
+      const body = completeSchema.safeParse(request.body);
+      if (!parameters.success || !body.success)
+        return reply.code(400).send({ error: 'Invalid recording result' });
+      const claim = await store.getRecordingUploadClaimByCredential(
+        hashSecret(token),
+        parameters.data.recordingId,
+      );
+      if (!claim)
+        return reply.code(404).send({ error: 'Recording upload unavailable' });
+      return finalizeRecordingUpload(
+        request,
+        reply,
+        claim,
+        body.data.providerFileId,
+      );
     },
   );
 
@@ -442,10 +455,57 @@ export function registerRecordingRoutes(
         ? authorization.slice('Bearer '.length)
         : '';
       if (!token) return unauthorized(reply);
-      return reply.code(409).send({
-        error:
-          'This camera needs an update before it can upload encrypted recordings',
+      const parameters = parametersSchema.safeParse(request.params);
+      const body = uploadSchema.safeParse(request.body);
+      if (!parameters.success || !body.success)
+        return reply.code(400).send({ error: 'Invalid recording upload' });
+      if (!recordingKeyCipher)
+        return reply
+          .code(503)
+          .send({ error: 'Encrypted recording storage is unavailable' });
+      const wrappedDataKey = recordingKeyCipher.wrap(
+        Buffer.from(body.data.encryption.dataKey, 'base64url'),
+      );
+      const claim = await store.beginRecordingUpload({
+        byteSize: body.data.byteSize,
+        checksumSha256: body.data.checksumSha256,
+        credentialHash: hashSecret(token),
+        durationMs: body.data.durationMs,
+        encryptionDataKeyCiphertext: wrappedDataKey.ciphertext,
+        encryptionDataKeyIv: wrappedDataKey.iv,
+        encryptionIv: Buffer.from(body.data.encryption.iv, 'base64url'),
+        mimeType: body.data.mimeType,
+        recordingId: parameters.data.recordingId,
       });
+      if (!claim)
+        return reply.code(404).send({ error: 'Recording upload unavailable' });
+      try {
+        const accessToken = await recordingAccessToken(claim.userId);
+        const uploadUrl = await initiateDriveRecordingUpload({
+          accessToken,
+          byteSize: claim.byteSize,
+          mimeType: 'application/octet-stream',
+          recordingId: claim.recordingId,
+        });
+        reply.header('Cache-Control', 'no-store');
+        return reply.code(201).send({
+          expiresInSeconds: 6 * 24 * 60 * 60,
+          recordingId: claim.recordingId,
+          uploadUrl,
+        });
+      } catch (error) {
+        await store.markRecordingUploadFailed(claim.recordingId);
+        app.log.warn(
+          {
+            errorName: error instanceof Error ? error.name : 'UnknownError',
+            recordingId: claim.recordingId,
+          },
+          'device recording upload session failed',
+        );
+        return reply
+          .code(503)
+          .send({ error: 'Recording upload is temporarily unavailable' });
+      }
     },
   );
 }

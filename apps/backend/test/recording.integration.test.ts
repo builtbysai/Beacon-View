@@ -152,6 +152,9 @@ describe.skipIf(!store)('recording persistence', () => {
       checksumSha256: 'b'.repeat(64),
       credentialHash: hashSecret('device-recording-credential'),
       durationMs: 8_000,
+      encryptionDataKeyCiphertext: Buffer.alloc(48),
+      encryptionDataKeyIv: Buffer.alloc(12),
+      encryptionIv: Buffer.alloc(12),
       mimeType: 'video/mp4',
       recordingId: requested!.id,
     });
@@ -201,6 +204,9 @@ describe.skipIf(!store)('recording persistence', () => {
       checksumSha256: 'c'.repeat(64),
       credentialHash: hashSecret('device-recording-credential'),
       durationMs: 3_000,
+      encryptionDataKeyCiphertext: Buffer.alloc(48),
+      encryptionDataKeyIv: Buffer.alloc(12),
+      encryptionIv: Buffer.alloc(12),
       mimeType: 'video/mp4',
       recordingId: second!.id,
     });

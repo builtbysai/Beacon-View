@@ -372,6 +372,9 @@ export interface MilestoneStore {
     checksumSha256: string;
     credentialHash: string;
     durationMs: number;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
     mimeType: 'video/mp4' | 'video/webm';
     recordingId: string;
   }): Promise<RecordingUploadClaim | null>;

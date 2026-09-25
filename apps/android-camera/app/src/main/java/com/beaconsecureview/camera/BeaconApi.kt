@@ -548,6 +548,8 @@ class BeaconApi(private val baseUrl: String) {
         checksumSha256: String,
         durationMs: Long,
         mimeType: String,
+        dataKey: String,
+        encryptionIv: String,
     ): String {
         val connection = connection("/api/device/recordings/$recordingId/upload-session", "POST")
         connection.setRequestProperty("Authorization", "Bearer $credential")
@@ -558,6 +560,13 @@ class BeaconApi(private val baseUrl: String) {
                     .put("checksumSha256", checksumSha256)
                     .put("durationMs", durationMs)
                     .put("mimeType", mimeType)
+                    .put(
+                        "encryption",
+                        JSONObject()
+                            .put("dataKey", dataKey)
+                            .put("iv", encryptionIv)
+                            .put("version", 1),
+                    )
                     .toString()
                     .toByteArray(Charsets.UTF_8),
             )
