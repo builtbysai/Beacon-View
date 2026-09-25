@@ -328,6 +328,10 @@ export function registerRecordingRoutes(
           accessToken,
           byteSize: claim.byteSize,
           mimeType: 'application/octet-stream',
+          // The owner uploads from the web app. Bind Google's resumable
+          // session to that browser origin so its subsequent PUT receives
+          // the provider CORS headers. Device uploads are native and omit it.
+          origin: config.WEB_ORIGIN,
           recordingId: claim.recordingId,
         });
         reply.header('Cache-Control', 'no-store');

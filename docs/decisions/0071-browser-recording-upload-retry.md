@@ -13,6 +13,20 @@ The browser retains the encrypted clip, its one-time encryption envelope, and up
 
 Drive responses are classified into quota, authorization, expired-session, temporary, and unknown failures with actionable messages. No plaintext clip, Drive token, or pending recording is written to browser storage.
 
+## Production follow-up — September 25, 2026
+
+Two physical Chrome recordings produced valid encrypted WebM payloads (460,095
+and 488,949 bytes), and Beacon created both resumable Drive sessions, but neither
+browser upload reached completion. The sessions were initiated by the backend
+without an `Origin` header and then used by a cross-origin browser `PUT`.
+
+Owner upload sessions now include the configured Beacon web origin when they are
+created. This lets the provider bind the resumable session to the browser origin
+and return the required CORS response headers. Native Android sessions omit the
+header because native HTTP clients are not subject to browser CORS. Access tokens
+remain server-side, and the upload session URL remains the only capability sent
+to the browser.
+
 ## Consequences
 
 Transient failures no longer require a second recording, and an owner can free Drive space or reconnect access before retrying the same encrypted bytes. Refreshing or closing the page discards the in-memory clip, after which Beacon's failure transition or stale recovery releases the server record. Background persistence and cross-device retries remain out of scope because they would require a separately reviewed encrypted local-storage lifecycle.

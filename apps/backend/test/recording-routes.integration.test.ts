@@ -370,6 +370,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
         accessToken: 'fake-drive-access-token',
         byteSize: 1_048_576,
         mimeType: 'application/octet-stream',
+        origin: 'http://127.0.0.1:5173',
         recordingId: recording.id,
       }),
     );

@@ -74,6 +74,13 @@ an hourly job releases stale work, and owners can remove failed entries.
 Provider-specific retry guidance and real-account Android-to-browser playback
 remain open acceptance work.
 
+September 25 production recording follow-up: Chrome successfully captured and
+encrypted two clips and Beacon opened both Drive resumable sessions, but the
+cross-origin browser uploads failed before completion. Owner-created sessions
+now bind to Beacon's configured web origin so the provider can authorize the
+browser PUT; Android's native upload contract is unchanged. Physical upload,
+playback, retry, and deletion verification remain open after deployment.
+
 Notification Transport v1 is implemented through its Chrome Web Push baseline; native
 FCM and the remaining physical acceptance matrix remain external evidence gates. On
 September 12 the owner explicitly approved a bounded interface-reliability follow-up:

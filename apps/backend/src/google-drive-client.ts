@@ -83,6 +83,7 @@ export async function initiateDriveRecordingUpload(input: {
   accessToken: string;
   byteSize: number;
   mimeType: 'application/octet-stream';
+  origin?: string;
   recordingId: string;
 }): Promise<string> {
   const parameters = new URLSearchParams({
@@ -102,6 +103,7 @@ export async function initiateDriveRecordingUpload(input: {
         'Content-Type': 'application/json; charset=UTF-8',
         'X-Upload-Content-Length': String(input.byteSize),
         'X-Upload-Content-Type': input.mimeType,
+        ...(input.origin ? { Origin: input.origin } : {}),
       },
       method: 'POST',
       signal: AbortSignal.timeout(GOOGLE_REQUEST_TIMEOUT_MS),
