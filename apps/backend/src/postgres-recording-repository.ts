@@ -292,10 +292,10 @@ export class PostgresRecordingRepository {
 
   async recoverStale(now: Date): Promise<number> {
     const result = await this.pool.query(
-      `UPDATE recordings SET status='failed', updated_at=$1
+      `UPDATE recordings SET status='failed', updated_at=$1::timestamptz
        WHERE deleted_at IS NULL AND (
-         (status IN ('requested', 'recording') AND updated_at < $1 - interval '15 minutes')
-         OR (status='uploading' AND updated_at < $1 - interval '2 hours')
+         (status IN ('requested', 'recording') AND updated_at < $1::timestamptz - interval '15 minutes')
+         OR (status='uploading' AND updated_at < $1::timestamptz - interval '2 hours')
        )`,
       [now],
     );
