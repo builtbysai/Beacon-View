@@ -228,6 +228,40 @@ private fun BeaconCameraApp(
             }
         }
     }
+    fun pairSignedInCamera(sessionToken: String) {
+        if (busy) return
+        busy = true
+        pairingState = PairingLifecycle.Waiting
+        cameraSetupStarted = true
+        navigationPreferences.edit().putBoolean("camera_setup_started", true).apply()
+        message = "Preparing secure camera setup…"
+        selectMonitor(false)
+        scope.launch {
+            val result =
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        val code = api.createPairingCode(sessionToken)
+                        api.register(installationId, "Android Camera", code)
+                    }
+                }
+            result.onSuccess {
+                credentialStore.save(it)
+                pairingState = PairingLifecycle.Accepted
+                pairingCode = ""
+                message = ""
+                busy = false
+            }.onFailure {
+                pairingState = PairingLifecycle.Pending
+                message = it.userFacingMessage("Beacon could not set up this camera. Try again.")
+                busy = false
+            }
+            result.getOrNull()?.let {
+                delay(900)
+                credential = it
+                pairingState = PairingLifecycle.Completed
+            }
+        }
+    }
     val permissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             cameraPermission = it
@@ -295,7 +329,11 @@ private fun BeaconCameraApp(
                 MonitorHome(
                     api = api,
                     sessionStore = accountSessionStore,
+                    cameraPaired = credential != null,
                     onCameraMode = { selectMonitor(false) },
+                    onSetUpThisDevice = {
+                        if (credential == null) pairSignedInCamera(it) else selectMonitor(false)
+                    },
                     onAccountDeleted = {
                         CameraForegroundService.stop(context)
                         credentialStore.clear()

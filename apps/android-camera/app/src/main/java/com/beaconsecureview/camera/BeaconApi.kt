@@ -88,6 +88,24 @@ class BeaconApi(private val baseUrl: String) {
         return JSONObject(body).getString("credential")
     }
 
+    fun createPairingCode(sessionToken: String): String {
+        val connection = connection("/api/pairing-codes", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_CREATED) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(
+                serverMessage?.takeIf(String::isNotBlank)
+                    ?: "Beacon could not prepare camera setup",
+            )
+        }
+        return JSONObject(body).getString("code")
+    }
+
     fun login(email: String, password: String): AccountSession {
         val connection = connection("/api/mobile/auth/login", "POST")
         connection.outputStream.use {
