@@ -152,7 +152,15 @@ permission still denied, Beacon failed closed: no camera service and no camera
 client started. Restoring both permissions and relaunching recovered the declared
 camera+microphone foreground service and CameraX without clearing the account,
 pairing, or settings; no Android runtime fatal was logged. The in-app denied-state
-tap-through and privacy action still require an unlocked device.
+tap-through still requires an unlocked denied-permission state.
+
+September 25, 2026 unlocked privacy-control follow-up — from active Camera mode,
+tapping **Pause** immediately rendered `PRIVACY ON` and **Resume**, disconnected the
+Pixel camera client, and reduced the foreground-service type from camera+microphone
+(`0xC0`) to camera-only (`0x40`). Tapping **Resume** restored the preview, Online
+state, active camera client, and `0xC0` service type. No fatal Android or CameraX
+exception was logged. This closes the local privacy tap-through; microphone release
+with an active remote Listen session remains open.
 
 September 25, 2026 recording diagnosis — Chrome manually recorded two Android
 camera clips. PostgreSQL retained valid encrypted upload metadata for both:
