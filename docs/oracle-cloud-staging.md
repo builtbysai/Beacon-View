@@ -110,7 +110,8 @@ separate owner-readable configuration and systemd timers are installed.
 
 5. Verify a restore before relying on the schedule. Create a separate empty database,
    never the live database, then run the helper with its explicit confirmation marker.
-   Review the restored row counts and application migration table. Keep the command
+   The helper refuses a non-empty target and reports migration and public-table counts.
+   Review aggregate application row counts separately. Keep the command
    and any restore output out of shared shell history.
 
    ```bash
