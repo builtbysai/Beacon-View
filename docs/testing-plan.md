@@ -154,6 +154,15 @@ camera+microphone foreground service and CameraX without clearing the account,
 pairing, or settings; no Android runtime fatal was logged. The in-app denied-state
 tap-through and privacy action still require an unlocked device.
 
+September 25, 2026 recording diagnosis — Chrome manually recorded two Android
+camera clips. PostgreSQL retained valid encrypted upload metadata for both:
+460,095 bytes / 2,740 ms and 488,949 bytes / 2,808 ms. Recording creation returned
+202 and each Drive session returned 201, followed by the browser's explicit
+upload-failure transition without a completion request. This proves capture and
+local encryption completed and isolates the failure to the cross-origin Drive
+PUT. The owner session initiation now sends Beacon's configured web origin;
+repeat upload, playback, retry, removal, and Drive-file verification after deploy.
+
 Activity regression tests cover server-side camera/time filters, household isolation,
 bounded cursor validation, more than 100 rows, equal timestamps, and PostgreSQL
 microsecond precision. Web tests cover day grouping, source-camera navigation,
