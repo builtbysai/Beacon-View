@@ -330,6 +330,40 @@ internal fun PairingSuccess() {
     }
 }
 
+internal enum class CameraPermissionPrompt(
+    val title: String,
+    val description: String,
+    val action: String,
+) {
+    Camera(
+        title = "Camera access needed",
+        description = "Allow camera access to show the local preview and share live video.",
+        action = "Allow camera",
+    ),
+    Notification(
+        title = "Status notification needed",
+        description = "Allow Beacon's ongoing status notification before Camera mode starts.",
+        action = "Allow status notification",
+    ),
+    Microphone(
+        title = "Microphone is off",
+        description = "Video remains available. Allow microphone access for Listen and recordings with sound.",
+        action = "Allow microphone",
+    ),
+}
+
+internal fun cameraPermissionPrompt(
+    cameraAllowed: Boolean,
+    notificationsAllowed: Boolean,
+    microphoneAllowed: Boolean,
+): CameraPermissionPrompt? =
+    when {
+        !cameraAllowed -> CameraPermissionPrompt.Camera
+        !notificationsAllowed -> CameraPermissionPrompt.Notification
+        !microphoneAllowed -> CameraPermissionPrompt.Microphone
+        else -> null
+    }
+
 @Composable
 internal fun CameraHome(
     runtime: CameraRuntimeState,
@@ -349,6 +383,12 @@ internal fun CameraHome(
 ) {
     var settingsOpen by remember { mutableStateOf(false) }
     var disconnectConfirmationOpen by remember { mutableStateOf(false) }
+    val permissionPrompt =
+        cameraPermissionPrompt(
+            cameraAllowed = cameraPermission,
+            notificationsAllowed = notificationPermission,
+            microphoneAllowed = microphonePermission,
+        )
     val selectedSource = runtime.cameras.find { it.id == runtime.selectedCameraId }
     val selectedIndex = runtime.cameras.indexOfFirst { it.id == runtime.selectedCameraId }
     val switchTarget =
@@ -385,7 +425,16 @@ internal fun CameraHome(
                     tint = Color(0xFF7FA3C9),
                     modifier = Modifier.size(38.dp),
                 )
-                Text(if (runtime.privacyMode) "Paused" else "Starting camera…", color = Color.White, fontWeight = FontWeight.Bold)
+                Text(
+                    when {
+                        runtime.privacyMode -> "Paused"
+                        permissionPrompt == CameraPermissionPrompt.Camera -> "Camera permission needed"
+                        permissionPrompt == CameraPermissionPrompt.Notification -> "Status notification needed"
+                        else -> "Starting camera…"
+                    },
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
 
@@ -452,13 +501,32 @@ internal fun CameraHome(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            if (!cameraPermission || !notificationPermission || !microphonePermission) {
+            if (permissionPrompt != null) {
                 Surface(shape = RoundedCornerShape(16.dp), color = Color(0xEFFFFFFF)) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        when {
-                            !cameraPermission -> Button(onClick = onAllowCamera, modifier = Modifier.fillMaxWidth()) { Text("Allow camera") }
-                            !notificationPermission -> Button(onClick = onAllowNotifications, modifier = Modifier.fillMaxWidth()) { Text("Allow status notification") }
-                            !microphonePermission -> Button(onClick = onAllowMicrophone, modifier = Modifier.fillMaxWidth()) { Text("Allow microphone") }
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            permissionPrompt.title,
+                            color = Color(0xFF0F172A),
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            permissionPrompt.description,
+                            color = Color(0xFF64748B),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Button(
+                            onClick =
+                                when (permissionPrompt) {
+                                    CameraPermissionPrompt.Camera -> onAllowCamera
+                                    CameraPermissionPrompt.Notification -> onAllowNotifications
+                                    CameraPermissionPrompt.Microphone -> onAllowMicrophone
+                                },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(permissionPrompt.action)
                         }
                     }
                 }
