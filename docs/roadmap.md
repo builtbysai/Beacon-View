@@ -135,6 +135,13 @@ microphone release, remote frame verification after every switch, denied-permiss
 late-viewer, and N2 audio/TURN cases remain open; details are in
 [testing-plan.md](testing-plan.md).
 
+The same Pixel also passed the OS-level denied-permission recovery checks: removing
+microphone access recreated Camera mode without audio, notification denial did not
+interrupt an already-active camera, and a cold restart without notification access
+failed closed with no capture. Restoring both permissions recovered capture without
+clearing device state. Interactive denied-state and privacy tap-through remain open
+until the device is unlocked.
+
 | ID / priority | Action and owner                                                                     | Acceptance evidence / decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | N1 / P0       | Physical privacy and recovery — Engineering + Device tester                          | Pixel `34171JEHN07672`: local Privacy while offline releases video/audio immediately; restart stays paused; reconnect reconciles safely. Switch front/rear repeatedly; lose/restore Wi-Fi; no stuck camera or rapid retry loop. Record build/device/network and observed capture indicators in [testing-plan.md](testing-plan.md). Still open.                                                                                                                                                                                                                                                              |

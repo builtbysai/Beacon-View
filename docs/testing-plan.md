@@ -142,6 +142,18 @@ microphone source is released, verify remote frame delivery after every switch, 
 viewer rejection, denied microphone/notification permissions, and the remaining N2
 audio/TURN matrix.
 
+September 25, 2026 permission-recovery follow-up — while Camera mode was active,
+revoking microphone permission caused Android to recreate Beacon in video-only mode.
+The foreground-service type changed from camera+microphone (`0xC0`) to camera-only
+(`0x40`), CameraX remained active, and `appops` reported no active microphone use.
+Revoking notification permission during active capture did not interrupt the
+foreground service or camera. After a forced cold restart with notification
+permission still denied, Beacon failed closed: no camera service and no camera
+client started. Restoring both permissions and relaunching recovered the declared
+camera+microphone foreground service and CameraX without clearing the account,
+pairing, or settings; no Android runtime fatal was logged. The in-app denied-state
+tap-through and privacy action still require an unlocked device.
+
 Activity regression tests cover server-side camera/time filters, household isolation,
 bounded cursor validation, more than 100 rows, equal timestamps, and PostgreSQL
 microsecond precision. Web tests cover day grouping, source-camera navigation,
