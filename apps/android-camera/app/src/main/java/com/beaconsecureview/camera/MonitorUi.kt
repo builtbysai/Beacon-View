@@ -230,7 +230,7 @@ internal fun MonitorHome(
                 session = it
                 message = ""
             }.onFailure {
-                message = it.message ?: "Google sign-in could not be completed."
+                message = it.userFacingMessage("Google sign-in could not be completed.")
             }
             busy = false
         }
@@ -273,7 +273,7 @@ internal fun MonitorHome(
                     selectedCameraId = null
                     message = "Your session expired. Sign in again."
                 } else {
-                    message = it.message ?: "Cameras are temporarily unavailable"
+                    message = it.userFacingMessage("Cameras are temporarily unavailable")
                 }
             }
             if (showLoading) busy = false
@@ -319,7 +319,7 @@ internal fun MonitorHome(
                     motionEvents = it
                     motionEventsLoaded = true
                 }.onFailure {
-                    message = it.message ?: "Activity is temporarily unavailable"
+                    message = it.userFacingMessage("Activity is temporarily unavailable")
                     motionEventsLoaded = true
                 }
             }
@@ -336,17 +336,17 @@ internal fun MonitorHome(
                     accessEvents = it
                     accessHistoryLoaded = true
                 }.onFailure {
-                    message = it.message ?: "Access history is temporarily unavailable"
+                    message = it.userFacingMessage("Access history is temporarily unavailable")
                     accessHistoryLoaded = true
                 }
                 retentionResult.onSuccess {
                     motionRetentionDays = it
                     savedMotionRetentionDays = it
                 }.onFailure {
-                    message = it.message ?: "Motion history settings are temporarily unavailable"
+                    message = it.userFacingMessage("Motion history settings are temporarily unavailable")
                 }
                 notificationResult.onSuccess { notificationPreferences = it }
-                    .onFailure { message = it.message ?: "Notification preferences are temporarily unavailable" }
+                    .onFailure { message = it.userFacingMessage("Notification preferences are temporarily unavailable") }
             }
             else -> Unit
         }
@@ -387,7 +387,7 @@ internal fun MonitorHome(
                                 delay(650)
                                 refresh(activeSession.token, showLoading = false)
                             }.onFailure {
-                                message = it.message ?: "Could not switch camera"
+                                message = it.userFacingMessage("Could not switch camera")
                             }
                         }
                     }
@@ -489,7 +489,7 @@ internal fun MonitorHome(
                                 password = ""
                                 session = it
                                 message = ""
-                            }.onFailure { message = it.message ?: "Sign in failed" }
+                            }.onFailure { message = it.userFacingMessage("Sign in failed") }
                             busy = false
                         }
                     },
@@ -578,7 +578,7 @@ internal fun MonitorHome(
                                         refresh(currentSession.token, showLoading = false)
                                         message = "${target.name} is now active."
                                     }.onFailure {
-                                        message = it.message ?: "Could not switch camera"
+                                        message = it.userFacingMessage("Could not switch camera")
                                     }
                                     deviceControlBusy = false
                                 }
@@ -600,7 +600,7 @@ internal fun MonitorHome(
                                             if (enabled) "Privacy mode enabled. Capture stopped."
                                             else "Privacy mode disabled. Camera available again."
                                     }.onFailure {
-                                        message = it.message ?: "Could not change privacy mode"
+                                        message = it.userFacingMessage("Could not change privacy mode")
                                     }
                                     deviceControlBusy = false
                                 }
@@ -717,7 +717,7 @@ internal fun MonitorHome(
                                         scope.launch {
                                             val result = withContext(Dispatchers.IO) { runCatching { api.updateNotificationPreference(currentSession.token, changed) } }
                                             result.onSuccess { saved -> notificationPreferences = notificationPreferences.map { if (it.deviceId == saved.deviceId) saved else it } }
-                                                .onFailure { message = it.message ?: "Notification preferences could not be saved" }
+                                                .onFailure { message = it.userFacingMessage("Notification preferences could not be saved") }
                                             notificationBusy = false
                                         }
                                     },
@@ -736,7 +736,7 @@ internal fun MonitorHome(
                                         scope.launch {
                                             val result = withContext(Dispatchers.IO) { runCatching { api.updateNotificationPreference(currentSession.token, changed) } }
                                             result.onSuccess { saved -> notificationPreferences = notificationPreferences.map { if (it.deviceId == saved.deviceId) saved else it } }
-                                                .onFailure { message = it.message ?: "Notification preferences could not be saved" }
+                                                .onFailure { message = it.userFacingMessage("Notification preferences could not be saved") }
                                             notificationBusy = false
                                         }
                                     },
@@ -827,7 +827,7 @@ internal fun MonitorHome(
                                             motionRetentionDays = it
                                             savedMotionRetentionDays = it
                                             message = "Motion history setting saved."
-                                        }.onFailure { message = it.message ?: "Motion history setting could not be saved" }
+                                        }.onFailure { message = it.userFacingMessage("Motion history setting could not be saved") }
                                         savingMotionRetention = false
                                     }
                                 },
@@ -941,7 +941,7 @@ internal fun MonitorHome(
                                     message = "Your Beacon account and its data were deleted."
                                     onAccountDeleted()
                                 }.onFailure {
-                                    deleteAccountError = it.message ?: "Your account could not be deleted."
+                                    deleteAccountError = it.userFacingMessage("Your account could not be deleted.")
                                 }
                                 deletingAccount = false
                             }
