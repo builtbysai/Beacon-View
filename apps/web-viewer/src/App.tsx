@@ -13,6 +13,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { ReauthenticationDialog } from './ReauthenticationDialog';
 import { BrowserCameraMode } from './BrowserCameraMode';
 import { MotionEventList } from './MotionEventList';
+import { RecordingLibrary } from './RecordingLibrary';
 import { AuthScreen } from './AuthScreen';
 import { SplashScreen } from './SplashScreen';
 import { CameraBrowser } from './CameraBrowser';
@@ -1451,19 +1452,22 @@ export function App() {
               </section>
             )}
             {page === 'events' && (
-              <MotionEventList
-                filterStorageKey={`beacon_motion_filters_${user.id}`}
-                includeHouseholdActivity={
-                  household?.role === 'owner' || household?.role === 'admin'
-                }
-                refreshRevision={motionEventRevision}
-                clearRevision={motionClearRevision}
-                cameras={cameras}
-                onCamera={(id) => {
-                  const camera = cameras.find((item) => item.id === id);
-                  if (camera) openCamera(camera);
-                }}
-              />
+              <>
+                {household?.role === 'owner' && <RecordingLibrary />}
+                <MotionEventList
+                  filterStorageKey={`beacon_motion_filters_${user.id}`}
+                  includeHouseholdActivity={
+                    household?.role === 'owner' || household?.role === 'admin'
+                  }
+                  refreshRevision={motionEventRevision}
+                  clearRevision={motionClearRevision}
+                  cameras={cameras}
+                  onCamera={(id) => {
+                    const camera = cameras.find((item) => item.id === id);
+                    if (camera) openCamera(camera);
+                  }}
+                />
+              </>
             )}
             {page === 'diagnostics' && <Diagnostics />}
             {page === 'settings' && (

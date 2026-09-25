@@ -33,3 +33,14 @@ export interface RecordingDeletionClaim {
   recordingId: string;
   userId: string;
 }
+
+export interface RecordingPlaybackClaim {
+  providerFileId: string;
+  byteSize: number;
+  checksumSha256: string;
+  mimeType: 'video/mp4' | 'video/webm';
+  encryptionIv: Buffer;
+  encryptionDataKeyCiphertext: Buffer;
+  encryptionDataKeyIv: Buffer;
+  userId: string;
+}

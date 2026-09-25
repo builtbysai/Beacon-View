@@ -139,6 +139,7 @@ export function buildApp(
   registerRecordingRoutes(app, {
     auth: sessionAuth,
     config,
+    limiter,
     signaling,
     store,
   });

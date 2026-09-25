@@ -102,8 +102,9 @@ not considered complete.
   envelope before the direct Drive upload; the backend stores ciphertext
   metadata and an encrypted per-clip key (ADR 0065). The unupdated Android
   route fails closed with `409`, preventing plaintext export. Authorized
-  ciphertext download/local decryption playback and the Android envelope
-  remain required before recording can be called release-ready.
+  ciphertext download/local decryption playback now exists for the owner on
+  web/PWA (ADR 0068). The Android envelope and physical end-to-end playback
+  evidence remain required before recording can be called release-ready.
 - [x] Use a separate Google OAuth grant with the least-privileged
       `drive.file` scope for user-visible recording files, kept separate
       from the existing `drive.appdata` connection.
@@ -111,7 +112,9 @@ not considered complete.
       mismatch handling (`finalizeRecordingUpload` calls
       `verifyDriveRecordingFile` before trusting the client's completion
       claim). Playback authorization, retry UX, quota/full-disk handling, and
-      provider-disconnect recovery are not separately exercised yet.
+      provider-disconnect recovery are not separately exercised yet. Owner-only
+      playback now verifies Drive metadata and decrypts in the browser; its
+      real-account Drive path still needs acceptance evidence.
 
 ### 5. Integration and operational proof
 

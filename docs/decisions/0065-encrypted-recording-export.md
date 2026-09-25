@@ -42,3 +42,6 @@ export plaintext recording data during the transition.
 - Android motion recording is temporarily unable to upload clips. It continues
   to record only through its visible capture path and receives the explicit
   update-required error instead of exporting plaintext.
+
+ADR 0068 later allows the backend to relay encrypted bytes for authorized
+playback. It does not decrypt or retain plaintext media.
