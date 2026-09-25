@@ -57,6 +57,15 @@ describe.skipIf(!store)('recording persistence', () => {
       await store!.listRecordings(randomUUID(), [camera!.cameraId]),
     ).toHaveLength(0);
 
+    await store!.pool.query(`UPDATE recordings SET updated_at=$2 WHERE id=$1`, [
+      recording!.id,
+      new Date(Date.now() - 16 * 60_000),
+    ]);
+    expect(await store!.recoverStaleRecordings(new Date())).toBe(1);
+    expect(
+      await store!.listRecordings(owner.householdId, [camera!.cameraId]),
+    ).toEqual([expect.objectContaining({ status: 'failed' })]);
+
     expect(await store!.deleteRecording(owner.householdId, recording!.id)).toBe(
       true,
     );

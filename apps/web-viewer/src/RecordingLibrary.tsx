@@ -26,6 +26,15 @@ function recordingTime(value: string): string {
   }).format(new Date(value));
 }
 
+const statusLabels: Record<RecordingSummary['status'], string> = {
+  requested: 'Preparing clip',
+  recording: 'Recording clip',
+  uploading: 'Uploading securely',
+  available: 'Ready',
+  failed: 'Upload failed',
+  deleting: 'Removing clip',
+};
+
 export function RecordingLibrary() {
   const [recordings, setRecordings] = useState<RecordingSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,6 +113,25 @@ export function RecordingLibrary() {
     }
   }
 
+  async function removeFailed(recording: RecordingSummary) {
+    setBusyId(recording.id);
+    setError('');
+    try {
+      await request(`/api/recordings/${recording.id}`, { method: 'DELETE' });
+      setRecordings((current) =>
+        current.filter((item) => item.id !== recording.id),
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Recording could not be removed.',
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <section
       className="recording-library"
@@ -152,9 +180,23 @@ export function RecordingLibrary() {
                 >
                   {busyId === recording.id ? 'Opening…' : 'Play clip'}
                 </button>
+              ) : recording.status === 'failed' ? (
+                <div className="recording-library-actions">
+                  <span className="recording-library-status">
+                    {statusLabels[recording.status]}
+                  </span>
+                  <button
+                    className="btn secondary"
+                    disabled={busyId !== null}
+                    onClick={() => void removeFailed(recording)}
+                    type="button"
+                  >
+                    {busyId === recording.id ? 'Removing…' : 'Remove'}
+                  </button>
+                </div>
               ) : (
                 <span className="recording-library-status">
-                  {recording.status}
+                  {statusLabels[recording.status]}
                 </span>
               )}
             </li>

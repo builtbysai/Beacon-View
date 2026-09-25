@@ -58,7 +58,12 @@
   margin-top: 14px !important;
 }
 .recording-library-status {
-  text-transform: capitalize;
+  white-space: nowrap;
+}
+.recording-library-actions {
+  display: flex !important;
+  align-items: center;
+  gap: 10px !important;
 }
 .recording-library-player {
   display: grid;

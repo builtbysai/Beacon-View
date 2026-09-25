@@ -7,6 +7,7 @@ import { parseConfig } from './config.js';
 import { startMotionRetentionJob } from './motion-retention.js';
 import { startNotificationJob } from './notification-job.js';
 import { startPresenceActivityJob } from './presence-activity-job.js';
+import { startRecordingRecoveryJob } from './recording-recovery.js';
 import { HouseholdEventHub } from './household-events.js';
 
 loadEnvironment({
@@ -23,6 +24,7 @@ let stopRetentionJob: (() => void) | undefined;
 let stopAuditRetentionJob: (() => void) | undefined;
 let stopNotificationJob: (() => void) | undefined;
 let stopPresenceActivityJob: (() => void) | undefined;
+let stopRecordingRecoveryJob: (() => void) | undefined;
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   if (shuttingDown) return;
@@ -31,6 +33,7 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   stopAuditRetentionJob?.();
   stopNotificationJob?.();
   stopPresenceActivityJob?.();
+  stopRecordingRecoveryJob?.();
 
   app.log.info({ signal }, 'Shutdown requested');
   await app.close();
@@ -56,6 +59,7 @@ try {
     app.log,
     householdEvents,
   );
+  stopRecordingRecoveryJob = startRecordingRecoveryJob(store, app.log);
 } catch (error) {
   app.log.fatal({ err: error }, 'Backend startup failed');
   process.exitCode = 1;

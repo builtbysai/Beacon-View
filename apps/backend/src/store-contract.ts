@@ -399,6 +399,16 @@ export interface MilestoneStore {
     recordingId: string,
   ): Promise<RecordingUploadClaim | null>;
   markRecordingUploadFailed(recordingId: string): Promise<void>;
+  markOwnerRecordingFailed(
+    householdId: string,
+    userId: string,
+    recordingId: string,
+  ): Promise<boolean>;
+  markDeviceRecordingFailed(
+    credentialHash: string,
+    recordingId: string,
+  ): Promise<boolean>;
+  recoverStaleRecordings(now: Date): Promise<number>;
   completeRecordingUpload(input: {
     recordingId: string;
     providerFileId: string;

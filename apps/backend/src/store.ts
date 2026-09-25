@@ -255,6 +255,25 @@ export class PostgresStore implements MilestoneStore {
     await this.recordings.markUploadFailed(recordingId);
   }
 
+  async markOwnerRecordingFailed(
+    householdId: string,
+    userId: string,
+    recordingId: string,
+  ): Promise<boolean> {
+    return this.recordings.markOwnerFailed(householdId, userId, recordingId);
+  }
+
+  async markDeviceRecordingFailed(
+    credentialHash: string,
+    recordingId: string,
+  ): Promise<boolean> {
+    return this.recordings.markFailedByCredential(credentialHash, recordingId);
+  }
+
+  async recoverStaleRecordings(now: Date): Promise<number> {
+    return this.recordings.recoverStale(now);
+  }
+
   async completeRecordingUpload(input: {
     recordingId: string;
     providerFileId: string;

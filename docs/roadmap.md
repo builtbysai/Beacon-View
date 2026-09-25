@@ -58,11 +58,13 @@ errors. A shared device-integration type contract begins the IoT design; no IoT
 adapter is enabled. The first adapter still requires a separate protocol, privacy,
 credential, household-authorization, and hardware acceptance review.
 
-The recording completion batches add owner-only web/PWA playback (ADR 0068) and
-Android's streaming AES-GCM upload envelope (ADR 0069). Beacon relays encrypted
-bytes from Drive, and the browser checks and decrypts them locally. Provider-
-failure recovery and real-account Android-to-browser playback remain open
-acceptance work.
+The recording completion batches add owner-only web/PWA playback (ADR 0068),
+Android's streaming AES-GCM upload envelope (ADR 0069), and bounded recording
+failure recovery (ADR 0070). Beacon relays encrypted bytes from Drive, and the
+browser checks and decrypts them locally. Clients now report terminal failures,
+an hourly job releases stale work, and owners can remove failed entries.
+Provider-specific retry guidance and real-account Android-to-browser playback
+remain open acceptance work.
 
 Notification Transport v1 is implemented through its Chrome Web Push baseline; native
 FCM and the remaining physical acceptance matrix remain external evidence gates. On

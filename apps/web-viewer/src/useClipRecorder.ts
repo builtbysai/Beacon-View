@@ -25,6 +25,21 @@ function errorMessage(error: unknown, fallback: string): string {
     : fallback;
 }
 
+async function reportRecordingFailure(
+  recordingId: string,
+  reason: 'capture_failed' | 'upload_failed',
+): Promise<void> {
+  try {
+    await request(`/api/recordings/${recordingId}/fail`, {
+      body: JSON.stringify({ reason }),
+      method: 'POST',
+    });
+  } catch {
+    // Recovery sweeps eventually release the recording if this best-effort
+    // report cannot reach Beacon.
+  }
+}
+
 /** Captures a short clip locally and uploads it straight to the Drive
  * session Beacon opens for it -- used both by the live viewer (recording
  * the stream it's receiving) and by browser camera mode (recording its own
@@ -94,6 +109,7 @@ export function useClipRecorder(cameraId: string): {
         });
         setState({ elapsedMs: 0, error: '', status: 'available' });
       } catch (error) {
+        await reportRecordingFailure(recordingId, 'upload_failed');
         setState({
           elapsedMs: 0,
           error: errorMessage(error, 'Recording could not be uploaded.'),
@@ -133,6 +149,11 @@ export function useClipRecorder(cameraId: string): {
           }, 500);
           autoStopRef.current = window.setTimeout(stop, MAX_CLIP_DURATION_MS);
         } catch (error) {
+          const recordingId = recordingIdRef.current;
+          if (recordingId)
+            await reportRecordingFailure(recordingId, 'capture_failed');
+          recorderRef.current = null;
+          recordingIdRef.current = null;
           setState({
             elapsedMs: 0,
             error: errorMessage(error, 'Recording could not be started.'),
