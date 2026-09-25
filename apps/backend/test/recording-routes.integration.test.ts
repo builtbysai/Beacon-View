@@ -504,7 +504,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
     device.close();
   });
 
-  it('blocks legacy device upload routes so they cannot export plaintext clips', async () => {
+  it('accepts encrypted device uploads and verifies them before availability', async () => {
     const owner = await registerAndSignIn(
       'device-driven@example.com',
       '10.2.0.8',
@@ -528,6 +528,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
         byteSize: 4_096,
         checksumSha256: 'c'.repeat(64),
         durationMs: 6_000,
+        encryption,
         mimeType: 'video/mp4',
       },
       url: `/api/device/recordings/${recording.id}/upload-session`,
@@ -545,7 +546,16 @@ describe.skipIf(!app || !store)('recording routes', () => {
       },
       url: `/api/device/recordings/${recording.id}/upload-session`,
     });
-    expect(session.statusCode).toBe(409);
+    expect(session.statusCode).toBe(201);
+    expect(session.json<{ uploadUrl: string }>().uploadUrl).toContain(
+      'www.googleapis.com',
+    );
+    expect(vi.mocked(drive.initiateDriveRecordingUpload)).toHaveBeenCalledWith({
+      accessToken: 'fake-drive-access-token',
+      byteSize: 4_096,
+      mimeType: 'application/octet-stream',
+      recordingId: recording.id,
+    });
 
     const completed = await app!.inject({
       headers: { Authorization: `Bearer ${camera.credential}` },
@@ -553,7 +563,14 @@ describe.skipIf(!app || !store)('recording routes', () => {
       payload: { providerFileId: 'drive-file-device' },
       url: `/api/device/recordings/${recording.id}/complete`,
     });
-    expect(completed.statusCode).toBe(409);
+    expect(completed.statusCode).toBe(204);
+    expect(vi.mocked(drive.verifyDriveRecordingFile)).toHaveBeenCalledWith({
+      accessToken: 'fake-drive-access-token',
+      byteSize: 4_096,
+      mimeType: 'application/octet-stream',
+      providerFileId: 'drive-file-device',
+      recordingId: recording.id,
+    });
 
     const listed = await app!.inject({
       headers: { cookie: owner.cookie },
@@ -562,7 +579,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
     });
     expect(
       listed.json<{ recordings: { status: string }[] }>().recordings,
-    ).toEqual([expect.objectContaining({ status: 'requested' })]);
+    ).toEqual([expect.objectContaining({ status: 'available' })]);
 
     device.close();
   });

@@ -591,18 +591,23 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     }
 
     private suspend fun uploadMotionClip(recordingId: String, file: File, durationMs: Long) {
+        val encryptedFile = File(cacheDir, "beacon-clip-$recordingId.encrypted")
         runCatching {
-            val checksum = sha256Hex(file)
+            val encrypted = encryptClip(file, encryptedFile)
+            file.delete()
+            val checksum = sha256Hex(encrypted.file)
             val uploadUrl =
                 api.beginRecordingUpload(
                     credential,
                     recordingId,
-                    file.length(),
+                    encrypted.file.length(),
                     checksum,
                     durationMs.coerceIn(1_000, 600_000),
                     "video/mp4",
+                    encrypted.dataKey,
+                    encrypted.iv,
                 )
-            val providerFileId = uploadClipToDrive(uploadUrl, file, "video/mp4")
+            val providerFileId = uploadClipToDrive(uploadUrl, encrypted.file)
             api.completeRecording(credential, recordingId, providerFileId)
             Log.i(LOG_TAG, "event=motion_clip_uploaded")
         }.onFailure { error ->
@@ -612,6 +617,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
             }
         }
         file.delete()
+        encryptedFile.delete()
     }
 
     private fun handleCaptureStart(generation: Int, started: Boolean) {

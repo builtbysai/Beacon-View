@@ -139,13 +139,18 @@ export class PostgresRecordingRepository {
     checksumSha256: string;
     credentialHash: string;
     durationMs: number;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
     mimeType: 'video/mp4' | 'video/webm';
     recordingId: string;
   }): Promise<RecordingUploadClaim | null> {
     const result = await this.pool.query<RecordingUploadClaim>(
       `UPDATE recordings r
        SET status='uploading', byte_size=$3, duration_ms=$4,
-           checksum_sha256=$5, mime_type=$6, updated_at=now()
+           checksum_sha256=$5, mime_type=$6, encryption_version=1,
+           encryption_iv=$7, encryption_data_key_ciphertext=$8,
+           encryption_data_key_iv=$9, updated_at=now()
        FROM camera_sources cs, cameras d, device_credentials dc
        WHERE r.id=$2 AND r.camera_source_id=cs.id AND cs.device_id=d.id
          AND dc.camera_id=d.id AND dc.credential_hash=$1
@@ -162,6 +167,9 @@ export class PostgresRecordingRepository {
         input.durationMs,
         input.checksumSha256,
         input.mimeType,
+        input.encryptionIv,
+        input.encryptionDataKeyCiphertext,
+        input.encryptionDataKeyIv,
       ],
     );
     return result.rows[0] ?? null;
