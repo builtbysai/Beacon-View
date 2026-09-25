@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, request } from './api';
 import {
   ClipRecorder,
+  DriveUploadError,
   encryptClip,
   MAX_CLIP_DURATION_MS,
   pickRecorderMimeType,
@@ -27,17 +28,32 @@ function errorMessage(error: unknown, fallback: string): string {
 
 async function reportRecordingFailure(
   recordingId: string,
-  reason: 'capture_failed' | 'upload_failed',
-): Promise<void> {
+  reason: 'abandoned' | 'capture_failed' | 'upload_failed',
+): Promise<boolean> {
   try {
     await request(`/api/recordings/${recordingId}/fail`, {
       body: JSON.stringify({ reason }),
       method: 'POST',
     });
+    return true;
   } catch {
     // Recovery sweeps eventually release the recording if this best-effort
     // report cannot reach Beacon.
+    return false;
   }
+}
+
+interface PendingUpload {
+  blob: Blob;
+  checksumSha256: string;
+  dataKey: string;
+  durationMs: number;
+  encryptionIv: string;
+  mimeType: 'video/mp4' | 'video/webm';
+  providerFileId?: string;
+  recordingId: string;
+  restartSession: boolean;
+  uploadUrl?: string;
 }
 
 /** Captures a short clip locally and uploads it straight to the Drive
@@ -52,6 +68,7 @@ export function useClipRecorder(cameraId: string): {
    * the control returns to "Record a short clip" -- a no-op while a
    * recording is actually in progress. */
   reset: () => void;
+  retry: () => void;
   supported: boolean;
 } {
   const [state, setState] = useState<ClipRecorderState>({
@@ -63,12 +80,79 @@ export function useClipRecorder(cameraId: string): {
   const recordingIdRef = useRef<string | null>(null);
   const tickRef = useRef<number | null>(null);
   const autoStopRef = useRef<number | null>(null);
+  const pendingRef = useRef<PendingUpload | null>(null);
+  const attemptingRef = useRef(false);
 
   const clearTimers = useCallback(() => {
     if (tickRef.current !== null) window.clearInterval(tickRef.current);
     if (autoStopRef.current !== null) window.clearTimeout(autoStopRef.current);
     tickRef.current = null;
     autoStopRef.current = null;
+  }, []);
+
+  const attemptUpload = useCallback(async (pending: PendingUpload) => {
+    attemptingRef.current = true;
+    setState({ elapsedMs: 0, error: '', status: 'uploading' });
+    try {
+      if (pending.restartSession) {
+        const released = await reportRecordingFailure(
+          pending.recordingId,
+          'upload_failed',
+        );
+        if (!released)
+          throw new Error(
+            'Beacon could not restart the upload. Check your connection and retry.',
+          );
+        delete pending.uploadUrl;
+        delete pending.providerFileId;
+        pending.restartSession = false;
+      }
+      if (!pending.uploadUrl) {
+        const session = await request<{ uploadUrl: string }>(
+          `/api/recordings/${pending.recordingId}/upload-session`,
+          {
+            body: JSON.stringify({
+              byteSize: pending.blob.size,
+              checksumSha256: pending.checksumSha256,
+              durationMs: pending.durationMs,
+              mimeType: pending.mimeType,
+              encryption: {
+                dataKey: pending.dataKey,
+                iv: pending.encryptionIv,
+                version: 1,
+              },
+            }),
+            method: 'POST',
+          },
+        );
+        pending.uploadUrl = session.uploadUrl;
+      }
+      if (!pending.providerFileId)
+        pending.providerFileId = await uploadClipToDrive(
+          pending.uploadUrl,
+          pending.blob,
+        );
+      await request(`/api/recordings/${pending.recordingId}/complete`, {
+        body: JSON.stringify({ providerFileId: pending.providerFileId }),
+        method: 'POST',
+      });
+      pendingRef.current = null;
+      setState({ elapsedMs: 0, error: '', status: 'available' });
+    } catch (error) {
+      if (
+        !pending.uploadUrl ||
+        (error instanceof DriveUploadError &&
+          (error.kind === 'authorization' || error.kind === 'session_expired'))
+      )
+        pending.restartSession = true;
+      setState({
+        elapsedMs: 0,
+        error: errorMessage(error, 'Recording could not be uploaded.'),
+        status: 'failed',
+      });
+    } finally {
+      attemptingRef.current = false;
+    }
   }, []);
 
   const stop = useCallback(() => {
@@ -81,38 +165,23 @@ export function useClipRecorder(cameraId: string): {
       try {
         const { blob, durationMs } = await recorder.stop();
         const encrypted = await encryptClip(blob);
-        const checksumSha256 = await sha256Hex(encrypted.blob);
-        const session = await request<{ uploadUrl: string }>(
-          `/api/recordings/${recordingId}/upload-session`,
-          {
-            body: JSON.stringify({
-              byteSize: encrypted.blob.size,
-              checksumSha256,
-              durationMs: Math.min(Math.max(durationMs, 1_000), 600_000),
-              mimeType: recordingContainerType(recorder.mimeType),
-              encryption: {
-                dataKey: encrypted.dataKey,
-                iv: encrypted.iv,
-                version: 1,
-              },
-            }),
-            method: 'POST',
-          },
-        );
-        const providerFileId = await uploadClipToDrive(
-          session.uploadUrl,
-          encrypted.blob,
-        );
-        await request(`/api/recordings/${recordingId}/complete`, {
-          body: JSON.stringify({ providerFileId }),
-          method: 'POST',
-        });
-        setState({ elapsedMs: 0, error: '', status: 'available' });
+        const pending: PendingUpload = {
+          blob: encrypted.blob,
+          checksumSha256: await sha256Hex(encrypted.blob),
+          dataKey: encrypted.dataKey,
+          durationMs: Math.min(Math.max(durationMs, 1_000), 600_000),
+          encryptionIv: encrypted.iv,
+          mimeType: recordingContainerType(recorder.mimeType),
+          recordingId,
+          restartSession: false,
+        };
+        pendingRef.current = pending;
+        await attemptUpload(pending);
       } catch (error) {
         await reportRecordingFailure(recordingId, 'upload_failed');
         setState({
           elapsedMs: 0,
-          error: errorMessage(error, 'Recording could not be uploaded.'),
+          error: errorMessage(error, 'Recording could not be prepared.'),
           status: 'failed',
         });
       } finally {
@@ -120,7 +189,7 @@ export function useClipRecorder(cameraId: string): {
         recordingIdRef.current = null;
       }
     })();
-  }, [clearTimers]);
+  }, [attemptUpload, clearTimers]);
 
   const start = useCallback(
     (stream: MediaStream) => {
@@ -166,6 +235,11 @@ export function useClipRecorder(cameraId: string): {
   );
 
   const reset = useCallback(() => {
+    const pending = pendingRef.current;
+    if (pending && !attemptingRef.current) {
+      pendingRef.current = null;
+      void reportRecordingFailure(pending.recordingId, 'abandoned');
+    }
     setState((current) =>
       current.status === 'available' || current.status === 'failed'
         ? { elapsedMs: 0, error: '', status: 'idle' }
@@ -173,16 +247,26 @@ export function useClipRecorder(cameraId: string): {
     );
   }, []);
 
+  const retry = useCallback(() => {
+    const pending = pendingRef.current;
+    if (!pending || attemptingRef.current) return;
+    void attemptUpload(pending);
+  }, [attemptUpload]);
+
   useEffect(
     () => () => {
       clearTimers();
       recorderRef.current?.discard();
+      const pending = pendingRef.current;
+      if (pending && !attemptingRef.current)
+        void reportRecordingFailure(pending.recordingId, 'abandoned');
     },
     [clearTimers],
   );
 
   return {
     reset,
+    retry,
     start,
     state,
     stop,

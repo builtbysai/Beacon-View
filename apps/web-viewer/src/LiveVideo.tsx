@@ -204,11 +204,10 @@ export function LiveVideo({
   // clip" control a few seconds after it lands, the same pause the old
   // request-and-poll version gave someone to read "Recording saved".
   useEffect(() => {
-    if (clip.state.status !== 'available' && clip.state.status !== 'failed')
-      return;
+    if (clip.state.status !== 'available') return;
     const timer = window.setTimeout(() => clip.reset(), 6_000);
     return () => window.clearTimeout(timer);
-  }, [clip, clip.state.status]);
+  }, [clip.reset, clip.state.status]);
 
   useEffect(
     () => () => {
@@ -786,7 +785,7 @@ export function LiveVideo({
                   clip.state.status === 'recording'
                     ? `Recording… ${formatClipTimer(clip.state.elapsedMs)} · tap to stop`
                     : clip.state.status === 'failed'
-                      ? 'Recording failed · try again'
+                      ? 'Retry encrypted upload'
                       : 'Record a short clip'
                 }
                 disabled={
@@ -797,7 +796,14 @@ export function LiveVideo({
                   clip.state.status === 'available'
                 }
                 onClick={
-                  clip.state.status === 'recording' ? clip.stop : startRecording
+                  clip.state.status === 'recording'
+                    ? clip.stop
+                    : clip.state.status === 'failed'
+                      ? () => {
+                          setControlError('');
+                          clip.retry();
+                        }
+                      : startRecording
                 }
                 type="button"
               >
@@ -812,7 +818,7 @@ export function LiveVideo({
                         : clip.state.status === 'available'
                           ? 'Recording saved'
                           : clip.state.status === 'failed'
-                            ? 'Recording failed, try again'
+                            ? 'Retry encrypted recording upload'
                             : 'Record a short clip'}
                 </span>
               </button>
@@ -925,7 +931,23 @@ export function LiveVideo({
       </p>
       {!compact && (controlError || talkState !== 'idle') && (
         <div className="live-footer">
-          {controlError && <p role="alert">{controlError}</p>}
+          {controlError && (
+            <p role="alert">
+              {controlError}
+              {clip.state.status === 'failed' && (
+                <button
+                  className="link"
+                  onClick={() => {
+                    clip.reset();
+                    setControlError('');
+                  }}
+                  type="button"
+                >
+                  Discard clip
+                </button>
+              )}
+            </p>
+          )}
           {talkState !== 'idle' && (
             <p
               className="live-talk-status"

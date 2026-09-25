@@ -266,7 +266,7 @@ export class PostgresRecordingRepository {
     const result = await this.pool.query(
       `UPDATE recordings SET status='failed', updated_at=now()
        WHERE id=$3 AND household_id=$1 AND created_by_user_id=$2
-         AND status IN ('requested', 'recording', 'uploading')
+         AND status IN ('requested', 'recording', 'uploading', 'failed')
          AND deleted_at IS NULL`,
       [householdId, userId, recordingId],
     );
@@ -283,7 +283,7 @@ export class PostgresRecordingRepository {
        WHERE r.id=$2 AND r.camera_source_id=cs.id AND cs.device_id=d.id
          AND dc.camera_id=d.id AND dc.credential_hash=$1
          AND dc.revoked_at IS NULL AND d.revoked_at IS NULL
-         AND r.status IN ('requested', 'recording', 'uploading')
+         AND r.status IN ('requested', 'recording', 'uploading', 'failed')
          AND r.deleted_at IS NULL`,
       [credentialHash, recordingId],
     );

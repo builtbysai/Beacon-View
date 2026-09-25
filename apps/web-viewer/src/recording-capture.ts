@@ -156,8 +156,45 @@ export async function uploadClipToDrive(
     headers: { 'Content-Type': blob.type || 'application/octet-stream' },
     method: 'PUT',
   });
-  if (!response.ok) throw new Error('Upload to Google Drive failed');
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      error?: { errors?: Array<{ reason?: string }> };
+    } | null;
+    const reason = payload?.error?.errors?.[0]?.reason ?? '';
+    const kind =
+      response.status === 404 || response.status === 410
+        ? 'session_expired'
+        : reason === 'storageQuotaExceeded' || reason === 'quotaExceeded'
+          ? 'quota'
+          : response.status === 401 || response.status === 403
+            ? 'authorization'
+            : response.status === 429 || response.status >= 500
+              ? 'temporary'
+              : 'unknown';
+    throw new DriveUploadError(kind, response.status);
+  }
   const file = (await response.json()) as { id?: string };
   if (!file.id) throw new Error('Google Drive did not return a file id');
   return file.id;
+}
+
+export class DriveUploadError extends Error {
+  constructor(
+    readonly kind:
+      'authorization' | 'quota' | 'session_expired' | 'temporary' | 'unknown',
+    readonly status: number,
+  ) {
+    super(
+      kind === 'quota'
+        ? 'Google Drive is out of storage. Free some space, then retry this upload.'
+        : kind === 'authorization'
+          ? 'Google Drive access expired. Reconnect Drive in Settings, then retry this upload.'
+          : kind === 'session_expired'
+            ? 'The Google Drive upload session expired. Retry this upload.'
+            : kind === 'temporary'
+              ? 'Google Drive is temporarily unavailable. Retry this upload.'
+              : 'Google Drive rejected the upload. Check Drive, then retry.',
+    );
+    this.name = 'DriveUploadError';
+  }
 }
