@@ -601,6 +601,24 @@ class BeaconApi(private val baseUrl: String) {
         }
     }
 
+    /** Releases a recording request that this camera cannot finish. The
+     * backend scopes the transition to the device credential, so one camera
+     * cannot alter another camera's recording. */
+    fun failRecording(credential: String, recordingId: String, reason: String) {
+        val connection = connection("/api/device/recordings/$recordingId/fail", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $credential")
+        connection.outputStream.use {
+            it.write(JSONObject().put("reason", reason).toString().toByteArray(Charsets.UTF_8))
+        }
+        responseBody(connection)
+        if (connection.responseCode in listOf(HttpURLConnection.HTTP_UNAUTHORIZED, HttpURLConnection.HTTP_FORBIDDEN)) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            throw IllegalStateException("Recording failure could not be reported")
+        }
+    }
+
     private fun connection(path: String, method: String): HttpURLConnection =
         (URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
             requestMethod = method

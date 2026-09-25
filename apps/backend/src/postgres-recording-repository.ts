@@ -258,6 +258,50 @@ export class PostgresRecordingRepository {
     );
   }
 
+  async markOwnerFailed(
+    householdId: string,
+    userId: string,
+    recordingId: string,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE recordings SET status='failed', updated_at=now()
+       WHERE id=$3 AND household_id=$1 AND created_by_user_id=$2
+         AND status IN ('requested', 'recording', 'uploading')
+         AND deleted_at IS NULL`,
+      [householdId, userId, recordingId],
+    );
+    return (result.rowCount ?? 0) === 1;
+  }
+
+  async markFailedByCredential(
+    credentialHash: string,
+    recordingId: string,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE recordings r SET status='failed', updated_at=now()
+       FROM camera_sources cs, cameras d, device_credentials dc
+       WHERE r.id=$2 AND r.camera_source_id=cs.id AND cs.device_id=d.id
+         AND dc.camera_id=d.id AND dc.credential_hash=$1
+         AND dc.revoked_at IS NULL AND d.revoked_at IS NULL
+         AND r.status IN ('requested', 'recording', 'uploading')
+         AND r.deleted_at IS NULL`,
+      [credentialHash, recordingId],
+    );
+    return (result.rowCount ?? 0) === 1;
+  }
+
+  async recoverStale(now: Date): Promise<number> {
+    const result = await this.pool.query(
+      `UPDATE recordings SET status='failed', updated_at=$1::timestamptz
+       WHERE deleted_at IS NULL AND (
+         (status IN ('requested', 'recording') AND updated_at < $1::timestamptz - interval '15 minutes')
+         OR (status='uploading' AND updated_at < $1::timestamptz - interval '2 hours')
+       )`,
+      [now],
+    );
+    return result.rowCount ?? 0;
+  }
+
   async completeUpload(input: {
     recordingId: string;
     providerFileId: string;

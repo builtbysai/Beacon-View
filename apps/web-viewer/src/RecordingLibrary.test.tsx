@@ -57,3 +57,35 @@ it('opens and releases a decrypted recording from Activity', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Close clip' }));
   expect(revokeUrl).toHaveBeenCalledWith('blob:beacon-clip');
 });
+
+it('labels and removes a failed recording', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          recordings: [
+            {
+              id: 'clip-failed',
+              cameraName: 'Back door',
+              deviceName: 'Pixel',
+              status: 'failed',
+              createdAt: '2026-09-25T12:00:00Z',
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    )
+    .mockResolvedValueOnce(new Response(null, { status: 204 }));
+  vi.stubGlobal('fetch', fetchMock);
+
+  render(<RecordingLibrary />);
+  expect(await screen.findByText('Upload failed')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+  expect(await screen.findByText('No recorded clips yet.')).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenLastCalledWith(
+    '/api/recordings/clip-failed',
+    expect.objectContaining({ method: 'DELETE' }),
+  );
+});

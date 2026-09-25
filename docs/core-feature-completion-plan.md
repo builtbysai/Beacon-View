@@ -111,8 +111,11 @@ not considered complete.
 - [x] Implement resumable upload, listing, deletion, and Drive-verification-
       mismatch handling (`finalizeRecordingUpload` calls
       `verifyDriveRecordingFile` before trusting the client's completion
-      claim). Playback authorization, retry UX, quota/full-disk handling, and
-      provider-disconnect recovery are not separately exercised yet. Owner-only
+      claim). Explicit browser/Android failure reporting, credential-scoped
+      device transitions, an hourly stale-request/upload recovery sweep, and
+      owner cleanup for failed entries ship in ADR 0070. Resuming partial
+      uploads, quota/full-disk guidance, and provider-disconnect reconnection
+      are not separately exercised yet. Owner-only
       playback now verifies Drive metadata and decrypts in the browser; its
       real-account Drive path still needs acceptance evidence.
 

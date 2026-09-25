@@ -559,14 +559,18 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         }
     }
 
-    /** Best-effort: the recording stays in Beacon's "requested" state
-     * forever (the same as if this had never been called) when this device
-     * can't record a clip right now -- never a crash, never an interruption
-     * to the live capture this service also drives for any viewer already
-     * watching. */
+    /** Best-effort clip capture that reports terminal failures without
+     * interrupting the live stream this service may already be sending. */
     private fun startMotionRecording(generation: Int, recordingId: String) {
-        if (generation != captureGeneration) return
-        val activeMedia = media ?: return
+        if (generation != captureGeneration) {
+            reportRecordingFailure(recordingId, "abandoned")
+            return
+        }
+        val activeMedia = media
+        if (activeMedia == null) {
+            reportRecordingFailure(recordingId, "capture_failed")
+            return
+        }
         val outputFile = File(cacheDir, "beacon-clip-$recordingId.mp4")
         val started =
             activeMedia.startClipRecording(
@@ -577,6 +581,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 lifecycleScope.launch(Dispatchers.IO) {
                     if (generation != captureGeneration) {
                         outputFile.delete()
+                        reportRecordingFailure(recordingId, "abandoned")
                         return@launch
                     }
                     if (success) {
@@ -584,10 +589,14 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                     } else {
                         outputFile.delete()
                         Log.w(LOG_TAG, "event=motion_clip_capture_failed")
+                        reportRecordingFailure(recordingId, "capture_failed")
                     }
                 }
             }
-        if (!started) outputFile.delete()
+        if (!started) {
+            outputFile.delete()
+            reportRecordingFailure(recordingId, "capture_failed")
+        }
     }
 
     private suspend fun uploadMotionClip(recordingId: String, file: File, durationMs: Long) {
@@ -612,12 +621,25 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
             Log.i(LOG_TAG, "event=motion_clip_uploaded")
         }.onFailure { error ->
             Log.w(LOG_TAG, "event=motion_clip_upload_failed")
+            runCatching { api.failRecording(credential, recordingId, "upload_failed") }
             if (error is AuthorizationLostException) {
                 withContext(Dispatchers.Main) { requirePairing() }
             }
         }
         file.delete()
         encryptedFile.delete()
+    }
+
+    private fun reportRecordingFailure(recordingId: String, reason: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { api.failRecording(credential, recordingId, reason) }
+                .onFailure { error ->
+                    Log.w(LOG_TAG, "event=recording_failure_report_failed")
+                    if (error is AuthorizationLostException) {
+                        withContext(Dispatchers.Main) { requirePairing() }
+                    }
+                }
+        }
     }
 
     private fun handleCaptureStart(generation: Int, started: Boolean) {

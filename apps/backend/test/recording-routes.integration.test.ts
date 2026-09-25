@@ -522,6 +522,30 @@ describe.skipIf(!app || !store)('recording routes', () => {
     });
     const recording = created.json<{ recording: { id: string } }>().recording;
 
+    const wrongDevice = await app!.inject({
+      headers: { Authorization: 'Bearer wrong-device-credential' },
+      method: 'POST',
+      payload: { reason: 'capture_failed' },
+      url: `/api/device/recordings/${recording.id}/fail`,
+    });
+    expect(wrongDevice.statusCode).toBe(404);
+
+    const failed = await app!.inject({
+      headers: { Authorization: `Bearer ${camera.credential}` },
+      method: 'POST',
+      payload: { reason: 'capture_failed' },
+      url: `/api/device/recordings/${recording.id}/fail`,
+    });
+    expect(failed.statusCode).toBe(204);
+    const afterFailure = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: '/api/recordings',
+    });
+    expect(
+      afterFailure.json<{ recordings: { status: string }[] }>().recordings,
+    ).toEqual([expect.objectContaining({ status: 'failed' })]);
+
     const noAuth = await app!.inject({
       method: 'POST',
       payload: {

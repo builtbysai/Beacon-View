@@ -54,6 +54,17 @@ const uploadSchema = z
 const completeSchema = z
   .object({ providerFileId: z.string().trim().min(1).max(512) })
   .strict();
+const failureSchema = z
+  .object({
+    reason: z.enum([
+      'capture_failed',
+      'encryption_failed',
+      'upload_failed',
+      'completion_failed',
+      'abandoned',
+    ]),
+  })
+  .strict();
 
 export function registerRecordingRoutes(
   app: FastifyInstance,
@@ -420,6 +431,36 @@ export function registerRecordingRoutes(
     );
   });
 
+  app.post('/api/recordings/:recordingId/fail', async (request, reply) => {
+    const session = await auth.authenticateStateChange(request, reply);
+    if (!session) return;
+    if (session.role !== 'owner')
+      return reply.code(403).send({ error: 'Household owner access required' });
+    const parameters = parametersSchema.safeParse(request.params);
+    const body = failureSchema.safeParse(request.body);
+    if (!parameters.success || !body.success)
+      return reply.code(400).send({ error: 'Invalid recording failure' });
+    const failed = await store.markOwnerRecordingFailed(
+      session.householdId,
+      session.userId,
+      parameters.data.recordingId,
+    );
+    if (!failed)
+      return reply.code(404).send({ error: 'Recording request unavailable' });
+    await store.audit({
+      eventType: 'recording_failed',
+      householdId: session.householdId,
+      ipAddress: request.ip,
+      metadata: {
+        reason: body.data.reason,
+        recordingId: parameters.data.recordingId,
+      },
+      success: true,
+      userId: session.userId,
+    });
+    return reply.code(204).send();
+  });
+
   app.post(
     '/api/device/recordings/:recordingId/complete',
     async (request, reply) => {
@@ -444,6 +485,32 @@ export function registerRecordingRoutes(
         claim,
         body.data.providerFileId,
       );
+    },
+  );
+
+  app.post(
+    '/api/device/recordings/:recordingId/fail',
+    async (request, reply) => {
+      const authorization = request.headers.authorization;
+      const token = authorization?.startsWith('Bearer ')
+        ? authorization.slice('Bearer '.length)
+        : '';
+      if (!token) return unauthorized(reply);
+      const parameters = parametersSchema.safeParse(request.params);
+      const body = failureSchema.safeParse(request.body);
+      if (!parameters.success || !body.success)
+        return reply.code(400).send({ error: 'Invalid recording failure' });
+      const failed = await store.markDeviceRecordingFailed(
+        hashSecret(token),
+        parameters.data.recordingId,
+      );
+      if (!failed)
+        return reply.code(404).send({ error: 'Recording request unavailable' });
+      app.log.info(
+        { reason: body.data.reason, recordingId: parameters.data.recordingId },
+        'device recording failed',
+      );
+      return reply.code(204).send();
     },
   );
 
