@@ -54,6 +54,42 @@ class StreamingStateTest {
     }
 
     @Test
+    fun cameraPermissionGuidancePrioritizesCaptureBlockers() {
+        assertEquals(
+            CameraPermissionPrompt.Camera,
+            cameraPermissionPrompt(
+                cameraAllowed = false,
+                notificationsAllowed = false,
+                microphoneAllowed = false,
+            ),
+        )
+        assertEquals(
+            CameraPermissionPrompt.Notification,
+            cameraPermissionPrompt(
+                cameraAllowed = true,
+                notificationsAllowed = false,
+                microphoneAllowed = false,
+            ),
+        )
+        assertEquals(
+            CameraPermissionPrompt.Microphone,
+            cameraPermissionPrompt(
+                cameraAllowed = true,
+                notificationsAllowed = true,
+                microphoneAllowed = false,
+            ),
+        )
+        assertEquals(
+            null,
+            cameraPermissionPrompt(
+                cameraAllowed = true,
+                notificationsAllowed = true,
+                microphoneAllowed = true,
+            ),
+        )
+    }
+
+    @Test
     fun connectedPeerIsStreaming() {
         assertEquals(StreamingState.Connected, stateAfterPeerConnection(connected = true))
     }

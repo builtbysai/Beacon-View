@@ -140,7 +140,8 @@ microphone access recreated Camera mode without audio, notification denial did n
 interrupt an already-active camera, and a cold restart without notification access
 failed closed with no capture. Restoring both permissions recovered capture without
 clearing device state. Interactive denied-state and privacy tap-through remain open
-until the device is unlocked.
+until the device is unlocked. Camera mode now replaces its ambiguous startup copy
+with state-specific camera, persistent status, or optional microphone guidance.
 
 | ID / priority | Action and owner                                                                     | Acceptance evidence / decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
