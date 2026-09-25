@@ -97,7 +97,7 @@ export function AuthScreen({
             </p>
             <div className="context-note">
               <Icon name="check" />
-              Live viewing · Private access · No cloud recordings
+              Live viewing · Private access · Optional encrypted clips
             </div>
           </aside>
 

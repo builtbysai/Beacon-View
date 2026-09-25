@@ -146,6 +146,14 @@ export class PostgresStore implements MilestoneStore {
     return this.recordings.listForCameraSources(householdId, cameraSourceIds);
   }
 
+  async getRecordingPlaybackClaim(
+    householdId: string,
+    userId: string,
+    recordingId: string,
+  ) {
+    return this.recordings.getPlaybackClaim(householdId, userId, recordingId);
+  }
+
   async createMotionTriggeredRecording(input: {
     cameraSourceId: string;
     householdId: string;

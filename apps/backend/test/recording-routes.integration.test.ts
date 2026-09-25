@@ -20,6 +20,7 @@ vi.mock('../src/google-drive-client.js', async (importOriginal) => {
   return {
     ...actual,
     deleteDriveRecordingFile: vi.fn().mockResolvedValue(undefined),
+    downloadDriveRecordingFile: vi.fn(),
     initiateDriveRecordingUpload: vi
       .fn()
       .mockResolvedValue(
@@ -293,6 +294,14 @@ describe.skipIf(!app || !store)('recording routes', () => {
       url: '/api/recordings',
     });
     expect(attempt.statusCode).toBe(403);
+
+    const playback = await app!.inject({
+      headers: { cookie: viewer.cookie },
+      method: 'GET',
+      url: `/api/recordings/${randomUUID()}/playback`,
+    });
+    expect(playback.statusCode).toBe(403);
+    expect(drive.downloadDriveRecordingFile).not.toHaveBeenCalled();
   });
 
   it('refuses to start a recording while the camera is offline', async () => {
@@ -398,6 +407,37 @@ describe.skipIf(!app || !store)('recording routes', () => {
     expect(
       afterComplete.json<{ recordings: { status: string }[] }>().recordings,
     ).toEqual([expect.objectContaining({ status: 'available' })]);
+
+    const otherOwner = await registerAndSignIn(
+      'other-owner@example.com',
+      '10.2.0.66',
+    );
+    const denied = await app!.inject({
+      headers: { cookie: otherOwner.cookie },
+      method: 'GET',
+      url: `/api/recordings/${recording.id}/playback`,
+    });
+    expect(denied.statusCode).toBe(404);
+    expect(drive.downloadDriveRecordingFile).not.toHaveBeenCalled();
+
+    const ciphertext = Buffer.alloc(1_048_576, 42);
+    vi.mocked(drive.downloadDriveRecordingFile).mockResolvedValueOnce(
+      new Response(ciphertext),
+    );
+    const playback = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: `/api/recordings/${recording.id}/playback`,
+    });
+    expect(playback.statusCode).toBe(200);
+    expect(playback.headers['cache-control']).toBe('no-store, private');
+    expect(playback.headers['x-beacon-recording-key']).toBe(encryption.dataKey);
+    expect(playback.headers['x-beacon-recording-iv']).toBe(encryption.iv);
+    expect(playback.rawPayload).toEqual(ciphertext);
+    expect(vi.mocked(drive.downloadDriveRecordingFile)).toHaveBeenCalledWith(
+      'fake-drive-access-token',
+      'drive-file-abc',
+    );
 
     const deleted = await app!.inject({
       headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },

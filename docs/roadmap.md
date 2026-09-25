@@ -58,6 +58,11 @@ errors. A shared device-integration type contract begins the IoT design; no IoT
 adapter is enabled. The first adapter still requires a separate protocol, privacy,
 credential, household-authorization, and hardware acceptance review.
 
+The next recording batch adds owner-only web/PWA playback (ADR 0068): Beacon
+relays encrypted bytes from Drive, and the browser checks and decrypts them
+locally. Android encrypted upload, provider-failure recovery, and real-account
+playback remain open acceptance work.
+
 Notification Transport v1 is implemented through its Chrome Web Push baseline; native
 FCM and the remaining physical acceptance matrix remain external evidence gates. On
 September 12 the owner explicitly approved a bounded interface-reliability follow-up:

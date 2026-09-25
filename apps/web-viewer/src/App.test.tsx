@@ -718,6 +718,11 @@ describe('App', () => {
           status: 200,
         })
         .mockResolvedValueOnce({
+          json: () => Promise.resolve({ recordings: [] }),
+          ok: true,
+          status: 200,
+        })
+        .mockResolvedValueOnce({
           json: () =>
             Promise.resolve({
               events: [
@@ -816,39 +821,41 @@ describe('App', () => {
                   ? { devices: [] }
                   : url === '/api/drive/status'
                     ? { recordingsConnected: false }
-                    : url.startsWith('/api/motion-events')
-                      ? {
-                          events: [
-                            {
-                              cameraId: 'camera-1',
-                              cameraName: 'Rear camera',
-                              confidence: 0.5,
-                              deviceName: 'Hallway phone',
-                              id: 'event-1',
-                              occurredAt: new Date().toISOString(),
-                            },
-                          ],
-                          nextCursor: null,
-                        }
-                      : url.startsWith('/api/activity')
-                        ? { events: [], total: 0 }
-                        : {
-                            cameras: [
+                    : url === '/api/recordings'
+                      ? { recordings: [] }
+                      : url.startsWith('/api/motion-events')
+                        ? {
+                            events: [
                               {
-                                credentialRevoked: false,
-                                deviceId: 'phone-1',
+                                cameraId: 'camera-1',
+                                cameraName: 'Rear camera',
+                                confidence: 0.5,
                                 deviceName: 'Hallway phone',
-                                enabled: true,
-                                id: 'camera-1',
-                                lastSeenAt: null,
-                                name: 'Rear camera',
-                                online: true,
-                                privacyMode: false,
-                                streaming: false,
-                                viewerCount: 0,
+                                id: 'event-1',
+                                occurredAt: new Date().toISOString(),
                               },
                             ],
-                          },
+                            nextCursor: null,
+                          }
+                        : url.startsWith('/api/activity')
+                          ? { events: [], total: 0 }
+                          : {
+                              cameras: [
+                                {
+                                  credentialRevoked: false,
+                                  deviceId: 'phone-1',
+                                  deviceName: 'Hallway phone',
+                                  enabled: true,
+                                  id: 'camera-1',
+                                  lastSeenAt: null,
+                                  name: 'Rear camera',
+                                  online: true,
+                                  privacyMode: false,
+                                  streaming: false,
+                                  viewerCount: 0,
+                                },
+                              ],
+                            },
             ),
           ok: true,
           status: 200,

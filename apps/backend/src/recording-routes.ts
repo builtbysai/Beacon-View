@@ -1,10 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { Readable } from 'node:stream';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
 import {
   deleteDriveRecordingFile,
+  downloadDriveRecordingFile,
   GOOGLE_DRIVE_RECORDING_SCOPE,
   initiateDriveRecordingUpload,
   refreshDriveAccessToken,
@@ -12,6 +14,7 @@ import {
 } from './google-drive-client.js';
 import type { RecordingRecord } from './recording-types.js';
 import { RecordingKeyCipher } from './recording-crypto.js';
+import type { RateLimiter } from './rate-limit.js';
 import { unauthorized, type SessionAuth } from './session-auth.js';
 import type { SignalingHub } from './signaling.js';
 import type { MilestoneStore } from './store.js';
@@ -56,11 +59,12 @@ export function registerRecordingRoutes(
   dependencies: {
     auth: SessionAuth;
     config: AppConfig;
+    limiter: RateLimiter;
     signaling: SignalingHub;
     store: MilestoneStore;
   },
 ): void {
-  const { auth, config, signaling, store } = dependencies;
+  const { auth, config, limiter, signaling, store } = dependencies;
   const recordingKeyCipher = config.RECORDING_ENCRYPTION_KEY
     ? new RecordingKeyCipher(config.RECORDING_ENCRYPTION_KEY)
     : null;
@@ -98,6 +102,75 @@ export function registerRecordingRoutes(
       cameras.map((camera) => camera.id),
     );
     return { recordings: recordings.map(presentRecording) };
+  });
+
+  app.get('/api/recordings/:recordingId/playback', async (request, reply) => {
+    const session = await auth.authenticate(request, reply);
+    if (!session) return;
+    if (session.role !== 'owner')
+      return reply.code(403).send({ error: 'Household owner access required' });
+    const parameters = parametersSchema.safeParse(request.params);
+    if (!parameters.success)
+      return reply.code(404).send({ error: 'Recording unavailable' });
+    const claim = await store.getRecordingPlaybackClaim(
+      session.householdId,
+      session.userId,
+      parameters.data.recordingId,
+    );
+    if (!claim) return reply.code(404).send({ error: 'Recording unavailable' });
+    if (!recordingKeyCipher)
+      return reply
+        .code(503)
+        .send({ error: 'Encrypted recording storage is unavailable' });
+    if (!limiter.take(`recording-playback:${session.userId}`, 30, 60 * 60_000))
+      return reply.code(429).send({ error: 'Too many playback requests' });
+    try {
+      const dataKey = recordingKeyCipher.unwrap({
+        ciphertext: claim.encryptionDataKeyCiphertext,
+        iv: claim.encryptionDataKeyIv,
+      });
+      if (
+        claim.encryptionIv.length !== 12 ||
+        claim.byteSize > 250 * 1024 * 1024
+      )
+        throw new Error('Invalid recording envelope');
+      const accessToken = await recordingAccessToken(claim.userId);
+      await verifyDriveRecordingFile({
+        accessToken,
+        byteSize: claim.byteSize,
+        mimeType: 'application/octet-stream',
+        providerFileId: claim.providerFileId,
+        recordingId: parameters.data.recordingId,
+      });
+      const provider = await downloadDriveRecordingFile(
+        accessToken,
+        claim.providerFileId,
+      );
+      reply.headers({
+        'Cache-Control': 'no-store, private',
+        'Content-Type': 'application/octet-stream',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Beacon-Recording-Bytes': String(claim.byteSize),
+        'X-Beacon-Recording-Checksum': claim.checksumSha256,
+        'X-Beacon-Recording-Key': dataKey.toString('base64url'),
+        'X-Beacon-Recording-IV': claim.encryptionIv.toString('base64url'),
+        'X-Beacon-Recording-Mime': claim.mimeType,
+      });
+      return reply.send(
+        Readable.from(boundedCiphertext(provider.body!, claim.byteSize)),
+      );
+    } catch (error) {
+      app.log.warn(
+        {
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+          recordingId: parameters.data.recordingId,
+        },
+        'recording playback failed',
+      );
+      return reply
+        .code(503)
+        .send({ error: 'Recording playback is temporarily unavailable' });
+    }
   });
 
   app.post('/api/recordings', async (request, reply) => {
@@ -375,6 +448,29 @@ export function registerRecordingRoutes(
       });
     },
   );
+}
+
+async function* boundedCiphertext(
+  body: ReadableStream<Uint8Array>,
+  expectedBytes: number,
+): AsyncGenerator<Uint8Array> {
+  const reader = body.getReader();
+  let bytes = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > expectedBytes)
+        throw new Error('Recording exceeded expected size');
+      yield value;
+    }
+    if (bytes !== expectedBytes)
+      throw new Error('Recording did not match expected size');
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
 }
 
 function presentRecording(recording: RecordingRecord) {

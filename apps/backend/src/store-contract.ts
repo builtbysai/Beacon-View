@@ -13,6 +13,7 @@ import type {
   RecordingRecord,
 } from './recording-types.js';
 import type { RecordingUploadClaim } from './recording-types.js';
+import type { RecordingPlaybackClaim } from './recording-types.js';
 
 export interface UserRecord {
   id: string;
@@ -351,6 +352,11 @@ export interface MilestoneStore {
     householdId: string,
     cameraSourceIds: string[],
   ): Promise<RecordingRecord[]>;
+  getRecordingPlaybackClaim(
+    householdId: string,
+    userId: string,
+    recordingId: string,
+  ): Promise<RecordingPlaybackClaim | null>;
   deleteRecording(householdId: string, recordingId: string): Promise<boolean>;
   beginAvailableRecordingDeletion(
     householdId: string,

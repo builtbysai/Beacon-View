@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 
 import type {
   RecordingDeletionClaim,
+  RecordingPlaybackClaim,
   RecordingRecord,
   RecordingUploadClaim,
 } from './recording-types.js';
@@ -57,6 +58,32 @@ export class PostgresRecordingRepository {
       [householdId, cameraSourceIds],
     );
     return result.rows;
+  }
+
+  async getPlaybackClaim(
+    householdId: string,
+    userId: string,
+    recordingId: string,
+  ): Promise<RecordingPlaybackClaim | null> {
+    const result = await this.pool.query<RecordingPlaybackClaim>(
+      `SELECT provider_file_id AS "providerFileId", byte_size AS "byteSize",
+              checksum_sha256 AS "checksumSha256", mime_type AS "mimeType",
+              encryption_iv AS "encryptionIv",
+              encryption_data_key_ciphertext AS "encryptionDataKeyCiphertext",
+              encryption_data_key_iv AS "encryptionDataKeyIv",
+              created_by_user_id AS "userId"
+       FROM recordings
+       WHERE id=$3 AND household_id=$1 AND created_by_user_id=$2
+         AND status='available' AND deleted_at IS NULL
+         AND encryption_version=1 AND provider_file_id IS NOT NULL
+         AND byte_size IS NOT NULL AND checksum_sha256 IS NOT NULL
+         AND mime_type IN ('video/mp4', 'video/webm')
+         AND encryption_iv IS NOT NULL
+         AND encryption_data_key_ciphertext IS NOT NULL
+         AND encryption_data_key_iv IS NOT NULL`,
+      [householdId, userId, recordingId],
+    );
+    return result.rows[0] ?? null;
   }
 
   async markDeleted(

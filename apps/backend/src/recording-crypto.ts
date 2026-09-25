@@ -1,4 +1,4 @@
-import { createCipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 export interface WrappedRecordingKey {
   ciphertext: Buffer;
@@ -30,5 +30,16 @@ export class RecordingKeyCipher {
       ]),
       iv,
     };
+  }
+
+  unwrap(wrapped: WrappedRecordingKey): Buffer {
+    if (wrapped.iv.length !== 12 || wrapped.ciphertext.length !== 48)
+      throw new Error('Invalid recording key envelope');
+    const decipher = createDecipheriv('aes-256-gcm', this.#key, wrapped.iv);
+    decipher.setAuthTag(wrapped.ciphertext.subarray(32));
+    return Buffer.concat([
+      decipher.update(wrapped.ciphertext.subarray(0, 32)),
+      decipher.final(),
+    ]);
   }
 }

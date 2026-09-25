@@ -14,6 +14,7 @@ export class GoogleDriveRequestError extends Error {
       | 'recording_file_list'
       | 'recording_file_verify'
       | 'recording_file_delete'
+      | 'recording_file_download'
       | 'recording_upload_start',
     readonly status: number,
   ) {
@@ -173,6 +174,26 @@ export async function deleteDriveRecordingFile(
   );
   if (!response.ok && response.status !== 404)
     throw new GoogleDriveRequestError('recording_file_delete', response.status);
+}
+
+/** Returns ciphertext as a stream; callers must not buffer it on the VM. */
+export async function downloadDriveRecordingFile(
+  accessToken: string,
+  providerFileId: string,
+): Promise<Response> {
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(providerFileId)}?alt=media`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(5 * 60_000),
+    },
+  );
+  if (!response.ok || !response.body)
+    throw new GoogleDriveRequestError(
+      'recording_file_download',
+      response.status,
+    );
+  return response;
 }
 
 export async function refreshDriveAccessToken(
