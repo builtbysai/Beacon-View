@@ -122,6 +122,14 @@ separate owner-readable configuration and systemd timers are installed.
      --entrypoint /usr/local/bin/beacon-restore-verify backup latest
    ```
 
+   On September 25, 2026, this drill restored a temporary encrypted snapshot into
+   `beacon_restore_verify_20260925` in three seconds. The restored database matched
+   the source at 28 migration rows, 23 public tables, and aggregate counts for users,
+   households, cameras, motion events, and recordings. Repository integrity passed.
+   The verification database and temporary snapshot were then removed and pruned.
+   The daily and weekly timers were disabled at the time of the drill, so scheduled
+   retention and expiry remain unproven.
+
 The supplied retention policy keeps seven daily, four weekly, and three monthly
 snapshots. Do not configure an Object Storage lifecycle policy that deletes backup
 objects earlier than that; Restic needs retained pack files to reconstruct snapshots.
