@@ -24,6 +24,15 @@ if [ "${RESTORE_TARGET_DATABASE}" = "${POSTGRES_DB:-}" ]; then
   exit 64
 fi
 
+target_table_count=$(PGPASSWORD="$POSTGRES_PASSWORD" psql \
+  --host=postgres --username="$POSTGRES_USER" --dbname="$RESTORE_TARGET_DATABASE" \
+  --tuples-only --no-align --set=ON_ERROR_STOP=1 \
+  --command "SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema');")
+if [ "$target_table_count" -ne 0 ]; then
+  echo "Refusing to restore into a non-empty verification database." >&2
+  exit 64
+fi
+
 snapshot=${1:-latest}
 workdir=$(mktemp -d)
 cleanup() { rm -rf "$workdir"; }
@@ -38,8 +47,16 @@ fi
 
 PGPASSWORD="$POSTGRES_PASSWORD" pg_restore \
   --host=postgres --username="$POSTGRES_USER" \
-  --dbname="$RESTORE_TARGET_DATABASE" --clean --if-exists --no-owner --no-privileges "$dump"
-PGPASSWORD="$POSTGRES_PASSWORD" psql --host=postgres --username="$POSTGRES_USER" \
+  --dbname="$RESTORE_TARGET_DATABASE" --no-owner --no-privileges "$dump"
+migration_count=$(PGPASSWORD="$POSTGRES_PASSWORD" psql --host=postgres --username="$POSTGRES_USER" \
   --dbname="$RESTORE_TARGET_DATABASE" --tuples-only --no-align \
-  --command 'SELECT 1 FROM users LIMIT 1' >/dev/null
-echo "Restore verification completed for $RESTORE_TARGET_DATABASE."
+  --set=ON_ERROR_STOP=1 --command 'SELECT count(*) FROM drizzle.__drizzle_migrations')
+public_table_count=$(PGPASSWORD="$POSTGRES_PASSWORD" psql --host=postgres --username="$POSTGRES_USER" \
+  --dbname="$RESTORE_TARGET_DATABASE" --tuples-only --no-align \
+  --set=ON_ERROR_STOP=1 \
+  --command "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';")
+if [ "$migration_count" -eq 0 ] || [ "$public_table_count" -eq 0 ]; then
+  echo "Restore completed without the expected migration or application schema." >&2
+  exit 65
+fi
+echo "Restore verification completed for $RESTORE_TARGET_DATABASE (migration rows: $migration_count; public tables: $public_table_count)."
