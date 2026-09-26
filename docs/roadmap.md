@@ -146,8 +146,8 @@ The same Pixel also passed the OS-level denied-permission recovery checks: remov
 microphone access recreated Camera mode without audio, notification denial did not
 interrupt an already-active camera, and a cold restart without notification access
 failed closed with no capture. Restoring both permissions recovered capture without
-clearing device state. Interactive denied-state and privacy tap-through remain open
-until the device is unlocked. Camera mode now replaces its ambiguous startup copy
+clearing device state. Interactive denied-state tap-through remains open. The unlocked
+Pixel privacy control now passes Pause/release/Resume acceptance. Camera mode replaces its ambiguous startup copy
 with state-specific camera, persistent status, or optional microphone guidance.
 
 | ID / priority | Action and owner                                                                     | Acceptance evidence / decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |

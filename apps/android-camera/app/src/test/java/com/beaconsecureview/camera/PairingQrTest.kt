@@ -18,6 +18,16 @@ class PairingQrTest {
                 "https://beacon.builtbysai.com",
             ),
         )
+        // ADR 0067's direct browser setup link carries the same bearer code and must be
+        // accepted too -- a household member scanning it with the Android app should not
+        // be told it "is not a Beacon setup link" just because a browser normally opens it.
+        assertEquals(
+            "ABCD234567",
+            parsePairingQr(
+                "https://beacon.builtbysai.com/camera-mode/setup?code=ABCD234567",
+                "https://beacon.builtbysai.com",
+            ),
+        )
     }
 
     @Test
@@ -31,6 +41,12 @@ class PairingQrTest {
         )
         assertNull(parsePairingQr("beacon://pair?code=too-short"))
         assertNull(parsePairingQr(null))
+        assertNull(
+            parsePairingQr(
+                "https://beacon.builtbysai.com/not-a-setup-path?code=ABCD234567",
+                "https://beacon.builtbysai.com",
+            ),
+        )
     }
 
     @Test

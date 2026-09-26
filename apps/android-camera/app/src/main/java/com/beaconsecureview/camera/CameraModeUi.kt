@@ -278,7 +278,11 @@ internal fun parsePairingQr(rawValue: String?, trustedApiUrl: String? = null): S
         !link.scheme.equals("https", ignoreCase = true) ||
         trustedHost == null ||
         !link.host.equals(trustedHost, ignoreCase = true) ||
-        link.path != "/pair"
+        // ADR 0067 added a direct browser setup link alongside the original generic
+        // pairing link; the code is the same bearer secret either way, so Android must
+        // accept both paths the web app is willing to hand a scanner (app-navigation.ts's
+        // pairingCodeFromScan), not only the original one.
+        link.path !in setOf("/pair", "/camera-mode/setup")
     ) {
         return null
     }

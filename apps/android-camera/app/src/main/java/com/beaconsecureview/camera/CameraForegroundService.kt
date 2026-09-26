@@ -54,11 +54,27 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     private var selectedCamera: RegisteredCameraSource? = null
     private var captureGeneration = 0
     private lateinit var privacyGate: PrivacyGate
+    private var startupBlockedByMissingCameraPermission = false
     @Volatile
     private var motionSettings = emptyMap<String, MotionSettings>()
 
     override fun onCreate() {
         super.onCreate()
+        if (!hasCameraPermission()) {
+            startupBlockedByMissingCameraPermission = true
+            CameraRuntime.update {
+                it.copy(
+                    cameraEnabled = false,
+                    sourceLifecycle = CameraSourceLifecycle.Disabled,
+                    diagnostic = "Camera permission is required",
+                )
+            }
+            // Android may restart this START_STICKY service immediately after the user
+            // revokes camera permission. Declaring a camera foreground-service type in
+            // that state throws SecurityException before the Activity can request access.
+            stopSelf()
+            return
+        }
         privacyGate = PrivacyGate(
             getSharedPreferences(PREFERENCES, MODE_PRIVATE).getBoolean(PENDING_PRIVACY_PAUSE, false),
         )
@@ -141,6 +157,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        if (startupBlockedByMissingCameraPermission) return START_NOT_STICKY
         if (intent?.action == ACTION_SELECT_CAMERA) {
             selectCamera(intent.getStringExtra(EXTRA_CAMERA_ID))
             return START_STICKY
@@ -757,6 +774,10 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
 
     private fun hasMicrophonePermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun hasCameraPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
 
     private fun createNotificationChannel() {

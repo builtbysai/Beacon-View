@@ -1,5 +1,226 @@
 # Beacon SecureView development handoff
 
+## September 25, 2026 — current continuation state
+
+This section supersedes older deployment, backup, and active-branch statements below.
+Read [AGENTS.md](../AGENTS.md), [roadmap.md](roadmap.md), and this section before
+editing. GitHub `main` is the canonical base; do not work directly on it.
+
+### Do not put keys in this repository
+
+This handoff identifies the access material a new environment needs, but does not
+contain secret values, private keys, tokens, `.env` files, Android signing material,
+or certificates. Obtain them from the owner through the approved private channel.
+
+| Need                                  | Where it belongs                                                                                    | Notes                                                                                                                 |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| GitHub repository access              | GitHub account / credential manager                                                                 | Repository: `builtbysai/Beacon-SecureView`.                                                                           |
+| Oracle administrative SSH private key | User-private SSH directory or approved secret manager                                               | Never copy into the repository or a shared Downloads folder.                                                          |
+| Oracle host key                       | `~/.ssh/known_hosts` from an approved source                                                        | Keep strict host-key checking enabled.                                                                                |
+| Tailscale identity                    | Tailscale client signed into the Beacon tailnet                                                     | Oracle SSH is tailnet-only; public SSH is intentionally closed.                                                       |
+| Production application configuration  | `/etc/beacon/production.env` on Oracle, root-owned mode `600`                                       | Includes database, TURN, OAuth, Drive-recording, notification, and application secrets. Do not print or copy it.      |
+| Backup configuration                  | `/etc/beacon/backup.env` on Oracle, root-owned mode `600`                                           | Object Storage credentials and Restic password; currently retained empty by owner request.                            |
+| Firebase Android configuration        | User-private `google-services.json`, installed by `scripts/Install-BeaconFirebaseAndroidConfig.ps1` | The destination is ignored by Git.                                                                                    |
+| Google OAuth and Drive configuration  | Production environment only                                                                         | Browser sign-in, Drive connection, and recording export cannot be reproduced without owner-managed OAuth credentials. |
+
+### New development environment
+
+Use Windows PowerShell from `C:\Dev\Beacon-SecureView` (or an equivalent clean
+checkout). Install Node 22.13+ within Node 22, pnpm 11.9.0, Docker Desktop with
+Compose, JDK 17, Android SDK Platform 35, Android platform tools, GitHub CLI, and
+Tailscale. For Android Studio's bundled JDK on this machine, use
+`C:\Program Files\Android\Android Studio\jbr\bin\java.exe` directly when the
+shell does not expose `JAVA_HOME`.
+
+```powershell
+git clone https://github.com/builtbysai/Beacon-SecureView.git C:\Dev\Beacon-SecureView
+Set-Location C:\Dev\Beacon-SecureView
+pnpm install --frozen-lockfile
+.\Start-Beacon.ps1
+```
+
+`Start-Beacon.ps1` creates ignored local configuration when needed, starts local
+PostgreSQL and Coturn, applies migrations, starts the secure local development stack,
+and opens the viewer. Stop it with `.\Stop-Beacon.ps1`; run the ordinary validation
+with `.\Test-Beacon.ps1` or `pnpm check`.
+
+For a physical Android device on a trusted LAN, install the owner-provided Firebase
+configuration first, then follow [physical-android-device-development.md](physical-android-device-development.md).
+The current Pixel is serial `34171JEHN07672`. Preserve its app data; do not clean
+install or clear it unless the owner explicitly asks.
+
+Before beginning a change, inspect other work and create a branch:
+
+```powershell
+git fetch origin --prune
+git worktree list
+git branch -r
+git switch main
+git pull --ff-only
+git switch -c codex/<short-description>
+```
+
+Run the focused checks while developing, then `pnpm check`. Android's full local
+gate on this Windows host is:
+
+```powershell
+& 'C:\Program Files\Android\Android Studio\jbr\bin\java.exe' `
+  -classpath apps/android-camera/gradle/wrapper/gradle-wrapper.jar `
+  org.gradle.wrapper.GradleWrapperMain -p apps/android-camera --no-daemon `
+  testDebugUnitTest lintDebug assembleDebug assembleRelease
+```
+
+### Connecting to Oracle
+
+Connect Tailscale first. Configure a local SSH alias using the owner-provided private
+key and known-host entry; this is the shape of the current configuration, with the
+key filename intentionally omitted:
+
+```sshconfig
+Host beacon-oracle
+    HostName beacon-secureview-oracle
+    User ubuntu
+    IdentityFile ~/.ssh/<owner-provided-beacon-key>
+    IdentitiesOnly yes
+    HostKeyAlias 129.213.128.206
+    StrictHostKeyChecking yes
+```
+
+Then verify private access without exposing configuration values:
+
+```powershell
+ssh beacon-oracle "hostname; date -Is"
+ssh beacon-oracle "sudo docker ps --format '{{.Names}}|{{.Status}}'"
+ssh beacon-oracle "sudo systemctl list-timers 'beacon-backup*' --all --no-pager"
+```
+
+Oracle layout:
+
+- Compose project: `beacon-secureview-cloud`
+- Release directories: `/opt/beacon/releases/web-<full-git-sha>`
+- Current production environment: `/etc/beacon/production.env`
+- Backup environment: `/etc/beacon/backup.env`
+- Services: `postgres`, `backend`, `web`, and `coturn`
+- Public private-alpha URL: `https://beacon.builtbysai.com`
+
+Never expose PostgreSQL, backend port 3000, production environment files, private
+keys, or TURN secrets. Use `sudo docker logs beacon-secureview-cloud-backend-1 --tail 100`
+for redacted backend diagnostics and `https://beacon.builtbysai.com/health` plus
+`/ready` for public liveness/readiness checks.
+
+### Deploying a reviewed commit
+
+`Deploy Beacon to Oracle` is currently **disabled manually**, so merging does not
+automatically deploy. Do not re-enable it without an explicit decision about future
+automatic releases. Deploy the exact reviewed `main` commit manually with the same
+sequence the workflow uses:
+
+1. Record the full SHA with `git rev-parse HEAD`; ensure it is the intended merged
+   `main` commit and its CI run is successful.
+2. Create `git archive --format=tar.gz` for that SHA and copy it to
+   `/tmp/beacon-<sha>.tar.gz` on `beacon-oracle`.
+3. On Oracle, extract it into `/opt/beacon/releases/web-<sha>`.
+4. Use that release's `infrastructure/cloud/compose.yaml` with both root-owned
+   environment files. Build `backend`, `migrate`, `migrate-verify`, and `web`; bring
+   up PostgreSQL; run migration and migration-schema verification; then replace only
+   backend and web.
+5. Check local TLS-routed `/health` and `/ready`, public `/health` and `/ready`,
+   container status, and backend startup logs.
+
+Use this remote command pattern after the archive is uploaded. It deliberately uses a
+release directory and never overwrites `/opt/beacon/app` or reads secret values into
+the terminal:
+
+```bash
+set -euo pipefail
+release_sha='<full-reviewed-sha>'
+release_dir="/opt/beacon/releases/web-${release_sha}"
+compose_file="${release_dir}/infrastructure/cloud/compose.yaml"
+env_files=(--env-file /etc/beacon/production.env --env-file /etc/beacon/backup.env)
+
+sudo install -d -m 0755 "$release_dir"
+sudo tar --extract --gzip --file "/tmp/beacon-${release_sha}.tar.gz" --directory "$release_dir"
+rm -f "/tmp/beacon-${release_sha}.tar.gz"
+
+sudo docker compose --project-name beacon-secureview-cloud "${env_files[@]}" --file "$compose_file" build backend migrate migrate-verify web
+sudo docker compose --project-name beacon-secureview-cloud "${env_files[@]}" --file "$compose_file" up -d postgres
+sudo docker compose --project-name beacon-secureview-cloud "${env_files[@]}" --file "$compose_file" run --rm --interactive=false migrate
+sudo docker compose --project-name beacon-secureview-cloud "${env_files[@]}" --file "$compose_file" run --rm --interactive=false migrate-verify
+sudo docker compose --project-name beacon-secureview-cloud "${env_files[@]}" --file "$compose_file" up -d --no-deps backend web
+
+domain=beacon.builtbysai.com
+curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors --resolve "${domain}:443:127.0.0.1" "https://${domain}/health" >/dev/null
+curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors --resolve "${domain}:443:127.0.0.1" "https://${domain}/ready" >/dev/null
+```
+
+The explicit `migrate-verify` step is mandatory. Migrations have historically printed
+success while missing schema work; do not replace it with the migration command alone.
+For a migration that changes schema, independently query only the relevant catalog
+shape and avoid dumping application data. See [github-web-deployment.md](github-web-deployment.md)
+and [oracle-cloud-staging.md](oracle-cloud-staging.md) for rollback and recovery limits.
+
+### Backup and database state
+
+The owner cleared application data, accounts, and Restic snapshots on September 23.
+The Oracle backup repository currently remains empty and both scheduled backup timers
+are disabled. PR #64 recorded a temporary snapshot/isolated restore drill, then removed
+the verification database and pruned that snapshot so the empty-backup state remained.
+PR #65 hardened the restore verifier: it refuses the live or any nonempty target
+database, and verifies migration/public-table presence after restore.
+
+Do not enable backup timers, write directly to the production database, restore over
+the live database, or create retained backups unless the owner explicitly asks. A future
+restore drill must create a separate empty verification database, use the explicit
+`BEACON_ALLOW_DESTRUCTIVE_RESTORE=RESTORE_A_SEPARATE_DATABASE` marker, compare aggregate
+counts without exposing users, and drop the verification database afterward.
+
+### Current branch and immediate next work
+
+At this handoff:
+
+- `main` includes production recording CORS repair (PR #63), backup restore proof
+  (PR #64), and restore-verifier hardening (PR #65).
+- PR #66, `codex/android-privacy-evidence`, has passing CI and records the successful
+  unlocked Pause/Resume privacy control test. It has an additional uncommitted Android
+  service fix and must not be merged as documentation-only until that fix is completed,
+  tested, committed, and its PR title/body are updated.
+- The uncommitted fix in
+  `apps/android-camera/app/src/main/java/com/beaconsecureview/camera/CameraForegroundService.kt`
+  handles a real Pixel regression: when Android revokes `CAMERA`, it kills and can
+  restart the sticky service; `onCreate()` immediately attempted a camera foreground
+  service and Android threw `SecurityException`. The draft change stops the service
+  before it declares a camera FGS type and makes the restart non-sticky while camera
+  permission is absent.
+- The Pixel's camera permission was restored after reproducing the crash and its live
+  camera capture resumed. A freshly rebuilt debug APK exists locally but still needs
+  installation with `adb install -r <apk>` and the physical permission-revocation
+  regression test. Preserve the app data.
+
+Finish this in order: inspect the uncommitted diff; run Android unit/lint/build;
+install the debug APK with `-r`; revoke `android.permission.CAMERA`; verify there is no
+crash and Beacon presents the permission request; grant camera permission through the
+normal UI; verify the service and preview return; update tests and this evidence record;
+then push a focused PR. Do not claim the camera-denied flow is complete until that run
+passes.
+
+### Remaining roadmap
+
+`docs/roadmap.md` is authoritative. The near-term items are:
+
+| Priority         | Work remaining                                                                                                                                                                                             |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0 N1            | Finish Android physical recovery: camera-denied flow above, active-Listen microphone release, remote frame check after every lens switch, late-viewer behavior, and network loss/recovery.                 |
+| P0 N2            | Physical Google chooser/cancel/return, Listen/Talk consent and teardown, speaker/Bluetooth/echo, competing talk owners, direct and forced TURN across separate networks.                                   |
+| P0 N3            | Recovery drill now has a successful isolated proof, but scheduled retention evidence, RPO/RTO, recovery operator, and a deliberate decision on enabling timers remain open.                                |
+| P0 N4/N7         | Owner decisions and review: email/domain identity, sender DNS evidence, support/incident operator, retention disclosures, legal/trust publication.                                                         |
+| P0 N5/N6         | MFA/passkey decision, native/physical security-alert evidence, independent security review, Android signing/AAB/versioning, rollout and Play readiness.                                                    |
+| P1 N8/N9         | Accessibility and responsive physical-device checks; older-device capacity, thermal, battery, bandwidth, and long-session recovery measurements.                                                           |
+| Recording        | Retest browser recording after PR #63: capture, direct Drive upload, playback, failure retry, removal, and Drive verification. Android real-account recording/upload/playback is still an acceptance gate. |
+| Sharing and push | Inbox/bounce evidence, multi-account sharing acceptance, native FCM or installed-PWA notification evidence, invalid-token cleanup, quiet hours, and lock-screen redaction.                                 |
+| Deferred         | IoT adapters, IP cameras, cross-platform native clients, cloud-synced workspaces, smart detection, subscriptions, ads, and biometric features require separate approval.                                   |
+
+Do not start a deferred item from the last row without an approved design milestone.
+
 Updated September 23, 2026. This is the shortest reliable orientation for a new
 development session. GitHub is canonical; the maintained local checkout is
 `C:\Dev\Beacon-SecureView`.
@@ -393,8 +614,8 @@ this doc short. Known follow-ups not done in that pass:
 - Repository: `builtbysai/Beacon-SecureView`
 - Active local branch should be a new `codex/*` feature branch, never `main`.
 - Pull requests target `main`; required CI must pass before merge.
-- Once the current workflow change is reviewed and merged, a successful CI run for a
-  push to `main` triggers the protected `Deploy Beacon to Oracle` workflow.
+- The GitHub deployment workflow is manually disabled. Use the current release-directory
+  procedure in the September 25 section above until the owner explicitly changes that.
 - Deployment uploads the validated source, applies migrations, restarts the backend
   and web services, and checks the local HTTPS `/health` and `/ready` endpoints.
 - Canonical private-alpha URL: <https://beacon.builtbysai.com>
@@ -402,6 +623,10 @@ this doc short. Known follow-ups not done in that pass:
   intentionally unsupported. Existing native installations need a canonical-domain
   build.
 - Deployment details and rollback boundaries: [github-web-deployment.md](github-web-deployment.md)
+
+> **Historical only:** the procedure below predates the release-directory deployment
+> above. Do not use it; it copies source through `/opt/beacon/app` and lacks the current
+> migration-schema verification path.
 
 **In practice, every deploy this year — including September 16's — has been
 done manually over SSH, not through the GitHub Actions workflow above** (that
