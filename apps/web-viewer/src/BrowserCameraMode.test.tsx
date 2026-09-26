@@ -272,7 +272,7 @@ describe('BrowserCameraMode', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Camera' }), {
       target: { value: 'usb' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Switch camera' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'USB camera unavailable',
     );
@@ -280,6 +280,87 @@ describe('BrowserCameraMode', () => {
     expect(stopCurrentTrack).not.toHaveBeenCalled();
     expect(screen.getByRole('combobox', { name: 'Camera' })).toHaveValue(
       'built-in',
+    );
+  });
+
+  it('renames the device and camera from the active settings panel, and Escape closes it', async () => {
+    Object.defineProperty(window, 'isSecureContext', {
+      configurable: true,
+      value: true,
+    });
+    const permissionStream = {
+      getTracks: () => [{ stop: vi.fn() }],
+    } as unknown as MediaStream;
+    const captureStream = {
+      getTracks: () => [{ stop: vi.fn() }],
+      getVideoTracks: () => [{ id: 'track', contentHint: '' }],
+    } as unknown as MediaStream;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: vi
+          .fn()
+          .mockResolvedValue([
+            { deviceId: 'built-in', kind: 'videoinput', label: 'Webcam' },
+          ]),
+        getUserMedia: vi
+          .fn()
+          .mockResolvedValueOnce(permissionStream)
+          .mockResolvedValue(captureStream),
+      },
+    });
+    const fetchMock = vi.fn<
+      (input: string | URL, init?: RequestInit) => Promise<Response>
+    >(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            cameras: [
+              {
+                id: 'camera-one',
+                name: 'Webcam',
+                sourceKey: 'browser:built-in',
+              },
+            ],
+            device: { id: 'device-one', name: 'Living room' },
+          }),
+          { status: 201 },
+        ),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('WebSocket', CameraSocket);
+
+    render(<BrowserCameraMode onBack={() => undefined} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Allow camera access' }),
+    );
+    await screen.findByText('Webcam');
+    fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
+    await screen.findByText('Camera Mode ready');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
+    const nameField = screen.getByRole('textbox', { name: 'Device name' });
+    expect(nameField).toHaveValue('Living room');
+    fireEvent.change(nameField, { target: { value: 'Front porch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => {
+      const lastCall = fetchMock.mock.calls.at(-1);
+      expect(lastCall?.[0]).toBe('/api/browser-devices');
+      const body = lastCall?.[1]?.body;
+      expect(typeof body).toBe('string');
+      expect(body as string).toContain('"name":"Front porch"');
+    });
+
+    fireEvent(
+      screen.getByRole('dialog'),
+      new Event('cancel', { bubbles: false, cancelable: true }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('textbox', { name: 'Device name' }),
+      ).not.toBeInTheDocument(),
     );
   });
 
@@ -694,9 +775,7 @@ describe('BrowserCameraMode', () => {
     expect(activeButton).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
     expect(screen.getByRole('combobox', { name: 'Camera' })).toBeDisabled();
-    expect(
-      screen.getByRole('button', { name: 'Switch camera' }),
-    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
     fireEvent.click(activeButton);
     FakeMediaRecorder.instances[0]!.stop();
 

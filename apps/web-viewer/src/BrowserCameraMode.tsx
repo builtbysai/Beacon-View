@@ -527,37 +527,98 @@ export function BrowserCameraMode({
           Camera: {state} · Viewers: {viewerCount} · Reconnects: {retryCount}
         </p>
         {settingsOpen && (
-          <div
+          <ModalDialog
             className="broadcast-settings"
-            role="dialog"
-            aria-label="Camera settings"
+            labelledBy="cameraSettingsTitle"
+            onDismiss={() => setSettingsOpen(false)}
           >
-            <label htmlFor="activeCameraSelect">Camera</label>
-            <select
-              id="activeCameraSelect"
-              value={selectedKey}
-              onChange={(event) => setSelectedKey(event.target.value)}
-              disabled={clipBusy}
-            >
-              {inputs.map((input) => (
-                <option key={input.deviceId} value={input.deviceId}>
-                  {input.label}
-                </option>
-              ))}
-            </select>
+            <h2 id="cameraSettingsTitle">Camera settings</h2>
+            {retryCount > 0 && (
+              <p className="local-hint" role="status">
+                {retryCount} reconnect{retryCount === 1 ? '' : 's'} so far
+              </p>
+            )}
+            <div className="local-field">
+              <label htmlFor="activeDeviceName">Device name</label>
+              <input
+                id="activeDeviceName"
+                value={deviceName}
+                maxLength={100}
+                disabled={clipBusy}
+                onChange={(event) => setDeviceName(event.target.value)}
+              />
+            </div>
+            <div className="local-field">
+              <label htmlFor="activeCameraSelect">Camera</label>
+              <select
+                id="activeCameraSelect"
+                value={selectedKey}
+                onChange={(event) => setSelectedKey(event.target.value)}
+                disabled={clipBusy}
+              >
+                {inputs.map((input) => (
+                  <option key={input.deviceId} value={input.deviceId}>
+                    {input.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="local-field">
+              <label htmlFor="activeCameraName">Camera name</label>
+              <input
+                id="activeCameraName"
+                value={sourceNames[selectedKey] ?? ''}
+                maxLength={100}
+                disabled={clipBusy}
+                onChange={(event) =>
+                  setSourceNames((current) => ({
+                    ...current,
+                    [selectedKey]: event.target.value,
+                  }))
+                }
+              />
+            </div>
+            {wakeLockSupported() && (
+              <label className="local-check full">
+                <input
+                  checked={wakeLockEnabled}
+                  type="checkbox"
+                  onChange={(event) => {
+                    const enabled = event.target.checked;
+                    wakeLockEnabledRef.current = enabled;
+                    setWakeLockEnabled(enabled);
+                    try {
+                      localStorage.setItem(WAKE_LOCK_KEY, String(enabled));
+                    } catch {
+                      // Camera Mode still works with a session-only preference.
+                    }
+                    if (!enabled) {
+                      void wakeLockRef.current?.release();
+                      wakeLockRef.current = null;
+                    } else if (state !== 'offline') {
+                      void acquireWakeLock();
+                    }
+                  }}
+                />
+                <span>Keep this device awake while Camera Mode is active</span>
+              </label>
+            )}
             <div className="heading-actions">
               <button
                 type="button"
                 onClick={() => void registerAndStart()}
                 disabled={clipBusy}
               >
-                Switch camera
+                Save changes
               </button>
               <button className="secondary" onClick={onBack} type="button">
                 Back to dashboard
               </button>
             </div>
-          </div>
+            <div className="local-hint">
+              Saving briefly reconnects this camera to apply changes.
+            </div>
+          </ModalDialog>
         )}
       </main>
     );
