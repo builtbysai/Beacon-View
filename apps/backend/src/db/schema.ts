@@ -392,6 +392,13 @@ export const recordings = pgTable(
     createdByUserId: uuid('created_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    // Null for a manually started recording. Set for an automatic,
+    // motion-triggered one, so a clip can be shown as supporting evidence on
+    // the Activity event that caused it rather than as its own timeline row.
+    triggerMotionEventId: uuid('trigger_motion_event_id').references(
+      () => motionEvents.id,
+      { onDelete: 'set null' },
+    ),
     status: text('status').notNull().default('requested'),
     provider: text('provider').notNull().default('google_drive'),
     providerFileId: text('provider_file_id'),
@@ -403,6 +410,19 @@ export const recordings = pgTable(
     encryptionIv: bytea('encryption_iv'),
     encryptionDataKeyCiphertext: bytea('encryption_data_key_ciphertext'),
     encryptionDataKeyIv: bytea('encryption_data_key_iv'),
+    // A thumbnail is a second, independently encrypted small image captured
+    // client-side (never derived from decrypting the clip server-side) --
+    // same envelope shape as the clip itself. Null until (and unless) one is
+    // uploaded; a clip is fully usable without one. See ADR 0078.
+    thumbnailProviderFileId: text('thumbnail_provider_file_id'),
+    thumbnailByteSize: integer('thumbnail_byte_size'),
+    thumbnailChecksumSha256: text('thumbnail_checksum_sha256'),
+    thumbnailMimeType: text('thumbnail_mime_type'),
+    thumbnailEncryptionIv: bytea('thumbnail_encryption_iv'),
+    thumbnailEncryptionDataKeyCiphertext: bytea(
+      'thumbnail_encryption_data_key_ciphertext',
+    ),
+    thumbnailEncryptionDataKeyIv: bytea('thumbnail_encryption_data_key_iv'),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
     ...timestamps,
@@ -416,7 +436,11 @@ export const recordings = pgTable(
       table.cameraSourceId,
       table.createdAt,
     ),
+    index('recordings_trigger_motion_event_idx').on(table.triggerMotionEventId),
     uniqueIndex('recordings_provider_file_unique').on(table.providerFileId),
+    uniqueIndex('recordings_thumbnail_provider_file_unique').on(
+      table.thumbnailProviderFileId,
+    ),
     check(
       'recordings_status_valid',
       sql`${table.status} in ('requested', 'recording', 'uploading', 'available', 'failed', 'deleting', 'deleted')`,
@@ -436,6 +460,14 @@ export const recordings = pgTable(
     check(
       'recordings_mime_type_valid',
       sql`${table.mimeType} is null or ${table.mimeType} in ('video/mp4', 'video/webm')`,
+    ),
+    check(
+      'recordings_thumbnail_size_valid',
+      sql`${table.thumbnailByteSize} is null or ${table.thumbnailByteSize} > 0`,
+    ),
+    check(
+      'recordings_thumbnail_mime_type_valid',
+      sql`${table.thumbnailMimeType} is null or ${table.thumbnailMimeType} in ('image/jpeg', 'image/webp')`,
     ),
   ],
 );
@@ -794,5 +826,34 @@ export const guestLinkCameras = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.guestLinkId, table.cameraSourceId] }),
+  ],
+);
+
+// A household owner's time-limited, revocable link letting someone outside
+// the household view one specific clip without a Beacon account. At most one
+// active (non-expired, non-revoked) link exists per recording -- creating a
+// new one revokes the old one first. See ADR 0077.
+export const recordingShareLinks = pgTable(
+  'recording_share_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recordings.id, { onDelete: 'cascade' }),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    lastAccessedAt: timestamp('last_accessed_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('recording_share_links_token_hash_unique').on(table.tokenHash),
+    index('recording_share_links_recording_idx').on(table.recordingId),
   ],
 );

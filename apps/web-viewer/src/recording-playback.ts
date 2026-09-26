@@ -14,15 +14,25 @@ function decodeBase64Url(
   return bytes;
 }
 
-/** The server authorizes access and relays ciphertext; only this browser decrypts it. */
-export async function loadRecordingForPlayback(
-  recordingId: string,
+/** The server authorizes access (by session for a household member, by a
+ * share token for an unauthenticated recipient) and relays ciphertext;
+ * only this browser ever decrypts it. */
+const KNOWN_MIME_TYPES = new Set([
+  'video/webm',
+  'video/mp4',
+  'image/jpeg',
+  'image/webp',
+]);
+
+async function loadEncryptedRecording(
+  playbackUrl: string,
   signal?: AbortSignal,
 ): Promise<Blob> {
-  const response = await fetch(
-    `/api/recordings/${encodeURIComponent(recordingId)}/playback`,
-    { cache: 'no-store', credentials: 'same-origin', signal: signal ?? null },
-  );
+  const response = await fetch(playbackUrl, {
+    cache: 'no-store',
+    credentials: 'same-origin',
+    signal: signal ?? null,
+  });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as {
       error?: string;
@@ -42,7 +52,8 @@ export async function loadRecordingForPlayback(
     expectedBytes > MAX_ENCRYPTED_BYTES ||
     !checksum ||
     !/^[a-f0-9]{64}$/u.test(checksum) ||
-    (mimeType !== 'video/webm' && mimeType !== 'video/mp4') ||
+    !mimeType ||
+    !KNOWN_MIME_TYPES.has(mimeType) ||
     !keyValue ||
     !ivValue
   )
@@ -73,4 +84,38 @@ export async function loadRecordingForPlayback(
   if (signal?.aborted)
     throw new DOMException('Playback cancelled', 'AbortError');
   return new Blob([plaintext], { type: mimeType });
+}
+
+export async function loadRecordingForPlayback(
+  recordingId: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  return loadEncryptedRecording(
+    `/api/recordings/${encodeURIComponent(recordingId)}/playback`,
+    signal,
+  );
+}
+
+export async function loadSharedRecordingForPlayback(
+  token: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  return loadEncryptedRecording(
+    `/api/shared-recordings/${encodeURIComponent(token)}/playback`,
+    signal,
+  );
+}
+
+export function extensionForRecordingMime(mimeType: string): string {
+  return mimeType === 'video/mp4' ? 'mp4' : 'webm';
+}
+
+export async function loadRecordingThumbnail(
+  recordingId: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  return loadEncryptedRecording(
+    `/api/recordings/${encodeURIComponent(recordingId)}/thumbnail`,
+    signal,
+  );
 }

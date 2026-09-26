@@ -718,11 +718,6 @@ describe('App', () => {
           status: 200,
         })
         .mockResolvedValueOnce({
-          json: () => Promise.resolve({ recordings: [] }),
-          ok: true,
-          status: 200,
-        })
-        .mockResolvedValueOnce({
           json: () =>
             Promise.resolve({
               events: [

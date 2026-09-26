@@ -14,12 +14,14 @@ import { ReauthenticationDialog } from './ReauthenticationDialog';
 import { BrowserCameraMode } from './BrowserCameraMode';
 import { MotionEventList } from './MotionEventList';
 import { RecordingLibrary } from './RecordingLibrary';
+import { EventsViewSwitch, type EventsView } from './EventsViewSwitch';
 import { AuthScreen } from './AuthScreen';
 import { SplashScreen } from './SplashScreen';
 import { CameraBrowser } from './CameraBrowser';
 import { ContactPage } from './ContactPage';
 import { Diagnostics } from './Diagnostics';
 import { GuestViewPage } from './GuestViewPage';
+import { SharedRecordingPage } from './SharedRecordingPage';
 import { Brand, Icon } from './Icon';
 import { Sidebar, SidebarProvider, SidebarTrigger } from './Sidebar';
 import { PendingDeviceRow } from './PendingDeviceRow';
@@ -110,6 +112,11 @@ export function App() {
   const [activityNotice, setActivityNotice] = useState('');
   const [motionEventRevision, setMotionEventRevision] = useState(0);
   const [motionClearRevision, setMotionClearRevision] = useState(0);
+  const [eventsView, setEventsView] = useState<EventsView>('activity');
+  const [focusRecordingId, setFocusRecordingId] = useState<string | null>(null);
+  const [focusMotionEventId, setFocusMotionEventId] = useState<string | null>(
+    null,
+  );
   const [membershipRevision, setMembershipRevision] = useState(0);
   const [driveRecordingReady, setDriveRecordingReady] = useState(false);
   const [capabilities, setCapabilities] = useState<BackendCapabilities | null>(
@@ -153,6 +160,7 @@ export function App() {
     setSelectedCamera(null);
     setBrowserCameraActive(false);
     setSettingsSection(new URLSearchParams(search).get('section'));
+    if (next === 'events') setEventsView('activity');
   }, []);
 
   useEffect(() => {
@@ -247,7 +255,8 @@ export function App() {
       window.location.pathname === '/auth/mobile' ||
       window.location.pathname === '/account/verify-email' ||
       window.location.pathname === '/account/reset-password' ||
-      window.location.pathname.startsWith('/g/')
+      window.location.pathname.startsWith('/g/') ||
+      window.location.pathname.startsWith('/shared/')
     )
       return;
     void request<{ household: HouseholdSession; user: User }>('/api/auth/me')
@@ -838,6 +847,8 @@ export function App() {
   }
 
   if (window.location.pathname.startsWith('/g/')) return <GuestViewPage />;
+  if (window.location.pathname.startsWith('/shared/'))
+    return <SharedRecordingPage />;
   if (window.location.pathname === '/camera-mode/setup')
     return (
       <BrowserCameraMode
@@ -1453,20 +1464,40 @@ export function App() {
             )}
             {page === 'events' && (
               <>
-                {household?.role === 'owner' && <RecordingLibrary />}
-                <MotionEventList
-                  filterStorageKey={`beacon_motion_filters_${user.id}`}
-                  includeHouseholdActivity={
-                    household?.role === 'owner' || household?.role === 'admin'
-                  }
-                  refreshRevision={motionEventRevision}
-                  clearRevision={motionClearRevision}
-                  cameras={cameras}
-                  onCamera={(id) => {
-                    const camera = cameras.find((item) => item.id === id);
-                    if (camera) openCamera(camera);
-                  }}
-                />
+                <EventsViewSwitch value={eventsView} onChange={setEventsView} />
+                {eventsView === 'clips' ? (
+                  <RecordingLibrary
+                    cameras={cameras}
+                    canDelete={household?.role === 'owner'}
+                    canShare={household?.role === 'owner'}
+                    focusRecordingId={focusRecordingId}
+                    onFocusHandled={() => setFocusRecordingId(null)}
+                    onOpenEvent={(motionEventId) => {
+                      setFocusMotionEventId(motionEventId);
+                      setEventsView('activity');
+                    }}
+                  />
+                ) : (
+                  <MotionEventList
+                    filterStorageKey={`beacon_motion_filters_${user.id}`}
+                    includeHouseholdActivity={
+                      household?.role === 'owner' || household?.role === 'admin'
+                    }
+                    refreshRevision={motionEventRevision}
+                    clearRevision={motionClearRevision}
+                    cameras={cameras}
+                    onCamera={(id) => {
+                      const camera = cameras.find((item) => item.id === id);
+                      if (camera) openCamera(camera);
+                    }}
+                    onViewClip={(recordingId: string) => {
+                      setFocusRecordingId(recordingId);
+                      setEventsView('clips');
+                    }}
+                    focusMotionEventId={focusMotionEventId}
+                    onFocusHandled={() => setFocusMotionEventId(null)}
+                  />
+                )}
               </>
             )}
             {page === 'diagnostics' && <Diagnostics />}
