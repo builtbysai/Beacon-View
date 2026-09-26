@@ -31,11 +31,14 @@ export class PostgresMotionRepository {
               cs.display_name AS "cameraName", d.name AS "deviceName",
               me.confidence::double precision AS confidence,
               me.occurred_at AS "occurredAt",
-              to_char(me.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorTimestamp"
+              to_char(me.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorTimestamp",
+              r.id AS "recordingId", r.status AS "recordingStatus"
        FROM motion_events me
        JOIN camera_sources cs ON cs.id = me.camera_source_id
        JOIN cameras d ON d.id = cs.device_id
        JOIN households h ON h.id = d.household_id
+       LEFT JOIN recordings r ON r.trigger_motion_event_id = me.id
+         AND r.deleted_at IS NULL
        WHERE d.household_id = $1
          AND me.occurred_at >= now() - (h.motion_retention_days * interval '1 day')
          AND ($2::uuid IS NULL OR cs.public_camera_id = $2)
@@ -55,6 +58,30 @@ export class PostgresMotionRepository {
       ],
     );
     return result.rows;
+  }
+
+  async getMotionEventById(
+    householdId: string,
+    motionEventId: string,
+    allowedCameraIds?: string[],
+  ): Promise<MotionEventRecord | null> {
+    const result = await this.pool.query<MotionEventRecord>(
+      `SELECT me.id, cs.public_camera_id AS "publicCameraId",
+              cs.display_name AS "cameraName", d.name AS "deviceName",
+              me.confidence::double precision AS confidence,
+              me.occurred_at AS "occurredAt",
+              to_char(me.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorTimestamp",
+              r.id AS "recordingId", r.status AS "recordingStatus"
+       FROM motion_events me
+       JOIN camera_sources cs ON cs.id = me.camera_source_id
+       JOIN cameras d ON d.id = cs.device_id
+       LEFT JOIN recordings r ON r.trigger_motion_event_id = me.id
+         AND r.deleted_at IS NULL
+       WHERE d.household_id = $1 AND me.id = $2
+         AND ($3::uuid[] IS NULL OR cs.public_camera_id = ANY($3::uuid[]))`,
+      [householdId, motionEventId, allowedCameraIds ?? null],
+    );
+    return result.rows[0] ?? null;
   }
 
   async getMotionRetention(
@@ -175,6 +202,7 @@ export class PostgresMotionRepository {
     cameraSourceId: string;
     ownerId: string;
     recordOnMotion: boolean;
+    motionEventId: string | null;
   } | null> {
     const client = await this.pool.connect();
     try {
@@ -234,6 +262,7 @@ export class PostgresMotionRepository {
           cameraSourceId: sourceId,
           created: false,
           householdId: device.householdId,
+          motionEventId: null,
           ownerId: device.userId,
           recordOnMotion: false,
         };
@@ -254,6 +283,7 @@ export class PostgresMotionRepository {
           cameraSourceId: sourceId,
           created: false,
           householdId: device.householdId,
+          motionEventId: null,
           ownerId: device.userId,
           recordOnMotion: false,
         };
@@ -286,6 +316,7 @@ export class PostgresMotionRepository {
         cameraSourceId: sourceId,
         created,
         householdId: device.householdId,
+        motionEventId: created ? motionEventId! : null,
         ownerId: device.userId,
         recordOnMotion: created && sourceSettings.recordOnMotion,
       };

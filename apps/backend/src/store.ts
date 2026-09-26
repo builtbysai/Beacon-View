@@ -142,22 +142,108 @@ export class PostgresStore implements MilestoneStore {
   async listRecordings(
     householdId: string,
     cameraSourceIds: string[],
+    options?: { limit?: number; before?: { time: string; id: string } },
   ): Promise<RecordingRecord[]> {
-    return this.recordings.listForCameraSources(householdId, cameraSourceIds);
+    return this.recordings.listForCameraSources(
+      householdId,
+      cameraSourceIds,
+      options,
+    );
   }
 
   async getRecordingPlaybackClaim(
     householdId: string,
-    userId: string,
+    recordingId: string,
+    cameraSourceIds: string[],
+  ) {
+    return this.recordings.getPlaybackClaim(
+      householdId,
+      recordingId,
+      cameraSourceIds,
+    );
+  }
+
+  async createRecordingShareLink(input: {
+    recordingId: string;
+    householdId: string;
+    createdByUserId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }) {
+    return this.recordings.createShareLink(input);
+  }
+
+  async getActiveRecordingShareLink(householdId: string, recordingId: string) {
+    return this.recordings.getActiveShareLink(householdId, recordingId);
+  }
+
+  async revokeRecordingShareLink(householdId: string, linkId: string) {
+    return this.recordings.revokeShareLink(householdId, linkId);
+  }
+
+  async getRecordingShareLinkPlaybackClaim(tokenHash: string) {
+    return this.recordings.getShareLinkPlaybackClaim(tokenHash);
+  }
+
+  async touchRecordingShareLinkAccess(linkId: string) {
+    return this.recordings.touchShareLinkAccess(linkId);
+  }
+
+  async beginOwnerThumbnailUpload(
+    input: Parameters<
+      PostgresRecordingRepository['beginOwnerThumbnailUpload']
+    >[0],
+  ) {
+    return this.recordings.beginOwnerThumbnailUpload(input);
+  }
+
+  async beginThumbnailUploadByCredential(
+    input: Parameters<
+      PostgresRecordingRepository['beginThumbnailUploadByCredential']
+    >[0],
+  ) {
+    return this.recordings.beginThumbnailUploadByCredential(input);
+  }
+
+  async getThumbnailUploadClaim(userId: string, recordingId: string) {
+    return this.recordings.getThumbnailUploadClaim(userId, recordingId);
+  }
+
+  async getThumbnailUploadClaimByCredential(
+    credentialHash: string,
     recordingId: string,
   ) {
-    return this.recordings.getPlaybackClaim(householdId, userId, recordingId);
+    return this.recordings.getThumbnailUploadClaimByCredential(
+      credentialHash,
+      recordingId,
+    );
+  }
+
+  async completeThumbnailUpload(input: {
+    recordingId: string;
+    providerFileId: string;
+    userId: string;
+  }) {
+    return this.recordings.completeThumbnailUpload(input);
+  }
+
+  async getThumbnailPlaybackClaim(
+    householdId: string,
+    recordingId: string,
+    cameraSourceIds: string[],
+  ) {
+    return this.recordings.getThumbnailPlaybackClaim(
+      householdId,
+      recordingId,
+      cameraSourceIds,
+    );
   }
 
   async createMotionTriggeredRecording(input: {
     cameraSourceId: string;
     householdId: string;
     ownerId: string;
+    motionEventId: string;
   }): Promise<{ recordingId: string } | null> {
     const drive = await this.googleDrive.get(input.ownerId);
     if (
@@ -175,6 +261,7 @@ export class PostgresStore implements MilestoneStore {
     const recording = await this.recordings.createRequested({
       cameraSourceId: input.cameraSourceId,
       householdId: input.householdId,
+      triggerMotionEventId: input.motionEventId,
       userId: input.ownerId,
     });
     return recording ? { recordingId: recording.id } : null;
@@ -704,6 +791,18 @@ export class PostgresStore implements MilestoneStore {
     return this.motion.listMotionEvents(householdId, options);
   }
 
+  async getMotionEventById(
+    householdId: string,
+    motionEventId: string,
+    allowedCameraIds?: string[],
+  ): Promise<MotionEventRecord | null> {
+    return this.motion.getMotionEventById(
+      householdId,
+      motionEventId,
+      allowedCameraIds,
+    );
+  }
+
   async getMotionRetention(
     householdId: string,
   ): Promise<MotionRetentionRecord | null> {
@@ -755,6 +854,7 @@ export class PostgresStore implements MilestoneStore {
     cameraSourceId: string;
     ownerId: string;
     recordOnMotion: boolean;
+    motionEventId: string | null;
   } | null> {
     return this.motion.createMotionEvent(input);
   }

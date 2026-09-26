@@ -12,6 +12,7 @@ import {
 import WebSocket from 'ws';
 
 import type { AppConfig } from '../src/config.js';
+import { hashSecret } from '../src/security.js';
 import { resetTestDatabase, testDatabaseUrl } from './test-database.js';
 
 vi.mock('../src/google-drive-client.js', async (importOriginal) => {
@@ -295,13 +296,142 @@ describe.skipIf(!app || !store)('recording routes', () => {
     });
     expect(attempt.statusCode).toBe(403);
 
+    // This viewer has no grant on any camera, so playback of any recording
+    // -- real or not -- is unavailable to them, not merely forbidden; the
+    // response doesn't distinguish "doesn't exist" from "no access".
     const playback = await app!.inject({
       headers: { cookie: viewer.cookie },
       method: 'GET',
       url: `/api/recordings/${randomUUID()}/playback`,
     });
-    expect(playback.statusCode).toBe(403);
+    expect(playback.statusCode).toBe(404);
     expect(drive.downloadDriveRecordingFile).not.toHaveBeenCalled();
+  });
+
+  it('lets a viewer play a clip from a camera they were granted, but not one they were not', async () => {
+    const owner = await registerAndSignIn(
+      'grant-playback-owner@example.com',
+      '10.2.0.21',
+    );
+    const granted = await pairCamera(owner, 'Granted camera');
+    const notGranted = await pairCamera(owner, 'Ungranted camera');
+    await connectDrive(owner.userId);
+
+    const invite = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { email: 'grant-playback-viewer@example.com', role: 'viewer' },
+      url: '/api/household/invitations',
+    });
+    const token = invite.json<{ token: string }>().token;
+    const viewer = await registerAndSignIn(
+      'grant-playback-viewer@example.com',
+      '10.2.0.22',
+    );
+    const accepted = await app!.inject({
+      headers: { cookie: viewer.cookie, 'x-csrf-token': viewer.csrf },
+      method: 'POST',
+      payload: { token },
+      url: '/api/household/invitations/accept',
+    });
+    const { householdId } = accepted.json<{ householdId: string }>();
+    await app!.inject({
+      headers: { cookie: viewer.cookie, 'x-csrf-token': viewer.csrf },
+      method: 'PUT',
+      payload: { householdId },
+      url: '/api/account/household',
+    });
+
+    const members = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: '/api/household/sharing',
+    });
+    const memberId = members
+      .json<{ members: { id: string; userId: string }[] }>()
+      .members.find((member) => member.userId === viewer.userId)!.id;
+    await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'PUT',
+      payload: {
+        grants: [
+          {
+            cameraId: granted.cameraId,
+            canFlip: false,
+            canListen: false,
+            canPause: false,
+            canTalk: false,
+          },
+        ],
+      },
+      url: `/api/household/members/${memberId}/grants`,
+    });
+
+    // A recording from each camera, both uploaded and available.
+    const [grantedDevice, notGrantedDevice] = [
+      connectDevice(granted.cameraId, granted.credential),
+      connectDevice(notGranted.cameraId, notGranted.credential),
+    ];
+    await Promise.all([
+      nextMessage(grantedDevice),
+      nextMessage(notGrantedDevice),
+    ]);
+    async function recordAndComplete(camera: {
+      cameraId: string;
+    }): Promise<string> {
+      const created = await app!.inject({
+        headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+        method: 'POST',
+        payload: { cameraId: camera.cameraId },
+        url: '/api/recordings',
+      });
+      const recordingId = created.json<{ recording: { id: string } }>()
+        .recording.id;
+      await app!.inject({
+        headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+        method: 'POST',
+        payload: {
+          byteSize: 1_048_576,
+          checksumSha256: 'a'.repeat(64),
+          durationMs: 15_000,
+          mimeType: 'video/webm',
+          encryption,
+        },
+        url: `/api/recordings/${recordingId}/upload-session`,
+      });
+      await app!.inject({
+        headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+        method: 'POST',
+        payload: { providerFileId: `drive-file-${recordingId}` },
+        url: `/api/recordings/${recordingId}/complete`,
+      });
+      return recordingId;
+    }
+    const grantedRecordingId = await recordAndComplete(granted);
+    const notGrantedRecordingId = await recordAndComplete(notGranted);
+
+    const deniedPlayback = await app!.inject({
+      headers: { cookie: viewer.cookie },
+      method: 'GET',
+      url: `/api/recordings/${notGrantedRecordingId}/playback`,
+    });
+    expect(deniedPlayback.statusCode).toBe(404);
+    expect(drive.downloadDriveRecordingFile).not.toHaveBeenCalled();
+
+    const ciphertext = Buffer.alloc(1_048_576, 7);
+    vi.mocked(drive.downloadDriveRecordingFile).mockResolvedValueOnce(
+      new Response(ciphertext),
+    );
+    const allowedPlayback = await app!.inject({
+      headers: { cookie: viewer.cookie },
+      method: 'GET',
+      url: `/api/recordings/${grantedRecordingId}/playback`,
+    });
+    expect(allowedPlayback.statusCode).toBe(200);
+    expect(allowedPlayback.rawPayload).toEqual(ciphertext);
+
+    grantedDevice.close();
+    notGrantedDevice.close();
   });
 
   it('refuses to start a recording while the camera is offline', async () => {
@@ -449,6 +579,358 @@ describe.skipIf(!app || !store)('recording routes', () => {
     expect(vi.mocked(drive.deleteDriveRecordingFile)).toHaveBeenCalledWith(
       'fake-drive-access-token',
       'drive-file-abc',
+    );
+
+    device.close();
+  });
+
+  it('paginates /api/recordings newest-first with a keyset cursor', async () => {
+    const owner = await registerAndSignIn(
+      'recordings-page@example.com',
+      '10.2.0.20',
+    );
+    const camera = await pairCamera(owner, 'Driveway');
+    await connectDrive(owner.userId);
+    const device = connectDevice(camera.cameraId, camera.credential);
+    await nextMessage(device);
+
+    const createdIds: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const created = await app!.inject({
+        headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+        method: 'POST',
+        payload: { cameraId: camera.cameraId },
+        url: '/api/recordings',
+      });
+      expect(created.statusCode).toBe(202);
+      createdIds.push(
+        created.json<{ recording: { id: string } }>().recording.id,
+      );
+    }
+    // Newest-first: the most recently requested recording is createdIds[2].
+    const expectedOrder = [...createdIds].reverse();
+
+    const firstPage = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: '/api/recordings?limit=2',
+    });
+    expect(firstPage.statusCode).toBe(200);
+    const firstBody = firstPage.json<{
+      recordings: { id: string }[];
+      nextCursor: string | null;
+    }>();
+    expect(firstBody.recordings.map((r) => r.id)).toEqual(
+      expectedOrder.slice(0, 2),
+    );
+    expect(firstBody.nextCursor).not.toBeNull();
+
+    const secondPage = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: `/api/recordings?limit=2&cursor=${encodeURIComponent(firstBody.nextCursor!)}`,
+    });
+    expect(secondPage.statusCode).toBe(200);
+    const secondBody = secondPage.json<{
+      recordings: { id: string }[];
+      nextCursor: string | null;
+    }>();
+    expect(secondBody.recordings.map((r) => r.id)).toEqual(
+      expectedOrder.slice(2),
+    );
+    expect(secondBody.nextCursor).toBeNull();
+
+    device.close();
+  });
+
+  it('lets an owner share a clip by link, and revokes it on demand or on replacement', async () => {
+    const owner = await registerAndSignIn(
+      'share-owner@example.com',
+      '10.2.0.30',
+    );
+    const camera = await pairCamera(owner, 'Front porch');
+    await connectDrive(owner.userId);
+    const device = connectDevice(camera.cameraId, camera.credential);
+    await nextMessage(device);
+
+    const created = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { cameraId: camera.cameraId },
+      url: '/api/recordings',
+    });
+    const recordingId = created.json<{ recording: { id: string } }>().recording
+      .id;
+
+    // Sharing a clip that hasn't finished uploading yet is refused.
+    const tooSoon = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { expiresInHours: 24 },
+      url: `/api/recordings/${recordingId}/share-links`,
+    });
+    expect(tooSoon.statusCode).toBe(409);
+
+    await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: {
+        byteSize: 2048,
+        checksumSha256: 'b'.repeat(64),
+        durationMs: 5_000,
+        mimeType: 'video/webm',
+        encryption,
+      },
+      url: `/api/recordings/${recordingId}/upload-session`,
+    });
+    await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { providerFileId: 'drive-file-share-1' },
+      url: `/api/recordings/${recordingId}/complete`,
+    });
+
+    const share = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { expiresInHours: 24 },
+      url: `/api/recordings/${recordingId}/share-links`,
+    });
+    expect(share.statusCode).toBe(201);
+    const { token, url } = share.json<{
+      token: string;
+      url: string;
+      expiresAt: string;
+    }>();
+    expect(url).toContain(`/shared/${token}`);
+
+    const status = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: `/api/recordings/${recordingId}/share-links`,
+    });
+    expect(status.json<{ active: { id: string } | null }>().active).not.toBe(
+      null,
+    );
+
+    // Unauthenticated: metadata, then a real ciphertext relay identical to
+    // the owner's own playback route.
+    const metadata = await app!.inject({
+      method: 'GET',
+      url: `/api/shared-recordings/${token}`,
+    });
+    expect(metadata.statusCode).toBe(200);
+    expect(metadata.json<{ expiresAt: string }>().expiresAt).toBeTruthy();
+
+    const ciphertext = Buffer.alloc(2048, 9);
+    vi.mocked(drive.downloadDriveRecordingFile).mockResolvedValueOnce(
+      new Response(ciphertext),
+    );
+    const sharedPlayback = await app!.inject({
+      method: 'GET',
+      url: `/api/shared-recordings/${token}/playback`,
+    });
+    expect(sharedPlayback.statusCode).toBe(200);
+    expect(sharedPlayback.rawPayload).toEqual(ciphertext);
+    expect(sharedPlayback.headers['x-beacon-recording-key']).toBe(
+      encryption.dataKey,
+    );
+
+    // A garbage or unknown token fails exactly like a valid-but-expired one.
+    const wrongToken = await app!.inject({
+      method: 'GET',
+      url: `/api/shared-recordings/${randomBytes(32).toString('base64url')}`,
+    });
+    expect(wrongToken.statusCode).toBe(404);
+
+    // A second link replaces the first -- the old token stops working.
+    const resharedResponse = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { expiresInHours: 1 },
+      url: `/api/recordings/${recordingId}/share-links`,
+    });
+    expect(resharedResponse.statusCode).toBe(201);
+    const oldTokenAfterReplacement = await app!.inject({
+      method: 'GET',
+      url: `/api/shared-recordings/${token}`,
+    });
+    expect(oldTokenAfterReplacement.statusCode).toBe(404);
+
+    const reshared = resharedResponse.json<{ token: string }>();
+    const explicitRevoke = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'DELETE',
+      url: `/api/recordings/share-links/${
+        status.json<{ active: { id: string } }>().active.id
+      }`,
+    });
+    // The first link was already replaced (revoked) above, so revoking it
+    // again by id reports it as gone rather than double-revoking.
+    expect(explicitRevoke.statusCode).toBe(404);
+
+    const activeAfterReshare = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: `/api/recordings/${recordingId}/share-links`,
+    });
+    const currentLinkId = activeAfterReshare.json<{
+      active: { id: string } | null;
+    }>().active!.id;
+    const revokeCurrent = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'DELETE',
+      url: `/api/recordings/share-links/${currentLinkId}`,
+    });
+    expect(revokeCurrent.statusCode).toBe(204);
+
+    const afterRevoke = await app!.inject({
+      method: 'GET',
+      url: `/api/shared-recordings/${reshared.token}`,
+    });
+    expect(afterRevoke.statusCode).toBe(404);
+
+    device.close();
+  });
+
+  it('refuses a non-owner household member from creating or revoking a share link', async () => {
+    const owner = await registerAndSignIn(
+      'share-nonowner@example.com',
+      '10.2.0.31',
+    );
+
+    const invite = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { email: 'share-viewer@example.com', role: 'viewer' },
+      url: '/api/household/invitations',
+    });
+    const token = invite.json<{ token: string }>().token;
+    const viewer = await registerAndSignIn(
+      'share-viewer@example.com',
+      '10.2.0.32',
+    );
+    const accepted = await app!.inject({
+      headers: { cookie: viewer.cookie, 'x-csrf-token': viewer.csrf },
+      method: 'POST',
+      payload: { token },
+      url: '/api/household/invitations/accept',
+    });
+    const { householdId } = accepted.json<{ householdId: string }>();
+    await app!.inject({
+      headers: { cookie: viewer.cookie, 'x-csrf-token': viewer.csrf },
+      method: 'PUT',
+      payload: { householdId },
+      url: '/api/account/household',
+    });
+
+    const attempt = await app!.inject({
+      headers: { cookie: viewer.cookie, 'x-csrf-token': viewer.csrf },
+      method: 'POST',
+      payload: { expiresInHours: 24 },
+      url: `/api/recordings/${randomUUID()}/share-links`,
+    });
+    expect(attempt.statusCode).toBe(403);
+
+    const revokeAttempt = await app!.inject({
+      headers: { cookie: viewer.cookie, 'x-csrf-token': viewer.csrf },
+      method: 'DELETE',
+      url: `/api/recordings/share-links/${randomUUID()}`,
+    });
+    expect(revokeAttempt.statusCode).toBe(403);
+  });
+
+  it('uploads, completes, and relays a clip thumbnail through the same encrypted envelope as the clip', async () => {
+    const owner = await registerAndSignIn(
+      'thumbnail-owner@example.com',
+      '10.2.0.40',
+    );
+    const camera = await pairCamera(owner, 'Front porch');
+    await connectDrive(owner.userId);
+    const device = connectDevice(camera.cameraId, camera.credential);
+    await nextMessage(device);
+
+    const created = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { cameraId: camera.cameraId },
+      url: '/api/recordings',
+    });
+    const recordingId = created.json<{ recording: { id: string } }>().recording
+      .id;
+
+    const listedBefore = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: '/api/recordings',
+    });
+    expect(
+      listedBefore.json<{ recordings: { hasThumbnail: boolean }[] }>()
+        .recordings[0]!.hasThumbnail,
+    ).toBe(false);
+
+    const session = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: {
+        byteSize: 4096,
+        checksumSha256: 'c'.repeat(64),
+        mimeType: 'image/jpeg',
+        encryption,
+      },
+      url: `/api/recordings/${recordingId}/thumbnail-upload-session`,
+    });
+    expect(session.statusCode).toBe(201);
+    expect(session.json<{ uploadUrl: string }>().uploadUrl).toContain(
+      'googleapis.com',
+    );
+
+    const completed = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { providerFileId: 'drive-thumb-abc' },
+      url: `/api/recordings/${recordingId}/thumbnail-complete`,
+    });
+    expect(completed.statusCode).toBe(204);
+
+    const listedAfter = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: '/api/recordings',
+    });
+    expect(
+      listedAfter.json<{ recordings: { hasThumbnail: boolean }[] }>()
+        .recordings[0]!.hasThumbnail,
+    ).toBe(true);
+
+    // A second upload attempt is refused: first-write-wins, so a retry can
+    // never orphan the already-uploaded Drive file.
+    const secondSession = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: {
+        byteSize: 4096,
+        checksumSha256: 'd'.repeat(64),
+        mimeType: 'image/jpeg',
+        encryption,
+      },
+      url: `/api/recordings/${recordingId}/thumbnail-upload-session`,
+    });
+    expect(secondSession.statusCode).toBe(404);
+
+    const thumbCiphertext = Buffer.alloc(4096, 3);
+    vi.mocked(drive.downloadDriveRecordingFile).mockResolvedValueOnce(
+      new Response(thumbCiphertext),
+    );
+    const thumbnail = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: `/api/recordings/${recordingId}/thumbnail`,
+    });
+    expect(thumbnail.statusCode).toBe(200);
+    expect(thumbnail.rawPayload).toEqual(thumbCiphertext);
+    expect(thumbnail.headers['x-beacon-recording-key']).toBe(
+      encryption.dataKey,
     );
 
     device.close();
@@ -702,11 +1184,23 @@ describe.skipIf(!app || !store)('recording routes', () => {
       'owner',
       camera.cameraId,
     );
+    // A real motion event to satisfy the trigger_motion_event_id FK -- this
+    // test exercises createMotionTriggeredRecording's own gating (Drive
+    // connection, duplicate-in-flight), not motion event creation, so the
+    // same event id is reused across all three attempts below.
+    const motionEvent = await store!.createMotionEvent({
+      credentialHash: hashSecret(camera.credential),
+      publicCameraId: camera.cameraId,
+      confidence: 0.5,
+      now: new Date(),
+    });
+    const motionEventId = motionEvent!.motionEventId!;
 
     expect(
       await store!.createMotionTriggeredRecording({
         cameraSourceId: accessible!.cameraId,
         householdId: user!.householdId,
+        motionEventId,
         ownerId: owner.userId,
       }),
     ).toBeNull();
@@ -715,6 +1209,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
     const created = await store!.createMotionTriggeredRecording({
       cameraSourceId: accessible!.cameraId,
       householdId: user!.householdId,
+      motionEventId,
       ownerId: owner.userId,
     });
     expect(created).not.toBeNull();
@@ -726,6 +1221,7 @@ describe.skipIf(!app || !store)('recording routes', () => {
       await store!.createMotionTriggeredRecording({
         cameraSourceId: accessible!.cameraId,
         householdId: user!.householdId,
+        motionEventId,
         ownerId: owner.userId,
       }),
     ).toBeNull();

@@ -29,6 +29,9 @@ export const browserDeviceSchema = z.object({
 });
 export const cameraParameterSchema = z.object({ cameraId: z.string().uuid() });
 export const deviceParameterSchema = z.object({ deviceId: z.string().uuid() });
+export const motionEventParameterSchema = z.object({
+  motionEventId: z.string().uuid(),
+});
 export const updateDeviceSchema = z
   .object({
     enabled: z.boolean().optional(),

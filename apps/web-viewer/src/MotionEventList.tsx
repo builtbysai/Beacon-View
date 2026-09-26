@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { request } from './api';
 import { Icon } from './Icon';
 import { ConfirmDialog } from './ConfirmDialog';
+import { recordingStatusLabels, recordingStatusTone } from './recording-status';
+import './EventsShared.css';
 import './MotionEventList.css';
 
 interface MotionEvent {
@@ -11,6 +13,8 @@ interface MotionEvent {
   deviceName: string;
   confidence: number;
   occurredAt: string;
+  recordingId: string | null;
+  recordingStatus: string | null;
   eventType?: never;
 }
 
@@ -47,15 +51,23 @@ interface CameraOption {
 }
 
 const kinds = [
-  { id: 'all', label: 'All', icon: '' },
-  { id: 'motion', label: 'Motion', icon: 'activity' },
-  { id: 'person', label: 'Person', icon: 'user' },
-  { id: 'package', label: 'Package', icon: 'package' },
-  { id: 'vehicle', label: 'Vehicle', icon: 'car' },
-  { id: 'animal', label: 'Animal', icon: 'animal' },
-  { id: 'sound', label: 'Sound', icon: 'sound' },
-  { id: 'ring', label: 'Doorbell', icon: 'bell' },
+  { id: 'all', label: 'All' },
+  { id: 'motion', label: 'Motion' },
+  { id: 'system', label: 'Household' },
 ] as const;
+
+/** What a clip attached to a motion event looks like right now, and
+ * whether it can be opened yet -- the shared recording states, worded as
+ * an inline call to action ("View clip") rather than a status pill. */
+function clipTagFor(
+  status: string,
+): { label: string; tone: 'link' | 'pending' | 'failed' } | null {
+  const label =
+    recordingStatusLabels[status as keyof typeof recordingStatusLabels];
+  if (!label) return null;
+  const tone = recordingStatusTone(status);
+  return { label: tone === 'link' ? 'View clip' : label, tone };
+}
 
 function savedFilter(key: string, fallback: string): string {
   try {
@@ -71,10 +83,6 @@ function savedTimeFilter(key: string): string {
   if (value === 'week') return '7';
   return ['24', '7', 'all'].includes(value) ? value : '24';
 }
-
-// /api/motion-events currently reports visual motion only. More specific
-// detection labels require an explicit device-reported event type.
-const motionKind = 'motion';
 
 const activityLabels: Record<string, string> = {
   camera_source_added: 'Camera source added',
@@ -137,20 +145,51 @@ function activitySourceName(event: ActivityEvent): string | null {
   return isMotionEvent(event) ? event.cameraName : event.sourceName;
 }
 
+function ClipTag({ status, onOpen }: { status: string; onOpen: () => void }) {
+  const tag = clipTagFor(status);
+  if (!tag) return null;
+  if (tag.tone !== 'link') {
+    return (
+      <span className={`events-clip-tag is-${tag.tone}`}>{tag.label}</span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="events-clip-tag is-link"
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen();
+      }}
+    >
+      {tag.label}
+    </button>
+  );
+}
+
 export function MotionEventList({
   filterStorageKey,
   refreshRevision,
   clearRevision = 0,
   cameras,
   onCamera,
+  onViewClip,
   includeHouseholdActivity = true,
+  focusMotionEventId = null,
+  onFocusHandled,
 }: {
   filterStorageKey: string;
   refreshRevision: number;
   clearRevision?: number;
   cameras: CameraOption[];
   onCamera: (id: string) => void;
+  onViewClip?: (recordingId: string) => void;
   includeHouseholdActivity?: boolean;
+  /** A motion event to open in the detail drawer right away, set by the
+   * Clips library's "View event" action. Fetched directly by id since it
+   * may not be on the page/filters currently loaded here. */
+  focusMotionEventId?: string | null;
+  onFocusHandled?: () => void;
 }) {
   const [events, setEvents] = useState<ActivityEvent[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -189,6 +228,27 @@ export function MotionEventList({
       // Activity filters still work when browser storage is unavailable.
     }
   }, [cameraFilter, filterStorageKey, timeFilter]);
+
+  useEffect(() => {
+    if (!focusMotionEventId) return;
+    let cancelled = false;
+    void request<MotionEvent>(
+      `/api/motion-events/${encodeURIComponent(focusMotionEventId)}`,
+    )
+      .then((event) => {
+        if (!cancelled) setDrawerEvent(event);
+      })
+      .catch(() => {
+        if (!cancelled)
+          setError('That event could not be found. It may have expired.');
+      })
+      .finally(() => {
+        if (!cancelled) onFocusHandled?.();
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [focusMotionEventId]);
 
   async function fetchPage(append: boolean, next: string | null = null) {
     const active = generation.current;
@@ -312,8 +372,8 @@ export function MotionEventList({
       );
     }
     if (kindFilter !== 'all') {
-      result = result.filter(
-        (event) => kindFilter === motionKind && isMotionEvent(event),
+      result = result.filter((event) =>
+        kindFilter === 'motion' ? isMotionEvent(event) : !isMotionEvent(event),
       );
     }
     if (search.trim()) {
@@ -378,7 +438,9 @@ export function MotionEventList({
   // Calculate counts per kind
   const kindCounts = useMemo(() => {
     const counts: Record<string, number> = { all: events?.length ?? 0 };
-    counts[motionKind] = events?.filter(isMotionEvent).length ?? 0;
+    counts.motion = events?.filter(isMotionEvent).length ?? 0;
+    counts.system =
+      events?.filter((event) => !isMotionEvent(event)).length ?? 0;
     return counts;
   }, [events]);
 
@@ -408,21 +470,21 @@ export function MotionEventList({
               </p>
               <p>
                 A basic motion event does not mean Beacon identified a person or
-                object. Specific labels such as Person, Package, Vehicle,
-                Animal, or Sound should only appear when the connected device
-                explicitly supports that detection.
+                object. Beacon currently reports visual motion only; more
+                specific labels such as Person or Vehicle will only appear here
+                once a connected device explicitly supports that detection.
               </p>
               <p>
                 Beacon's current privacy model stores event metadata rather than
-                an image or recording.
+                an image or recording, unless a clip was separately recorded.
               </p>
             </div>
           )}
         </div>
       </section>
 
-      <section className="activity-v3-controls">
-        <label className="activity-v3-search">
+      <section className="events-controls">
+        <label className="events-search">
           <span className="icon-wrapper">
             <Icon name="search" />
           </span>
@@ -435,7 +497,7 @@ export function MotionEventList({
         </label>
 
         <select
-          className="activity-v3-select"
+          className="events-select"
           value={cameraFilter}
           onChange={(e) => setCameraFilter(e.target.value)}
           disabled={clearing}
@@ -450,7 +512,7 @@ export function MotionEventList({
         </select>
 
         <select
-          className="activity-v3-select"
+          className="events-select"
           value={timeFilter}
           onChange={(e) => setTimeFilter(e.target.value)}
           disabled={clearing}
@@ -462,13 +524,13 @@ export function MotionEventList({
         </select>
       </section>
 
-      <div className="activity-v3-chips">
+      <div className="events-chips">
         {kinds.map((k) => {
           const count = kindCounts[k.id] ?? 0;
           return (
             <button
               key={k.id}
-              className={`activity-v3-chip ${kindFilter === k.id ? 'on' : ''}`}
+              className={`events-chip ${kindFilter === k.id ? 'on' : ''}`}
               onClick={() => setKindFilter(k.id)}
             >
               {k.label} <span className="n">{count}</span>
@@ -477,12 +539,12 @@ export function MotionEventList({
         })}
       </div>
 
-      <div className="activity-v3-resultbar">
+      <div className="events-resultbar">
         <strong role="status" tabIndex={-1} ref={status}>
           {filteredEvents.length}{' '}
           {filteredEvents.length === 1 ? 'event' : 'events'}
         </strong>
-        <label className="activity-v3-sort">
+        <label className="events-sort">
           Sort
           <select
             value={sortOrder}
@@ -515,7 +577,7 @@ export function MotionEventList({
       )}
 
       {filteredEvents.length === 0 && (
-        <div className="activity-v3-empty">
+        <div className="events-empty">
           <i>
             <Icon name="activity" />
           </i>
@@ -531,18 +593,17 @@ export function MotionEventList({
       )}
 
       {Array.from(groups, ([day, entries]) => (
-        <section className="activity-v3-day" key={day} aria-label={day}>
-          <h2 className="activity-v3-daytitle">{day}</h2>
-          <div className="activity-v3-feed">
+        <section className="events-day" key={day} aria-label={day}>
+          <h2 className="events-daytitle">{day}</h2>
+          <div className="events-feed">
             {entries.map((event) => {
-              const kind = isMotionEvent(event) ? motionKind : 'system';
+              const kind = isMotionEvent(event) ? 'motion' : 'system';
               const label = activityLabel(event);
-              const iconName = 'activity';
 
               return (
                 <article
                   key={event.id}
-                  className="activity-v3-event"
+                  className="events-row"
                   tabIndex={0}
                   role="button"
                   aria-label={`View ${label} from ${activityDeviceName(event)}`}
@@ -554,11 +615,11 @@ export function MotionEventList({
                     }
                   }}
                 >
-                  <div className={`activity-v3-evicon ${kind}`}>
-                    <Icon name={iconName} />
+                  <div className={`events-row-icon activity-v3-evicon ${kind}`}>
+                    <Icon name="activity" />
                   </div>
-                  <div className="activity-v3-evmain">
-                    <div className="activity-v3-evline">
+                  <div className="events-row-main">
+                    <div className="events-row-line">
                       <strong>{label}</strong>
                       <time dateTime={event.occurredAt}>
                         {new Date(event.occurredAt).toLocaleTimeString(
@@ -566,8 +627,16 @@ export function MotionEventList({
                           { hour: 'numeric', minute: '2-digit' },
                         )}
                       </time>
+                      {isMotionEvent(event) &&
+                        event.recordingStatus &&
+                        onViewClip && (
+                          <ClipTag
+                            status={event.recordingStatus}
+                            onOpen={() => onViewClip(event.recordingId!)}
+                          />
+                        )}
                     </div>
-                    <div className="activity-v3-where">
+                    <div className="events-row-where">
                       <b>{activityDeviceName(event)}</b>
                       {isMotionEvent(event) ? (
                         <>
@@ -580,7 +649,7 @@ export function MotionEventList({
                       ) : null}
                     </div>
                   </div>
-                  <span className="activity-v3-chev" aria-hidden="true">
+                  <span className="events-chev" aria-hidden="true">
                     &rsaquo;
                   </span>
                 </article>
@@ -591,7 +660,7 @@ export function MotionEventList({
       ))}
 
       {events && events.length > 0 && (
-        <div className="activity-v3-bottom">
+        <div className="events-bottom">
           {(cursor || activityHasMore) && (
             <button
               className="btn secondary activity-v3-loadmore"
@@ -645,7 +714,7 @@ export function MotionEventList({
 
             <div className="activity-v3-eventhero">
               <div
-                className={`activity-v3-evicon ${isMotionEvent(drawerEvent) ? motionKind : 'system'}`}
+                className={`events-row-icon activity-v3-evicon ${isMotionEvent(drawerEvent) ? 'motion' : 'system'}`}
               >
                 <Icon name="activity" />
               </div>
@@ -699,6 +768,16 @@ export function MotionEventList({
                   <span>{Math.round(drawerEvent.confidence * 100)}%</span>
                 </div>
               )}
+              {isMotionEvent(drawerEvent) && drawerEvent.recordingStatus && (
+                <div className="activity-v3-fact">
+                  <span>Clip</span>
+                  <span>
+                    {recordingStatusLabels[
+                      drawerEvent.recordingStatus as keyof typeof recordingStatusLabels
+                    ] ?? drawerEvent.recordingStatus}
+                  </span>
+                </div>
+              )}
             </div>
 
             {isMotionEvent(drawerEvent) && (
@@ -710,25 +789,50 @@ export function MotionEventList({
             )}
 
             <div className="activity-v3-draweractions">
-              {(isMotionEvent(drawerEvent) ||
-                (drawerEvent.cameraSourceId &&
-                  cameras.some(
-                    (camera) => camera.id === drawerEvent.cameraSourceId,
-                  ))) && (
-                <button
-                  className="primary"
-                  onClick={() => {
-                    setDrawerEvent(null);
-                    onCamera(
-                      isMotionEvent(drawerEvent)
-                        ? drawerEvent.cameraId
-                        : drawerEvent.cameraSourceId!,
-                    );
-                  }}
-                >
-                  Open {activityDeviceName(drawerEvent)}
-                </button>
-              )}
+              {(() => {
+                const hasClip =
+                  isMotionEvent(drawerEvent) &&
+                  drawerEvent.recordingStatus === 'available' &&
+                  drawerEvent.recordingId &&
+                  onViewClip;
+                const canOpenCamera =
+                  isMotionEvent(drawerEvent) ||
+                  (drawerEvent.cameraSourceId &&
+                    cameras.some(
+                      (camera) => camera.id === drawerEvent.cameraSourceId,
+                    ));
+                return (
+                  <>
+                    {hasClip && (
+                      <button
+                        className="primary"
+                        onClick={() => {
+                          const recordingId = drawerEvent.recordingId!;
+                          setDrawerEvent(null);
+                          onViewClip(recordingId);
+                        }}
+                      >
+                        View clip
+                      </button>
+                    )}
+                    {canOpenCamera && (
+                      <button
+                        className={hasClip ? 'secondary2' : 'primary'}
+                        onClick={() => {
+                          setDrawerEvent(null);
+                          onCamera(
+                            isMotionEvent(drawerEvent)
+                              ? drawerEvent.cameraId
+                              : drawerEvent.cameraSourceId!,
+                          );
+                        }}
+                      >
+                        Open {activityDeviceName(drawerEvent)}
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
               <button
                 className="secondary2"
                 onClick={() => setDrawerEvent(null)}

@@ -7,6 +7,7 @@ import type { HouseholdEventHub } from '../src/household-events.js';
 import type { SessionAuth } from '../src/session-auth.js';
 import type { SignalingHub } from '../src/signaling.js';
 import type { MilestoneStore } from '../src/store.js';
+import { DEFAULT_TIMELINE_EVENT_TYPES } from '../src/store-contract.js';
 
 const app = Fastify();
 const listHouseholdActivity = vi.fn().mockResolvedValue({
@@ -96,6 +97,7 @@ it('passes validated source and time filters to the activity store', async () =>
   expect(response.statusCode).toBe(200);
   expect(listHouseholdActivity).toHaveBeenCalledWith('household-1', {
     cameraSourceId: cameraId,
+    eventTypes: DEFAULT_TIMELINE_EVENT_TYPES,
     since: new Date(since),
   });
 });

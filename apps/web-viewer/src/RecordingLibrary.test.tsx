@@ -80,12 +80,53 @@ it('labels and removes a failed recording', async () => {
     .mockResolvedValueOnce(new Response(null, { status: 204 }));
   vi.stubGlobal('fetch', fetchMock);
 
-  render(<RecordingLibrary />);
-  expect(await screen.findByText('Upload failed')).toBeInTheDocument();
+  render(<RecordingLibrary canDelete />);
+  expect(await screen.findByText('Recording failed')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
   expect(await screen.findByText('No recorded clips yet.')).toBeInTheDocument();
   expect(fetchMock).toHaveBeenLastCalledWith(
     '/api/recordings/clip-failed',
     expect.objectContaining({ method: 'DELETE' }),
   );
+});
+
+it('hides delete controls for a viewer without delete access, but still allows playback', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          recordings: [
+            {
+              id: 'clip-2',
+              cameraName: 'Front door',
+              deviceName: 'Spare phone',
+              status: 'available',
+              createdAt: '2026-09-24T12:00:00Z',
+            },
+            {
+              id: 'clip-failed-2',
+              cameraName: 'Back door',
+              deviceName: 'Pixel',
+              status: 'failed',
+              createdAt: '2026-09-25T12:00:00Z',
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    ),
+  );
+
+  render(<RecordingLibrary />);
+  await screen.findByRole('button', { name: 'Play clip' });
+  expect(
+    screen.queryByRole('button', { name: 'Delete clip' }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Remove' }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: 'Download clip' }),
+  ).toBeInTheDocument();
 });

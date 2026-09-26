@@ -178,6 +178,63 @@ export async function uploadClipToDrive(
   return file.id;
 }
 
+/** Grabs a single frame from the stream about to be (or being) recorded, as
+ * a small JPEG -- the source thumbnail image, before it's encrypted the
+ * same way as the clip itself (see ADR 0078). Uses a temporary, never-
+ * attached <video> element rather than the visible one, so it works
+ * regardless of which visible player (live view or camera-mode preview) is
+ * driving the recording, and never disturbs it. Best-effort: any failure
+ * (unsupported browser, a track that never produces a frame in time)
+ * rejects and the caller simply skips the thumbnail. */
+export async function captureFrameAsJpeg(stream: MediaStream): Promise<Blob> {
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.srcObject = stream;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = window.setTimeout(
+        () => reject(new Error('Timed out waiting for a video frame')),
+        4_000,
+      );
+      video.addEventListener(
+        'loadeddata',
+        () => {
+          window.clearTimeout(timeout);
+          resolve();
+        },
+        { once: true },
+      );
+      video.addEventListener(
+        'error',
+        () => {
+          window.clearTimeout(timeout);
+          reject(new Error('Could not read the camera stream'));
+        },
+        { once: true },
+      );
+      void video.play().catch(() => undefined);
+    });
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    if (!width || !height) throw new Error('Camera stream has no frame yet');
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas is unavailable');
+    context.drawImage(video, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', 0.75),
+    );
+    if (!blob) throw new Error('Could not encode the thumbnail');
+    return blob;
+  } finally {
+    video.pause();
+    video.srcObject = null;
+  }
+}
+
 export class DriveUploadError extends Error {
   constructor(
     readonly kind:

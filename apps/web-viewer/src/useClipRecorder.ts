@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, request } from './api';
 import {
+  captureFrameAsJpeg,
   ClipRecorder,
   DriveUploadError,
   encryptClip,
@@ -40,6 +41,45 @@ async function reportRecordingFailure(
     // Recovery sweeps eventually release the recording if this best-effort
     // report cannot reach Beacon.
     return false;
+  }
+}
+
+/** Best-effort thumbnail for a clip that just started recording -- never
+ * awaited by the caller, never reported as a recording failure, and never
+ * retried. See ADR 0078. */
+async function uploadThumbnail(
+  recordingId: string,
+  stream: MediaStream,
+): Promise<void> {
+  try {
+    const frame = await captureFrameAsJpeg(stream);
+    const encrypted = await encryptClip(frame);
+    const session = await request<{ uploadUrl: string }>(
+      `/api/recordings/${recordingId}/thumbnail-upload-session`,
+      {
+        body: JSON.stringify({
+          byteSize: encrypted.blob.size,
+          checksumSha256: await sha256Hex(encrypted.blob),
+          mimeType: 'image/jpeg',
+          encryption: {
+            dataKey: encrypted.dataKey,
+            iv: encrypted.iv,
+            version: 1,
+          },
+        }),
+        method: 'POST',
+      },
+    );
+    const providerFileId = await uploadClipToDrive(
+      session.uploadUrl,
+      encrypted.blob,
+    );
+    await request(`/api/recordings/${recordingId}/thumbnail-complete`, {
+      body: JSON.stringify({ providerFileId }),
+      method: 'POST',
+    });
+  } catch {
+    // A clip without a thumbnail is still a complete, usable clip.
   }
 }
 
@@ -204,6 +244,7 @@ export function useClipRecorder(cameraId: string): {
             { body: JSON.stringify({ cameraId }), method: 'POST' },
           );
           recordingIdRef.current = created.recording.id;
+          void uploadThumbnail(created.recording.id, stream);
           const recorder = new ClipRecorder(stream, mimeType);
           recorderRef.current = recorder;
           recorder.start();
