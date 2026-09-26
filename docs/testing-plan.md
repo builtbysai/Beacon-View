@@ -162,6 +162,42 @@ state, active camera client, and `0xC0` service type. No fatal Android or Camera
 exception was logged. This closes the local privacy tap-through; microphone release
 with an active remote Listen session remains open.
 
+September 26, 2026 camera-permission-denial recovery — Pixel 7a `34171JEHN07672`,
+production-targeted debug build from `codex/android-privacy-evidence`. While Camera
+mode was active with a real capture client, `pm revoke android.permission.CAMERA`
+killed the process as expected; the restarted `CameraForegroundService` detected the
+missing permission in `onCreate()`, set `Disabled`/"Camera permission is required",
+and called `stopSelf()` before declaring a camera foreground-service type. No
+`SecurityException` or other fatal exception was logged, `dumpsys activity services`
+showed no service and no crash-restart loop, and `onStartCommand` returned
+`START_NOT_STICKY` while permission remained absent. Relaunching `MainActivity`
+presented the system permission request (`GrantPermissionsActivity`); granting camera
+access through that normal UI brought the service back as an active foreground camera
+client with a live preview, without re-pairing. This closes the camera-denied flow
+gap that blocked PR #66.
+
+September 26, 2026 pairing-link and build-configuration fixes, found during the
+recovery test above — two independent problems surfaced while re-pairing the same
+Pixel after its app data was cleared:
+
+1. Android's `parsePairingQr` only accepted the original `/pair` path. ADR 0067
+   (2026-09-24) added a second valid link shape, `/camera-mode/setup?code=...`, and
+   updated the web app's own scanner (`pairingCodeFromScan`) to accept both, but never
+   updated Android, which rejected the newer link with "That is not a Beacon setup
+   link." Fixed by accepting both paths on the trusted host; `PairingQrTest` covers
+   the newly-accepted path and confirms an arbitrary third path is still rejected.
+2. A debug APK built without explicitly exporting `BEACON_API_URL` silently compiles
+   against the emulator-only `http://10.0.2.2:3000` default (see
+   [physical-android-device-development.md](physical-android-device-development.md)),
+   which is unreachable from a physical device and explained the remaining sign-in and
+   "cannot reach your account" failures independent of the path bug above.
+
+With both fixed and `BEACON_API_URL=https://beacon.builtbysai.com` set explicitly,
+scanning a freshly generated production pairing code completed a real pairing: the
+Pixel reached an active `CameraForegroundService`, front-camera preview rendered a
+real room image, and Pause/flip controls worked, confirmed by screenshot and
+`dumpsys`/logcat with no fatal exception.
+
 September 25, 2026 recording diagnosis — Chrome manually recorded two Android
 camera clips. PostgreSQL retained valid encrypted upload metadata for both:
 460,095 bytes / 2,740 ms and 488,949 bytes / 2,808 ms. Recording creation returned

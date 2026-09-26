@@ -117,6 +117,18 @@ The Android build receives
 The emulator default remains `http://10.0.2.2:3000`. Release builds require
 HTTPS and do not broadly trust user certificates or cleartext.
 
+**Building a debug APK for the physical Pixel outside `Start-Beacon.ps1`/this
+script -- for example a plain `gradlew assembleDebug` -- silently falls back to
+the emulator-only `http://10.0.2.2:3000` default if `BEACON_API_URL` is not set
+in the shell or passed as `-PbeaconApiUrl=...`.** That address means nothing to
+a physical device, so sign-in, pairing-code validation, and every other backend
+call fail (a September 26, 2026 session lost time to exactly this: Google
+sign-in opened `10.0.2.2:3000`, valid production pairing links failed the
+scanner's host check, and manual code entry reported "cannot reach your
+account" -- none of it a code bug). Always export `BEACON_API_URL` (production:
+`https://beacon.builtbysai.com`) before an ad hoc Gradle invocation targeting
+the physical Pixel.
+
 Open `https://<LAN_IP>:8443` in laptop and phone Chrome. Pair the camera, keep
 the Android streaming screen visible, sign in as the owner, and open live
 video.
