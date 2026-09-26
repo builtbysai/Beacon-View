@@ -1,3 +1,6 @@
+import java.net.URI
+import java.security.MessageDigest
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -17,6 +20,55 @@ if (file("google-services.json").exists()) {
 
 providers.gradleProperty("beaconBuildDir").orNull?.let {
     layout.buildDirectory.set(file(it))
+}
+
+// ADR 0073/0075: the smart-detection experiment is default-off in every build.
+// Flipping it on (Gradle property or env var, matching the beaconApiUrl pattern)
+// is a deliberate, controlled-test choice, never a production default.
+val smartDetectionEnabled: Boolean =
+    providers.gradleProperty("smartDetectionEnabled")
+        .orElse(providers.environmentVariable("SMART_DETECTION_ENABLED"))
+        .orElse("false")
+        .map(String::toBoolean)
+        .get()
+
+val smartDetectionModelDir = layout.buildDirectory.dir("generated/smartDetectionAssets")
+
+// ADR 0075: download and checksum-verify the model at build time instead of
+// committing a ~4.4 MiB binary to git history. Only runs when the experiment
+// is enabled, so an ordinary build never touches the network for this.
+val downloadSmartDetectionModel by tasks.registering {
+    val modelUrl =
+        "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite"
+    val expectedSha256 = "0720bf247bd76e6594ea28fa9c6f7c5242be774818997dbbeffc4da460c723bb"
+    val outputDirectory = smartDetectionModelDir
+    outputs.dir(outputDirectory)
+    onlyIf { smartDetectionEnabled }
+    doLast {
+        val destination = outputDirectory.get().file("efficientdet_lite0.tflite").asFile
+        destination.parentFile.mkdirs()
+        if (!destination.exists()) {
+            URI(modelUrl).toURL().openStream().use { input ->
+                destination.outputStream().use { output -> input.copyTo(output) }
+            }
+        }
+        val digest = MessageDigest.getInstance("SHA-256")
+        destination.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            var read = input.read(buffer)
+            while (read != -1) {
+                digest.update(buffer, 0, read)
+                read = input.read(buffer)
+            }
+        }
+        val actualSha256 = digest.digest().joinToString("") { "%02x".format(it) }
+        if (actualSha256 != expectedSha256) {
+            destination.delete()
+            throw GradleException(
+                "Smart-detection model checksum mismatch: expected $expectedSha256 but got $actualSha256",
+            )
+        }
+    }
 }
 
 android {
@@ -44,6 +96,7 @@ android {
                 "beaconApiUrl must use http:// or https://"
             }
             buildConfigField("String", "BEACON_API_URL", "\"$beaconApiUrl\"")
+            buildConfigField("boolean", "SMART_DETECTION_ENABLED", "$smartDetectionEnabled")
         }
         release {
             val beaconApiUrl =
@@ -55,6 +108,13 @@ android {
                 "Release Beacon API URL must use https://"
             }
             buildConfigField("String", "BEACON_API_URL", "\"$beaconApiUrl\"")
+            buildConfigField("boolean", "SMART_DETECTION_ENABLED", "$smartDetectionEnabled")
+        }
+    }
+
+    sourceSets {
+        getByName("main") {
+            assets.srcDir(smartDetectionModelDir)
         }
     }
 
@@ -70,6 +130,8 @@ android {
 
     kotlinOptions { jvmTarget = "17" }
 }
+
+tasks.named("preBuild") { dependsOn(downloadSmartDetectionModel) }
 
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
@@ -90,6 +152,9 @@ dependencies {
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     implementation("com.google.firebase:firebase-messaging")
     implementation("io.github.webrtc-sdk:android:144.7559.08")
+    // ADR 0074/0075: smart-detection experiment runtime. The model asset is
+    // fetched separately by downloadSmartDetectionModel, not bundled here.
+    implementation("com.google.mediapipe:tasks-vision:1.0.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation(kotlin("test"))

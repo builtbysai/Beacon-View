@@ -214,6 +214,21 @@ whether `TalkSession.stop()` and its Android-side counterpart fully tear down th
 audio sink. Recording/Drive states as seen by a viewer and Browser Camera Mode's
 own states remain open per the roadmap.
 
+September 26, 2026 smart-detection real-device verification (ADR 0074/0075) --
+Pixel 7a `34171JEHN07672`, debug build with `SMART_DETECTION_ENABLED=true` (the
+production default remains off; this flag exists only for controlled test
+builds). `downloadSmartDetectionModel` fetched and checksum-verified
+`efficientdet_lite0.tflite` at build time; the app loaded it and ran real
+MediaPipe inference roughly once per second with zero crashes across a
+multi-minute session. With the camera facing an empty wall/ceiling it correctly
+reported no detections. With the owner standing in frame, it reported real,
+sustained `person` detections for about 19 consecutive cycles at confidence
+0.55-0.89. `top` showed the process using roughly 1.5 CPU cores and
+`dumpsys battery` reported 43.6C during this window -- a preliminary signal
+only, not the dedicated thermal/battery/false-positive study roadmap N9 still
+requires. The Pixel was reinstalled with the flag-off build afterward; the
+experiment is not left running on it.
+
 With both fixed and `BEACON_API_URL=https://beacon.builtbysai.com` set explicitly,
 scanning a freshly generated production pairing code completed a real pairing: the
 Pixel reached an active `CameraForegroundService`, front-camera preview rendered a
