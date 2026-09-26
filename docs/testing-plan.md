@@ -192,6 +192,28 @@ Pixel after its app data was cleared:
    which is unreachable from a physical device and explained the remaining sign-in and
    "cannot reach your account" failures independent of the path bug above.
 
+September 26, 2026 live two-device viewer evidence (N1/N2/U-checklist follow-up,
+`builtbysai/Beacon-SecureView#21`) -- Pixel 7a `34171JEHN07672` as the camera, a
+signed-in Chrome session as the viewer, against production `beacon.builtbysai.com`
+after deploying `392bd7b`. Beyond UI state, device-side ground truth was checked
+directly. Listen: `adb shell appops get ... RECORD_AUDIO` showed `allow ...
+(running)` on the Pixel continuously while Listen was enabled from the viewer.
+Talk: `adb shell dumpsys audio` showed a real `AudioTrack`
+(`usage=USAGE_VOICE_COMMUNICATION`, `content=CONTENT_TYPE_SPEECH`, 48kHz,
+`state:started`) on the Beacon process while speaking from the viewer. Camera
+source switching produced a genuine `CONNECTING` -> `LIVE` renegotiation and real
+new frames after switching back; one intermediate source showed a black frame,
+most likely the covered/misdirected rear lens rather than a software fault, not
+confirmed either way. The browser's "1 other viewer" count matched the Pixel's
+own on-device viewer badge during the switch. An interrupted connection recovered
+automatically ("Beacon is retrying - attempt 1" then `LIVE`) without a repair
+action. Still open: after ending Talk, `dumpsys audio` still showed the
+`AudioTrack` in `state:started` several seconds later -- not a privacy issue
+since this is speaker output rather than microphone capture, but worth checking
+whether `TalkSession.stop()` and its Android-side counterpart fully tear down the
+audio sink. Recording/Drive states as seen by a viewer and Browser Camera Mode's
+own states remain open per the roadmap.
+
 With both fixed and `BEACON_API_URL=https://beacon.builtbysai.com` set explicitly,
 scanning a freshly generated production pairing code completed a real pairing: the
 Pixel reached an active `CameraForegroundService`, front-camera preview rendered a
