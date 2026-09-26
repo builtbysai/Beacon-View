@@ -52,7 +52,9 @@ existing data-minimization guarantee.
    TensorFlow Lite, MediaPipe, or ONNX Runtime Mobile per the product brief -- including model
    provenance, license, and a size/latency budget for the oldest supported device. Adding that
    dependency needs its own ADR per the working rules ("explain important dependency choices
-   in an architecture decision record").
+   in an architecture decision record"). **Done in ADR 0074**, which selects MediaPipe Tasks
+   Vision and EfficientDet-Lite0 but does not add the dependency or model file yet, since
+   real inference cannot be verified without an emulator or physical device.
 2. Add an explicit, default-off feature flag before wiring any detector into the capture
    pipeline, and disable it automatically on unsupported or overheated devices.
 3. Measure false positives, CPU, thermal, and battery impact on at least one older supported
