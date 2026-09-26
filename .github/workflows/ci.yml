@@ -8,7 +8,69 @@ on:
 permissions:
   contents: read
 
+# A new push to the same PR (a fixup, a rebase, a force-push) makes any run
+# already in flight for it moot -- only the latest push's result matters.
+# Without this, every push kept its predecessor running to completion,
+# multiplying Actions usage on exactly the branches that get pushed to most.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # A docs-only or single-app change doesn't need the whole matrix: android
+  # and database are this workflow's two most expensive jobs (a full Gradle
+  # build/test/lint/assembleRelease, and a Postgres-backed migration/
+  # integration suite), and previously ran unconditionally on every push --
+  # including changes that could not possibly affect either of them. This
+  # job decides, from the actual diff, whether each is worth running.
+  # `validate` (lint/typecheck/test/build/format, including markdown) and
+  # `secrets`/`sbom` stay unconditional: they're comparatively cheap and are
+  # exactly the checks a docs-only change still benefits from.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.filter.outputs.android }}
+      database: ${{ steps.filter.outputs.database }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+          else
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+          fi
+          # A brand-new branch, a force-pushed history rewrite, or the
+          # repository's very first push all leave no usable base commit to
+          # diff against -- run everything rather than guess.
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$base" 2>/dev/null; then
+            echo "No usable base commit for a diff -- running the full matrix."
+            echo "android=true" >> "$GITHUB_OUTPUT"
+            echo "database=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "$base" "$head")"
+          echo "Changed files ($base..$head):"
+          echo "$changed"
+          if echo "$changed" | grep -qE '^(apps/android-camera/|\.github/workflows/)'; then
+            echo "android=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "android=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$changed" | grep -qE '^(apps/backend/|packages/|pnpm-lock\.yaml|pnpm-workspace\.yaml|package\.json|\.github/workflows/)'; then
+            echo "database=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "database=false" >> "$GITHUB_OUTPUT"
+          fi
+
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -65,6 +127,8 @@ jobs:
           retention-days: 90
 
   database:
+    needs: changes
+    if: needs.changes.outputs.database == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
@@ -117,6 +181,8 @@ jobs:
         run: pnpm --filter @beacon/backend test
 
   android:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
