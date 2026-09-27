@@ -312,7 +312,7 @@ the full 168-test backend suite passes.
    implementation, and reviewed legal text approved before publication.
 4. Choose one later candidate only after its prerequisites and design are reviewable.
    A backlog entry or deployment of this UI batch does not approve it.
-5. Camera use-case profiles (doorbell/car/regular) — see
+5. Camera use-case profiles (doorbell/car/baby monitor/regular) — see
    [camera-use-case-profiles.md](camera-use-case-profiles.md) for the research and
    proposed phasing. Decide which profile (if any) to build first; Phase 3 of that
    doc (continuous/loop recording for driving) additionally needs its own privacy

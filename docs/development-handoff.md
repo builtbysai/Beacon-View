@@ -1,13 +1,12 @@
 # Beacon SecureView development handoff
 
-## September 26, 2026 — handoff to next session (unfinished, read this first)
+## September 26, 2026 — handoff to next session (docs committed, no implementation started)
 
 This section supersedes the September 25 section below for **current state and
 next steps**; the September 25 section's environment setup, Oracle access, and
 deploy procedure are still accurate and still the ones to use. This handoff was
-written because the current session is ending (usage limit), mid-task, with
-uncommitted documentation changes. Read [AGENTS.md](../AGENTS.md) and
-[roadmap.md](roadmap.md) first, then this.
+written because the current session is ending (usage limit). Read
+[AGENTS.md](../AGENTS.md) and [roadmap.md](roadmap.md) first, then this.
 
 ### What happened this session
 
@@ -30,15 +29,15 @@ uncommitted documentation changes. Read [AGENTS.md](../AGENTS.md) and
 2. Old release directories and stopped containers on the Oracle VM were cleaned
    up conservatively (only clearly-safe auto-generated build artifacts;
    **nothing** ambiguous, no secrets, no keys, no `.env` files were touched).
-3. The owner asked three things in one message, only the first of which has any
-   work started:
+3. The owner opened three new workstreams in one message, then added a fourth
+   (baby monitor) shortly after. **All four are decisions/research only —
+   none are implemented on either platform:**
    - **Approved roadmap item N5 (MFA/passkeys)**: "yes we can add MFA and
-     passkey where applicable and on devices that support it." This is a
-     **decision, not an implementation** — no MFA/passkey code exists on
-     either platform (confirmed by grep for `webauthn|passkey|WebAuthn|Passkey`
-     across `apps/backend/src`, `apps/web-viewer/src`,
-     `apps/android-camera/app/src/main/java` — zero matches). See the proposed
-     shape already recorded in
+     passkey where applicable and on devices that support it." No MFA/passkey
+     code exists on either platform (confirmed by grep for
+     `webauthn|passkey|WebAuthn|Passkey` across `apps/backend/src`,
+     `apps/web-viewer/src`, `apps/android-camera/app/src/main/java` — zero
+     matches). Proposed shape recorded in
      [core-feature-completion-plan.md](core-feature-completion-plan.md)'s
      Step 7 (WebAuthn/passkey for web as primary path since it needs no new
      OTP delivery channel; Android Credential Manager passkeys where
@@ -46,132 +45,92 @@ uncommitted documentation changes. Read [AGENTS.md](../AGENTS.md) and
      implementing**: can a passkey be the *only* credential on an account, and
      what's the recovery story if the authenticator is lost? Needs an owner
      decision, not an engineering guess.
-   - **Requested research** on purpose-built camera "use-case profiles":
-     doorbell (dormant until motion/button), car/dash camera, and the existing
-     always-on profile — "Take your time and do some research... think about
-     the plan to implement them." **This research was started but the
-     deliverable file was never written.** See "Immediate next step" below —
-     this is the single most important unfinished thing in this handoff.
-   - **Requested an Android/web parity pass**: make the Android app's UI look
-     "exactly identical" to the current PWA design (owner explicitly likes the
-     PWA's current look), and audit both platforms so neither is missing
-     features the other has. **No audit has been started.** A placeholder
-     entry describing the scope (and the "audit before implementation, Compose
-     is not CSS" caveat) is already in
+   - **Camera use-case profiles research** — doorbell, car/dash camera, baby
+     monitor/nursery camera, and the existing always-on profile. Written up in
+     full in the new [camera-use-case-profiles.md](camera-use-case-profiles.md)
+     (see next section for the summary). This is the completed deliverable for
+     "take your time and do some research... think about the plan to
+     implement them" — **research and phased plan only, zero implementation.**
+   - **Android/web parity pass** — make the Android app's UI match the PWA's
+     current look ("exactly identical," owner's words) and audit both
+     platforms so neither is missing features the other has. Recorded as row
+     **U7** in [roadmap.md](roadmap.md) and in
      [core-feature-completion-plan.md](core-feature-completion-plan.md)'s
-     Step 6.
+     Step 6. **No audit has been started.** Explicitly: do not begin visual or
+     feature work until the audit/gap-list exists and the owner has reviewed
+     it — Compose cannot literally copy CSS, so "identical" needs to be
+     translated into layout/color/type/spacing intent first.
 
-### Uncommitted right now — fix before anything else
+### Camera use-case profiles — what the research concluded
 
-`git status` will show `docs/core-feature-completion-plan.md` modified and
-**not yet committed**. That edit:
+Full detail in [camera-use-case-profiles.md](camera-use-case-profiles.md).
+Short version for orientation:
+- **Regular/Always-on** — today's behavior, unchanged, no work needed.
+- **Doorbell** — a named preset over *existing* motion-settings columns (high
+  sensitivity, short cooldown, record-on-motion on, maybe elevated
+  notification priority). No new capture code. A literal hardware doorbell
+  button is out of scope (Beacon runs on phones, not purpose-built doorbell
+  hardware) unless the owner wants to scope Bluetooth-button pairing
+  separately later.
+- **Car/Dashcam** — same preset pattern, plus a genuinely new trigger: reading
+  the phone's built-in accelerometer as an impact detector (a real analog to
+  a dash-cam's G-sensor), producing a protected short clip. **True
+  continuous/loop recording while driving is explicitly excluded from this
+  proposal** — it conflicts with this repo's stated hard boundary of no
+  continuous or hidden recording ([roadmap.md](roadmap.md),
+  [product-build-brief.md](product-build-brief.md)) and needs its own,
+  separate owner privacy sign-off before anyone builds it.
+- **Baby monitor/nursery** — the easiest of the four. Beacon already has
+  always-on live view and consent-gated Listen/Talk; this profile is mostly a
+  UX/defaults preset (surface Listen/Talk prominently, turn off
+  motion-triggered recording by default since crib movement isn't a security
+  event). An optional cry-detection alert would be a new small audio-level
+  (decibel/frequency) detector — deliberately **not** speech or voice
+  analysis, which would cross into the biometric/identity territory this
+  repo's privacy rules already forbid. Phone hardware cannot match
+  purpose-built nursery cameras on night vision/IR; the doc says so plainly
+  rather than overselling it.
+- **Recommended order**: ship the Phase-1 presets for all three
+  event-oriented profiles (Doorbell, Car, Baby monitor) together first — low
+  risk, no new detectors, no boundary conflicts. New detectors
+  (accelerometer, cry-detection) are an optional Phase 2 per profile.
+  Continuous driving recording stays a separate, later, owner-gated decision.
 
-- Marked the recording/Clips UI work above as done (accurate).
-- Added a placeholder bullet for the Android/web parity pass (accurate, no
-  implementation claimed).
-- Added a new "MFA/passkeys" bullet under the release-gate section (accurate).
-- Added a new "Camera use-case profiles — research and proposal" section at
-  the bottom that **links to `[camera-use-case-profiles.md](camera-use-case-profiles.md)`
-  — a file that does not exist.** This is a dangling reference and must be
-  resolved before this doc batch is committed. Either:
-  - (preferred) Write `docs/camera-use-case-profiles.md` — see the research
-    notes below, which were gathered but never synthesized into that file, or
-  - Remove that section/link from `core-feature-completion-plan.md` if you'd
-    rather punt the research to a separate later session.
+### Docs status: fully committed, nothing pending
 
-`docs/roadmap.md` still needs updating and has **not been touched yet** this
-session, even though it's "the single actionable roadmap and current scope
-authority" per its own header. It is stale as of commit `394551b` — it
-predates all of PR #72/#73's work. Needed edits, not yet made:
-- A new dated entry summarizing the September 26 Activity/Clips/sharing/
-  thumbnails/recording-indicator work (mirror what's already accurately
-  written into `core-feature-completion-plan.md` above).
-- Update the **N5 row** (`docs/roadmap.md:169`) — it currently ends "...and
-  the owner's MFA/passkey policy decision," which reads as still-open. That
-  decision is now made (see above); reword to reflect approval and point at
-  the implementation task instead.
-- Add an entry for the Android/web parity pass (there isn't one yet in any of
-  the N/A/U tables).
-- Add a line referencing `camera-use-case-profiles.md` once it exists.
+Everything from this session is committed on branch
+`codex/camera-profiles-and-roadmap-docs` (commits `8e6e965` and the one
+finalizing baby monitor + this section) — **not pushed, no PR opened**, since
+that wasn't explicitly requested. `docs/roadmap.md` has been updated (N5 row
+reworded to reflect the MFA/passkey approval, new row U7 for the parity pass,
+a September 26 narrative entry, and new "Decisions requiring the owner"
+items for the camera profiles and parity sequencing).
+`core-feature-completion-plan.md`'s dangling link to
+`camera-use-case-profiles.md` is resolved — the file exists and is
+cross-referenced from all three docs consistently.
 
 There is also an untracked `.codex-remote-attachments/` directory at the repo
 root (a Codex remote-session artifact, not something this session created).
 Left untouched deliberately — don't delete it without checking whether a
 Codex session still owns it.
 
-### Immediate next step: write `docs/camera-use-case-profiles.md`
+### Next steps for whoever picks this up
 
-Research was gathered (web search, not yet re-run this session — re-verify
-specifics if they matter) on:
-- **Ring-style doorbell pattern**: separate "Ring Alert" (button press, always
-  active regardless of arm/disarm mode) vs. "Motion Alert" (movement
-  detected); drawable motion zones; battery-powered devices reduce
-  motion-check polling frequency to conserve power.
-- **Dash-cam pattern**: "parking mode" puts the camera in low-power standby,
-  woken by motion or G-sensor (accelerometer)-detected impact; G-sensor
-  clips are protected from being overwritten by loop recording; loop
-  recording continuously overwrites the oldest unprotected footage once
-  storage fills.
-
-Before writing the proposal, weigh this against Beacon's **actual**
-architecture and this repo's explicit hard boundaries — do not let the
-proposal drift into promising things Beacon's current model can't support or
-shouldn't per policy:
-- `docs/roadmap.md:218` and `docs/product-build-brief.md:316` state a **hard
-  boundary: no continuous or hidden recording.** A naive "car camera = loop
-  recording while driving" feature would conflict with this directly and
-  needs explicit owner privacy sign-off before any implementation — do not
-  build it unilaterally. A "record only on motion/impact while parked,
-  chunked into the existing short-clip model" framing avoids the conflict;
-  flag the continuous/loop-recording version as a separate decision the owner
-  must make explicitly.
-- Beacon runs on repurposed **Android phones**, not purpose-built low-power
-  camera silicon. There is no hardware doorbell button. A phone's built-in
-  accelerometer *is* a real, already-present equivalent to a dash-cam's
-  G-sensor — that's a genuinely buildable new trigger type, distinct from the
-  existing luma-based motion detection. A literal doorbell button would need
-  new hardware pairing (e.g. a Bluetooth button) — treat that as a stretch
-  goal, not part of a first cut.
-- Current camera/motion schema to build on (`camera_sources` table):
-  `motion_enabled`, `motion_record_enabled`, `motion_sensitivity`
-  (low/medium/high), `motion_cooldown_seconds` (30/60/120/300),
-  `motion_quiet_hours_start_minute`/`end_minute`/`time_zone`. Surfaced via
-  `apps/web-viewer/src/MotionSettingsPanel.tsx` and
-  `apps/backend/src/motion-settings.ts`. A "use-case profile" can likely ship
-  first as **a named preset that sets existing columns** (e.g. "Doorbell" =
-  high sensitivity + short cooldown + `motion_record_enabled` on + elevated
-  notification priority) rather than new capture architecture — low risk,
-  matches the "don't expose settings unsupported by the actual product" rule
-  the owner has stated elsewhere in this session, and ships value immediately.
-- Only the car-camera profile's impact trigger needs genuinely new capability
-  (reading the Android accelerometer as a second, independent trigger
-  alongside luma motion). Everything else is presets over what exists.
-
-Proposed shape for the doc: (1) research summary, (2) Beacon's constraints
-(above), (3) three profiles — Regular/Always-on (today, no change),
-Doorbell (preset only, buildable soon), Car/Dashcam (preset + new
-accelerometer trigger for parked-impact clips; explicitly flag true
-continuous/loop recording as a separate owner privacy decision, not part of
-this proposal), (4) incremental phases (Phase 1: profile-preset schema/UI,
-no new capture code; Phase 2: Android accelerometer trigger behind the
-existing `ActivityDetector`-style interface from the smart-detection
-foundation, ADR 0073; Phase 3, gated on owner sign-off: continuous/loop
-recording evaluation). Recommend starting with Phase 1 since it's real,
-low-risk, and doesn't touch the hard boundary.
-
-### After that
-
-1. Update `docs/roadmap.md` per the four bullets above.
-2. Commit this docs-only batch on a `codex/*` branch (not `main` — see
-   AGENTS.md), following the branch → commit → push → PR flow in the
-   "Safe continuation prompt" section below. Reproduce CI-equivalent checks
-   locally first if GitHub Actions billing is still blocked.
-3. **Do not start implementing MFA/passkeys, camera-use-case profiles, or the
-   Android/web parity audit without checking in with the owner on sequencing
-   first.** All three are substantial new workstreams introduced in a single
-   message, and this repo's own rule is one approved milestone at a time
-   (see AGENTS.md's "Do not begin a later milestone without explicit
-   approval"). Propose an order; don't assume one.
+1. If you want this docs batch on `main`: push
+   `codex/camera-profiles-and-roadmap-docs` and open a PR. Reproduce
+   CI-equivalent checks locally first if GitHub Actions billing is still
+   blocked (see point 1 under "What happened this session").
+2. **Do not start implementing MFA/passkeys, any camera-use-case profile, or
+   the Android/web parity audit without checking in with the owner on
+   sequencing first.** Four substantial workstreams were opened in this
+   session alone, and this repo's own rule is one approved milestone at a
+   time (AGENTS.md: "Do not begin a later milestone without explicit
+   approval"). Propose an order; don't assume one. The camera-profiles doc's
+   own recommendation (Phase 1 presets first, across all three profiles) is a
+   reasonable starting suggestion, not a decision already made.
+3. Start the Android/web parity audit (U7) as documentation/analysis only —
+   enumerate screens/controls on both platforms — before writing any UI code,
+   once the owner confirms this should be next.
 
 ### Where to get keys and access
 

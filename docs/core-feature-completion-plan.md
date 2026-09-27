@@ -184,8 +184,8 @@ is a user-owned cloud processor and recordings consume the user's quota.
 ## Camera use-case profiles — research and proposal
 
 The owner is considering purpose-built camera profiles (e.g. doorbell: dormant
-until motion/button; car camera; the current always-on profile) rather than one
-undifferentiated camera behavior. See
+until motion/button; car camera; baby monitor/nursery; the current always-on
+profile) rather than one undifferentiated camera behavior. See
 [camera-use-case-profiles.md](camera-use-case-profiles.md) for the research and
 a proposed incremental implementation plan. No implementation has started; this
 is a research deliverable awaiting owner direction on which profile (if any) to
