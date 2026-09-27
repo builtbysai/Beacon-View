@@ -40,14 +40,47 @@ narrower or wider content pane.
 Validated: `compileDebugKotlin` clean, then the full local gate
 (`testDebugUnitTest lintDebug assembleDebug assembleRelease`) passes -- same
 two pre-existing, unrelated Firebase deprecation warnings Codex already
-noted, no new ones. **Not validated**: no tablet, foldable, or emulator at a
-≥600dp width was available in this environment to visually confirm the wide
-layout on a real or emulated wide screen -- this is compile/lint-verified
-correctness only, not a visual acceptance check. That physical/emulated
-check is the natural next step before calling this slice done. Left
-uncommitted on `codex/android-clips-library` alongside Codex's existing
-work, per the owner's continue-in-place instruction; nothing pushed,
-deployed, or altered in production.
+noted, no new ones. Left uncommitted on `codex/android-clips-library`
+alongside Codex's existing work, per the owner's continue-in-place
+instruction; nothing pushed, deployed, or altered in production.
+
+**Update: physically verified on real hardware.** The owner connected both
+the Pixel (`34171JEHN07672`) and a Samsung tablet (`R52RC0B5AAX`, ~1200dp
+wide, well over the 600dp breakpoint) via adb and authorized full control to
+drive both devices for verification. Built a debug APK against the local dev
+backend, tunneled to each device with `adb reverse tcp:3000 tcp:3000` since
+neither device is the emulator. Hit and fixed a real bug in the process: the
+debug network security config
+(`apps/android-camera/app/src/debug/res/xml/network_security_config.xml`)
+only allowlisted cleartext HTTP to `10.0.2.2` (the emulator's loopback
+alias), so every request from a physical device silently failed
+(`Sign in failed`, `Account could not be created`) with no exception
+category the existing `userFacingMessage` mapping recognized -- confirmed by
+the exact same request succeeding via `curl` straight to the backend, and
+ruled out an app-logic bug by comparing the response shape `BeaconApi.kt`
+expects against what the server actually returns (identical). Added a
+second debug-only domain entry for `127.0.0.1`, alongside the existing
+`10.0.2.2` one -- mirrors it exactly, still gated to the debug build variant
+only, so release/production cleartext posture is unchanged.
+
+With that fixed, created a local-only test account
+(`beacon.review@example.test`, a `.test`-TLD address per RFC 2606, password
+generated for this session) directly against the local dev backend and
+signed in on both devices. Confirmed on the physical tablet: the permanent
+sidebar renders at the correct 280dp-equivalent width (measured against the
+tablet's own density, matched pixel-for-pixel), no top bar/hamburger is
+shown, Home/Cameras/Events/Settings navigation all work, the Events
+Activity/Clips tab switch and empty-state Clips screen (from this session's
+sharing/thumbnail work) render correctly, and Settings' motion-retention,
+notification, and account sections all render without error. Confirmed on
+the physical Pixel: the phone still gets the original top-bar-plus-drawer
+chrome (not the sidebar), and the drawer itself opens, closes, and lists the
+same four destinations plus the account row -- i.e. the `BeaconSidebarContent`
+extraction did not regress the already-shipped phone behavior. Real clip
+playback/sharing/thumbnails remain unverified since this fresh test account
+has no paired camera or uploaded clip -- that would need pairing a camera
+and either waiting for motion or using the new manual-recording path, which
+was out of scope for this pass.
 
 ### September 27 follow-up (Claude Code): Android clip sharing and thumbnails
 
