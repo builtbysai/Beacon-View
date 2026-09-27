@@ -24,7 +24,12 @@ import { unauthorized, type SessionAuth } from './session-auth.js';
 import type { SignalingHub } from './signaling.js';
 import type { MilestoneStore } from './store.js';
 
-const createSchema = z.object({ cameraId: z.string().uuid() }).strict();
+const createSchema = z
+  .object({
+    cameraId: z.string().uuid(),
+    captureMode: z.enum(['viewer', 'camera']).optional(),
+  })
+  .strict();
 const parametersSchema = z.object({ recordingId: z.string().uuid() });
 const shareLinkCreateSchema = z
   .object({ expiresInHours: z.number().int().min(1).max(72) })
@@ -433,6 +438,17 @@ export function registerRecordingRoutes(
     });
     if (!recording)
       return reply.code(409).send({ error: 'Camera is unavailable' });
+    if (
+      body.data.captureMode === 'camera' &&
+      !signaling.requestRecording(camera.publicCameraId, recording.id)
+    ) {
+      await store.markOwnerRecordingFailed(
+        session.householdId,
+        session.userId,
+        recording.id,
+      );
+      return reply.code(409).send({ error: 'Camera is offline' });
+    }
     await store.audit({
       eventType: 'recording_requested',
       householdId: session.householdId,

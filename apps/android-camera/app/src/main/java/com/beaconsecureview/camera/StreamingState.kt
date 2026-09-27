@@ -71,6 +71,7 @@ data class CameraRuntimeState(
     val privacyMode: Boolean = false,
     val privacyChangePending: Boolean = false,
     val privacySyncPending: Boolean = false,
+    val recordingActive: Boolean = false,
 )
 
 data class RegisteredCameraSource(

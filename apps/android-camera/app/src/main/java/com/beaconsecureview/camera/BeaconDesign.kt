@@ -15,8 +15,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -26,8 +28,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 // These semantic values mirror the web viewer tokens so the Monitor keeps the
 // same visual language without depending on the web implementation.
@@ -79,6 +85,63 @@ internal val BeaconHeroSupporting = Color(0xFFA1A1AA)
 internal val BeaconVideoOverlay = Color(0xE009090B)
 internal val BeaconVideoControl = Color(0xFF27272A)
 internal val BeaconVideoMuted = Color(0xFFA1A1AA)
+
+/** Mirrors the PWA's `--space-*` scale instead of scattering unrelated dp values. */
+internal object BeaconSpacing {
+    val Xs = 4.dp
+    val Sm = 8.dp
+    val Md = 12.dp
+    val Lg = 16.dp
+    val Xl = 24.dp
+    val Xxl = 32.dp
+    val Xxxl = 48.dp
+    val Huge = 64.dp
+}
+
+internal object BeaconRadii {
+    val Sm = 4.dp
+    val Md = 8.dp
+    val Lg = 12.dp
+    val Full = 999.dp
+}
+
+internal enum class BeaconThemePreference { Light, System, Dark }
+
+private val BeaconInter =
+    FontFamily(
+        Font(R.font.inter_variable, FontWeight.Normal),
+        Font(R.font.inter_variable, FontWeight.Medium),
+        Font(R.font.inter_variable, FontWeight.SemiBold),
+        Font(R.font.inter_variable, FontWeight.Bold),
+        Font(R.font.inter_variable, FontWeight.ExtraBold),
+    )
+
+/** PWA type tokens (`--text-xs` through `--text-4xl`) mapped to Compose roles. */
+internal val BeaconTypography =
+    Typography(
+        displayLarge = TextStyle(fontFamily = BeaconInter, fontSize = 36.sp, lineHeight = 38.sp, fontWeight = FontWeight.ExtraBold),
+        headlineLarge = TextStyle(fontFamily = BeaconInter, fontSize = 30.sp, lineHeight = 34.sp, fontWeight = FontWeight.ExtraBold),
+        headlineMedium = TextStyle(fontFamily = BeaconInter, fontSize = 24.sp, lineHeight = 29.sp, fontWeight = FontWeight.Bold),
+        headlineSmall = TextStyle(fontFamily = BeaconInter, fontSize = 20.sp, lineHeight = 25.sp, fontWeight = FontWeight.Bold),
+        titleLarge = TextStyle(fontFamily = BeaconInter, fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold),
+        titleMedium = TextStyle(fontFamily = BeaconInter, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold),
+        titleSmall = TextStyle(fontFamily = BeaconInter, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold),
+        bodyLarge = TextStyle(fontFamily = BeaconInter, fontSize = 16.sp, lineHeight = 25.sp),
+        bodyMedium = TextStyle(fontFamily = BeaconInter, fontSize = 14.sp, lineHeight = 21.sp),
+        bodySmall = TextStyle(fontFamily = BeaconInter, fontSize = 12.sp, lineHeight = 18.sp),
+        labelLarge = TextStyle(fontFamily = BeaconInter, fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold),
+        labelMedium = TextStyle(fontFamily = BeaconInter, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold),
+        labelSmall = TextStyle(fontFamily = BeaconInter, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold),
+    )
+
+internal val BeaconShapes =
+    Shapes(
+        extraSmall = RoundedCornerShape(BeaconRadii.Sm),
+        small = RoundedCornerShape(BeaconRadii.Md),
+        medium = RoundedCornerShape(BeaconRadii.Lg),
+        large = RoundedCornerShape(BeaconRadii.Lg),
+        extraLarge = RoundedCornerShape(BeaconRadii.Lg),
+    )
 
 @Composable
 internal fun BeaconWordmark(

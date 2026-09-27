@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -124,6 +125,8 @@ internal fun MonitorHome(
     inboundGoogleAuthCode: String?,
     onInboundGoogleAuthCodeHandled: () -> Unit,
     onGoogleSignIn: () -> Unit,
+    themePreference: BeaconThemePreference,
+    onThemePreferenceChange: (BeaconThemePreference) -> Unit,
 ) {
     val context = LocalContext.current
     var session by remember { mutableStateOf(sessionStore.read()) }
@@ -144,6 +147,8 @@ internal fun MonitorHome(
     var favoritesOnly by rememberSaveable(session?.userId) { mutableStateOf(false) }
     var reordering by rememberSaveable(session?.userId) { mutableStateOf(false) }
     var monitorPage by rememberSaveable(session?.userId) { mutableStateOf(MonitorPage.Home) }
+    var eventsView by rememberSaveable(session?.userId) { mutableStateOf(MonitorEventsView.Activity) }
+    var navigationOpen by rememberSaveable(session?.userId) { mutableStateOf(false) }
     var accessEvents by remember(session?.userId) {
         mutableStateOf<List<BeaconApi.AccessEvent>>(emptyList())
     }
@@ -160,6 +165,23 @@ internal fun MonitorHome(
         mutableStateOf<List<BeaconApi.MotionEvent>>(emptyList())
     }
     var motionEventsLoaded by remember(session?.userId) { mutableStateOf(false) }
+    var cameraMotionSettings by remember(selectedSettingsDeviceId) {
+        mutableStateOf<List<BeaconApi.CameraMotionSettings>>(emptyList())
+    }
+    var cameraMotionSettingsLoaded by remember(selectedSettingsDeviceId) { mutableStateOf(false) }
+    var cameraMotionSettingsBusy by remember { mutableStateOf(false) }
+    var cameraMotionSettingsError by remember(selectedSettingsDeviceId) { mutableStateOf("") }
+    var cameraMotionSettingsNotice by remember(selectedSettingsDeviceId) { mutableStateOf("") }
+    var recordings by remember(session?.userId) {
+        mutableStateOf<List<BeaconApi.RecordingSummary>>(emptyList())
+    }
+    var recordingsLoaded by remember(session?.userId) { mutableStateOf(false) }
+    var recordingsCursor by remember(session?.userId) { mutableStateOf<String?>(null) }
+    var recordingBusyId by remember { mutableStateOf<String?>(null) }
+    var recordingsLoadingMore by remember { mutableStateOf(false) }
+    var recordingPlayback by remember { mutableStateOf<BeaconApi.PlaybackRecording?>(null) }
+    var recordingDeleteTarget by remember { mutableStateOf<BeaconApi.RecordingSummary?>(null) }
+    var recordingShareTarget by remember { mutableStateOf<BeaconApi.RecordingSummary?>(null) }
     var message by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -167,6 +189,18 @@ internal fun MonitorHome(
     var notificationBusy by remember { mutableStateOf(false) }
     var notificationPreferences by remember(session?.userId) {
         mutableStateOf<List<BeaconApi.NotificationPreference>>(emptyList())
+    }
+    fun expireSession() {
+        NotificationConsentStore(context).mute()
+        notificationConsent = false
+        scope.launch(Dispatchers.IO) {
+            disableAndroidNotifications(context, api, null)
+        }
+        sessionStore.clear()
+        session = null
+        selectedCameraId = null
+        cameras = emptyList()
+        message = "Your session expired. Sign in again."
     }
     fun enableNotifications() {
         val active = session ?: return
@@ -265,15 +299,7 @@ internal fun MonitorHome(
                 message = ""
             }.onFailure {
                 if (it is AuthorizationLostException) {
-                    NotificationConsentStore(context).mute()
-                    notificationConsent = false
-                    scope.launch(Dispatchers.IO) {
-                        disableAndroidNotifications(context, api, null)
-                    }
-                    sessionStore.clear()
-                    session = null
-                    selectedCameraId = null
-                    message = "Your session expired. Sign in again."
+                    expireSession()
                 } else {
                     message = it.userFacingMessage("Cameras are temporarily unavailable")
                 }
@@ -292,30 +318,46 @@ internal fun MonitorHome(
 
     LaunchedEffect(session?.token) {
         val active = session ?: return@LaunchedEffect
-        if (active.email != null) return@LaunchedEffect
         val result = withContext(Dispatchers.IO) { runCatching { api.currentAccount(active.token) } }
         result.onSuccess {
-            if (session?.token == active.token) session = it
+            if (session?.token == active.token) {
+                sessionStore.save(it)
+                session = it
+            }
         }.onFailure {
             if (it is AuthorizationLostException) {
-                NotificationConsentStore(context).mute()
-                notificationConsent = false
-                scope.launch(Dispatchers.IO) {
-                    disableAndroidNotifications(context, api, null)
-                }
-                sessionStore.clear()
-                session = null
-                cameras = emptyList()
-                message = "Your session expired. Sign in again."
+                expireSession()
             }
         }
     }
 
-    LaunchedEffect(session, monitorPage) {
+    LaunchedEffect(selectedSettingsDeviceId, session?.token, session?.householdRole) {
+        val deviceId = selectedSettingsDeviceId ?: return@LaunchedEffect
+        val active = session ?: return@LaunchedEffect
+        if (active.householdRole !in setOf("owner", "admin")) {
+            cameraMotionSettingsLoaded = true
+            return@LaunchedEffect
+        }
+        cameraMotionSettingsLoaded = false
+        cameraMotionSettingsError = ""
+        val result = withContext(Dispatchers.IO) { runCatching { api.monitorMotionSettings(active.token, deviceId) } }
+        result.onSuccess {
+            cameraMotionSettings = it
+            cameraMotionSettingsLoaded = true
+        }.onFailure {
+            if (it is AuthorizationLostException) {
+                expireSession()
+            } else {
+                cameraMotionSettingsError = it.userFacingMessage("Motion settings could not be loaded. Try again.")
+            }
+            cameraMotionSettingsLoaded = true
+        }
+    }
+
+    LaunchedEffect(session, monitorPage, eventsView) {
         val active = session ?: return@LaunchedEffect
         when (monitorPage) {
-            MonitorPage.Home,
-            MonitorPage.Activity -> {
+            MonitorPage.Home -> {
                 val result = withContext(Dispatchers.IO) { runCatching { api.motionEvents(active.token) } }
                 result.onSuccess {
                     motionEvents = it
@@ -323,6 +365,27 @@ internal fun MonitorHome(
                 }.onFailure {
                     message = it.userFacingMessage("Activity is temporarily unavailable")
                     motionEventsLoaded = true
+                }
+            }
+            MonitorPage.Events -> if (eventsView == MonitorEventsView.Activity) {
+                val result = withContext(Dispatchers.IO) { runCatching { api.motionEvents(active.token) } }
+                result.onSuccess {
+                    motionEvents = it
+                    motionEventsLoaded = true
+                }.onFailure {
+                    message = it.userFacingMessage("Activity is temporarily unavailable")
+                    motionEventsLoaded = true
+                }
+            } else {
+                recordingsLoaded = false
+                val result = withContext(Dispatchers.IO) { runCatching { api.recordings(active.token) } }
+                result.onSuccess {
+                    recordings = it.recordings
+                    recordingsCursor = it.nextCursor
+                    recordingsLoaded = true
+                }.onFailure {
+                    message = it.userFacingMessage("Clips are temporarily unavailable")
+                    recordingsLoaded = true
                 }
             }
             MonitorPage.Settings -> {
@@ -407,6 +470,7 @@ internal fun MonitorHome(
                 cameras = emptyList()
                 message = "Your session expired. Sign in again."
             },
+            canRecord = activeSession.householdRole == "owner",
             favorite = activeCamera.id in favoriteCameraIds,
             onFavorite = {
                 favoriteCameraIds = favoritesStore.toggle(activeSession.userId, activeCamera.id)
@@ -418,71 +482,83 @@ internal fun MonitorHome(
     BackHandler(enabled = selectedSettingsDeviceId != null) {
         selectedSettingsDeviceId = null
     }
+    BackHandler(enabled = navigationOpen) { navigationOpen = false }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier =
-                Modifier.fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(monitorScrollState)
-                    .safeDrawingPadding()
-                    .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-        if (session == null) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onCameraMode) { Icon(Icons.Outlined.Home, "Camera mode home") }
-                BeaconWordmark(compact = true)
-            }
-            BeaconPageHeader(
-                eyebrow = "Your space, within reach",
-                title = "Welcome to Beacon",
-                supportingText = "Sign in to access your cameras and live views.",
-            )
-            BeaconPanel(modifier = Modifier.fillMaxWidth(), contentPadding = 20) {
-                Button(
-                    enabled = !busy,
-                    onClick = onGoogleSignIn,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(),
-                ) {
-                    Text("G", color = Color(0xFF4285F4), fontWeight = FontWeight.ExtraBold)
-                    Text("Continue with Google", modifier = Modifier.padding(start = 12.dp).weight(1f))
-                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, modifier = Modifier.size(18.dp))
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Spacer(Modifier.height(1.dp).weight(1f).background(MaterialTheme.colorScheme.outlineVariant))
-                    Text("or use email", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(1.dp).weight(1f).background(MaterialTheme.colorScheme.outlineVariant))
-                }
-                Text("Sign in with your Beacon account", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("Email") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("Password") },
-                    singleLine = true,
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { showPassword = !showPassword }) {
-                            Icon(Icons.Outlined.Visibility, if (showPassword) "Hide password" else "Show password")
+    // Android's conventional phone/tablet breakpoint. Below it, Beacon uses the
+    // PWA's mobile drawer (BeaconMonitorTopBar + BeaconMonitorNavigation, unchanged
+    // below); at or above it, a permanent sidebar sits beside the content instead,
+    // mirroring the PWA's own wide-layout behavior instead of stretching the
+    // phone-width drawer across a tablet or unfolded foldable.
+    val isWideLayout = LocalConfiguration.current.screenWidthDp >= BEACON_WIDE_LAYOUT_MIN_WIDTH_DP
+
+    Row(modifier = Modifier.fillMaxSize()) {
+        if (isWideLayout && session != null) {
+            BeaconPermanentSidebar(
+                selected = monitorPage,
+                email = session!!.email ?: "Beacon account",
+                themePreference = themePreference,
+                onSelect = {
+                    monitorPage = it
+                    if (it != MonitorPage.Cameras) selectedSettingsDeviceId = null
+                },
+                onThemePreferenceChange = onThemePreferenceChange,
+                onTrustAndPrivacy = { monitorPage = MonitorPage.Settings },
+                onLogout = {
+                    val active = session
+                    if (active != null) {
+                        NotificationConsentStore(context).mute()
+                        notificationConsent = false
+                        sessionStore.clear()
+                        session = null
+                        selectedCameraId = null
+                        cameras = emptyList()
+                        monitorPage = MonitorPage.Home
+                        scope.launch(Dispatchers.IO) {
+                            runCatching { disableAndroidNotifications(context, api, active) }
+                            runCatching { api.logout(active.token) }
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                )
-                Button(
-                    enabled = email.isNotBlank() && password.isNotBlank() && !busy,
-                    onClick = {
+                    }
+                },
+            )
+            Box(
+                modifier =
+                    Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant),
+            )
+        }
+        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (session != null && !isWideLayout) {
+                BeaconMonitorTopBar(onOpenNavigation = { navigationOpen = true })
+            }
+            Column(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(monitorScrollState)
+                        .then(if (session == null) Modifier.safeDrawingPadding() else Modifier.navigationBarsPadding())
+                        .padding(horizontal = 16.dp, vertical = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+        if (session == null) {
+            MonitorAuthScreen(
+                email = email,
+                password = password,
+                showPassword = showPassword,
+                busy = busy,
+                message = message,
+                onEmailChange = {
+                    email = it
+                    message = ""
+                },
+                onPasswordChange = {
+                    password = it
+                    message = ""
+                },
+                onShowPasswordChange = { showPassword = it },
+                onSignIn = {
+                    if (email.isBlank() || password.isBlank()) {
+                        message = "Enter your email and password."
+                    } else {
                         busy = true
                         scope.launch {
                             val result = withContext(Dispatchers.IO) { runCatching { api.login(email, password) } }
@@ -494,14 +570,27 @@ internal fun MonitorHome(
                             }.onFailure { message = it.userFacingMessage("Sign in failed") }
                             busy = false
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                ) { Text(if (busy) "Signing in…" else "Sign in securely") }
-                BeaconTrustLine(
-                    "Cloud recording is optional. Camera capture stays visible on the device.",
-                    modifier = Modifier.padding(top = 10.dp),
-                )
-            }
+                    }
+                },
+                onCreateAccount = {
+                    busy = true
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) { runCatching { api.createAccount(email, password) } }
+                        result.onSuccess {
+                            sessionStore.save(it)
+                            password = ""
+                            session = it
+                            message = ""
+                        }.onFailure { message = it.userFacingMessage("Account could not be created") }
+                        busy = false
+                    }
+                },
+                onGoogleSignIn = onGoogleSignIn,
+                onCameraMode = onCameraMode,
+                requestPasswordReset = { resetEmail ->
+                    withContext(Dispatchers.IO) { runCatching { api.requestPasswordReset(resetEmail) } }
+                },
+            )
         } else {
             // A stable snapshot, not repeated `session!!` reads: this branch
             // only runs while session is non-null, but the callbacks below
@@ -543,7 +632,10 @@ internal fun MonitorHome(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text("Latest activity", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            androidx.compose.material3.TextButton(onClick = { monitorPage = MonitorPage.Activity }) {
+                            androidx.compose.material3.TextButton(onClick = {
+                                monitorPage = MonitorPage.Events
+                                eventsView = MonitorEventsView.Activity
+                            }) {
                                 Text("See all")
                             }
                         }
@@ -607,6 +699,70 @@ internal fun MonitorHome(
                                     deviceControlBusy = false
                                 }
                             },
+                            motionContent = {
+                                if (currentSession.householdRole in setOf("owner", "admin")) {
+                                    AndroidMotionSettingsPanel(
+                                        sources = settingsSources,
+                                        settings = cameraMotionSettings,
+                                        loaded = cameraMotionSettingsLoaded,
+                                        busy = cameraMotionSettingsBusy,
+                                        error = cameraMotionSettingsError,
+                                        notice = cameraMotionSettingsNotice,
+                                        onChange = { changed ->
+                                            cameraMotionSettings =
+                                                cameraMotionSettings.map { if (it.cameraId == changed.cameraId) changed else it }
+                                            cameraMotionSettingsError = ""
+                                            cameraMotionSettingsNotice = ""
+                                        },
+                                        onSave = { changed ->
+                                            cameraMotionSettingsBusy = true
+                                            cameraMotionSettingsError = ""
+                                            cameraMotionSettingsNotice = ""
+                                            scope.launch {
+                                                val result =
+                                                    withContext(Dispatchers.IO) {
+                                                        runCatching { api.updateMonitorMotionSettings(currentSession.token, changed) }
+                                                    }
+                                                result.onSuccess { saved ->
+                                                    cameraMotionSettings =
+                                                        cameraMotionSettings.map { if (it.cameraId == saved.cameraId) saved else it }
+                                                    cameraMotionSettingsNotice =
+                                                        "Saved. Your phone applies the settings on its next connection check."
+                                                }.onFailure {
+                                                    if (it is AuthorizationLostException) {
+                                                        expireSession()
+                                                    } else {
+                                                        cameraMotionSettingsError =
+                                                            it.userFacingMessage("Changes could not be saved. Your edits are still here to retry.")
+                                                    }
+                                                }
+                                                cameraMotionSettingsBusy = false
+                                            }
+                                        },
+                                        onRetry = {
+                                            val deviceId = settingsSources.first().deviceId
+                                            cameraMotionSettingsLoaded = false
+                                            cameraMotionSettingsError = ""
+                                            scope.launch {
+                                                val result =
+                                                    withContext(Dispatchers.IO) {
+                                                        runCatching { api.monitorMotionSettings(currentSession.token, deviceId) }
+                                                    }
+                                                result.onSuccess { cameraMotionSettings = it }
+                                                    .onFailure {
+                                                        if (it is AuthorizationLostException) {
+                                                            expireSession()
+                                                        } else {
+                                                            cameraMotionSettingsError =
+                                                                it.userFacingMessage("Motion settings could not be loaded. Try again.")
+                                                        }
+                                                    }
+                                                cameraMotionSettingsLoaded = true
+                                            }
+                                        },
+                                    )
+                                }
+                            },
                         )
                     } else {
                         BeaconPageHeader(
@@ -655,20 +811,103 @@ internal fun MonitorHome(
                         )
                     }
                 }
-                MonitorPage.Activity -> {
-                    BeaconPageHeader(
-                        eyebrow = "On-device detection",
-                        title = "Motion events",
-                        supportingText = "Camera, time, and motion intensity—never an image or recording.",
-                    )
-                    if (!motionEventsLoaded) Text("Loading activity…")
-                    if (motionEventsLoaded && motionEvents.isEmpty()) {
-                        BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                            Text("No activity yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("Motion events will appear here after you connect a camera.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                MonitorPage.Events -> {
+                    BeaconEventsViewSwitch(selected = eventsView, onSelect = { eventsView = it })
+                    if (eventsView == MonitorEventsView.Activity) {
+                        BeaconPageHeader(
+                            eyebrow = "On-device detection",
+                            title = "Motion events",
+                            supportingText = "Camera, time, and motion intensity—never an image or recording.",
+                        )
+                        if (!motionEventsLoaded) Text("Loading activity…")
+                        if (motionEventsLoaded && motionEvents.isEmpty()) {
+                            BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+                                Text("No activity yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("Motion events will appear here after you connect a camera.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
+                        motionEvents.forEach { event -> MotionEventRow(event) }
+                    } else {
+                        AndroidRecordingLibrary(
+                        api = api,
+                        sessionToken = currentSession.token,
+                        recordings = recordings,
+                        loaded = recordingsLoaded,
+                        loadingMore = recordingsLoadingMore,
+                        nextCursor = recordingsCursor,
+                        busyRecordingId = recordingBusyId,
+                        canDelete = currentSession.householdRole == "owner",
+                        playback = recordingPlayback,
+                        deleteTarget = recordingDeleteTarget,
+                        shareTarget = recordingShareTarget,
+                        onRefresh = {
+                            recordingsLoaded = false
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) { runCatching { api.recordings(currentSession.token) } }
+                                result.onSuccess {
+                                    recordings = it.recordings
+                                    recordingsCursor = it.nextCursor
+                                    message = ""
+                                }.onFailure { message = it.userFacingMessage("Clips are temporarily unavailable") }
+                                recordingsLoaded = true
+                            }
+                        },
+                        onLoadMore = {
+                            val cursor = recordingsCursor ?: return@AndroidRecordingLibrary
+                            recordingsLoadingMore = true
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) { runCatching { api.recordings(currentSession.token, cursor) } }
+                                result.onSuccess {
+                                    recordings = recordings + it.recordings
+                                    recordingsCursor = it.nextCursor
+                                }.onFailure { message = it.userFacingMessage("More clips could not be loaded") }
+                                recordingsLoadingMore = false
+                            }
+                        },
+                        onPlay = { recording ->
+                            recordingPlayback?.file?.delete()
+                            recordingPlayback = null
+                            recordingBusyId = recording.id
+                            scope.launch {
+                                val result =
+                                    withContext(Dispatchers.IO) {
+                                        runCatching {
+                                            api.downloadRecordingForPlayback(
+                                                currentSession.token,
+                                                recording.id,
+                                                context.cacheDir,
+                                            )
+                                        }
+                                    }
+                                result.onSuccess { recordingPlayback = it }
+                                    .onFailure { message = it.userFacingMessage("Clip could not be played") }
+                                recordingBusyId = null
+                            }
+                        },
+                        onRequestDelete = { recordingDeleteTarget = it },
+                        onConfirmDelete = {
+                            val target = recordingDeleteTarget ?: return@AndroidRecordingLibrary
+                            recordingBusyId = target.id
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) { runCatching { api.deleteRecording(currentSession.token, target.id) } }
+                                result.onSuccess {
+                                    recordings = recordings.filterNot { it.id == target.id }
+                                    recordingPlayback?.file?.delete()
+                                    recordingPlayback = null
+                                    recordingDeleteTarget = null
+                                }.onFailure { message = it.userFacingMessage("Clip could not be deleted") }
+                                recordingBusyId = null
+                            }
+                        },
+                        onCancelDelete = { recordingDeleteTarget = null },
+                        onClosePlayback = {
+                            recordingPlayback?.file?.delete()
+                            recordingPlayback = null
+                        },
+                        onRequestShare = { recordingShareTarget = it },
+                        onDismissShare = { recordingShareTarget = null },
+                        )
                     }
-                    motionEvents.forEach { event -> MotionEventRow(event) }
                 }
                 MonitorPage.Settings -> {
                     BeaconPageHeader(
@@ -904,6 +1143,7 @@ internal fun MonitorHome(
                 )
             }
         }
+        }
         if (deleteAccountOpen && session != null) {
             AlertDialog(
                 onDismissRequest = { if (!deletingAccount) deleteAccountOpen = false },
@@ -961,14 +1201,39 @@ internal fun MonitorHome(
                 },
             )
         }
-        if (session != null) {
+        if (session != null && !isWideLayout) {
             BeaconMonitorNavigation(
+                open = navigationOpen,
                 selected = monitorPage,
+                email = session!!.email ?: "Beacon account",
+                themePreference = themePreference,
+                onDismiss = { navigationOpen = false },
                 onSelect = {
                     monitorPage = it
                     if (it != MonitorPage.Cameras) selectedSettingsDeviceId = null
                 },
+                onThemePreferenceChange = onThemePreferenceChange,
+                onTrustAndPrivacy = {
+                    monitorPage = MonitorPage.Settings
+                    navigationOpen = false
+                },
+                onLogout = {
+                    val active = session ?: return@BeaconMonitorNavigation
+                    NotificationConsentStore(context).mute()
+                    notificationConsent = false
+                    sessionStore.clear()
+                    session = null
+                    selectedCameraId = null
+                    cameras = emptyList()
+                    monitorPage = MonitorPage.Home
+                    navigationOpen = false
+                    scope.launch(Dispatchers.IO) {
+                        runCatching { disableAndroidNotifications(context, api, active) }
+                        runCatching { api.logout(active.token) }
+                    }
+                },
             )
+        }
         }
     }
 }

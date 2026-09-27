@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Cameraswitch
 import androidx.compose.material.icons.outlined.Fullscreen
+import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Button
@@ -37,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +53,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.webrtc.SurfaceViewRenderer
 
 @Composable
@@ -63,6 +68,7 @@ internal fun AndroidLiveView(
     onFlip: (() -> Unit)?,
     flipLabel: String?,
     onAuthorizationLost: () -> Unit,
+    canRecord: Boolean,
     favorite: Boolean,
     onFavorite: () -> Unit,
 ) {
@@ -77,6 +83,12 @@ internal fun AndroidLiveView(
     var listening by remember(camera.id) { mutableStateOf(false) }
     var fullscreen by remember(camera.id) { mutableStateOf(false) }
     var viewerSession by remember(camera.id) { mutableStateOf<AndroidViewerSession?>(null) }
+    var manualRecording by remember(camera.id) { mutableStateOf<BeaconApi.RecordingSummary?>(null) }
+    var recordingBusy by remember(camera.id) { mutableStateOf(false) }
+    var recordingElapsedSeconds by remember(camera.id) { mutableStateOf(0) }
+    var recordingError by remember(camera.id) { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val api = remember { BeaconApi(BuildConfig.BEACON_API_URL) }
     val renderer = remember(camera.id, viewerGeneration) { SurfaceViewRenderer(context) }
     var state by remember(camera.id) { mutableStateOf(StreamingState.Connecting) }
     val othersWatching = otherViewerCount(camera.viewerCount, state == StreamingState.Connected)
@@ -144,6 +156,53 @@ internal fun AndroidLiveView(
         }
     }
 
+    LaunchedEffect(manualRecording?.id) {
+        val requested = manualRecording ?: return@LaunchedEffect
+        var current = requested
+        recordingElapsedSeconds = 0
+        while (current.status in setOf("requested", "recording", "uploading")) {
+            delay(1_000)
+            recordingElapsedSeconds += 1
+            if (recordingElapsedSeconds % 2 != 0) continue
+            val result =
+                withContext(Dispatchers.IO) {
+                    runCatching { api.recordings(sessionToken).recordings.firstOrNull { it.id == requested.id } }
+                }
+            val error = result.exceptionOrNull()
+            if (error is AuthorizationLostException) {
+                onAuthorizationLost()
+                return@LaunchedEffect
+            }
+            result.getOrNull()?.let {
+                current = it
+                manualRecording = it
+            }
+            if (recordingElapsedSeconds >= 90) break
+        }
+        if (current.status == "available") {
+            delay(6_000)
+            if (manualRecording?.id == current.id) manualRecording = null
+        }
+    }
+
+    fun requestRecording() {
+        if (recordingBusy || manualRecording?.status in setOf("requested", "recording", "uploading")) return
+        recordingBusy = true
+        recordingError = ""
+        scope.launch {
+            val result =
+                withContext(Dispatchers.IO) {
+                    runCatching { api.requestManualRecording(sessionToken, camera.id) }
+                }
+            result.onSuccess { manualRecording = it }
+                .onFailure {
+                    if (it is AuthorizationLostException) onAuthorizationLost()
+                    else recordingError = it.userFacingMessage("Recording could not be started.")
+                }
+            recordingBusy = false
+        }
+    }
+
     BackHandler(enabled = fullscreen) { fullscreen = false }
 
     if (fullscreen) {
@@ -175,6 +234,9 @@ internal fun AndroidLiveView(
                     color = Color.White,
                     style = MaterialTheme.typography.bodySmall,
                 )
+                if (canRecord && (recordingBusy || manualRecording != null)) {
+                    ManualRecordingBadge(recordingBusy, manualRecording, recordingElapsedSeconds)
+                }
             }
             Row(
                 modifier =
@@ -194,6 +256,15 @@ internal fun AndroidLiveView(
                         Icon(if (listening) Icons.AutoMirrored.Outlined.VolumeUp else Icons.AutoMirrored.Outlined.VolumeOff, null, modifier = Modifier.size(19.dp))
                         Text(if (listening) "Mute" else "Listen")
                     }
+                }
+                if (canRecord) {
+                    ManualRecordingControl(
+                        enabled = state == StreamingState.Connected,
+                        busy = recordingBusy,
+                        recording = manualRecording,
+                        elapsedSeconds = recordingElapsedSeconds,
+                        onClick = ::requestRecording,
+                    )
                 }
                 Button(onClick = { fullscreen = false }) {
                     Icon(Icons.Outlined.Fullscreen, null, modifier = Modifier.size(19.dp))
@@ -230,6 +301,9 @@ internal fun AndroidLiveView(
                 if (state == StreamingState.Connected) "LIVE" else "CONNECTING",
                 if (state == StreamingState.Connected) BeaconDarkColorScheme.error else BeaconVideoMuted,
             )
+            if (canRecord && (recordingBusy || manualRecording != null)) {
+                ManualRecordingBadge(recordingBusy, manualRecording, recordingElapsedSeconds)
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(camera.deviceName, color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(camera.name, color = BeaconVideoMuted, style = MaterialTheme.typography.bodySmall)
@@ -267,6 +341,9 @@ internal fun AndroidLiveView(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (recordingError.isNotBlank()) {
+                Text(recordingError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (canListen) {
                     Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
@@ -287,6 +364,15 @@ internal fun AndroidLiveView(
                             modifier = Modifier.semantics { contentDescription = "Switch to ${flipLabel ?: "other camera"}" },
                         ) { Icon(Icons.Outlined.Cameraswitch, null, tint = Color.White) }
                     }
+                }
+                if (canRecord) {
+                    ManualRecordingControl(
+                        enabled = state == StreamingState.Connected,
+                        busy = recordingBusy,
+                        recording = manualRecording,
+                        elapsedSeconds = recordingElapsedSeconds,
+                        onClick = ::requestRecording,
+                    )
                 }
                 Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
                     IconButton(enabled = state == StreamingState.Connected, onClick = { fullscreen = true }) {
@@ -314,3 +400,64 @@ internal fun AndroidLiveView(
         }
     }
 }
+
+@Composable
+private fun ManualRecordingBadge(
+    busy: Boolean,
+    recording: BeaconApi.RecordingSummary?,
+    elapsedSeconds: Int,
+) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = if (recording?.status == "failed") MaterialTheme.colorScheme.error else BeaconVideoOverlay,
+    ) {
+        Text(
+            manualRecordingLabel(busy, recording, elapsedSeconds),
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+    }
+}
+
+@Composable
+private fun ManualRecordingControl(
+    enabled: Boolean,
+    busy: Boolean,
+    recording: BeaconApi.RecordingSummary?,
+    elapsedSeconds: Int,
+    onClick: () -> Unit,
+) {
+    val active = recording?.status in setOf("requested", "recording", "uploading")
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = if (active) BeaconLive else BeaconVideoControl,
+    ) {
+        IconButton(
+            enabled = enabled && !busy && !active,
+            onClick = onClick,
+        ) {
+            Icon(
+                Icons.Outlined.FiberManualRecord,
+                manualRecordingLabel(busy, recording, elapsedSeconds),
+                tint = Color.White,
+            )
+        }
+    }
+}
+
+internal fun manualRecordingLabel(
+    busy: Boolean,
+    recording: BeaconApi.RecordingSummary?,
+    elapsedSeconds: Int,
+): String =
+    when {
+        busy -> "Starting recording…"
+        recording == null -> "Record a 15-second clip"
+        recording.status == "requested" || recording.status == "recording" ->
+            "Recording · Manual · ${elapsedSeconds.coerceAtMost(15).toString().padStart(2, '0')}s / 15s"
+        recording.status == "uploading" -> "Encrypting and uploading recording"
+        recording.status == "available" -> "Recording saved"
+        recording.status == "failed" -> "Recording failed"
+        else -> recordingStatusLabel(recording.status)
+    }

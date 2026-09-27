@@ -1,0 +1,421 @@
+package com.beaconsecureview.camera
+
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.widget.MediaController
+import android.widget.VideoView
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+@Composable
+internal fun AndroidRecordingLibrary(
+    api: BeaconApi,
+    sessionToken: String,
+    recordings: List<BeaconApi.RecordingSummary>,
+    loaded: Boolean,
+    loadingMore: Boolean,
+    nextCursor: String?,
+    busyRecordingId: String?,
+    canDelete: Boolean,
+    playback: BeaconApi.PlaybackRecording?,
+    deleteTarget: BeaconApi.RecordingSummary?,
+    shareTarget: BeaconApi.RecordingSummary?,
+    onRefresh: () -> Unit,
+    onLoadMore: () -> Unit,
+    onPlay: (BeaconApi.RecordingSummary) -> Unit,
+    onRequestDelete: (BeaconApi.RecordingSummary) -> Unit,
+    onConfirmDelete: () -> Unit,
+    onCancelDelete: () -> Unit,
+    onClosePlayback: () -> Unit,
+    onRequestShare: (BeaconApi.RecordingSummary) -> Unit,
+    onDismissShare: () -> Unit,
+) {
+    BeaconPageHeader(
+        eyebrow = "Encrypted in your Drive",
+        title = "Clips",
+        supportingText = "Playback is authorized by Beacon and decrypted only on this device.",
+    )
+    OutlinedButton(onClick = onRefresh) {
+        Icon(Icons.Outlined.Refresh, null)
+        Text("Refresh", modifier = Modifier.padding(start = 6.dp))
+    }
+
+    when {
+        !loaded -> Text("Loading clips…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        recordings.isEmpty() -> {
+            BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.Movie, null)
+                Text("No recorded clips yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "A clip appears here after a camera finishes an approved recording upload.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        else -> recordings.forEach { recording ->
+            RecordingRow(
+                api = api,
+                sessionToken = sessionToken,
+                recording = recording,
+                busy = busyRecordingId != null,
+                canDelete = canDelete,
+                onPlay = { onPlay(recording) },
+                onDelete = { onRequestDelete(recording) },
+                onShare = { onRequestShare(recording) },
+            )
+        }
+    }
+
+    if (nextCursor != null) {
+        OutlinedButton(
+            enabled = !loadingMore,
+            onClick = onLoadMore,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(if (loadingMore) "Loading…" else "Load more") }
+    }
+
+    playback?.let { clip -> RecordingPlaybackDialog(clip, onClosePlayback) }
+    deleteTarget?.let { clip ->
+        AlertDialog(
+            onDismissRequest = onCancelDelete,
+            title = { Text("Delete this clip?") },
+            text = { Text("This permanently deletes the encrypted clip from your Google Drive. This cannot be undone.") },
+            confirmButton = {
+                Button(
+                    enabled = busyRecordingId == null,
+                    onClick = onConfirmDelete,
+                ) { Text(if (busyRecordingId == clip.id) "Deleting…" else "Delete clip") }
+            },
+            dismissButton = { TextButton(onClick = onCancelDelete) { Text("Cancel") } },
+        )
+    }
+    shareTarget?.let { clip ->
+        ShareClipDialog(
+            api = api,
+            sessionToken = sessionToken,
+            recordingId = clip.id,
+            cameraName = clip.cameraName,
+            onDismiss = onDismissShare,
+        )
+    }
+}
+
+@Composable
+private fun RecordingRow(
+    api: BeaconApi,
+    sessionToken: String,
+    recording: BeaconApi.RecordingSummary,
+    busy: Boolean,
+    canDelete: Boolean,
+    onPlay: () -> Unit,
+    onDelete: () -> Unit,
+    onShare: () -> Unit,
+) {
+    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+        if (recording.status == "available" && recording.hasThumbnail) {
+            RecordingThumbnailImage(api = api, sessionToken = sessionToken, recordingId = recording.id)
+        }
+        Text(recording.cameraName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(
+            "${recording.deviceName} · ${formatRecordingTime(recording.createdAt)}",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        formatRecordingDuration(recording.durationMs)?.let {
+            Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (recording.status == "available") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(enabled = !busy, onClick = onPlay) {
+                    Icon(Icons.Outlined.PlayArrow, null)
+                    Text("Play", modifier = Modifier.padding(start = 4.dp))
+                }
+                if (canDelete) {
+                    OutlinedButton(enabled = !busy, onClick = onShare) {
+                        Icon(Icons.Outlined.Share, null)
+                        Text("Share", modifier = Modifier.padding(start = 4.dp))
+                    }
+                    OutlinedButton(enabled = !busy, onClick = onDelete) {
+                        Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error)
+                        Text("Delete", modifier = Modifier.padding(start = 4.dp), color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        } else {
+            Text(recordingStatusLabel(recording.status), fontWeight = FontWeight.SemiBold)
+            if (recording.status == "failed" && canDelete) {
+                OutlinedButton(enabled = !busy, onClick = onDelete) { Text("Remove failed clip") }
+            }
+        }
+    }
+}
+
+/** Best-effort decoration: loads and decrypts the clip's thumbnail (ADR 0078)
+ * if one exists, showing nothing at all rather than an error state if it
+ * doesn't -- a missing thumbnail is never a reason to block viewing the row. */
+@Composable
+private fun RecordingThumbnailImage(
+    api: BeaconApi,
+    sessionToken: String,
+    recordingId: String,
+) {
+    val context = LocalContext.current
+    var thumbnail by remember(recordingId) { mutableStateOf<BeaconApi.RecordingThumbnail?>(null) }
+
+    LaunchedEffect(recordingId) {
+        val result =
+            withContext(Dispatchers.IO) {
+                runCatching { api.downloadRecordingThumbnail(sessionToken, recordingId, context.cacheDir) }
+            }
+        thumbnail = result.getOrNull()
+    }
+    DisposableEffect(recordingId) {
+        onDispose { thumbnail?.file?.delete() }
+    }
+
+    thumbnail?.let { loaded ->
+        val bitmap = remember(loaded.file) { BitmapFactory.decodeFile(loaded.file.path)?.asImageBitmap() }
+        bitmap?.let {
+            Image(
+                bitmap = it,
+                contentDescription = null,
+                modifier =
+                    Modifier.fillMaxWidth().heightIn(max = 160.dp).clip(RoundedCornerShape(BeaconRadii.Md)),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
+        }
+    }
+}
+
+/** Owner-only: create, inspect, or revoke the one active share link for a
+ * clip. The raw token/URL is only shown once, right after creation --
+ * mirrors the PWA's ShareClipDialog (ADR 0077). */
+@Composable
+private fun ShareClipDialog(
+    api: BeaconApi,
+    sessionToken: String,
+    recordingId: String,
+    cameraName: String,
+    onDismiss: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
+    var checking by remember(recordingId) { mutableStateOf(true) }
+    var activeLink by remember(recordingId) { mutableStateOf<BeaconApi.ActiveRecordingShareLink?>(null) }
+    var hours by remember(recordingId) { mutableStateOf(24) }
+    var consent by remember(recordingId) { mutableStateOf(false) }
+    var created by remember(recordingId) { mutableStateOf<BeaconApi.RecordingShareLink?>(null) }
+    var copied by remember(recordingId) { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+
+    LaunchedEffect(recordingId) {
+        val result = withContext(Dispatchers.IO) { runCatching { api.activeRecordingShareLink(sessionToken, recordingId) } }
+        result.onSuccess { activeLink = it }
+            .onFailure { error = "Could not check for an existing link." }
+        checking = false
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Share $cameraName clip") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Sm)) {
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+                val link = created
+                val active = activeLink
+                when {
+                    checking -> Text("Checking for an existing link…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    link != null -> {
+                        Text("Anyone with this link can view this clip until ${formatRecordingTime(link.expiresAt)}.")
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                link.url,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            TextButton(onClick = {
+                                clipboard.setText(AnnotatedString(link.url))
+                                copied = true
+                            }) { Text(if (copied) "Copied" else "Copy") }
+                        }
+                    }
+                    active != null -> {
+                        Text(
+                            "A link for this clip is active until ${formatRecordingTime(active.expiresAt)}. " +
+                                "Anyone who has it can view the clip until then.",
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                enabled = !busy,
+                                onClick = {
+                                    busy = true
+                                    scope.launch {
+                                        val result =
+                                            withContext(Dispatchers.IO) {
+                                                runCatching { api.revokeRecordingShareLink(sessionToken, active.id) }
+                                            }
+                                        result.onSuccess { activeLink = null }
+                                            .onFailure { error = it.userFacingMessage("The share link could not be revoked.") }
+                                        busy = false
+                                    }
+                                },
+                            ) { Text(if (busy) "Revoking…" else "Revoke link") }
+                            OutlinedButton(enabled = !busy, onClick = { activeLink = null }) { Text("Replace with a new link") }
+                        }
+                    }
+                    else -> {
+                        Text("Link expires after", style = MaterialTheme.typography.labelMedium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(24, 48, 72).forEach { option ->
+                                val optionSelected = hours == option
+                                OutlinedButton(
+                                    onClick = { hours = option },
+                                    colors =
+                                        ButtonDefaults.outlinedButtonColors(
+                                            containerColor = if (optionSelected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+                                        ),
+                                ) { Text("${option}h") }
+                            }
+                        }
+                        Row(verticalAlignment = Alignment.Top) {
+                            Checkbox(checked = consent, onCheckedChange = { consent = it })
+                            Text(
+                                "I understand anyone with this link can view this clip without a Beacon " +
+                                    "account until it expires or I revoke it.",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 12.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (created == null && activeLink == null && !checking) {
+                Button(
+                    enabled = consent && !busy,
+                    onClick = {
+                        busy = true
+                        scope.launch {
+                            val result =
+                                withContext(Dispatchers.IO) {
+                                    runCatching { api.createRecordingShareLink(sessionToken, recordingId, hours) }
+                                }
+                            result.onSuccess { created = it }
+                                .onFailure { error = it.userFacingMessage("This clip could not be shared. Try again.") }
+                            busy = false
+                        }
+                    },
+                ) { Text(if (busy) "Creating…" else "Create link") }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(if (created != null) "Done" else "Cancel") } },
+    )
+}
+
+@Composable
+private fun RecordingPlaybackDialog(
+    playback: BeaconApi.PlaybackRecording,
+    onClose: () -> Unit,
+) {
+    DisposableEffect(playback.file) {
+        onDispose { playback.file.delete() }
+    }
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Recorded clip") },
+        text = {
+            AndroidView(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 480.dp),
+                factory = { context ->
+                    VideoView(context).apply {
+                        val controls = MediaController(context)
+                        controls.setAnchorView(this)
+                        setMediaController(controls)
+                        setVideoURI(Uri.fromFile(playback.file))
+                        setOnPreparedListener { player ->
+                            player.isLooping = false
+                            start()
+                        }
+                    }
+                },
+                onRelease = { it.stopPlayback() },
+            )
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Close") } },
+        containerColor = MaterialTheme.colorScheme.surface,
+        textContentColor = Color.Unspecified,
+    )
+}
+
+internal fun formatRecordingDuration(durationMs: Long?): String? {
+    if (durationMs == null || durationMs <= 0) return null
+    val totalSeconds = (durationMs / 1_000L).coerceAtLeast(1L)
+    return "%d:%02d".format(totalSeconds / 60L, totalSeconds % 60L)
+}
+
+internal fun recordingStatusLabel(status: String): String =
+    when (status) {
+        "requested" -> "Preparing recording"
+        "recording" -> "Recording"
+        "uploading" -> "Uploading securely"
+        "failed" -> "Recording failed"
+        "deleting" -> "Deleting"
+        else -> "Unavailable"
+    }
+
+private fun formatRecordingTime(value: String): String =
+    runCatching {
+        DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a")
+            .withZone(ZoneId.systemDefault())
+            .format(Instant.parse(value))
+    }.getOrDefault("Unknown time")

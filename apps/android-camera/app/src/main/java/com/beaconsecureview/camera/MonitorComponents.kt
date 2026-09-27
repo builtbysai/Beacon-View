@@ -47,6 +47,7 @@ internal fun MonitorDeviceSettings(
     onView: (BeaconApi.MonitorCamera) -> Unit,
     onActivate: (BeaconApi.MonitorCamera) -> Unit,
     onPrivacyChange: (Boolean) -> Unit,
+    motionContent: @Composable () -> Unit = {},
 ) {
     val device = sources.first()
     val activeSource = sources.firstOrNull { it.available } ?: device
@@ -153,6 +154,7 @@ internal fun MonitorDeviceSettings(
         }
         BeaconTrustLine("Camera and microphone use always stays visible on the camera device.")
     }
+    motionContent()
 }
 @Composable
 internal fun MonitorCameraGrid(

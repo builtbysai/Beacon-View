@@ -1,8 +1,14 @@
 package com.beaconsecureview.camera
 
 import org.json.JSONObject
+import android.util.Base64
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 class AuthorizationLostException : IllegalStateException()
 
@@ -13,6 +19,7 @@ class BeaconApi(private val baseUrl: String) {
         val token: String,
         val userId: String,
         val email: String? = null,
+        val householdRole: String? = null,
     )
 
     data class MonitorCamera(
@@ -44,6 +51,55 @@ class BeaconApi(private val baseUrl: String) {
         val deviceName: String,
         val confidence: Double,
         val occurredAt: String,
+    )
+
+    data class CameraMotionSettings(
+        val cameraId: String,
+        val enabled: Boolean,
+        val recordOnMotion: Boolean,
+        val sensitivity: MotionSensitivity,
+        val cooldownSeconds: Int,
+        val quietHours: QuietHours?,
+    )
+
+    data class RecordingSummary(
+        val id: String,
+        val cameraId: String,
+        val cameraName: String,
+        val deviceName: String,
+        val status: String,
+        val durationMs: Long?,
+        val createdAt: String,
+        val triggerMotionEventId: String?,
+        val hasThumbnail: Boolean,
+    )
+
+    data class RecordingPage(
+        val recordings: List<RecordingSummary>,
+        val nextCursor: String?,
+    )
+
+    data class PlaybackRecording(
+        val file: File,
+        val mimeType: String,
+    )
+
+    /** Best-effort clip decoration, not part of the recording lifecycle --
+     * see [downloadRecordingThumbnail]. Callers must delete [file] once shown. */
+    data class RecordingThumbnail(
+        val file: File,
+        val mimeType: String,
+    )
+
+    data class RecordingShareLink(
+        val token: String,
+        val url: String,
+        val expiresAt: String,
+    )
+
+    data class ActiveRecordingShareLink(
+        val id: String,
+        val expiresAt: String,
     )
 
     data class CameraSynchronization(
@@ -133,6 +189,54 @@ class BeaconApi(private val baseUrl: String) {
         )
     }
 
+    fun createAccount(email: String, password: String): AccountSession {
+        val connection = connection("/api/mobile/auth/register", "POST")
+        connection.outputStream.use {
+            it.write(
+                JSONObject().put("email", email).put("password", password).toString()
+                    .toByteArray(Charsets.UTF_8),
+            )
+        }
+        val body = responseBody(connection)
+        if (connection.responseCode != HttpURLConnection.HTTP_CREATED) {
+            val error = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(
+                when {
+                    connection.responseCode == HttpURLConnection.HTTP_BAD_REQUEST ->
+                        "Use a valid email and a password of at least 12 characters"
+                    connection.responseCode == HttpURLConnection.HTTP_CONFLICT && error == "googleAccountExists" ->
+                        "This email already uses Google. Continue with Google instead."
+                    connection.responseCode == HttpURLConnection.HTTP_CONFLICT ->
+                        "An account with this email already exists"
+                    connection.responseCode == 429 ->
+                        "Too many account attempts. Wait before trying again."
+                    else -> "Beacon could not create your account. Check the connection and try again."
+                },
+            )
+        }
+        val response = JSONObject(body)
+        val user = response.getJSONObject("user")
+        return AccountSession(
+            token = response.getString("sessionToken"),
+            userId = user.getString("id"),
+            email = user.optString("email").takeIf(String::isNotBlank),
+        )
+    }
+
+    fun requestPasswordReset(email: String) {
+        val connection = connection("/api/auth/password-reset/request", "POST")
+        connection.outputStream.use {
+            it.write(JSONObject().put("email", email).toString().toByteArray(Charsets.UTF_8))
+        }
+        responseBody(connection)
+        // Enumeration resistance: the UI intentionally presents the same result
+        // for existing, Google-only, and unknown accounts. Only a service outage
+        // needs a retry message; throttling is also expressed generically.
+        if (connection.responseCode !in listOf(HttpURLConnection.HTTP_ACCEPTED, HttpURLConnection.HTTP_NO_CONTENT)) {
+            throw IllegalStateException("Password reset is temporarily unavailable")
+        }
+    }
+
     fun exchangeGoogleSignIn(code: String): AccountSession {
         val connection = connection("/api/mobile/auth/google", "POST")
         connection.outputStream.use {
@@ -162,10 +266,12 @@ class BeaconApi(private val baseUrl: String) {
             throw IllegalStateException("Account details are temporarily unavailable")
         }
         val user = JSONObject(body).getJSONObject("user")
+        val household = JSONObject(body).optJSONObject("household")
         return AccountSession(
             token = sessionToken,
             userId = user.getString("id"),
             email = user.optString("email").takeIf(String::isNotBlank),
+            householdRole = household?.optString("role")?.takeIf(String::isNotBlank),
         )
     }
 
@@ -275,6 +381,326 @@ class BeaconApi(private val baseUrl: String) {
                     occurredAt = it.getString("occurredAt"),
                 )
             }
+        }
+    }
+
+    fun monitorMotionSettings(sessionToken: String, deviceId: String): List<CameraMotionSettings> {
+        val connection = connection("/api/devices/${urlPathSegment(deviceId)}/motion-settings", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Motion settings are temporarily unavailable")
+        }
+        val cameras = JSONObject(body).getJSONArray("cameras")
+        return buildList {
+            repeat(cameras.length()) { index -> add(parseCameraMotionSettings(cameras.getJSONObject(index))) }
+        }
+    }
+
+    fun updateMonitorMotionSettings(
+        sessionToken: String,
+        settings: CameraMotionSettings,
+    ): CameraMotionSettings {
+        val connection = connection("/api/cameras/${urlPathSegment(settings.cameraId)}/motion-settings", "PUT")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val quietHours = settings.quietHours?.let {
+            JSONObject().put("start", it.start).put("end", it.end).put("timeZone", it.timeZone)
+        }
+        val payload =
+            JSONObject()
+                .put("enabled", settings.enabled)
+                .put("recordOnMotion", settings.recordOnMotion)
+                .put("sensitivity", settings.sensitivity.wireValue)
+                .put("cooldownSeconds", settings.cooldownSeconds)
+                .put("quietHours", quietHours ?: JSONObject.NULL)
+        connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Motion settings could not be saved")
+        }
+        return parseCameraMotionSettings(JSONObject(body).getJSONObject("settings"))
+    }
+
+    fun recordings(sessionToken: String, cursor: String? = null): RecordingPage {
+        val suffix = cursor?.let { "?cursor=${java.net.URLEncoder.encode(it, Charsets.UTF_8.name())}" }.orEmpty()
+        val connection = connection("/api/recordings$suffix", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Clips are temporarily unavailable")
+        }
+        return parseRecordingsResponse(body)
+    }
+
+    fun requestManualRecording(
+        sessionToken: String,
+        cameraId: String,
+    ): RecordingSummary {
+        val connection = connection("/api/recordings", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use {
+            it.write(
+                JSONObject()
+                    .put("cameraId", cameraId)
+                    .put("captureMode", "camera")
+                    .toString()
+                    .toByteArray(Charsets.UTF_8),
+            )
+        }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_ACCEPTED) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(
+                when (serverMessage) {
+                    "Connect Google Drive for recordings first" ->
+                        "Connect Google Drive for recordings from Beacon Settings first."
+                    "Camera is offline", "Camera is unavailable" ->
+                        "The camera must be online before recording."
+                    "Household owner access required" ->
+                        "Only the household owner can record clips."
+                    else -> "Recording could not be started. Try again."
+                },
+            )
+        }
+        return parseRecordingSummary(JSONObject(body).getJSONObject("recording"))
+    }
+
+    fun deleteRecording(sessionToken: String, recordingId: String) {
+        val connection = connection("/api/recordings/${urlPathSegment(recordingId)}", "DELETE")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "Clip could not be deleted")
+        }
+    }
+
+    /** Downloads authorized ciphertext, verifies its declared size and SHA-256,
+     * then decrypts it into app-private cache for the active playback session.
+     * Callers must delete [PlaybackRecording.file] as soon as playback closes. */
+    fun downloadRecordingForPlayback(
+        sessionToken: String,
+        recordingId: String,
+        cacheDirectory: File,
+    ): PlaybackRecording {
+        val connection = connection("/api/recordings/${urlPathSegment(recordingId)}/playback", "GET").apply {
+            setRequestProperty("Authorization", "Bearer $sessionToken")
+            readTimeout = 60_000
+            useCaches = false
+        }
+        val status = connection.responseCode
+        if (status == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            connection.errorStream?.close()
+            connection.disconnect()
+            throw AuthorizationLostException()
+        }
+        if (status != HttpURLConnection.HTTP_OK) {
+            val body = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            connection.disconnect()
+            throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "Clip could not be loaded")
+        }
+
+        val expectedBytes = connection.getHeaderField("X-Beacon-Recording-Bytes")?.toLongOrNull()
+        val expectedChecksum = connection.getHeaderField("X-Beacon-Recording-Checksum")
+        val mimeType = connection.getHeaderField("X-Beacon-Recording-Mime")
+        val encodedKey = connection.getHeaderField("X-Beacon-Recording-Key")
+        val encodedIv = connection.getHeaderField("X-Beacon-Recording-IV")
+        requirePlaybackMetadata(expectedBytes, expectedChecksum, mimeType, encodedKey, encodedIv)
+
+        cacheDirectory.mkdirs()
+        cacheDirectory.listFiles { file -> file.name.startsWith("beacon-clip-") }
+            ?.forEach { it.delete() }
+        val encryptedFile = File.createTempFile("beacon-clip-", ".encrypted", cacheDirectory)
+        val extension = if (mimeType == "video/mp4") ".mp4" else ".webm"
+        val playbackFile = File.createTempFile("beacon-clip-", extension, cacheDirectory)
+        try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            var bytes = 0L
+            connection.inputStream.use { input ->
+                encryptedFile.outputStream().use { output ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        bytes += read
+                        if (bytes > expectedBytes!!) throw IllegalStateException("Clip exceeded its expected size")
+                        digest.update(buffer, 0, read)
+                        output.write(buffer, 0, read)
+                    }
+                }
+            }
+            if (bytes != expectedBytes) throw IllegalStateException("Clip download was incomplete")
+            val actualChecksum = digest.digest().joinToString("") { "%02x".format(it) }
+            if (actualChecksum != expectedChecksum) throw IllegalStateException("Clip failed its integrity check")
+
+            val key = decodeBase64Url(encodedKey!!, 32)
+            val iv = decodeBase64Url(encodedIv!!, 12)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
+            encryptedFile.inputStream().use { input ->
+                javax.crypto.CipherInputStream(input, cipher).use { decrypted ->
+                    playbackFile.outputStream().use { output -> decrypted.copyTo(output) }
+                }
+            }
+            return PlaybackRecording(playbackFile, mimeType!!)
+        } catch (error: Exception) {
+            playbackFile.delete()
+            throw error
+        } finally {
+            encryptedFile.delete()
+            connection.disconnect()
+        }
+    }
+
+    /** Mirrors [downloadRecordingForPlayback]'s verify-then-decrypt contract for the
+     * much smaller, optional thumbnail asset (ADR 0078). Thumbnails are decoration,
+     * not part of the recording lifecycle, so any failure -- network, integrity,
+     * or simply no thumbnail existing yet -- returns null instead of throwing;
+     * a missing thumbnail must never block viewing or deleting the clip itself.
+     * Session expiry is the one exception: callers still need to know about that. */
+    fun downloadRecordingThumbnail(
+        sessionToken: String,
+        recordingId: String,
+        cacheDirectory: File,
+    ): RecordingThumbnail? {
+        val connection = connection("/api/recordings/${urlPathSegment(recordingId)}/thumbnail", "GET").apply {
+            setRequestProperty("Authorization", "Bearer $sessionToken")
+            readTimeout = 30_000
+            useCaches = false
+        }
+        try {
+            val status = connection.responseCode
+            if (status == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                connection.errorStream?.close()
+                throw AuthorizationLostException()
+            }
+            if (status != HttpURLConnection.HTTP_OK) {
+                connection.errorStream?.close()
+                return null
+            }
+
+            val expectedBytes = connection.getHeaderField("X-Beacon-Recording-Bytes")?.toLongOrNull()
+            val expectedChecksum = connection.getHeaderField("X-Beacon-Recording-Checksum")
+            val mimeType = connection.getHeaderField("X-Beacon-Recording-Mime")
+            val encodedKey = connection.getHeaderField("X-Beacon-Recording-Key")
+            val encodedIv = connection.getHeaderField("X-Beacon-Recording-IV")
+            if (
+                expectedBytes == null || expectedBytes !in 1..MAX_THUMBNAIL_BYTES ||
+                expectedChecksum == null || !expectedChecksum.matches(Regex("^[a-f0-9]{64}$")) ||
+                mimeType !in setOf("image/jpeg", "image/webp") || encodedKey == null || encodedIv == null
+            ) {
+                return null
+            }
+
+            cacheDirectory.mkdirs()
+            cacheDirectory.listFiles { file -> file.name.startsWith("beacon-thumb-") }
+                ?.forEach { it.delete() }
+            val encryptedFile = File.createTempFile("beacon-thumb-", ".encrypted", cacheDirectory)
+            val extension = if (mimeType == "image/webp") ".webp" else ".jpg"
+            val imageFile = File.createTempFile("beacon-thumb-", extension, cacheDirectory)
+            return try {
+                val digest = MessageDigest.getInstance("SHA-256")
+                var bytes = 0L
+                connection.inputStream.use { input ->
+                    encryptedFile.outputStream().use { output ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            bytes += read
+                            if (bytes > expectedBytes) throw IllegalStateException("Thumbnail exceeded its expected size")
+                            digest.update(buffer, 0, read)
+                            output.write(buffer, 0, read)
+                        }
+                    }
+                }
+                if (bytes != expectedBytes) throw IllegalStateException("Thumbnail download was incomplete")
+                val actualChecksum = digest.digest().joinToString("") { "%02x".format(it) }
+                if (actualChecksum != expectedChecksum) throw IllegalStateException("Thumbnail failed its integrity check")
+
+                val key = decodeBase64Url(encodedKey, 32)
+                val iv = decodeBase64Url(encodedIv, 12)
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
+                encryptedFile.inputStream().use { input ->
+                    javax.crypto.CipherInputStream(input, cipher).use { decrypted ->
+                        imageFile.outputStream().use { output -> decrypted.copyTo(output) }
+                    }
+                }
+                RecordingThumbnail(imageFile, mimeType)
+            } catch (error: Exception) {
+                imageFile.delete()
+                null
+            } finally {
+                encryptedFile.delete()
+            }
+        } catch (error: AuthorizationLostException) {
+            throw error
+        } catch (error: Exception) {
+            return null
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    fun createRecordingShareLink(
+        sessionToken: String,
+        recordingId: String,
+        expiresInHours: Int,
+    ): RecordingShareLink {
+        val connection = connection("/api/recordings/${urlPathSegment(recordingId)}/share-links", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use {
+            it.write(JSONObject().put("expiresInHours", expiresInHours).toString().toByteArray(Charsets.UTF_8))
+        }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_CREATED) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(
+                when (serverMessage) {
+                    "Household owner access required" -> "Only the household owner can share clips."
+                    "Only an available clip can be shared" -> "This clip cannot be shared yet."
+                    else -> "This clip could not be shared. Try again."
+                },
+            )
+        }
+        val json = JSONObject(body)
+        return RecordingShareLink(
+            token = json.getString("token"),
+            url = json.getString("url"),
+            expiresAt = json.getString("expiresAt"),
+        )
+    }
+
+    fun activeRecordingShareLink(sessionToken: String, recordingId: String): ActiveRecordingShareLink? {
+        val connection = connection("/api/recordings/${urlPathSegment(recordingId)}/share-links", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
+        val active = JSONObject(body).optJSONObject("active") ?: return null
+        return ActiveRecordingShareLink(id = active.getString("id"), expiresAt = active.getString("expiresAt"))
+    }
+
+    fun revokeRecordingShareLink(sessionToken: String, linkId: String) {
+        val connection = connection("/api/recordings/share-links/${urlPathSegment(linkId)}", "DELETE")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "Share link could not be removed")
         }
     }
 
@@ -637,6 +1063,25 @@ class BeaconApi(private val baseUrl: String) {
         }
     }
 
+    private fun parseCameraMotionSettings(value: JSONObject): CameraMotionSettings =
+        CameraMotionSettings(
+            cameraId = value.getString("cameraId"),
+            enabled = value.getBoolean("enabled"),
+            recordOnMotion = value.getBoolean("recordOnMotion"),
+            sensitivity =
+                MotionSensitivity.entries.firstOrNull { it.wireValue == value.getString("sensitivity") }
+                    ?: throw IllegalStateException("Unsupported motion sensitivity"),
+            cooldownSeconds = value.getInt("cooldownSeconds"),
+            quietHours =
+                value.optJSONObject("quietHours")?.let {
+                    QuietHours(
+                        start = it.getString("start"),
+                        end = it.getString("end"),
+                        timeZone = it.getString("timeZone"),
+                    )
+                },
+        )
+
     private fun connection(path: String, method: String): HttpURLConnection =
         (URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
             requestMethod = method
@@ -652,6 +1097,61 @@ class BeaconApi(private val baseUrl: String) {
         return stream?.bufferedReader()?.use { it.readText() }.orEmpty()
     }
 }
+
+internal fun parseRecordingsResponse(body: String): BeaconApi.RecordingPage {
+    val response = JSONObject(body)
+    val recordings = response.getJSONArray("recordings")
+    return BeaconApi.RecordingPage(
+        recordings =
+            (0 until recordings.length()).map { index ->
+                parseRecordingSummary(recordings.getJSONObject(index))
+            },
+        nextCursor = nullableApiText(response.optString("nextCursor")),
+    )
+}
+
+private fun parseRecordingSummary(value: JSONObject): BeaconApi.RecordingSummary =
+    BeaconApi.RecordingSummary(
+        id = value.getString("id"),
+        cameraId = value.getString("cameraId"),
+        cameraName = value.getString("cameraName"),
+        deviceName = value.getString("deviceName"),
+        status = value.getString("status"),
+        durationMs = if (value.isNull("durationMs")) null else value.getLong("durationMs"),
+        createdAt = value.getString("createdAt"),
+        triggerMotionEventId = nullableApiText(value.optString("triggerMotionEventId")),
+        hasThumbnail = value.optBoolean("hasThumbnail", false),
+    )
+
+private fun urlPathSegment(value: String): String =
+    java.net.URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
+
+private fun requirePlaybackMetadata(
+    expectedBytes: Long?,
+    checksum: String?,
+    mimeType: String?,
+    key: String?,
+    iv: String?,
+) {
+    if (
+        expectedBytes == null || expectedBytes !in 17..MAX_RECORDING_BYTES ||
+        checksum == null || !checksum.matches(Regex("^[a-f0-9]{64}$")) ||
+        mimeType !in setOf("video/mp4", "video/webm") || key == null || iv == null
+    ) {
+        throw IllegalStateException("Clip metadata is incomplete")
+    }
+}
+
+private fun decodeBase64Url(value: String, expectedLength: Int): ByteArray {
+    if (!value.matches(Regex("^[A-Za-z0-9_-]+$"))) throw IllegalStateException("Invalid clip key")
+    val decoded = runCatching { Base64.decode(value, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING) }
+        .getOrElse { throw IllegalStateException("Invalid clip key") }
+    if (decoded.size != expectedLength) throw IllegalStateException("Invalid clip key")
+    return decoded
+}
+
+private const val MAX_RECORDING_BYTES = 250L * 1024L * 1024L
+private const val MAX_THUMBNAIL_BYTES = 2L * 1024L * 1024L
 
 internal fun nullableApiText(value: String?): String? =
     value?.trim()?.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }

@@ -261,7 +261,7 @@ class StreamingStateTest {
     }
 
     @Test
-    fun cameraRuntimeLabelPrioritizesPrivacyAndActiveViewing() {
+    fun cameraRuntimeLabelPrioritizesPrivacyRecordingAndActiveViewing() {
         assertEquals(
             "PRIVACY ON",
             cameraRuntimeLabel(
@@ -269,6 +269,16 @@ class StreamingStateTest {
                     device = DeviceLifecycle.Streaming,
                     activeViewers = 2,
                     privacyMode = true,
+                ),
+            ),
+        )
+        assertEquals(
+            "RECORDING",
+            cameraRuntimeLabel(
+                CameraRuntimeState(
+                    device = DeviceLifecycle.Streaming,
+                    activeViewers = 1,
+                    recordingActive = true,
                 ),
             ),
         )

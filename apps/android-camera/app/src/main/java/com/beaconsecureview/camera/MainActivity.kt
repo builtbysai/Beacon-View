@@ -1,6 +1,7 @@
 package com.beaconsecureview.camera
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -26,12 +26,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalView
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -135,6 +138,17 @@ private fun BeaconCameraApp(
     val context = LocalContext.current
     val navigationPreferences =
         remember { context.getSharedPreferences("beacon_navigation", Context.MODE_PRIVATE) }
+    val appearancePreferences =
+        remember { context.getSharedPreferences("beacon_appearance", Context.MODE_PRIVATE) }
+    var themePreference by remember {
+        mutableStateOf(
+            runCatching {
+                BeaconThemePreference.valueOf(
+                    appearancePreferences.getString("theme", BeaconThemePreference.System.name)!!,
+                )
+            }.getOrDefault(BeaconThemePreference.System),
+        )
+    }
     var credential by remember { mutableStateOf(credentialStore.read()) }
     var cameraSetupStarted by rememberSaveable {
         mutableStateOf(
@@ -323,7 +337,10 @@ private fun BeaconCameraApp(
         }
     }
 
-    BeaconTheme(darkCameraSurface = !monitorMode && credential != null) {
+    BeaconTheme(
+        darkCameraSurface = !monitorMode && credential != null,
+        preference = themePreference,
+    ) {
         Surface(modifier = Modifier.fillMaxSize()) {
             if (monitorMode) {
                 MonitorHome(
@@ -348,6 +365,11 @@ private fun BeaconCameraApp(
                                 Uri.parse("${BuildConfig.BEACON_API_URL.trimEnd('/')}/api/auth/google?platform=android"),
                             ).addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY),
                         )
+                    },
+                    themePreference = themePreference,
+                    onThemePreferenceChange = {
+                        themePreference = it
+                        appearancePreferences.edit().putString("theme", it.name).apply()
                     },
                 )
             } else when {
@@ -495,18 +517,34 @@ internal fun shouldShowWelcome(
 ): Boolean = !paired && !monitorMode && !cameraSetupStarted
 
 @Composable
+@Suppress("DEPRECATION")
 private fun BeaconTheme(
     darkCameraSurface: Boolean,
+    preference: BeaconThemePreference,
     content: @Composable () -> Unit,
 ) {
-    val useDarkColors = darkCameraSurface || isSystemInDarkTheme()
+    val useDarkColors =
+        darkCameraSurface ||
+            when (preference) {
+                BeaconThemePreference.Light -> false
+                BeaconThemePreference.System -> isSystemInDarkTheme()
+                BeaconThemePreference.Dark -> true
+            }
+    val colors = if (useDarkColors) BeaconDarkColorScheme else BeaconLightColorScheme
+    val view = LocalView.current
+    SideEffect {
+        val window = (view.context as? Activity)?.window ?: return@SideEffect
+        window.statusBarColor = colors.background.toArgb()
+        window.navigationBarColor = colors.background.toArgb()
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = !useDarkColors
+            isAppearanceLightNavigationBars = !useDarkColors
+        }
+    }
     MaterialTheme(
-        colorScheme = if (useDarkColors) BeaconDarkColorScheme else BeaconLightColorScheme,
-        typography =
-            Typography(
-                headlineLarge = MaterialTheme.typography.headlineLarge.copy(lineHeight = 38.sp),
-                bodyLarge = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
-            ),
+        colorScheme = colors,
+        typography = BeaconTypography,
+        shapes = BeaconShapes,
         content = content,
     )
 }

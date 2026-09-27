@@ -103,6 +103,68 @@ export function registerAuthenticationRoutes(
       )
     : null;
 
+  async function createPasswordAccount(
+    email: string,
+    password: string,
+    ipAddress: string,
+  ) {
+    const passwordHash = await hashPassword(password);
+    const user = await store.createAccount(email, passwordHash, ipAddress);
+    // Best-effort: the account exists either way, and the user can always
+    // request another verification email from Settings if this one never
+    // lands (e.g. delivery is misconfigured or the address bounces).
+    if (config.RESEND_API_KEY && config.RESEND_FROM) {
+      const verificationToken = generateToken();
+      const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL);
+      await store
+        .createEmailVerificationToken({
+          expiresAt,
+          tokenHash: hashSecret(verificationToken),
+          userId: user.id,
+        })
+        .then(() =>
+          deliverEmailVerificationEmail(config, {
+            expiresAt,
+            to: email,
+            token: verificationToken,
+          }),
+        )
+        .catch((deliveryError: unknown) =>
+          app.log.warn(
+            { err: deliveryError },
+            'registration verification email delivery failed',
+          ),
+        );
+    }
+    return user;
+  }
+
+  async function sendRegistrationConflict(
+    error: unknown,
+    email: string,
+    reply: FastifyReply,
+  ) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === '23505'
+    ) {
+      // A duplicate email here almost always means "signed up with Google
+      // already" -- that account has no password to collide with, so tell
+      // the caller which case this is instead of a dead-end error the
+      // existing Google user has no path out of.
+      const existing = await store.findUserByEmail(email);
+      if (existing && !existing.passwordHash) {
+        return reply
+          .code(409)
+          .send({ error: 'googleAccountExists', field: 'email' });
+      }
+      return reply.code(409).send({ error: 'Unable to create account' });
+    }
+    throw error;
+  }
+
   app.post('/api/auth/register', async (request, reply) => {
     if (!limiter.take(`register:${request.ip}`, 5, HOUR)) {
       return reply.code(429).send({ error: 'Too many requests' });
@@ -113,56 +175,45 @@ export function registerAuthenticationRoutes(
     }
     const email = normalizeEmail(parsed.data.email);
     try {
-      const passwordHash = await hashPassword(parsed.data.password);
-      const user = await store.createAccount(email, passwordHash, request.ip);
+      const user = await createPasswordAccount(
+        email,
+        parsed.data.password,
+        request.ip,
+      );
       await issueSession(reply, user.id, true, request.headers['user-agent']);
-      // Best-effort: the account exists either way, and the user can always
-      // request another verification email from Settings if this one never
-      // lands (e.g. delivery is misconfigured or the address bounces).
-      if (config.RESEND_API_KEY && config.RESEND_FROM) {
-        const verificationToken = generateToken();
-        const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL);
-        await store
-          .createEmailVerificationToken({
-            expiresAt,
-            tokenHash: hashSecret(verificationToken),
-            userId: user.id,
-          })
-          .then(() =>
-            deliverEmailVerificationEmail(config, {
-              expiresAt,
-              to: email,
-              token: verificationToken,
-            }),
-          )
-          .catch((deliveryError: unknown) =>
-            app.log.warn(
-              { err: deliveryError },
-              'registration verification email delivery failed',
-            ),
-          );
-      }
       return reply.code(201).send({ user: { email: user.email, id: user.id } });
     } catch (error) {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        error.code === '23505'
-      ) {
-        // A duplicate email here almost always means "signed up with Google
-        // already" -- that account has no password to collide with, so tell
-        // the caller which case this is instead of a dead-end error the
-        // existing Google user has no path out of.
-        const existing = await store.findUserByEmail(email);
-        if (existing && !existing.passwordHash) {
-          return reply
-            .code(409)
-            .send({ error: 'googleAccountExists', field: 'email' });
-        }
-        return reply.code(409).send({ error: 'Unable to create account' });
-      }
-      throw error;
+      return sendRegistrationConflict(error, email, reply);
+    }
+  });
+
+  app.post('/api/mobile/auth/register', async (request, reply) => {
+    if (!limiter.take(`register:${request.ip}`, 5, HOUR)) {
+      return reply.code(429).send({ error: 'Too many requests' });
+    }
+    const parsed = credentialsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid registration details' });
+    }
+    const email = normalizeEmail(parsed.data.email);
+    try {
+      const user = await createPasswordAccount(
+        email,
+        parsed.data.password,
+        request.ip,
+      );
+      const token = await issueSession(
+        reply,
+        user.id,
+        false,
+        request.headers['user-agent'],
+      );
+      return reply.code(201).send({
+        sessionToken: token,
+        user: { email: user.email, id: user.id },
+      });
+    } catch (error) {
+      return sendRegistrationConflict(error, email, reply);
     }
   });
 

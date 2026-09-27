@@ -1,5 +1,135 @@
 # Beacon SecureView development handoff
 
+## September 27, 2026 — active continuation
+
+The pending roadmap is ordered in `docs/roadmap.md` under **Ordered continuation
+queue**. Pixel `34171JEHN07672` is connected and authorized again, so N1 is no
+longer device-blocked, but its full evidence matrix is still open and must not be
+claimed complete. The active branch is `codex/android-clips-library`, based on
+the open parity-audit branch; do not work on `main`.
+
+### September 27 follow-up (Claude Code): wide-screen responsive layout
+
+The owner asked specifically that Android stay responsive across different
+display sizes -- not just phones -- while matching the PWA's look, and asked
+whether the existing native front end should be scrapped and rebuilt.
+Recommendation: no. This branch's visual-system work (ADR 0080/0081, shared
+tokens, Inter, the PWA-matched auth/nav screens) is sound and already tested;
+throwing it away to fix a real but narrow gap would be wasteful. The actual
+gap: nothing in the app read a window-size signal (`grep` for
+`WindowSizeClass` across `apps/android-camera/app/src/main` returned nothing,
+and no adaptive-layout dependency exists in `build.gradle.kts`), so the new
+PWA-style drawer navigation would stretch across a tablet or unfolded
+foldable instead of adapting, unlike the PWA itself.
+
+Closed that gap without touching the drawer's tested phone behavior:
+`MonitorNavigation.kt`'s `BeaconMonitorNavigation` (the modal drawer) had its
+nav-item-list/account-menu/theme-switcher body extracted into a shared
+private `BeaconSidebarContent`, now also used by a new `BeaconPermanentSidebar`
+-- a non-dismissible, always-visible sidebar shown once the window is at
+least `BEACON_WIDE_LAYOUT_MIN_WIDTH_DP` (600dp, Android's own conventional
+phone/tablet breakpoint) wide, mirroring the PWA's own persistent-sidebar
+behavior at wide viewports. `MonitorUi.kt`'s `MonitorHome` now reads
+`LocalConfiguration.current.screenWidthDp` once and branches the root layout
+between the existing top-bar+drawer chrome (unchanged, phones) and the new
+sidebar-beside-content layout (tablets/foldables/Chromebooks); the entire
+scrollable content column in between is untouched -- not duplicated -- so
+every existing screen renders identically either way, just inside a
+narrower or wider content pane.
+
+Validated: `compileDebugKotlin` clean, then the full local gate
+(`testDebugUnitTest lintDebug assembleDebug assembleRelease`) passes -- same
+two pre-existing, unrelated Firebase deprecation warnings Codex already
+noted, no new ones. **Not validated**: no tablet, foldable, or emulator at a
+≥600dp width was available in this environment to visually confirm the wide
+layout on a real or emulated wide screen -- this is compile/lint-verified
+correctness only, not a visual acceptance check. That physical/emulated
+check is the natural next step before calling this slice done. Left
+uncommitted on `codex/android-clips-library` alongside Codex's existing
+work, per the owner's continue-in-place instruction; nothing pushed,
+deployed, or altered in production.
+
+### September 27 follow-up (Claude Code): Android clip sharing and thumbnails
+
+Continuing U7's remaining Clips-library gaps per the owner's "keep
+implementing" direction. Added to `BeaconApi.kt`: `downloadRecordingThumbnail`
+(mirrors `downloadRecordingForPlayback`'s verify-then-decrypt contract against
+the existing `GET /api/recordings/:id/thumbnail` route, but treats any
+failure as "no thumbnail" rather than throwing, since a thumbnail is
+decoration, not part of the recording lifecycle -- ADR 0078) and
+`createRecordingShareLink`/`activeRecordingShareLink`/`revokeRecordingShareLink`
+(against the existing `/api/recordings/:id/share-links` routes, ADR 0077). No
+backend changes were needed -- confirmed `authenticateStateChange` already
+treats a bearer-token request as CSRF-exempt, the same way Android's existing
+manual-recording request already works, so these routes were already
+reachable from a native client.
+
+`RecordingLibrary.kt` gained a `RecordingThumbnailImage` composable (loads and
+decrypts a clip's thumbnail if `hasThumbnail` is true, shows nothing at all
+otherwise or on any failure) and a `ShareClipDialog` composable mirroring the
+PWA's `ShareClipDialog.tsx` state machine and copy: check for an active link,
+then either show it (copy/revoke/replace) or offer to create one (24/48/72h
+picker plus a required consent checkbox, matching the PWA's exact disclosure
+wording). Wired into `MonitorUi.kt` via one new hoisted `recordingShareTarget`
+state var, following this file's existing convention for Clips-screen state.
+
+Validated: `compileDebugKotlin` clean on the first attempt for both additions,
+then the full gate (`testDebugUnitTest lintDebug assembleDebug assembleRelease`)
+passes, same two pre-existing unrelated warnings, no new ones. **Not
+validated**: no real clip fixture existed in this environment to exercise
+thumbnail display or share-link creation against an actual recorded clip --
+compile/lint/unit-test verified only. Household/sharing *management*
+(invite/accept/revoke/grants -- distinct from clip *share links*) remains
+entirely unimplemented and unstarted; it's a larger, separate feature and was
+deliberately not started in this same pass. Left uncommitted on
+`codex/android-clips-library` alongside everything above.
+
+The current uncommitted implementation adds an Android Clips library,
+grant-filtered listing through the existing `/api/recordings` contract,
+size/checksum verification followed by local AES-GCM decryption for playback,
+temporary app-cache cleanup, pagination, and owner-only deletion controls. It
+does not add a schema or weaken backend authorization. U7 now also bundles Inter
+under its license, centralizes the PWA token scales, matches the installed PWA's
+mobile top bar/sidebar/account menu, groups Activity and Clips under Events,
+adds theme selection and system-bar contrast, and matches the installed PWA's
+signed-out/password-reset/registration screens. Native account creation now uses
+`/api/mobile/auth/register`, sharing the browser path's password policy, IP
+rate-limit bucket, duplicate handling, verification-email behavior, and session
+issuer while returning a revocable bearer token. Sharing, Android thumbnails,
+and household management remain later slices. Android manual recording is now
+implemented locally as a backend-authorized 15-second camera capture: the owner
+request creates the normal audited recording row, the backend alone commands the
+authenticated camera socket, and the camera reuses its visible CameraX capture,
+AES-GCM encryption, Drive upload, and failure paths. Viewer and camera indicators
+match the PWA lifecycle language. Backend/APK deployment and a real Drive-backed
+capture remain open. The Android camera-settings screen also exposes the
+existing motion contract: per-source
+detection, sensitivity, record-on-motion, cooldown, and time-zone-aware quiet
+hours can be loaded and saved by owners/admins without adding a second policy or
+schema.
+
+The production-targeted debug APK was installed without clearing Pixel data.
+Home, the drawer/account menu, Events/Activity, and the empty Clips screen were
+visually checked on device; a temporary signed-out preview was used without
+modifying the stored session, then removed. Real clip playback/deletion is still
+unproven because this household has no clip fixture. Registration UI was also
+previewed without submitting or creating an account; production acceptance must
+wait until the new backend route is deployed. The motion panel's real-device
+empty state was inspected on the Pixel. This household's current device returned
+no editable motion rows, so a physical save/apply round trip remains open. The
+dedicated PostgreSQL auth
+suite passes all 23 tests; the complete backend gate passes TypeScript,
+repository ESLint, all 43 test files / 227 tests, and the Android gate passes
+`testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleRelease` with
+the production API URL injected. `git diff --check` and the documentation
+Prettier check also pass. The existing Firebase deprecated-override compiler
+warning remains unrelated to this slice.
+
+PR #76 (parity audit) and PR #75 (dead web component removal) remain open. Their
+GitHub jobs did not start because of the account billing/spending-limit state.
+The parity documentation also needs Prettier cleanup before merge. Do not merge,
+push, deploy, or alter production merely to continue this local branch.
+
 ## September 26, 2026 — handoff to next session (docs committed, no implementation started)
 
 This section supersedes the September 25 section below for **current state and
@@ -21,7 +151,7 @@ written because the current session is ending (usage limit). Read
    intentional (non-silent) recording abort when the source stream drops or
    ends (ADR 0079). GitHub Actions CI was (and, verify, may still be) blocked by
    a **billing failure**, not a code problem (`gh api
-   repos/builtbysai/Beacon-SecureView/actions/runs` will show it, or check
+repos/builtbysai/Beacon-SecureView/actions/runs` will show it, or check
    billing on github.com/settings/billing) — both merges were done with the
    owner's explicit approval to merge without CI, after manually reproducing
    every `.github/workflows/*` job locally first. Do the same if CI is still
@@ -42,7 +172,7 @@ written because the current session is ending (usage limit). Read
      Step 7 (WebAuthn/passkey for web as primary path since it needs no new
      OTP delivery channel; Android Credential Manager passkeys where
      supported; password fallback everywhere). **Open design question before
-     implementing**: can a passkey be the *only* credential on an account, and
+     implementing**: can a passkey be the _only_ credential on an account, and
      what's the recovery story if the authenticator is lost? Needs an owner
      decision, not an engineering guess.
    - **Camera use-case profiles research** — doorbell, car/dash camera, baby
@@ -65,8 +195,9 @@ written because the current session is ending (usage limit). Read
 
 Full detail in [camera-use-case-profiles.md](camera-use-case-profiles.md).
 Short version for orientation:
+
 - **Regular/Always-on** — today's behavior, unchanged, no work needed.
-- **Doorbell** — a named preset over *existing* motion-settings columns (high
+- **Doorbell** — a named preset over _existing_ motion-settings columns (high
   sensitivity, short cooldown, record-on-motion on, maybe elevated
   notification priority). No new capture code. A literal hardware doorbell
   button is out of scope (Beacon runs on phones, not purpose-built doorbell

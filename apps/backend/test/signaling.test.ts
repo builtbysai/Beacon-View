@@ -450,6 +450,23 @@ describe('SignalingHub', () => {
     hub.close();
   });
 
+  it('sends recording requests only through the server-owned device channel', () => {
+    const hub = new SignalingHub(
+      () => [],
+      () => [],
+    );
+    const device = socket();
+    hub.connectDevice('internal-camera', 'public-camera', device.ws);
+
+    expect(hub.requestRecording('public-camera', 'recording-one')).toBe(true);
+    expect(device.mock.sent.at(-1)).toEqual({
+      recordingId: 'recording-one',
+      type: 'recording-request',
+    });
+    expect(hub.requestRecording('offline-camera', 'recording-two')).toBe(false);
+    hub.close();
+  });
+
   it('ends viewers immediately in privacy mode but keeps device control', () => {
     const hub = new SignalingHub(
       () => [],
