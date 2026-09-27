@@ -224,7 +224,7 @@ private fun BeaconSidebarContent(
             listOf(
                 Triple(MonitorPage.Home, "Home", Icons.Outlined.Home),
                 Triple(MonitorPage.Cameras, "Cameras", Icons.Outlined.Videocam),
-                Triple(MonitorPage.Events, "Events", Icons.Outlined.History),
+                Triple(MonitorPage.Events, "Activity", Icons.Outlined.History),
                 Triple(MonitorPage.Settings, "Settings", Icons.Outlined.Settings),
             ).forEach { (page, label, icon) ->
                 BeaconSidebarButton(

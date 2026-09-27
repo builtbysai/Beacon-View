@@ -149,6 +149,7 @@ internal fun MonitorHome(
     var monitorPage by rememberSaveable(session?.userId) { mutableStateOf(MonitorPage.Home) }
     var eventsView by rememberSaveable(session?.userId) { mutableStateOf(MonitorEventsView.Activity) }
     var navigationOpen by rememberSaveable(session?.userId) { mutableStateOf(false) }
+    var household by remember(session?.userId) { mutableStateOf<BeaconApi.HouseholdSummary?>(null) }
     var accessEvents by remember(session?.userId) {
         mutableStateOf<List<BeaconApi.AccessEvent>>(emptyList())
     }
@@ -397,6 +398,8 @@ internal fun MonitorHome(
                             runCatching { api.notificationPreferences(active.token) },
                         )
                     }
+                withContext(Dispatchers.IO) { runCatching { api.currentHousehold(active.token) } }
+                    .onSuccess { household = it }
                 historyResult.onSuccess {
                     accessEvents = it
                     accessHistoryLoaded = true
@@ -915,6 +918,7 @@ internal fun MonitorHome(
                         title = "Settings",
                         supportingText = "Manage alerts, household data, and your account.",
                     )
+                    BeaconHouseholdOverviewCard(household = household, cameraCount = cameras.size)
                     BeaconSectionHeader("Notifications", "Control private alerts from this phone.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("Private camera alerts", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -988,6 +992,12 @@ internal fun MonitorHome(
                             }
                         }
                     }
+                    BeaconPeopleAccessPanel(
+                        api = api,
+                        sessionToken = currentSession.token,
+                        isAdmin = currentSession.householdRole == "owner" || currentSession.householdRole == "admin",
+                        onAuthorizationLost = ::expireSession,
+                    )
                     BeaconSectionHeader("This device", "Use this phone as a visible Beacon camera.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("Camera mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -1003,7 +1013,13 @@ internal fun MonitorHome(
                             )
                         }
                     }
-                    BeaconSectionHeader("Security", "Review recent access to your cameras.")
+                    BeaconSectionHeader("Security", "Review signed-in devices and camera access.")
+                    BeaconSignedInDevicesPanel(
+                        api = api,
+                        sessionToken = currentSession.token,
+                        onAuthorizationLost = ::expireSession,
+                    )
+                    Text("Recent access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp))
                     if (!accessHistoryLoaded) Text("Loading access history…")
                     if (accessHistoryLoaded && accessEvents.isEmpty()) {
                         Text("No recent camera access.", color = MaterialTheme.colorScheme.onSurfaceVariant)

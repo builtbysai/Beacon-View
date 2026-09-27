@@ -1,5 +1,45 @@
 # Beacon SecureView development handoff
 
+## September 27, 2026 — real Android bug found and fixed: bodyless DELETE requests were broken app-wide
+
+While verifying the new Signed-in devices Revoke button against real hardware
+(physical Pixel and a Samsung tablet, both connected via adb, backend
+tunneled with `adb reverse tcp:3000 tcp:3000`), the Revoke button silently
+did nothing on both devices. Root cause, found via `Log.e` instrumentation
+plus reading the actual HTTP response instead of assuming: **every bodyless
+`DELETE` call in `BeaconApi.kt` was broken**, not just this new one. Android's
+`HttpURLConnection` does not send a clean, header-free zero-length body for
+`DELETE` the way `curl -X DELETE` or a browser's `fetch()` does; left to
+its own defaults, it was hit with `FST_ERR_CTP_INVALID_MEDIA_TYPE` (backend's
+Fastify has no parser for whatever content-type Android defaulted to), and an
+explicit zero-length body with `Content-Type: application/json` got
+`FST_ERR_CTP_EMPTY_JSON_BODY` instead (Fastify's JSON parser rejects an empty
+body when that content-type is declared). The fix that actually works: send
+an explicit `"{}"` body on every DELETE, mirroring the pattern
+`deleteAccount` already used elsewhere in this file. Fixed at the shared
+`connection()` helper (now sets `doOutput = true` for DELETE, not just
+POST/PUT) plus added the explicit `"{}"` body write to every DELETE call site
+that didn't already have one: `deleteRecording`, `revokeRecordingShareLink`,
+`revokeHouseholdInvitation`, `removeHouseholdMember`,
+`revokeBrowserSession`, and the FCM token unsubscribe call.
+
+**This means clip deletion, share-link revocation, and notification
+unsubscribe were silently broken on Android before this fix too** -- not
+just the household-invitation/session-revoke features added this session.
+None of those were ever exercised against a real device with a real network
+round trip before now; they compiled and passed unit tests, which don't
+catch this class of bug. Confirmed fixed end-to-end on real hardware: revoke
+a signed-in device session on the Pixel, watch it disappear from the list on
+next load, and independently verify server-side via `GET
+/api/account/sessions` that it's actually gone. Full local gate
+(`testDebugUnitTest lintDebug assembleDebug assembleRelease`) passes.
+**Not independently re-verified on-device**: `deleteRecording`,
+`revokeRecordingShareLink`, and the notification-unsubscribe call now share
+the same fix but weren't individually re-tested against a real clip/share-
+link/subscription after this change -- the shared root cause and identical
+fix pattern make it very likely they now work, but that's inference, not a
+fresh observation for those three specifically.
+
 ## September 27, 2026 — active continuation
 
 The pending roadmap is ordered in `docs/roadmap.md` under **Ordered continuation

@@ -413,7 +413,7 @@ internal fun recordingStatusLabel(status: String): String =
         else -> "Unavailable"
     }
 
-private fun formatRecordingTime(value: String): String =
+internal fun formatRecordingTime(value: String): String =
     runCatching {
         DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a")
             .withZone(ZoneId.systemDefault())

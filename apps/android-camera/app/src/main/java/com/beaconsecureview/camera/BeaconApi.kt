@@ -22,6 +22,46 @@ class BeaconApi(private val baseUrl: String) {
         val householdRole: String? = null,
     )
 
+    data class HouseholdSummary(
+        val id: String,
+        val name: String,
+        val role: String,
+    )
+
+    data class HouseholdMember(
+        val id: String,
+        val userId: String,
+        val email: String,
+        val role: String,
+        val status: String,
+    )
+
+    data class HouseholdInvitation(
+        val id: String,
+        val invitedEmail: String,
+        val role: String,
+        val expiresAt: String,
+    )
+
+    data class HouseholdSharing(
+        val members: List<HouseholdMember>,
+        val invitations: List<HouseholdInvitation>,
+    )
+
+    data class CreatedInvitation(
+        val id: String,
+        val token: String,
+        val expiresAt: String,
+    )
+
+    data class BrowserSessionSummary(
+        val id: String,
+        val userAgent: String,
+        val current: Boolean,
+        val lastSeenAt: String,
+        val createdAt: String,
+    )
+
     data class MonitorCamera(
         val id: String,
         val name: String,
@@ -474,6 +514,7 @@ class BeaconApi(private val baseUrl: String) {
     fun deleteRecording(sessionToken: String, recordingId: String) {
         val connection = connection("/api/recordings/${urlPathSegment(recordingId)}", "DELETE")
         connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
         val body = responseBody(connection)
         if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
             throw AuthorizationLostException()
@@ -696,11 +737,170 @@ class BeaconApi(private val baseUrl: String) {
     fun revokeRecordingShareLink(sessionToken: String, linkId: String) {
         val connection = connection("/api/recordings/share-links/${urlPathSegment(linkId)}", "DELETE")
         connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
         val body = responseBody(connection)
         if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
         if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
             val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
             throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "Share link could not be removed")
+        }
+    }
+
+    fun currentHousehold(sessionToken: String): HouseholdSummary? {
+        val connection = connection("/api/account/households", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
+        val json = JSONObject(body)
+        val currentId = json.optString("currentHouseholdId")
+        val households = json.getJSONArray("households")
+        for (index in 0 until households.length()) {
+            val household = households.getJSONObject(index)
+            if (household.getString("id") == currentId) {
+                return HouseholdSummary(
+                    id = household.getString("id"),
+                    name = household.getString("name"),
+                    role = household.getString("role"),
+                )
+            }
+        }
+        return null
+    }
+
+    /** Owner/admin only -- mirrors the PWA's People & access section. A
+     * viewer or guest calling this gets a 403, handled by the caller as
+     * "nothing to manage" rather than an error. */
+    fun householdSharing(sessionToken: String): HouseholdSharing {
+        val connection = connection("/api/household/sharing", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Household members are temporarily unavailable")
+        }
+        val json = JSONObject(body)
+        val members = json.getJSONArray("members")
+        val invitations = json.getJSONArray("invitations")
+        return HouseholdSharing(
+            members =
+                (0 until members.length()).map { index ->
+                    val member = members.getJSONObject(index)
+                    HouseholdMember(
+                        id = member.getString("id"),
+                        userId = member.getString("userId"),
+                        email = member.getString("email"),
+                        role = member.getString("role"),
+                        status = member.getString("status"),
+                    )
+                },
+            invitations =
+                (0 until invitations.length()).map { index ->
+                    val invitation = invitations.getJSONObject(index)
+                    HouseholdInvitation(
+                        id = invitation.getString("id"),
+                        invitedEmail = invitation.getString("invitedEmail"),
+                        role = invitation.getString("role"),
+                        expiresAt = invitation.getString("expiresAt"),
+                    )
+                },
+        )
+    }
+
+    fun createHouseholdInvitation(
+        sessionToken: String,
+        email: String,
+        role: String,
+    ): CreatedInvitation {
+        val connection = connection("/api/household/invitations", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use {
+            it.write(JSONObject().put("email", email).put("role", role).toString().toByteArray(Charsets.UTF_8))
+        }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_CREATED) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(
+                when (serverMessage) {
+                    "You cannot invite that household role" -> "You can't invite that role."
+                    "Too many invitation changes" -> "Too many invitations. Wait before trying again."
+                    else -> "The invitation could not be created. Try again."
+                },
+            )
+        }
+        val json = JSONObject(body)
+        return CreatedInvitation(
+            id = json.getString("id"),
+            token = json.getString("token"),
+            expiresAt = json.getString("expiresAt"),
+        )
+    }
+
+    fun acceptHouseholdInvitation(sessionToken: String, token: String) {
+        val connection = connection("/api/household/invitations/accept", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use {
+            it.write(JSONObject().put("token", token).toString().toByteArray(Charsets.UTF_8))
+        }
+        responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("That invitation code is invalid or has expired.")
+        }
+    }
+
+    fun revokeHouseholdInvitation(sessionToken: String, invitationId: String) {
+        val connection = connection("/api/household/invitations/${urlPathSegment(invitationId)}", "DELETE")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            throw IllegalStateException("This invitation could not be revoked.")
+        }
+    }
+
+    fun removeHouseholdMember(sessionToken: String, memberId: String) {
+        val connection = connection("/api/household/members/${urlPathSegment(memberId)}", "DELETE")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            throw IllegalStateException("This member could not be removed.")
+        }
+    }
+
+    fun browserSessions(sessionToken: String): List<BrowserSessionSummary> {
+        val connection = connection("/api/account/sessions", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Signed-in devices are temporarily unavailable")
+        }
+        val sessions = JSONObject(body).getJSONArray("sessions")
+        return (0 until sessions.length()).map { index ->
+            val entry = sessions.getJSONObject(index)
+            BrowserSessionSummary(
+                id = entry.getString("id"),
+                userAgent = entry.optString("userAgent").takeIf(String::isNotBlank) ?: "Unknown device",
+                current = entry.getBoolean("current"),
+                lastSeenAt = entry.getString("lastSeenAt"),
+                createdAt = entry.getString("createdAt"),
+            )
+        }
+    }
+
+    fun revokeBrowserSession(sessionToken: String, targetSessionId: String) {
+        val connection = connection("/api/account/sessions/${urlPathSegment(targetSessionId)}", "DELETE")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            throw IllegalStateException("This session could not be revoked.")
         }
     }
 
@@ -785,6 +985,7 @@ class BeaconApi(private val baseUrl: String) {
     fun revokeNotificationSubscription(sessionToken: String, subscriptionId: String) {
         val connection = connection("/api/notification-subscriptions/$subscriptionId", "DELETE")
         connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
         responseBody(connection)
         if (connection.responseCode !in listOf(HttpURLConnection.HTTP_NO_CONTENT, HttpURLConnection.HTTP_NOT_FOUND)) {
             if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
@@ -1087,7 +1288,11 @@ class BeaconApi(private val baseUrl: String) {
             requestMethod = method
             connectTimeout = 10_000
             readTimeout = 10_000
-            doOutput = method != "DELETE" && method != "GET"
+            // DELETE also gets doOutput=true: Android's HttpURLConnection has been
+            // observed sending a Content-Type the backend's Fastify instance can't
+            // parse on a truly bodyless DELETE (FST_ERR_CTP_INVALID_MEDIA_TYPE).
+            // Every DELETE call site below writes an explicit "{}" body to avoid it.
+            doOutput = method != "GET"
             if (doOutput) setRequestProperty("Content-Type", "application/json")
         }
 
