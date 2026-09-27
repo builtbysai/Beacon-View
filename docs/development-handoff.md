@@ -1,5 +1,146 @@
 # Beacon SecureView development handoff
 
+## September 26, 2026 — handoff to next session (docs committed, no implementation started)
+
+This section supersedes the September 25 section below for **current state and
+next steps**; the September 25 section's environment setup, Oracle access, and
+deploy procedure are still accurate and still the ones to use. This handoff was
+written because the current session is ending (usage limit). Read
+[AGENTS.md](../AGENTS.md) and [roadmap.md](roadmap.md) first, then this.
+
+### What happened this session
+
+1. PR [#72](https://github.com/builtbysai/Beacon-SecureView/pull/72) and PR
+   [#73](https://github.com/builtbysai/Beacon-SecureView/pull/73) were merged to
+   `main` and manually deployed to production (`https://beacon.builtbysai.com`).
+   They cover: Activity feed split from a Clips library with clip↔motion-event
+   association, keyset pagination, per-camera-grant clip read access,
+   time-limited external share links (ADR 0077), client-captured encrypted
+   thumbnails for browser clips (ADR 0078), a persistent accessible
+   `RecordingBadge` replacing the old dead `data-tooltip` indicator, and
+   intentional (non-silent) recording abort when the source stream drops or
+   ends (ADR 0079). GitHub Actions CI was (and, verify, may still be) blocked by
+   a **billing failure**, not a code problem (`gh api
+   repos/builtbysai/Beacon-SecureView/actions/runs` will show it, or check
+   billing on github.com/settings/billing) — both merges were done with the
+   owner's explicit approval to merge without CI, after manually reproducing
+   every `.github/workflows/*` job locally first. Do the same if CI is still
+   blocked when you pick this up: don't assume it's a code regression.
+2. Old release directories and stopped containers on the Oracle VM were cleaned
+   up conservatively (only clearly-safe auto-generated build artifacts;
+   **nothing** ambiguous, no secrets, no keys, no `.env` files were touched).
+3. The owner opened three new workstreams in one message, then added a fourth
+   (baby monitor) shortly after. **All four are decisions/research only —
+   none are implemented on either platform:**
+   - **Approved roadmap item N5 (MFA/passkeys)**: "yes we can add MFA and
+     passkey where applicable and on devices that support it." No MFA/passkey
+     code exists on either platform (confirmed by grep for
+     `webauthn|passkey|WebAuthn|Passkey` across `apps/backend/src`,
+     `apps/web-viewer/src`, `apps/android-camera/app/src/main/java` — zero
+     matches). Proposed shape recorded in
+     [core-feature-completion-plan.md](core-feature-completion-plan.md)'s
+     Step 7 (WebAuthn/passkey for web as primary path since it needs no new
+     OTP delivery channel; Android Credential Manager passkeys where
+     supported; password fallback everywhere). **Open design question before
+     implementing**: can a passkey be the *only* credential on an account, and
+     what's the recovery story if the authenticator is lost? Needs an owner
+     decision, not an engineering guess.
+   - **Camera use-case profiles research** — doorbell, car/dash camera, baby
+     monitor/nursery camera, and the existing always-on profile. Written up in
+     full in the new [camera-use-case-profiles.md](camera-use-case-profiles.md)
+     (see next section for the summary). This is the completed deliverable for
+     "take your time and do some research... think about the plan to
+     implement them" — **research and phased plan only, zero implementation.**
+   - **Android/web parity pass** — make the Android app's UI match the PWA's
+     current look ("exactly identical," owner's words) and audit both
+     platforms so neither is missing features the other has. Recorded as row
+     **U7** in [roadmap.md](roadmap.md) and in
+     [core-feature-completion-plan.md](core-feature-completion-plan.md)'s
+     Step 6. **No audit has been started.** Explicitly: do not begin visual or
+     feature work until the audit/gap-list exists and the owner has reviewed
+     it — Compose cannot literally copy CSS, so "identical" needs to be
+     translated into layout/color/type/spacing intent first.
+
+### Camera use-case profiles — what the research concluded
+
+Full detail in [camera-use-case-profiles.md](camera-use-case-profiles.md).
+Short version for orientation:
+- **Regular/Always-on** — today's behavior, unchanged, no work needed.
+- **Doorbell** — a named preset over *existing* motion-settings columns (high
+  sensitivity, short cooldown, record-on-motion on, maybe elevated
+  notification priority). No new capture code. A literal hardware doorbell
+  button is out of scope (Beacon runs on phones, not purpose-built doorbell
+  hardware) unless the owner wants to scope Bluetooth-button pairing
+  separately later.
+- **Car/Dashcam** — same preset pattern, plus a genuinely new trigger: reading
+  the phone's built-in accelerometer as an impact detector (a real analog to
+  a dash-cam's G-sensor), producing a protected short clip. **True
+  continuous/loop recording while driving is explicitly excluded from this
+  proposal** — it conflicts with this repo's stated hard boundary of no
+  continuous or hidden recording ([roadmap.md](roadmap.md),
+  [product-build-brief.md](product-build-brief.md)) and needs its own,
+  separate owner privacy sign-off before anyone builds it.
+- **Baby monitor/nursery** — the easiest of the four. Beacon already has
+  always-on live view and consent-gated Listen/Talk; this profile is mostly a
+  UX/defaults preset (surface Listen/Talk prominently, turn off
+  motion-triggered recording by default since crib movement isn't a security
+  event). An optional cry-detection alert would be a new small audio-level
+  (decibel/frequency) detector — deliberately **not** speech or voice
+  analysis, which would cross into the biometric/identity territory this
+  repo's privacy rules already forbid. Phone hardware cannot match
+  purpose-built nursery cameras on night vision/IR; the doc says so plainly
+  rather than overselling it.
+- **Recommended order**: ship the Phase-1 presets for all three
+  event-oriented profiles (Doorbell, Car, Baby monitor) together first — low
+  risk, no new detectors, no boundary conflicts. New detectors
+  (accelerometer, cry-detection) are an optional Phase 2 per profile.
+  Continuous driving recording stays a separate, later, owner-gated decision.
+
+### Docs status: fully committed, nothing pending
+
+Everything from this session is committed on branch
+`codex/camera-profiles-and-roadmap-docs` (commits `8e6e965` and the one
+finalizing baby monitor + this section) — **not pushed, no PR opened**, since
+that wasn't explicitly requested. `docs/roadmap.md` has been updated (N5 row
+reworded to reflect the MFA/passkey approval, new row U7 for the parity pass,
+a September 26 narrative entry, and new "Decisions requiring the owner"
+items for the camera profiles and parity sequencing).
+`core-feature-completion-plan.md`'s dangling link to
+`camera-use-case-profiles.md` is resolved — the file exists and is
+cross-referenced from all three docs consistently.
+
+There is also an untracked `.codex-remote-attachments/` directory at the repo
+root (a Codex remote-session artifact, not something this session created).
+Left untouched deliberately — don't delete it without checking whether a
+Codex session still owns it.
+
+### Next steps for whoever picks this up
+
+1. If you want this docs batch on `main`: push
+   `codex/camera-profiles-and-roadmap-docs` and open a PR. Reproduce
+   CI-equivalent checks locally first if GitHub Actions billing is still
+   blocked (see point 1 under "What happened this session").
+2. **Do not start implementing MFA/passkeys, any camera-use-case profile, or
+   the Android/web parity audit without checking in with the owner on
+   sequencing first.** Four substantial workstreams were opened in this
+   session alone, and this repo's own rule is one approved milestone at a
+   time (AGENTS.md: "Do not begin a later milestone without explicit
+   approval"). Propose an order; don't assume one. The camera-profiles doc's
+   own recommendation (Phase 1 presets first, across all three profiles) is a
+   reasonable starting suggestion, not a decision already made.
+3. Start the Android/web parity audit (U7) as documentation/analysis only —
+   enumerate screens/controls on both platforms — before writing any UI code,
+   once the owner confirms this should be next.
+
+### Where to get keys and access
+
+Nothing changed here this session — see "Do not put keys in this repository"
+in the September 25 section immediately below for the full table (GitHub,
+Oracle SSH via Tailscale, production/backup `.env` files on Oracle, Firebase
+Android config, Google OAuth). This session used pre-existing Tailscale/SSH
+access already configured on this machine; no new credentials were created,
+rotated, or discovered.
+
 ## September 25, 2026 — current continuation state
 
 This section supersedes older deployment, backup, and active-branch statements below.

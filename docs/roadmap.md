@@ -33,6 +33,24 @@ and deployed asset hashes were verified. Chrome on Windows Web Push opt-in plus 
 motion, offline, and recovery delivery passed September 12. Native Android FCM and the
 remaining physical lifecycle matrix remain gated.
 
+On September 26 the Activity feed was split from a dedicated Clips library
+(PR #72), with clips attached to the motion event that caused them instead of
+appearing as their own timeline rows; clips gained keyset pagination,
+per-camera-grant read access, time-limited external share links (ADR 0077),
+and client-captured encrypted thumbnails for browser clips (ADR 0078,
+Android capture still open). PR #73 replaced the manual-record control's
+inert tooltip indicator with a persistent, accessible `RecordingBadge` and
+made in-progress recordings abort intentionally (visible failure) if their
+source stream drops or ends unexpectedly (ADR 0079). Both merged and are
+live at `https://beacon.builtbysai.com`. The owner also approved N5's
+MFA/passkey policy in principle, requested a research pass on purpose-built
+camera use-case profiles (see
+[camera-use-case-profiles.md](camera-use-case-profiles.md)), and requested an
+Android/web feature-and-design parity pass (U7). None of the latter three are
+implemented; see the relevant table rows and
+[development-handoff.md](development-handoff.md)'s September 26 entry for
+what to do next and in what order.
+
 ## Current scope and evidence
 
 The backend completion sequence is tracked in
@@ -166,7 +184,7 @@ with state-specific camera, persistent status, or optional microphone guidance.
 | N2 / P0       | Google and media acceptance — Device tester + Engineering                            | Android Monitor Google account chooser, cancel/failure/return; Listen starts muted; Talk only after consent; stop/navigation/disconnect/privacy release microphone. Audible speaker/Bluetooth and echo checks, competing talk owners, direct and forced TURN across separate networks. Physical results still open.                                                                                                                                                                                                                                                                                                |
 | N3 / P0       | Prove backup recovery — Engineering + Owner                                          | September 25 restore drill passed: a temporary encrypted Object Storage snapshot restored into a separate empty database in 3 seconds; all 28 migration rows, 23 public tables, and aggregate user/household/camera/event/recording counts matched the source. Repository integrity passed, the verification database was dropped, and the temporary snapshot was forgotten and pruned so the owner-requested empty-backup state remains. Still open: backup timers are disabled, retention/expiry needs scheduled evidence, and the owner must set RPO/RTO and recovery operator. Never restore over the live DB. |
 | N4 / P0       | Domain and email identity — Owner + Engineering                                      | Owner chooses/owns domain and public operator identity. Plan TLS/OAuth/Android-link migration and rollback before changing DNS. Verify Resend sender, SPF/DKIM/DMARC alignment, delivery and bounce/complaint handling. No purchase, sender/DNS mutation, or email dispatch is implied by UI work.                                                                                                                                                                                                                                                                                                                 |
-| N5 / P0       | Account lifecycle and reauthentication — Engineering + Owner + Reviewer              | Implemented: verified-email state with single-use hashed tokens; enumeration-resistant, rate-limited one-hour password reset that revokes every existing session and emails a change alert; and a password-confirmation dialog that refreshes the existing ten-minute sensitive-action window without a full sign-out. Google-only accounts get a distinct "sign in with Google" reset email rather than a usable token. Automated integration coverage passes. Still open: non-silenceable push/in-app security alerts (belongs with the notification outbox) and the owner's MFA/passkey policy decision.        |
+| N5 / P0       | Account lifecycle and reauthentication — Engineering + Owner + Reviewer              | Implemented: verified-email state with single-use hashed tokens; enumeration-resistant, rate-limited one-hour password reset that revokes every existing session and emails a change alert; and a password-confirmation dialog that refreshes the existing ten-minute sensitive-action window without a full sign-out. Google-only accounts get a distinct "sign in with Google" reset email rather than a usable token. Automated integration coverage passes. Owner approved MFA/passkeys September 26: add where applicable and on devices that support it (WebAuthn/passkey for web, Android Credential Manager passkeys where supported, password fallback elsewhere) — see [core-feature-completion-plan.md](core-feature-completion-plan.md) Step 7. Not started; needs a recovery-story decision (can a passkey be the only credential on an account?) before implementation. Still open: non-silenceable push/in-app security alerts (belongs with the notification outbox).        |
 | N6 / P0       | Security/release pipeline — Engineering + Owner + Reviewer                           | Authorization, CSRF, OAuth, pairing, WebSocket/TURN, rate-limit, and secret-redaction review is covered by source and integration tests. CI now retains a CycloneDX SBOM generated from the frozen dependency graph. GitHub branch protection is unavailable for this private repository on its current plan, confirmed September 24. Still open: independent security review, protected Android release signing/AAB/versioning, staged rollout/rollback, and Play readiness. Never put signing material in git.                                                                                                   |
 | N7 / P0       | Trust and support operations — Owner + Reviewer, Engineering publishes approved copy | Review [legal drafts](legal/), operator/contact/region/retention and Play disclosures. Confirm access/export/correction/deletion identity checks, deadlines, support SLA, incident owner and escalation process. Existing Trust/contact UI is not approval of the legal drafts. Publication awaits owner sign-off.                                                                                                                                                                                                                                                                                                 |
 | N8 / P1       | Web and accessibility completion — Engineering + Owner acceptance                    | Complete U1–U4 below and [responsive audit](responsive-audit.md). Cross-browser keyboard/focus, screen reader, contrast and reduced motion; real-device TalkBack, font scaling, rotation, split-screen, tablet/foldable. Browser emulation cannot close native acceptance.                                                                                                                                                                                                                                                                                                                                         |
@@ -196,6 +214,7 @@ explicitly where a design, privacy, infrastructure, or release decision is requi
 | U4  | Finish design-package screen details — Engineering + Owner visual acceptance | Mobile Activity/Settings/device states and wide Monitor remain within current backend/media contracts. Preserve independent streams and explicit Listen/Talk. Validate web tests, lint, types/build and review incremental diff; deploy web only and verify public assets, TLS and `/ready`.                                                                                                                                                                                                                         |
 | U5  | Sidebar and account-menu reliability — Engineering                           | Sticky header/footer, independently scrollable navigation, icon-collapse rail and keyboard toggle implemented without adding shadcn. The account menu renders outside the sidebar clipping boundary and keeps Trust & privacy and Sign out reachable when collapsed. Unit, responsive keyboard/portal, short-viewport, and production rendering checks pass.                                                                                                                                                         |
 | U6  | Notification settings and Android disconnect — Engineering + Device tester   | Web notification delivery state and per-camera preferences use explicit cards, switches, dirty-state feedback, and responsive layout; the web build is live and verified. Android disconnect is always visible, requires confirmation, stops capture and sends a JSON disconnect action; the backend revokes the credential and retains settings for device-bound repair. Unit/build validation passes; the production request-path failure is fixed and a physical disconnect/re-pair tap-through remains required. |
+| U7  | Android/web feature-and-design parity pass — Engineering + Owner review      | Owner-requested September 26: the owner likes the PWA's current look and wants the Android app's UI to match it, plus full feature parity in both directions (nothing missing on either platform). Not started. Needs an audit before any implementation — enumerate every web-viewer screen/control against its Android equivalent (or absence), then design tokens/components Android can actually render natively (Compose is not CSS; "identical" means matching layout, color, type and spacing intent, not a literal port). No implementation should start until that audit exists and the owner has reviewed the gap list. |
 
 ## Later / deferred — requires a separate approved milestone
 
@@ -288,7 +307,16 @@ the full 168-test backend suite passes.
    equipment; nominate reviewers for native accessibility/security.
 2. Choose the owned domain, sender identity, support/incident operator, SLA and
    recovery RPO/RTO; approve associated costs/configuration when concrete.
-3. Approve account verification/reset/reauth and MFA/passkey recovery design before
-   the security feature batch; approve reviewed legal text before publication.
+3. MFA/passkeys approved in principle (September 26); still needs the recovery-story
+   decision (can a passkey be the only credential on an account?) before
+   implementation, and reviewed legal text approved before publication.
 4. Choose one later candidate only after its prerequisites and design are reviewable.
    A backlog entry or deployment of this UI batch does not approve it.
+5. Camera use-case profiles (doorbell/car/baby monitor/regular) — see
+   [camera-use-case-profiles.md](camera-use-case-profiles.md) for the research and
+   proposed phasing. Decide which profile (if any) to build first; Phase 3 of that
+   doc (continuous/loop recording for driving) additionally needs its own privacy
+   sign-off since it is in tension with this doc's no-continuous-recording boundary.
+6. Android/web parity pass (U7) — review the audit/gap list once produced before any
+   implementation begins; sequence it against MFA/passkeys and camera profiles rather
+   than assuming all three proceed in parallel (one approved milestone at a time).
