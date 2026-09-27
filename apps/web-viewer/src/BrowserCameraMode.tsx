@@ -8,6 +8,7 @@ import { PairingCodeScanner } from './PairingCodeScanner';
 import './BrowserCameraModeSetup.css';
 import { browserOsLabel, friendlyDeviceLabel } from './naming';
 import { formatClipTimer } from './recording-capture';
+import { RecordingBadge } from './RecordingBadge';
 import { useClipRecorder } from './useClipRecorder';
 import { rememberLocalBrowserDevice } from './browser-camera-local';
 
@@ -398,13 +399,16 @@ export function BrowserCameraMode({
           muted
         />
         <div className="broadcast-top">
-          <span
-            className={`broadcast-live${state === 'streaming' ? ' is-watched' : ''}`}
-            role="status"
-          >
-            <span aria-hidden="true" className="broadcast-live-dot" />
-            {broadcastStatusLabel(state, viewerCount)}
-          </span>
+          <div className="video-badges-row">
+            <span
+              className={`broadcast-live${state === 'streaming' ? ' is-watched' : ''}`}
+              role="status"
+            >
+              <span aria-hidden="true" className="broadcast-live-dot" />
+              {broadcastStatusLabel(state, viewerCount)}
+            </span>
+            <RecordingBadge state={clip.state} />
+          </div>
           <div className="broadcast-top-actions">
             {canRecord && clip.supported && activeCameraId && (
               <button
@@ -412,9 +416,9 @@ export function BrowserCameraMode({
                 className={`broadcast-icon-button${
                   clip.state.status === 'recording' ? ' is-active' : ''
                 }`}
-                data-tooltip={
+                title={
                   clip.state.status === 'recording'
-                    ? `Recording… ${formatClipTimer(clip.state.elapsedMs)} · tap to stop`
+                    ? 'Tap to stop recording'
                     : clip.state.status === 'failed'
                       ? 'Retry encrypted upload'
                       : 'Record a short clip'
