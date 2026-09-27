@@ -4,10 +4,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -85,6 +89,7 @@ private fun BeaconHouseholdStat(label: String, value: String) {
 internal fun BeaconPeopleAccessPanel(
     api: BeaconApi,
     sessionToken: String,
+    cameras: List<BeaconApi.MonitorCamera>,
     isAdmin: Boolean,
     onAuthorizationLost: () -> Unit,
 ) {
@@ -95,6 +100,8 @@ internal fun BeaconPeopleAccessPanel(
     var busyId by remember { mutableStateOf<String?>(null) }
     var inviteOpen by remember { mutableStateOf(false) }
     var joinOpen by remember { mutableStateOf(false) }
+    var manageMemberId by remember { mutableStateOf<String?>(null) }
+    var confirmRevokeMemberId by remember { mutableStateOf<String?>(null) }
 
     fun refresh() {
         if (!isAdmin) return
@@ -132,18 +139,13 @@ internal fun BeaconPeopleAccessPanel(
                         BeaconMemberRow(
                             email = member.email,
                             role = member.role,
+                            status = member.status,
+                            grantCount = member.grants.size,
                             busy = busyId == member.id,
+                            canManageGrants = member.role == "viewer" || member.role == "guest",
                             canRemove = member.role != "owner",
-                            onRemove = {
-                                busyId = member.id
-                                scope.launch {
-                                    val result = withContext(Dispatchers.IO) { runCatching { api.removeHouseholdMember(sessionToken, member.id) } }
-                                    result.onSuccess { refresh() }.onFailure {
-                                        if (it is AuthorizationLostException) onAuthorizationLost() else error = it.userFacingMessage("This member could not be removed.")
-                                    }
-                                    busyId = null
-                                }
-                            },
+                            onManage = { manageMemberId = member.id },
+                            onRemove = { confirmRevokeMemberId = member.id },
                         )
                     }
                     current.invitations.forEach { invitation ->
@@ -187,14 +189,78 @@ internal fun BeaconPeopleAccessPanel(
             onJoined = { refresh() },
         )
     }
+    sharing?.members?.find { it.id == manageMemberId }?.let { member ->
+        BeaconManageMemberDialog(
+            api = api,
+            sessionToken = sessionToken,
+            member = member,
+            cameras = cameras,
+            onDismiss = { manageMemberId = null },
+            onSaved = {
+                manageMemberId = null
+                refresh()
+            },
+            onRemoved = {
+                manageMemberId = null
+                refresh()
+            },
+            onAuthorizationLost = onAuthorizationLost,
+        )
+    }
+    sharing?.members?.find { it.id == confirmRevokeMemberId }?.let { member ->
+        BeaconConfirmRevokeDialog(
+            email = member.email,
+            busy = busyId == member.id,
+            onDismiss = { confirmRevokeMemberId = null },
+            onConfirm = {
+                busyId = member.id
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) { runCatching { api.removeHouseholdMember(sessionToken, member.id) } }
+                    result.onSuccess {
+                        confirmRevokeMemberId = null
+                        refresh()
+                    }.onFailure {
+                        if (it is AuthorizationLostException) onAuthorizationLost() else error = it.userFacingMessage("This member could not be removed.")
+                    }
+                    busyId = null
+                }
+            },
+        )
+    }
+}
+
+/** Mirrors the PWA's revoke `ConfirmDialog`: "They immediately lose access
+ * to every camera in this household." -- shown before the admin row's
+ * direct Remove action, and before `BeaconManageMemberDialog`'s own
+ * "Remove access" action, both of which only soft-revoke (see
+ * [BeaconApi.removeHouseholdMember]). */
+@Composable
+private fun BeaconConfirmRevokeDialog(email: String, busy: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text("Remove $email?") },
+        text = { Text("They immediately lose access to every camera in this household.") },
+        dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = {
+            TextButton(
+                enabled = !busy,
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) { Text(if (busy) "Removing…" else "Remove access") }
+        },
+    )
 }
 
 @Composable
 private fun BeaconMemberRow(
     email: String,
     role: String,
+    status: String,
+    grantCount: Int,
     busy: Boolean,
+    canManageGrants: Boolean,
     canRemove: Boolean,
+    onManage: () -> Unit,
     onRemove: () -> Unit,
 ) {
     Row(
@@ -204,9 +270,22 @@ private fun BeaconMemberRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(email, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(role.replaceFirstChar { it.uppercase() }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text(
+                buildString {
+                    append(role.replaceFirstChar { it.uppercase() })
+                    if (status == "revoked") {
+                        append(" · Access removed")
+                    } else if (canManageGrants) {
+                        append(" · $grantCount ${if (grantCount == 1) "camera" else "cameras"}")
+                    }
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
-        if (canRemove) {
+        if (canManageGrants) {
+            OutlinedButton(onClick = onManage) { Text("Manage") }
+        } else if (canRemove && status == "active") {
             OutlinedButton(enabled = !busy, onClick = onRemove) { Text(if (busy) "Removing…" else "Remove") }
         }
     }
@@ -446,5 +525,179 @@ internal fun BeaconSignedInDevicesPanel(
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
+    }
+}
+
+/** Mirrors the PWA's `ManageMemberDialog` (HouseholdSharingSettings.tsx):
+ * per-camera View/Listen/Talk/Flip/Pause checkboxes for a viewer or guest
+ * member, saved as one full replacement set matching the backend's own
+ * replace-not-patch grants contract. The PWA additionally remembers a
+ * camera's last sub-permissions across an uncheck/recheck within the same
+ * dialog session and offers a search box past 8 cameras -- both skipped
+ * here as minor polish, not correctness: unchecking and rechecking a
+ * camera here simply starts it back at every permission off. */
+@Composable
+private fun BeaconManageMemberDialog(
+    api: BeaconApi,
+    sessionToken: String,
+    member: BeaconApi.HouseholdMember,
+    cameras: List<BeaconApi.MonitorCamera>,
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit,
+    onRemoved: () -> Unit,
+    onAuthorizationLost: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var grants by remember(member.id) {
+        mutableStateOf(member.grants.associateBy { it.cameraId })
+    }
+    var saving by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+    var confirmRevoke by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    fun toggleView(camera: BeaconApi.MonitorCamera, checked: Boolean) {
+        grants =
+            if (checked) {
+                grants + (camera.id to BeaconApi.CameraGrant(camera.id, camera.name, false, false, false, false))
+            } else {
+                grants - camera.id
+            }
+    }
+
+    fun togglePermission(cameraId: String, update: (BeaconApi.CameraGrant) -> BeaconApi.CameraGrant) {
+        val current = grants[cameraId] ?: return
+        grants = grants + (cameraId to update(current))
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!saving && !removing) onDismiss() },
+        title = {
+            Column {
+                Text(member.email)
+                Text(
+                    "${member.role.replaceFirstChar { it.uppercase() }} · ${grants.size} ${if (grants.size == 1) "camera" else "cameras"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+                if (cameras.isEmpty()) {
+                    Text("No cameras match.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                cameras.forEach { camera ->
+                    val grant = grants[camera.id]
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(camera.deviceName.ifBlank { camera.name }, fontWeight = FontWeight.Bold)
+                        BeaconGrantCheckbox("View", grant != null, enabled = true) { toggleView(camera, it) }
+                        BeaconGrantCheckbox("Listen", grant?.canListen ?: false, enabled = grant != null) {
+                            togglePermission(camera.id) { existing -> existing.copy(canListen = it) }
+                        }
+                        BeaconGrantCheckbox("Talk", grant?.canTalk ?: false, enabled = grant != null) {
+                            togglePermission(camera.id) { existing -> existing.copy(canTalk = it) }
+                        }
+                        BeaconGrantCheckbox("Flip", grant?.canFlip ?: false, enabled = grant != null) {
+                            togglePermission(camera.id) { existing -> existing.copy(canFlip = it) }
+                        }
+                        BeaconGrantCheckbox("Pause", grant?.canPause ?: false, enabled = grant != null) {
+                            togglePermission(camera.id) { existing -> existing.copy(canPause = it) }
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
+                if (member.status == "active") {
+                    TextButton(
+                        enabled = !saving && !removing,
+                        onClick = { confirmRevoke = true },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    ) { Text("Remove access") }
+                } else {
+                    TextButton(
+                        enabled = !saving && !removing,
+                        onClick = { confirmDelete = true },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    ) { Text(if (removing) "Deleting…" else "Delete from list") }
+                }
+            }
+        },
+        dismissButton = { TextButton(enabled = !saving && !removing, onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = {
+            Button(
+                enabled = !saving && !removing,
+                onClick = {
+                    saving = true
+                    error = ""
+                    scope.launch {
+                        val result =
+                            withContext(Dispatchers.IO) {
+                                runCatching { api.updateHouseholdMemberGrants(sessionToken, member.id, grants.values.toList()) }
+                            }
+                        result.onSuccess { onSaved() }.onFailure {
+                            if (it is AuthorizationLostException) onAuthorizationLost() else error = it.userFacingMessage("Unable to save camera access")
+                        }
+                        saving = false
+                    }
+                },
+            ) { Text(if (saving) "Saving…" else "Save changes") }
+        },
+    )
+
+    if (confirmRevoke) {
+        BeaconConfirmRevokeDialog(
+            email = member.email,
+            busy = removing,
+            onDismiss = { confirmRevoke = false },
+            onConfirm = {
+                removing = true
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) { runCatching { api.removeHouseholdMember(sessionToken, member.id) } }
+                    result.onSuccess { onRemoved() }.onFailure {
+                        if (it is AuthorizationLostException) onAuthorizationLost() else error = it.userFacingMessage("This member could not be removed.")
+                    }
+                    removing = false
+                    confirmRevoke = false
+                }
+            },
+        )
+    }
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { if (!removing) confirmDelete = false },
+            title = { Text("Delete ${member.email} from the list?") },
+            text = { Text("This removes their record entirely rather than just revoking access.") },
+            dismissButton = { TextButton(enabled = !removing, onClick = { confirmDelete = false }) { Text("Cancel") } },
+            confirmButton = {
+                TextButton(
+                    enabled = !removing,
+                    onClick = {
+                        removing = true
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) { runCatching { api.permanentlyRemoveHouseholdMember(sessionToken, member.id) } }
+                            result.onSuccess { onRemoved() }.onFailure {
+                                if (it is AuthorizationLostException) onAuthorizationLost() else error = it.userFacingMessage("This member could not be deleted.")
+                            }
+                            removing = false
+                            confirmDelete = false
+                        }
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Text(if (removing) "Deleting…" else "Delete") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun BeaconGrantCheckbox(label: String, checked: Boolean, enabled: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange)
+        Text(label, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

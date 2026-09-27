@@ -1,22 +1,83 @@
 # Beacon SecureView development handoff
 
-## September 27, 2026 — Found and closed a real gap in the primary pairing flow: Android could never pair a *different* device
+## September 27, 2026 — Household per-camera grant editing completed, plus a missing confirmation step found and fixed
+
+Continued the screen-by-screen sweep onto the last explicitly-deferred
+household/sharing gap: per-camera grant editing for viewer/guest members.
+Comparing against the PWA's `HouseholdSharingSettings.tsx` (`ManageMemberDialog`)
+found the feature was previously unimplemented on Android at all -- membership
+(invite/join/member list/revoke) existed, but there was no way to control
+which cameras a viewer or guest could see, let alone Listen/Talk/Flip/Pause on.
+
+**New API surface** (`BeaconApi.kt`): a `CameraGrant` data class
+(`cameraId`/`cameraName`/`canListen`/`canTalk`/`canFlip`/`canPause`),
+`HouseholdMember.grants: List<CameraGrant>` (the backend's `GET
+/api/household/sharing` already returned this per member -- Android was
+discarding it), `updateHouseholdMemberGrants()` (`PUT
+/api/household/members/:id/grants`, a full-replace contract matching the
+backend exactly -- send every camera the member should still have access to,
+omitted ones lose it), and `permanentlyRemoveHouseholdMember()` (`DELETE
+/api/household/members/:id/permanently`, only valid once a member is already
+revoked).
+
+**New UI** (`HouseholdSharingPanel.kt`): `BeaconManageMemberDialog` mirrors
+the PWA's `ManageMemberDialog` almost exactly -- per-camera View/Listen/Talk/
+Flip/Pause checkboxes (unchecking View clears the other four; the PWA also
+remembers a camera's last sub-permissions across an uncheck/recheck within
+the same dialog session and offers a search box past 8 cameras, both skipped
+as minor polish, not correctness), and a danger footer that changes with the
+member's status: "Remove access" (soft-revoke) while active, "Delete from
+list" (hard delete) once already revoked -- matching the PWA's two-stage
+`onRevoke`/`onRemove` design exactly rather than the single always-on action
+an earlier draft of this dialog had.
+
+**Real gap found and fixed while wiring this up, not part of the original
+plan**: the existing admin-row "Remove" button in the People & access list
+called `removeHouseholdMember` directly with **no confirmation step at all**,
+unlike the PWA's `ConfirmDialog` ("Remove {email}? They immediately lose
+access to every camera in this household."). A stray tap would have
+silently revoked someone's access. Added a shared `BeaconConfirmRevokeDialog`
+used both by the admin row and by `BeaconManageMemberDialog`'s own "Remove
+access" action, plus a matching confirm step ("Delete {email} from the list?
+This removes their record entirely rather than just revoking access.")
+before the new permanent-delete action -- copy matches the PWA's
+`ConfirmDialog` instances verbatim. The member row's subtitle now also shows
+"· Access removed" for a revoked-but-not-yet-deleted member instead of a
+stale grant count, matching `HouseholdSharingSettings.tsx` exactly.
+
+Validated: full local gate (`testDebugUnitTest lintDebug assembleDebug
+assembleRelease`) passes, one transient Windows Gradle-daemon OOM on
+`mergeDexRelease` mid-session (same known class of flakiness documented
+elsewhere in this file; killing the daemon and retrying with a larger
+`-Xmx` succeeded cleanly). Physically confirmed end-to-end on a two-emulator
+setup, not just compiled: registered a genuine second test account
+(`beacon.review.viewer@example.test`), invited and accepted it into the
+household as a viewer, opened `BeaconManageMemberDialog` and toggled Listen
+on for one camera, saved, and independently confirmed via the database that
+`camera_grants.can_listen` actually flipped to `true`. Then exercised the
+full two-stage removal: "Remove access" (with its confirm dialog) soft-
+revoked the member (verified `household_members.status = 'revoked'`), and
+reopening the dialog correctly showed "Delete from list" instead of "Remove
+access"; confirming that deleted the member's row entirely (verified zero
+rows remain for that member id).
+
+## September 27, 2026 — Found and closed a real gap in the primary pairing flow: Android could never pair a _different_ device
 
 Continuing the screen-by-screen sweep onto "Add camera" surfaced something
 more significant than a styling gap: comparing against the PWA's
 `AddCameraPage.tsx` and `PairingDialog.tsx` showed that **Android's monitor
 UI had no way to pair a separate spare Android device at all.** Tapping "Add
 camera" always called `pairSignedInCamera`, which creates a pairing code and
-immediately redeems it *on the same device* -- a clever one-step shortcut for
-the "use the phone I'm holding right now" case, but it's the PWA's *other*
+immediately redeems it _on the same device_ -- a clever one-step shortcut for
+the "use the phone I'm holding right now" case, but it's the PWA's _other_
 option ("Use this device" / browser camera mode), not its recommended
 primary path. The PWA's actual "Add a device" page presents a real choice:
 "Pair another device" (recommended -- shows a QR code and one-time code for
-a *different* phone to scan) versus "Use this device" (self-pair). Android
+a _different_ phone to scan) versus "Use this device" (self-pair). Android
 had silently collapsed onto the second option always, meaning the app's own
 core stated purpose -- monitor from one phone, use a spare phone as the
 camera -- had no supported path through the Android client itself. Every
-two-device test this session worked by signing into the *same* account
+two-device test this session worked by signing into the _same_ account
 independently on each emulator and self-pairing each one, not by using a
 real monitor-generates-code-for-a-separate-device flow, because that flow
 did not exist.
@@ -25,7 +86,7 @@ did not exist.
 `api.createPairingCode(sessionToken)` already existed and already worked --
 it was just never called from anywhere except inside the self-pairing
 shortcut, never exposed as its own action the user could trigger to get a
-code for a *different* device.
+code for a _different_ device.
 
 **Added**: a `BeaconAddCameraChoiceDialog` (mirrors `AddCameraPage.tsx`'s two
 cards exactly, including copy) shown from both of "Add camera"'s entry
@@ -35,7 +96,7 @@ straight to self-pairing), and a `BeaconPairAnotherDeviceDialog` (mirrors
 shows it as both a **scannable QR code** and plain text, plus a copyable
 setup link. The QR needed a new dependency -- `com.google.zxing:core` --
 since the `play-services-code-scanner` library already in this app only
-*reads* barcodes, it has no encoder. zxing is small, pure-Java, dependency-free,
+_reads_ barcodes, it has no encoder. zxing is small, pure-Java, dependency-free,
 and one of the most widely used QR libraries in the Android ecosystem, so
 this isn't scope creep, it's the standard tool for a real, previously-missing
 piece of the product's core flow.
@@ -77,7 +138,7 @@ capabilities -- none of which existed on Android in any form), plus
 `devices()`, `renameDevice()`/`removeDevice()` (`PATCH`/`DELETE
 /api/devices/:id`), `renameCameraSource()`/`removeCameraSource()`
 (`PATCH`/`DELETE /api/cameras/:id`), and `reconnectDevicePairingCode()`
-(`POST /api/devices/:id/pairing-code` -- a device-*targeted* reissue that
+(`POST /api/devices/:id/pairing-code` -- a device-_targeted_ reissue that
 keeps the existing device record and its settings, distinct from the
 generic `createPairingCode()` Android already had for pairing a brand new
 device). `devices()` is now fetched alongside `cameras()` in the existing
@@ -170,6 +231,7 @@ web actually requires. Built it for real instead of deferring it.
 
 **Backend/API layer changes** (`BeaconApi.kt`) -- this genuinely needed
 reorganizing, not just a UI pass:
+
 - `MotionEvent` gained `recordingId`/`recordingStatus`, which the backend's
   `/api/motion-events` response already included but Android was silently
   discarding -- needed for the "View clip" tag on a motion row and the
@@ -181,7 +243,7 @@ reorganizing, not just a UI pass:
 - Added `motionEventById()`, `clearMotionEvents()` (`DELETE /api/motion-events`),
   and a new `householdActivity()` call against `/api/activity` --
   the household-wide audit feed the PWA merges with motion events on this
-  page. This is a *different* endpoint from `/api/access-history` (already
+  page. This is a _different_ endpoint from `/api/access-history` (already
   wired as `accessHistory()`/`AccessEvent` for Settings > Security's
   narrower "signed-in access" log) -- conflating the two would have been
   wrong. `/api/activity` is owner/admin-only server-side, so the new
@@ -251,6 +313,7 @@ left as an open item rather than rushed.
 
 **Settings (`MonitorUi.kt`) — the actual source of the "slop" complaint.**
 Found and removed, all with no PWA counterpart at all:
+
 - The page-level header (`eyebrow = "Beacon / account"` + a supporting
   sentence) -- the PWA's Settings page has no page-level intro, only each
   section's own one-line `SectionHead`. Replaced with a bare "Settings"
@@ -316,7 +379,7 @@ Continued the CSS-driven port onto the live camera viewer
 of gap, same pattern as Home and Cameras:
 
 **Invented UI removed** (no PWA counterpart): a favorite-star toggle in the
-header, and previous/next arrows that paged through *every* camera in the
+header, and previous/next arrows that paged through _every_ camera in the
 household. The PWA's live view only ever switches between one device's own
 sibling sources (`CameraFlipButton`, already matched by Android's existing
 `onFlip`) -- it has no concept of paging through unrelated cameras from
@@ -375,14 +438,14 @@ platform-aware case for a native Android viewer: `role === 'viewer'` always
 gets `VIEWER_STUN_URL`/`VIEWER_TURN_URL` (default `127.0.0.1:3478`, correct
 for a browser on the same host as the backend during local dev), while
 `role === 'device'` gets `DEVICE_STUN_URL`/`DEVICE_TURN_URL` (default
-`10.0.2.2:3478`, correct for the *camera* app on an emulator). An Android
+`10.0.2.2:3478`, correct for the _camera_ app on an emulator). An Android
 **monitor** app is a `viewer`, so it's always issued the browser-oriented
 `127.0.0.1` address -- which, from inside an emulator's own network
 namespace, refers to the emulator itself, not the host, and would be no
 better on a physical device (`10.0.2.2` has no meaning outside an emulator,
 and `adb reverse` only forwards TCP, not the UDP that STUN/TURN prefers).
 This is a plausible, code-supported explanation for a local-dev-only
-connectivity gap that would affect *every* native Android monitor trying to
+connectivity gap that would affect _every_ native Android monitor trying to
 watch a live stream against a local backend -- but it was not confirmed with
 packet-level or server-log evidence in this session (no access to the
 running dev backend's logs), and doesn't explain why the very first attempt
@@ -503,7 +566,7 @@ owner/admin, "No cameras shared with you yet" for a viewer/guest) and a
 "+ Add device" button. The non-empty state is even further off: the PWA
 renders a plain `h2` greeting (time-of-day: Good morning/afternoon/evening)
 and a small secondary-colored subtitle ("N of M cameras are ready to view."),
-*not* a card at all, with a real attention banner (only shown when a camera
+_not_ a card at all, with a real attention banner (only shown when a camera
 actually needs attention) and a genuine Favorites grid -- none of which
 Android had; it always showed the same hero regardless of state, plus two
 stat tiles ("Ready to view"/"Watching now") that don't exist on the web at
@@ -696,8 +759,8 @@ then the full gate (`testDebugUnitTest lintDebug assembleDebug assembleRelease`)
 passes, same two pre-existing unrelated warnings, no new ones. **Not
 validated**: no real clip fixture existed in this environment to exercise
 thumbnail display or share-link creation against an actual recorded clip --
-compile/lint/unit-test verified only. Household/sharing *management*
-(invite/accept/revoke/grants -- distinct from clip *share links*) remains
+compile/lint/unit-test verified only. Household/sharing _management_
+(invite/accept/revoke/grants -- distinct from clip _share links_) remains
 entirely unimplemented and unstarted; it's a larger, separate feature and was
 deliberately not started in this same pass. Left uncommitted on
 `codex/android-clips-library` alongside everything above.

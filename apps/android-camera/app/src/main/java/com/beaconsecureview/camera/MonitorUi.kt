@@ -1082,6 +1082,7 @@ internal fun MonitorHome(
                     BeaconPeopleAccessPanel(
                         api = api,
                         sessionToken = currentSession.token,
+                        cameras = cameras,
                         isAdmin = currentSession.householdRole == "owner" || currentSession.householdRole == "admin",
                         onAuthorizationLost = ::expireSession,
                     )

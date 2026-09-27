@@ -1,5 +1,6 @@
 package com.beaconsecureview.camera
 
+import org.json.JSONArray
 import org.json.JSONObject
 import android.util.Base64
 import java.io.File
@@ -28,12 +29,22 @@ class BeaconApi(private val baseUrl: String) {
         val role: String,
     )
 
+    data class CameraGrant(
+        val cameraId: String,
+        val cameraName: String,
+        val canListen: Boolean,
+        val canTalk: Boolean,
+        val canFlip: Boolean,
+        val canPause: Boolean,
+    )
+
     data class HouseholdMember(
         val id: String,
         val userId: String,
         val email: String,
         val role: String,
         val status: String,
+        val grants: List<CameraGrant> = emptyList(),
     )
 
     data class HouseholdInvitation(
@@ -1153,12 +1164,27 @@ class BeaconApi(private val baseUrl: String) {
             members =
                 (0 until members.length()).map { index ->
                     val member = members.getJSONObject(index)
+                    val grants = member.optJSONArray("grants")
                     HouseholdMember(
                         id = member.getString("id"),
                         userId = member.getString("userId"),
                         email = member.getString("email"),
                         role = member.getString("role"),
                         status = member.getString("status"),
+                        grants =
+                            grants?.let { array ->
+                                (0 until array.length()).map { grantIndex ->
+                                    val grant = array.getJSONObject(grantIndex)
+                                    CameraGrant(
+                                        cameraId = grant.getString("cameraId"),
+                                        cameraName = grant.getString("cameraName"),
+                                        canListen = grant.getBoolean("canListen"),
+                                        canTalk = grant.getBoolean("canTalk"),
+                                        canFlip = grant.getBoolean("canFlip"),
+                                        canPause = grant.getBoolean("canPause"),
+                                    )
+                                }
+                            } ?: emptyList(),
                     )
                 },
             invitations =
@@ -1228,6 +1254,9 @@ class BeaconApi(private val baseUrl: String) {
         }
     }
 
+    /** Soft-revokes a member: they immediately lose access to every camera,
+     * but their record (and history) stays until [permanentlyRemoveHouseholdMember]
+     * is called separately, matching the PWA's two-stage revoke-then-delete flow. */
     fun removeHouseholdMember(sessionToken: String, memberId: String) {
         val connection = connection("/api/household/members/${urlPathSegment(memberId)}", "DELETE")
         connection.setRequestProperty("Authorization", "Bearer $sessionToken")
@@ -1236,6 +1265,51 @@ class BeaconApi(private val baseUrl: String) {
         if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
         if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
             throw IllegalStateException("This member could not be removed.")
+        }
+    }
+
+    /** Deletes an already-revoked member's record entirely. The backend
+     * requires the member to be revoked first (409 otherwise). */
+    fun permanentlyRemoveHouseholdMember(sessionToken: String, memberId: String) {
+        val connection = connection("/api/household/members/${urlPathSegment(memberId)}/permanently", "DELETE")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "This member could not be deleted.")
+        }
+    }
+
+    /** Replaces a member's full camera-grant set in one call, matching the
+     * backend's own replace-not-patch contract (`PUT
+     * /api/household/members/:memberId/grants`) -- send every camera this
+     * member should still have access to, omitted ones lose it. */
+    fun updateHouseholdMemberGrants(sessionToken: String, memberId: String, grants: List<CameraGrant>) {
+        val connection = connection("/api/household/members/${urlPathSegment(memberId)}/grants", "PUT")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val grantsJson =
+            JSONArray().apply {
+                grants.forEach { grant ->
+                    put(
+                        JSONObject()
+                            .put("cameraId", grant.cameraId)
+                            .put("canListen", grant.canListen)
+                            .put("canTalk", grant.canTalk)
+                            .put("canFlip", grant.canFlip)
+                            .put("canPause", grant.canPause),
+                    )
+                }
+            }
+        connection.outputStream.use {
+            it.write(JSONObject().put("grants", grantsJson).toString().toByteArray(Charsets.UTF_8))
+        }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "Unable to save camera access")
         }
     }
 
