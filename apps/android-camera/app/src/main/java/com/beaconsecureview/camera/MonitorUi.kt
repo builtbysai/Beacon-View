@@ -1100,11 +1100,19 @@ internal fun MonitorHome(
                                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                             ) { Text(if (savingMotionRetention) "Saving…" else "Save changes") }
                         }
+                        BeaconGoogleDriveCard(
+                            api = api,
+                            sessionToken = currentSession.token,
+                            onAuthorizationLost = ::expireSession,
+                        )
                     }
                     BeaconSectionHeader("Account", "Manage your signed-in session and data.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("SIGNED IN", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                        Text(currentSession.email ?: "Beacon account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        BeaconAccountProfileCard(
+                            api = api,
+                            sessionToken = currentSession.token,
+                            onAuthorizationLost = ::expireSession,
+                        )
                     }
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("Delete account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)

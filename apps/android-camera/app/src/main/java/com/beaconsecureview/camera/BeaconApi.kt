@@ -62,6 +62,20 @@ class BeaconApi(private val baseUrl: String) {
         val createdAt: String,
     )
 
+    data class AccountDetails(
+        val email: String,
+        val emailVerified: Boolean,
+        val googleLinked: Boolean,
+        val hasPassword: Boolean,
+    )
+
+    data class DriveStatus(
+        val connected: Boolean,
+        val configured: Boolean,
+        val recordingsConnected: Boolean,
+        val providerEmail: String?,
+    )
+
     data class MonitorCamera(
         val id: String,
         val name: String,
@@ -743,6 +757,86 @@ class BeaconApi(private val baseUrl: String) {
         if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
             val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
             throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "Share link could not be removed")
+        }
+    }
+
+    fun accountDetails(sessionToken: String): AccountDetails {
+        val connection = connection("/api/auth/me", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Account details are temporarily unavailable")
+        }
+        val user = JSONObject(body).getJSONObject("user")
+        return AccountDetails(
+            email = user.getString("email"),
+            emailVerified = user.getBoolean("emailVerified"),
+            googleLinked = user.getBoolean("googleLinked"),
+            hasPassword = user.getBoolean("hasPassword"),
+        )
+    }
+
+    fun requestEmailVerification(sessionToken: String) {
+        val connection = connection("/api/account/email/verify/request", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(
+                when (serverMessage) {
+                    "Email verification is unavailable" -> "Email verification is not available on this server."
+                    "Too many requests" -> "Too many attempts. Wait before trying again."
+                    else -> "The verification email could not be sent."
+                },
+            )
+        }
+    }
+
+    fun driveStatus(sessionToken: String): DriveStatus {
+        val connection = connection("/api/drive/status", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Google Drive status is temporarily unavailable")
+        }
+        val json = JSONObject(body)
+        return DriveStatus(
+            connected = json.getBoolean("connected"),
+            configured = json.getBoolean("configured"),
+            recordingsConnected = json.getBoolean("recordingsConnected"),
+            providerEmail = nullableApiText(json.optString("providerEmail")),
+        )
+    }
+
+    fun disconnectDrive(sessionToken: String) {
+        val connection = connection("/api/drive/connection", "DELETE")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            throw IllegalStateException("Google Drive could not be disconnected.")
+        }
+    }
+
+    fun verifyDrive(sessionToken: String) {
+        val connection = connection("/api/drive/verify", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(
+                when (serverMessage) {
+                    "Google Drive is not connected" -> "Google Drive is not connected."
+                    else -> "Google Drive verification failed."
+                },
+            )
         }
     }
 
