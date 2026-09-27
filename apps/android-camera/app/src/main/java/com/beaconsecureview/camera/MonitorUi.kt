@@ -431,20 +431,16 @@ internal fun MonitorHome(
         monitorHostCameras(cameras).sortedBy { orderByCameraId[it.id] ?: Int.MAX_VALUE }
     val activeCamera = orderedCameras.find { it.id == selectedCameraId }
     if (activeSession != null && activeCamera != null) {
-        val activeIndex = orderedCameras.indexOfFirst { it.id == activeCamera.id }
         val alternateSource = nextCameraSource(cameras, activeCamera)
         AndroidLiveView(
             camera = activeCamera,
             sessionToken = activeSession.token,
             onBack = { selectedCameraId = null },
-            onPrevious =
-                orderedCameras.getOrNull(activeIndex - 1)?.let { previous ->
-                    { selectedCameraId = previous.id }
-                },
-            onNext =
-                orderedCameras.getOrNull(activeIndex + 1)?.let { next ->
-                    { selectedCameraId = next.id }
-                },
+            onDevice = {
+                selectedCameraId = null
+                monitorPage = MonitorPage.Cameras
+                selectedSettingsDeviceId = activeCamera.deviceId
+            },
             onFlip =
                 alternateSource?.let { target ->
                     {
@@ -477,10 +473,6 @@ internal fun MonitorHome(
                 message = "Your session expired. Sign in again."
             },
             canRecord = activeSession.householdRole == "owner",
-            favorite = activeCamera.id in favoriteCameraIds,
-            onFavorite = {
-                favoriteCameraIds = favoritesStore.toggle(activeSession.userId, activeCamera.id)
-            },
         )
         return
     }

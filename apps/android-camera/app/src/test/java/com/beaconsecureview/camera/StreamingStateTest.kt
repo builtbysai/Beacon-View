@@ -254,6 +254,35 @@ class StreamingStateTest {
     }
 
     @Test
+    fun liveOverlayPrioritizesPrivacyOverConnectionState() {
+        assertEquals(
+            LiveOverlay(
+                "Privacy is on",
+                "Live viewing is blocked. Turn privacy off when you are ready to resume.",
+            ),
+            liveOverlay(StreamingState.Connected, privacyMode = true, reconnectAttempt = 0),
+        )
+    }
+
+    @Test
+    fun liveOverlayIsNullOnlyWhenConnectedOrReadyWithoutPrivacy() {
+        assertEquals(null, liveOverlay(StreamingState.Connected, privacyMode = false, reconnectAttempt = 0))
+        assertEquals(null, liveOverlay(StreamingState.Ready, privacyMode = false, reconnectAttempt = 0))
+    }
+
+    @Test
+    fun liveOverlayReportsReconnectAttemptOnlyWhenNonZero() {
+        assertEquals(
+            LiveOverlay("Connection interrupted", "Beacon is retrying."),
+            liveOverlay(StreamingState.Reconnecting, privacyMode = false, reconnectAttempt = 0),
+        )
+        assertEquals(
+            LiveOverlay("Connection interrupted", "Beacon is retrying · attempt 3."),
+            liveOverlay(StreamingState.Reconnecting, privacyMode = false, reconnectAttempt = 3),
+        )
+    }
+
+    @Test
     fun cameraCatalogResultsMessageReportsSearchMatchOrPlainCount() {
         assertEquals("2 of 3 cameras shown", cameraCatalogResultsMessage("", 2, 3))
         assertEquals(
@@ -263,18 +292,6 @@ class StreamingStateTest {
         assertEquals(
             "2 cameras match “cam”.",
             cameraCatalogResultsMessage("cam", 2, 3),
-        )
-    }
-
-    @Test
-    fun viewerStatusExplainsAutomaticRecovery() {
-        assertEquals(
-            "Camera offline. Beacon will reconnect automatically.",
-            viewerStatusText(StreamingState.Offline, reconnectAttempt = 2),
-        )
-        assertEquals(
-            "Connection interrupted. Reconnecting…",
-            viewerStatusText(StreamingState.Reconnecting, reconnectAttempt = 1),
         )
     }
 

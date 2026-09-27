@@ -229,3 +229,42 @@ internal fun cameraCatalogResultsMessage(query: String, visibleCount: Int, total
 }
 
 internal fun shouldRunNativeViewer(lifecycleStarted: Boolean): Boolean = lifecycleStarted
+
+internal data class LiveOverlay(val title: String, val detail: String)
+
+/** Mirrors the PWA's `liveOverlay` (live-video-presentation.ts): a single
+ * title+detail pair shown over the video instead of separate, sometimes-
+ * inconsistent title/detail lines. Privacy takes precedence over the
+ * connection state, same as the PWA's own status precedence. Android's
+ * `StreamingState` doesn't distinguish the PWA's finer-grained failure
+ * reasons (ICE failed, signaling unavailable, timed out, camera deleted) --
+ * those all collapse into Offline/Failed here, which is what the underlying
+ * viewer session already reports. */
+internal fun liveOverlay(
+    state: StreamingState,
+    privacyMode: Boolean,
+    reconnectAttempt: Int,
+): LiveOverlay? {
+    if (privacyMode) {
+        return LiveOverlay(
+            "Privacy is on",
+            "Live viewing is blocked. Turn privacy off when you are ready to resume.",
+        )
+    }
+    return when (state) {
+        StreamingState.Connected, StreamingState.Ready -> null
+        StreamingState.Connecting ->
+            LiveOverlay("Connecting to camera", "Waiting for the secure live stream.")
+        StreamingState.Reconnecting ->
+            LiveOverlay(
+                "Connection interrupted",
+                "Beacon is retrying" + (if (reconnectAttempt > 0) " · attempt $reconnectAttempt" else "") + ".",
+            )
+        StreamingState.Offline ->
+            LiveOverlay("Camera offline", "Beacon will reconnect automatically.")
+        StreamingState.Failed ->
+            LiveOverlay("Unable to connect", "Beacon will keep trying.")
+        StreamingState.PermissionRequired ->
+            LiveOverlay("Camera permission required", "Camera permission is required on the camera device.")
+    }
+}

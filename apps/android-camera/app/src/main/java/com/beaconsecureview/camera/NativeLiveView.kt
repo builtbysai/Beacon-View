@@ -16,14 +16,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Cameraswitch
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FiberManualRecord
-import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -63,14 +62,11 @@ internal fun AndroidLiveView(
     camera: BeaconApi.MonitorCamera,
     sessionToken: String,
     onBack: () -> Unit,
-    onPrevious: (() -> Unit)?,
-    onNext: (() -> Unit)?,
+    onDevice: () -> Unit,
     onFlip: (() -> Unit)?,
     flipLabel: String?,
     onAuthorizationLost: () -> Unit,
     canRecord: Boolean,
-    favorite: Boolean,
-    onFavorite: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -82,6 +78,7 @@ internal fun AndroidLiveView(
     var canListen by remember(camera.id) { mutableStateOf(false) }
     var listening by remember(camera.id) { mutableStateOf(false) }
     var fullscreen by remember(camera.id) { mutableStateOf(false) }
+    var statsOpen by remember(camera.id) { mutableStateOf(false) }
     var viewerSession by remember(camera.id) { mutableStateOf<AndroidViewerSession?>(null) }
     var manualRecording by remember(camera.id) { mutableStateOf<BeaconApi.RecordingSummary?>(null) }
     var recordingBusy by remember(camera.id) { mutableStateOf(false) }
@@ -308,27 +305,24 @@ internal fun AndroidLiveView(
                 Text(camera.deviceName, color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(camera.name, color = BeaconVideoMuted, style = MaterialTheme.typography.bodySmall)
             }
-            IconButton(onClick = onFavorite) {
-                Icon(
-                    if (favorite) Icons.Outlined.Star else Icons.Outlined.StarBorder,
-                    if (favorite) "Remove from favorites" else "Add to favorites",
-                    tint = if (favorite) BeaconActionBright else Color.White,
-                )
+            IconButton(onClick = onDevice) {
+                Icon(Icons.Outlined.Settings, "Camera settings", tint = Color.White)
             }
         }
-        if (state != StreamingState.Connected) {
+        val overlay = liveOverlay(state, camera.privacyMode, reconnectAttempt)
+        if (overlay != null) {
             Column(
                 modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    if (state == StreamingState.Connecting) "Connecting to camera" else "Reconnecting to camera",
+                    overlay.title,
                     color = Color.White,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
-                Text(viewerStatusText(state, reconnectAttempt), color = BeaconVideoMuted)
+                Text(overlay.detail, color = BeaconVideoMuted)
             }
         }
         Column(
@@ -380,22 +374,58 @@ internal fun AndroidLiveView(
                     }
                 }
             }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                IconButton(enabled = onPrevious != null, onClick = { onPrevious?.invoke() }) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Previous camera", tint = Color.White)
-                }
-                Text(
-                    "$othersWatching other ${if (othersWatching == 1) "viewer" else "viewers"} · ${if (listening) "Listening" else "Audio off"}",
-                    color = BeaconVideoMuted,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.align(Alignment.CenterVertically),
-                )
-                IconButton(enabled = onNext != null, onClick = { onNext?.invoke() }) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, "Next camera", tint = Color.White)
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = BeaconVideoControl,
+                onClick = { statsOpen = !statsOpen },
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Outlined.Visibility, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Text(
+                        if (othersWatching > 0) {
+                            "$othersWatching other ${if (othersWatching == 1) "viewer" else "viewers"}"
+                        } else {
+                            "Stream details"
+                        },
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
             }
-            if (reconnectAttempt > 0 && state != StreamingState.Connected) {
-                Text("Reconnect attempt $reconnectAttempt", style = MaterialTheme.typography.bodySmall, color = BeaconVideoMuted)
+            if (statsOpen) {
+                Column(
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .background(BeaconVideoControl, RoundedCornerShape(12.dp))
+                            .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        if (othersWatching == 0) "No one else is watching" else "Watching now",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (state == StreamingState.Connected) {
+                        Text("You", color = BeaconVideoMuted, style = MaterialTheme.typography.bodySmall)
+                    }
+                    repeat(othersWatching) { index ->
+                        Text(
+                            "Household viewer ${index + 1}",
+                            color = BeaconVideoMuted,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Text(
+                        "Viewer names stay private in this live view.",
+                        color = BeaconVideoMuted,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
             }
         }
     }

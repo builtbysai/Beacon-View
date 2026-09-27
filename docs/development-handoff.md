@@ -1,5 +1,100 @@
 # Beacon SecureView development handoff
 
+## September 27, 2026 — Live viewer ported to match the PWA; a likely, unconfirmed Android WebRTC connectivity gap found
+
+Continued the CSS-driven port onto the live camera viewer
+(`AndroidLiveView` in `NativeLiveView.kt`), reading the PWA's
+`LiveVideo.tsx`/`.css` and `live-video-presentation.ts` directly. Two classes
+of gap, same pattern as Home and Cameras:
+
+**Invented UI removed** (no PWA counterpart): a favorite-star toggle in the
+header, and previous/next arrows that paged through *every* camera in the
+household. The PWA's live view only ever switches between one device's own
+sibling sources (`CameraFlipButton`, already matched by Android's existing
+`onFlip`) -- it has no concept of paging through unrelated cameras from
+inside the live view, and no way to (un)favorite a camera from there either
+(favorites are only edited from Home's `FavoritesEditor`). Deleted both
+outright, including the now-dead `movedCameraId`-style plumbing they needed
+(`favoriteCameraIds`/`onFavorite` wiring in `MonitorUi.kt`), rather than
+leaving them dormant.
+
+**A real gap closed**: the PWA's header always shows a "Camera settings" gear
+button linking to device settings; Android's live view had no such button at
+all -- `onDevice` was never wired into `AndroidLiveView`. Added it, replacing
+the removed favorite-star button's position, wired to the same
+`selectedSettingsDeviceId` navigation the Cameras catalog already uses.
+
+**A real correctness bug fixed while porting the overlay text**: the center
+"connecting" overlay only ever showed one of two titles ("Connecting to
+camera" / "Reconnecting to camera") based on a single `== Connecting` check,
+so a genuinely `Offline` or `Failed` camera showed the misleading
+"Reconnecting to camera" title above its own, differently-worded detail line
+just below it. Replaced with a single `liveOverlay(state, privacyMode,
+reconnectAttempt)` function in `MonitorPresentation.kt` that mirrors the
+PWA's `live-video-presentation.ts` `liveOverlay` exactly: one consistent
+title+detail pair per state, with privacy-mode checked first (matching the
+PWA's own precedence) so a camera whose privacy just got turned on while
+being watched now correctly shows "Privacy is on" instead of whatever stale
+connection-state text it last had. `viewerStatusText` (the old, now-fully-
+redundant helper) was deleted along with its test.
+
+**Added, using only data Android already had**: the PWA's "Stream details" /
+"N other viewers" disclosure button and the viewer-roster panel it opens
+("You" + a placeholder row per other viewer, "Viewer names stay private in
+this live view."), replacing the old always-visible prev/next row. The PWA's
+same panel also shows live WebRTC quality metrics (path/fps/bitrate/rtt/
+jitter/loss) pulled from `RTCPeerConnection.getStats()` -- that part was
+**not** ported, since Android's `AndroidViewerSession` doesn't currently
+expose any stats plumbing to the UI; adding it is a native-layer task, not a
+UI port, and is left as an open, documented gap. **Talk (two-way audio to
+the camera) was also not ported** for the same reason -- it needs native
+microphone capture and an outbound WebRTC audio track wired through
+`AndroidViewerSession`/`CameraSignalingClient`, which doesn't exist on
+Android today. Both are real, product-relevant gaps, just not ones a
+Compose-layer port can close; they belong on their own milestone.
+
+**An important, unresolved finding surfaced during on-device verification,
+not fully root-caused**: watching the live feed between the two emulators
+(`Beacon_Phone` as monitor, `Beacon_Camera` as the paired camera, same
+dev-backend setup as the Cameras catalog verification) connected successfully
+exactly once, then failed on every subsequent attempt with "Unable to
+connect" -- immediately, without ever reaching Connected first. The camera
+side stayed healthy throughout (steady green connected indicator, capture
+never interrupted), so the failure is on the viewer's negotiation path.
+Reading `apps/backend/src/config.ts` and `signaling-route.ts` shows the
+signaling server hands out **role-based** ICE servers with no
+platform-aware case for a native Android viewer: `role === 'viewer'` always
+gets `VIEWER_STUN_URL`/`VIEWER_TURN_URL` (default `127.0.0.1:3478`, correct
+for a browser on the same host as the backend during local dev), while
+`role === 'device'` gets `DEVICE_STUN_URL`/`DEVICE_TURN_URL` (default
+`10.0.2.2:3478`, correct for the *camera* app on an emulator). An Android
+**monitor** app is a `viewer`, so it's always issued the browser-oriented
+`127.0.0.1` address -- which, from inside an emulator's own network
+namespace, refers to the emulator itself, not the host, and would be no
+better on a physical device (`10.0.2.2` has no meaning outside an emulator,
+and `adb reverse` only forwards TCP, not the UDP that STUN/TURN prefers).
+This is a plausible, code-supported explanation for a local-dev-only
+connectivity gap that would affect *every* native Android monitor trying to
+watch a live stream against a local backend -- but it was not confirmed with
+packet-level or server-log evidence in this session (no access to the
+running dev backend's logs), and doesn't explain why the very first attempt
+connected. Flagging this prominently rather than asserting it as a confirmed
+fix: this needs either a platform-aware third ICE-server case (native mobile
+viewer vs. browser viewer) or further diagnosis with real logs before
+anyone spends time debugging what looks like an app bug but might be a
+local-dev-only address mismatch. Does not affect production, where a real
+internet-routable STUN/TURN address is reachable from anywhere.
+
+Validated: full local gate (`testDebugUnitTest lintDebug assembleDebug
+assembleRelease`) passes, including new unit tests for `liveOverlay`.
+Physically confirmed on-device: header (settings gear, no favorite star),
+bottom control row (Listen/Flip/Record/Fullscreen, no prev/next), the
+"Stream details" → "N other viewer(s)" toggle wording change, and the
+`Failed`-state overlay text ("Unable to connect" / "Beacon will keep
+trying.") all rendered correctly. The `Connected` state with an actual
+decoded video frame was seen once but not reliably reproducible in this
+two-emulator setup, for the reason above.
+
 ## September 27, 2026 — Cameras catalog ported to match the PWA; physical Pixel swapped for two emulators
 
 Continued the CSS-driven port from Home onto the Cameras catalog
