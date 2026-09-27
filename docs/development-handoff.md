@@ -1,5 +1,62 @@
 # Beacon SecureView development handoff
 
+## September 27, 2026 — Found and closed a real gap in the primary pairing flow: Android could never pair a *different* device
+
+Continuing the screen-by-screen sweep onto "Add camera" surfaced something
+more significant than a styling gap: comparing against the PWA's
+`AddCameraPage.tsx` and `PairingDialog.tsx` showed that **Android's monitor
+UI had no way to pair a separate spare Android device at all.** Tapping "Add
+camera" always called `pairSignedInCamera`, which creates a pairing code and
+immediately redeems it *on the same device* -- a clever one-step shortcut for
+the "use the phone I'm holding right now" case, but it's the PWA's *other*
+option ("Use this device" / browser camera mode), not its recommended
+primary path. The PWA's actual "Add a device" page presents a real choice:
+"Pair another device" (recommended -- shows a QR code and one-time code for
+a *different* phone to scan) versus "Use this device" (self-pair). Android
+had silently collapsed onto the second option always, meaning the app's own
+core stated purpose -- monitor from one phone, use a spare phone as the
+camera -- had no supported path through the Android client itself. Every
+two-device test this session worked by signing into the *same* account
+independently on each emulator and self-pairing each one, not by using a
+real monitor-generates-code-for-a-separate-device flow, because that flow
+did not exist.
+
+**Root cause was a missing consumer, not a missing endpoint**:
+`api.createPairingCode(sessionToken)` already existed and already worked --
+it was just never called from anywhere except inside the self-pairing
+shortcut, never exposed as its own action the user could trigger to get a
+code for a *different* device.
+
+**Added**: a `BeaconAddCameraChoiceDialog` (mirrors `AddCameraPage.tsx`'s two
+cards exactly, including copy) shown from both of "Add camera"'s entry
+points (Cameras catalog, Home's zero-camera state -- previously both jumped
+straight to self-pairing), and a `BeaconPairAnotherDeviceDialog` (mirrors
+`PairingDialog.tsx`'s non-reconnect case) that generates a code on open and
+shows it as both a **scannable QR code** and plain text, plus a copyable
+setup link. The QR needed a new dependency -- `com.google.zxing:core` --
+since the `play-services-code-scanner` library already in this app only
+*reads* barcodes, it has no encoder. zxing is small, pure-Java, dependency-free,
+and one of the most widely used QR libraries in the Android ecosystem, so
+this isn't scope creep, it's the standard tool for a real, previously-missing
+piece of the product's core flow.
+
+Deliberately not ported: the PWA's live auto-completion detection (a
+household websocket event flips the dialog to "Camera connected" and
+auto-navigates) -- Android's monitor session has no live household-event
+feed wired into this dialog, so the user dismisses manually once the other
+device is paired, matching the simpler pattern already established for the
+Reconnect dialog in the previous entry.
+
+Validated: full local gate (`testDebugUnitTest lintDebug assembleDebug
+assembleRelease`) passes -- one transient Windows Gradle-daemon lock/OOM
+hit mid-session (a stuck daemon process from an earlier run holding the
+file-hash cache lock; killing it and retrying succeeded cleanly, matching
+the known class of Windows-host flakiness already documented in this file).
+Physically confirmed end-to-end on `emulator-5554`: tapping "Add camera"
+now shows the real two-option chooser, and choosing "Pair another device"
+generates and displays a genuine scannable QR code plus a working one-time
+code (`JLY8YURF3R` in the test run) from the real backend.
+
 ## September 27, 2026 — Camera Device Settings screen fully rebuilt; a whole missing Device API surface added
 
 Continued the screen-by-screen sweep onto the settings screen reached from

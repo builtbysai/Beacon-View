@@ -138,6 +138,8 @@ internal fun MonitorHome(
     var devices by remember { mutableStateOf<List<BeaconApi.Device>>(emptyList()) }
     var selectedCameraId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedSettingsDeviceId by rememberSaveable { mutableStateOf<String?>(null) }
+    var addCameraChoiceOpen by rememberSaveable(session?.userId) { mutableStateOf(false) }
+    var pairAnotherDeviceOpen by rememberSaveable(session?.userId) { mutableStateOf(false) }
     val favoritesStore = remember(context) { CameraFavoritesStore(context.applicationContext) }
     val orderStore = remember(context) { CameraOrderStore(context.applicationContext) }
     var favoriteCameraIds by remember(session?.userId) {
@@ -621,7 +623,7 @@ internal fun MonitorHome(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             if (isHouseholdManager) {
-                                Button(onClick = { monitorPage = MonitorPage.Cameras }) {
+                                Button(onClick = { addCameraChoiceOpen = true }) {
                                     Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
                                     Text("Add device", modifier = Modifier.padding(start = 6.dp))
                                 }
@@ -832,7 +834,7 @@ internal fun MonitorHome(
                         ) {
                             Text("Cameras", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
                             if (currentSession.householdRole !in setOf("viewer", "guest")) {
-                                Button(onClick = { onSetUpThisDevice(currentSession.token) }) {
+                                Button(onClick = { addCameraChoiceOpen = true }) {
                                     Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
                                     Text("Add camera", modifier = Modifier.padding(start = 6.dp))
                                 }
@@ -1245,6 +1247,26 @@ internal fun MonitorHome(
                 )
             }
         }
+        }
+        if (addCameraChoiceOpen && session != null) {
+            BeaconAddCameraChoiceDialog(
+                onDismiss = { addCameraChoiceOpen = false },
+                onPairAnotherDevice = {
+                    addCameraChoiceOpen = false
+                    pairAnotherDeviceOpen = true
+                },
+                onUseThisDevice = {
+                    addCameraChoiceOpen = false
+                    onSetUpThisDevice(session!!.token)
+                },
+            )
+        }
+        if (pairAnotherDeviceOpen && session != null) {
+            BeaconPairAnotherDeviceDialog(
+                api = api,
+                sessionToken = session!!.token,
+                onDismiss = { pairAnotherDeviceOpen = false },
+            )
         }
         if (deleteAccountOpen && session != null) {
             AlertDialog(
