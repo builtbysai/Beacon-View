@@ -329,6 +329,16 @@ internal fun BeaconMetric(
     }
 }
 
+/** A plain label/value row -- shared between the Activity feed's detail
+ * dialog and the Camera Device Settings screen's device-information list. */
+@Composable
+internal fun BeaconFactRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, fontWeight = FontWeight.SemiBold)
+    }
+}
+
 @Composable
 internal fun BeaconTrustLine(
     text: String,

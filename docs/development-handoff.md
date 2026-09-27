@@ -1,5 +1,71 @@
 # Beacon SecureView development handoff
 
+## September 27, 2026 — Camera Device Settings screen fully rebuilt; a whole missing Device API surface added
+
+Continued the screen-by-screen sweep onto the settings screen reached from
+a camera's gear icon (Cameras catalog, Live viewer). Comparing against the
+PWA's `CameraSettings.tsx` found the same "invented structure" pattern as
+Home/Cameras/Settings, but bigger: Android's version was built entirely
+from `MonitorCamera` (`/api/cameras`), which is camera-source-centric and
+carries none of the device-level fields the PWA's screen actually shows.
+There was no shortcut available here -- matching the web required a real
+new API surface, not just new Compose code, so this is the "reorganize the
+backend layer where it doesn't support the goal" case explicitly discussed
+before starting.
+
+**New Device API layer** (`BeaconApi.kt`): a `Device` data class matching
+`GET /api/devices`'s response exactly (connection state, last-seen,
+battery, health-reported-at, software version, revoked/canRemove,
+capabilities -- none of which existed on Android in any form), plus
+`devices()`, `renameDevice()`/`removeDevice()` (`PATCH`/`DELETE
+/api/devices/:id`), `renameCameraSource()`/`removeCameraSource()`
+(`PATCH`/`DELETE /api/cameras/:id`), and `reconnectDevicePairingCode()`
+(`POST /api/devices/:id/pairing-code` -- a device-*targeted* reissue that
+keeps the existing device record and its settings, distinct from the
+generic `createPairingCode()` Android already had for pairing a brand new
+device). `devices()` is now fetched alongside `cameras()` in the existing
+poll loop.
+
+**New presentation layer** (`DeviceSettingsPresentation.kt`, 12 unit
+tests): verbatim ports of the PWA's `device-guidance.ts` (`deviceGuidance`,
+covering revoked/disabled/privacy/offline/no-camera/healthy in that
+precedence), `device-presentation.ts` (`relativeLastSeen`,
+`capabilitySummary`), and `naming.ts` (`deviceKindLabel`), plus a
+`deviceAttentionNotice` function that reproduces `CameraSettings.tsx`'s
+exact `(needsReconnect || warning || guidance.attention)` gate and its
+title/summary precedence (reconnect-needed beats a low-battery warning
+beats general guidance).
+
+**Rebuilt `MonitorDeviceSettings`** (`MonitorComponents.kt`) to match the
+PWA's actual sections instead of the old invented "DEVICE STATUS" card: a
+renameable title with a device-kind eyebrow, a three-column health summary
+(Connection/Last seen/Viewers), a conditional attention notice with a
+working Reconnect action and an expandable Troubleshoot/Readiness-tips
+disclosure, per-camera-source rows with working rename/remove and a "View
+live" button, a Privacy toggle switch (was a button), a full Device
+information list (was entirely missing: device kind, power, health-updated,
+capabilities, software version, access state), and a Remove-camera danger
+section (was entirely missing -- there was previously no way to remove a
+paired camera from its own settings screen at all). The composable owns
+its own rename/remove/reconnect network calls end to end, matching this
+session's other Settings-adjacent panels.
+
+Scoped out, matching the precedent already set for Household grants:
+"Leave this camera" (the guest/viewer self-removal path) wasn't ported --
+it needs a second real non-owner account to exercise meaningfully, same
+reasoning as the deferred per-camera grants work.
+
+Validated: full local gate (`testDebugUnitTest lintDebug assembleDebug
+assembleRelease`) passes. Physically confirmed end-to-end on `emulator-5554`
+against a real revoked/offline device left over from earlier testing: the
+health summary showed real values (Access revoked / 3 hr ago / 0 viewers),
+the attention notice correctly read "This camera needs to reconnect" with
+the exact PWA copy, both camera sources listed with working rename/delete
+icons, Device information showed real battery/capabilities/software-version
+data, and tapping Reconnect actually created a working one-time pairing
+code from the backend (`GKUHA2W4BS` in the test run) -- a capability that
+did not exist on Android in any form before this change.
+
 ## September 27, 2026 — Clips library gets the same search/filter/day-grouping treatment as Activity
 
 Followed the Activity feed rebuild with its sibling: the PWA's

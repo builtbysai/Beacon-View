@@ -446,15 +446,15 @@ private fun BeaconActivityDetailDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(formatActivityFullDate(event.occurredAt), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                BeaconActivityFact("Device", activityDeviceName(event))
-                activitySourceName(event)?.let { BeaconActivityFact("Source", it) }
+                BeaconFactRow("Device", activityDeviceName(event))
+                activitySourceName(event)?.let { BeaconFactRow("Source", it) }
                 if (event is HouseholdActivityFeedEvent) {
-                    event.event.actorEmail?.let { BeaconActivityFact("Actor", it) }
+                    event.event.actorEmail?.let { BeaconFactRow("Actor", it) }
                 }
-                BeaconActivityFact("Event type", activityLabel(event).removeSuffix(" detected"))
+                BeaconFactRow("Event type", activityLabel(event).removeSuffix(" detected"))
                 if (event is MotionActivityEvent) {
-                    BeaconActivityFact("Motion intensity", "${(event.event.confidence * 100).toInt()}%")
-                    event.event.recordingStatus?.let { BeaconActivityFact("Clip", recordingStatusLabel(it)) }
+                    BeaconFactRow("Motion intensity", "${(event.event.confidence * 100).toInt()}%")
+                    event.event.recordingStatus?.let { BeaconFactRow("Clip", recordingStatusLabel(it)) }
                 }
                 if (event is MotionActivityEvent) {
                     Text(
@@ -476,10 +476,3 @@ private fun BeaconActivityDetailDialog(
     )
 }
 
-@Composable
-private fun BeaconActivityFact(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, fontWeight = FontWeight.SemiBold)
-    }
-}

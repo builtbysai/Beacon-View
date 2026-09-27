@@ -98,6 +98,31 @@ class BeaconApi(private val baseUrl: String) {
         val reason: String?,
     )
 
+    /** Mirrors the PWA's `Device` domain type as returned by `GET /api/devices`
+     * -- distinct from `MonitorCamera` (`/api/cameras`), which is camera-
+     * source-centric and doesn't carry battery/health/software/revoked
+     * state at all. The Camera Device Settings screen needs both: cameras
+     * for the per-source list, this for the device-level health summary,
+     * attention guidance, and device information. */
+    data class Device(
+        val id: String,
+        val name: String,
+        val platform: String,
+        val deviceType: String,
+        val enabled: Boolean,
+        val privacyMode: Boolean,
+        val revoked: Boolean,
+        val online: Boolean,
+        val connectionState: String,
+        val lastSeenAt: String?,
+        val healthReportedAt: String?,
+        val softwareVersion: String?,
+        val batteryPercent: Int?,
+        val batteryCharging: Boolean,
+        val canRemove: Boolean,
+        val capabilities: Map<String, Any?>,
+    )
+
     data class MotionEvent(
         val id: String,
         val cameraId: String,
@@ -240,6 +265,25 @@ class BeaconApi(private val baseUrl: String) {
                 serverMessage?.takeIf(String::isNotBlank)
                     ?: "Beacon could not prepare camera setup",
             )
+        }
+        return JSONObject(body).getString("code")
+    }
+
+    /** Mirrors the PWA's device-specific reconnect flow (`reconnectDevice` in
+     * App.tsx): a fresh code targeted at an *existing* device record, so the
+     * camera keeps its history and settings instead of becoming a brand new
+     * device the way the generic [createPairingCode] flow would. */
+    fun reconnectDevicePairingCode(sessionToken: String, deviceId: String): String {
+        val connection = connection("/api/devices/${urlPathSegment(deviceId)}/pairing-code", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_CREATED) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "A new pairing code could not be created")
         }
         return JSONObject(body).getString("code")
     }
@@ -413,6 +457,100 @@ class BeaconApi(private val baseUrl: String) {
             val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
             throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "Could not change privacy mode")
         }
+    }
+
+    fun devices(sessionToken: String): List<Device> {
+        val connection = connection("/api/devices", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Devices are temporarily unavailable")
+        }
+        val devices = JSONObject(body).getJSONArray("devices")
+        return (0 until devices.length()).map { index -> parseDevice(devices.getJSONObject(index)) }
+    }
+
+    fun renameDevice(sessionToken: String, deviceId: String, name: String) {
+        val connection = connection("/api/devices/${urlPathSegment(deviceId)}", "PATCH")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write(JSONObject().put("name", name).toString().toByteArray(Charsets.UTF_8)) }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "This device could not be renamed")
+        }
+    }
+
+    fun removeDevice(sessionToken: String, deviceId: String) {
+        val connection = connection("/api/devices/${urlPathSegment(deviceId)}", "DELETE")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "This camera could not be removed")
+        }
+    }
+
+    fun renameCameraSource(sessionToken: String, cameraId: String, name: String) {
+        val connection = connection("/api/cameras/${urlPathSegment(cameraId)}", "PATCH")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write(JSONObject().put("name", name).toString().toByteArray(Charsets.UTF_8)) }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "This camera could not be renamed")
+        }
+    }
+
+    fun removeCameraSource(sessionToken: String, cameraId: String) {
+        val connection = connection("/api/cameras/${urlPathSegment(cameraId)}", "DELETE")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            throw IllegalStateException(serverMessage?.takeIf(String::isNotBlank) ?: "This camera source could not be removed")
+        }
+    }
+
+    private fun parseDevice(it: JSONObject): Device {
+        val capabilitiesJson = it.optJSONObject("capabilities")
+        val capabilities: Map<String, Any?> =
+            capabilitiesJson?.keys()?.asSequence()?.associateWith { key -> capabilitiesJson.get(key) } ?: emptyMap()
+        return Device(
+            id = it.getString("id"),
+            name = it.getString("name"),
+            platform = it.getString("platform"),
+            deviceType = it.getString("deviceType"),
+            enabled = it.getBoolean("enabled"),
+            privacyMode = it.getBoolean("privacyMode"),
+            revoked = it.getBoolean("revoked"),
+            online = it.getBoolean("online"),
+            connectionState = it.getString("connectionState"),
+            lastSeenAt = nullableApiText(it.optString("lastSeenAt")),
+            healthReportedAt = nullableApiText(it.optString("healthReportedAt")),
+            softwareVersion = nullableApiText(it.optString("softwareVersion")),
+            batteryPercent = if (it.isNull("batteryPercent") || !it.has("batteryPercent")) null else it.optInt("batteryPercent"),
+            batteryCharging = it.optBoolean("batteryCharging"),
+            canRemove = it.getBoolean("canRemove"),
+            capabilities = capabilities,
+        )
     }
 
     fun accessHistory(sessionToken: String): List<AccessEvent> {

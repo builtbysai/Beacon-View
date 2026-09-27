@@ -135,6 +135,7 @@ internal fun MonitorHome(
     var password by remember { mutableStateOf("") }
     var showPassword by rememberSaveable { mutableStateOf(false) }
     var cameras by remember { mutableStateOf<List<BeaconApi.MonitorCamera>>(emptyList()) }
+    var devices by remember { mutableStateOf<List<BeaconApi.Device>>(emptyList()) }
     var selectedCameraId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedSettingsDeviceId by rememberSaveable { mutableStateOf<String?>(null) }
     val favoritesStore = remember(context) { CameraFavoritesStore(context.applicationContext) }
@@ -306,6 +307,9 @@ internal fun MonitorHome(
                     message = it.userFacingMessage("Cameras are temporarily unavailable")
                 }
             }
+            withContext(Dispatchers.IO) { runCatching { api.devices(token) } }
+                .onSuccess { devices = it }
+                .onFailure { if (it is AuthorizationLostException) expireSession() }
             if (showLoading) busy = false
         }
     }
@@ -706,7 +710,11 @@ internal fun MonitorHome(
                         }.orEmpty()
                     if (selectedSettingsDeviceId != null && settingsSources.isNotEmpty()) {
                         MonitorDeviceSettings(
+                            api = api,
+                            sessionToken = currentSession.token,
+                            device = devices.find { it.id == selectedSettingsDeviceId },
                             sources = settingsSources,
+                            canManageSettings = currentSession.householdRole in setOf("owner", "admin"),
                             busy = deviceControlBusy,
                             onBack = { selectedSettingsDeviceId = null },
                             onView = { selectedCameraId = it.id },
@@ -749,6 +757,8 @@ internal fun MonitorHome(
                                     deviceControlBusy = false
                                 }
                             },
+                            onAuthorizationLost = ::expireSession,
+                            onChanged = { refresh(currentSession.token, showLoading = false) },
                             motionContent = {
                                 if (currentSession.householdRole in setOf("owner", "admin")) {
                                     AndroidMotionSettingsPanel(
