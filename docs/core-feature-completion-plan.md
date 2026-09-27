@@ -148,16 +148,19 @@ not considered complete.
 - [ ] Add accessibility, responsive, loading, empty, error, and reconnect
       states. Done for the Clips/Activity surfaces above; the rest of the app
       still needs the systematic audit in [responsive-audit.md](responsive-audit.md).
-- [ ] **Android/web feature-and-design parity pass** — owner-requested
-      September 27. The owner wants the Android app's UI to match the PWA's
-      current look, and both platforms to expose the same feature set with
-      nothing missing on either side. Needs its own audit before
-      implementation: enumerate every web-viewer screen/control against its
-      Android equivalent (or absence), then design tokens/components Android
-      can actually render natively (Compose is not CSS; "identical" means
-      matching layout, color, type, and spacing intent, not a literal port).
-      No implementation should start until that audit exists and the owner
-      has reviewed the gap list.
+- [x] **Android/web feature-and-design parity audit** — owner-requested
+      September 27, audit completed September 27 (implementation not
+      started). See
+      [android-web-parity-audit.md](android-web-parity-audit.md) for the full
+      screen-by-screen and design-token comparison. Headline: color tokens
+      already match (Android's palette was deliberately copied from the
+      web's); the real design gap is an untokenized Android typography/
+      spacing scale, and the real feature gaps are a missing Clips library,
+      motion settings panel, manual-recording indicator, and household/
+      sharing management on Android — none of which are styling issues.
+      Implementation should not start until the owner reviews that doc's
+      open questions (navigation paradigm, account-creation scope,
+      sequencing).
 
 ### 7. Release gate (last)
 

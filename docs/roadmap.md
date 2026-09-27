@@ -214,7 +214,7 @@ explicitly where a design, privacy, infrastructure, or release decision is requi
 | U4  | Finish design-package screen details — Engineering + Owner visual acceptance | Mobile Activity/Settings/device states and wide Monitor remain within current backend/media contracts. Preserve independent streams and explicit Listen/Talk. Validate web tests, lint, types/build and review incremental diff; deploy web only and verify public assets, TLS and `/ready`.                                                                                                                                                                                                                         |
 | U5  | Sidebar and account-menu reliability — Engineering                           | Sticky header/footer, independently scrollable navigation, icon-collapse rail and keyboard toggle implemented without adding shadcn. The account menu renders outside the sidebar clipping boundary and keeps Trust & privacy and Sign out reachable when collapsed. Unit, responsive keyboard/portal, short-viewport, and production rendering checks pass.                                                                                                                                                         |
 | U6  | Notification settings and Android disconnect — Engineering + Device tester   | Web notification delivery state and per-camera preferences use explicit cards, switches, dirty-state feedback, and responsive layout; the web build is live and verified. Android disconnect is always visible, requires confirmation, stops capture and sends a JSON disconnect action; the backend revokes the credential and retains settings for device-bound repair. Unit/build validation passes; the production request-path failure is fixed and a physical disconnect/re-pair tap-through remains required. |
-| U7  | Android/web feature-and-design parity pass — Engineering + Owner review      | Owner-requested September 26: the owner likes the PWA's current look and wants the Android app's UI to match it, plus full feature parity in both directions (nothing missing on either platform). Not started. Needs an audit before any implementation — enumerate every web-viewer screen/control against its Android equivalent (or absence), then design tokens/components Android can actually render natively (Compose is not CSS; "identical" means matching layout, color, type and spacing intent, not a literal port). No implementation should start until that audit exists and the owner has reviewed the gap list. |
+| U7  | Android/web feature-and-design parity pass — Engineering + Owner review      | Owner-requested September 26. Audit completed September 27 — see [android-web-parity-audit.md](android-web-parity-audit.md). Color tokens already match between platforms; the real design gap is Android's untokenized typography/spacing scale, and the real feature gaps (bigger than styling) are a missing Clips library, motion settings panel, manual-recording indicator, and household/sharing management on Android. Implementation not started; awaiting owner review of the doc's open questions (navigation paradigm — keep bottom nav vs. attempt a sidebar; whether Android's sign-in-only auth is intentional; sequencing). |
 
 ## Later / deferred — requires a separate approved milestone
 
@@ -317,6 +317,9 @@ the full 168-test backend suite passes.
    proposed phasing. Decide which profile (if any) to build first; Phase 3 of that
    doc (continuous/loop recording for driving) additionally needs its own privacy
    sign-off since it is in tension with this doc's no-continuous-recording boundary.
-6. Android/web parity pass (U7) — review the audit/gap list once produced before any
-   implementation begins; sequence it against MFA/passkeys and camera profiles rather
-   than assuming all three proceed in parallel (one approved milestone at a time).
+6. Android/web parity pass (U7) — audit is now complete
+   ([android-web-parity-audit.md](android-web-parity-audit.md)); review its open
+   questions (navigation paradigm, account-creation scope, sequencing) before any
+   implementation begins, and sequence it against MFA/passkeys and camera profiles
+   rather than assuming all three proceed in parallel (one approved milestone at a
+   time).
