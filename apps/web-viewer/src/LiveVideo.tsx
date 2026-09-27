@@ -15,6 +15,7 @@ import {
   type StreamQuality,
 } from './live-video-quality';
 import { formatClipTimer } from './recording-capture';
+import { RecordingBadge } from './RecordingBadge';
 import { useClipRecorder } from './useClipRecorder';
 
 import {
@@ -208,6 +209,17 @@ export function LiveVideo({
     const timer = window.setTimeout(() => clip.reset(), 6_000);
     return () => window.clearTimeout(timer);
   }, [clip.reset, clip.state.status]);
+
+  // A manual recording captures whatever this session receives over
+  // WebRTC. If that connection drops mid-recording, finishing it would
+  // just upload a broken clip -- abort it as a real, explained failure
+  // instead of silently continuing against a dead stream.
+  useEffect(() => {
+    if (clip.state.status !== 'recording' || status === 'connected') return;
+    clip.abort(
+      'Recording stopped because the connection to the camera was lost.',
+    );
+  }, [clip, status]);
 
   useEffect(
     () => () => {
@@ -565,17 +577,20 @@ export function LiveVideo({
               <Icon name="chevronLeft" />
             </button>
             <div className="video-identity">
-              <span
-                className={`video-live-badge${
-                  status === 'connected' && videoReady ? ' is-live' : ''
-                }`}
-              >
-                {status === 'connected'
-                  ? videoReady
-                    ? 'LIVE'
-                    : 'STARTING'
-                  : status.toUpperCase()}
-              </span>
+              <div className="video-badges-row">
+                <span
+                  className={`video-live-badge${
+                    status === 'connected' && videoReady ? ' is-live' : ''
+                  }`}
+                >
+                  {status === 'connected'
+                    ? videoReady
+                      ? 'LIVE'
+                      : 'STARTING'
+                    : status.toUpperCase()}
+                </span>
+                <RecordingBadge state={clip.state} />
+              </div>
               {renaming ? (
                 <InlineRename
                   value={primaryName}
@@ -657,9 +672,7 @@ export function LiveVideo({
               <button
                 aria-pressed={listening}
                 className="video-control"
-                data-tooltip={
-                  listening ? 'Mute camera audio' : 'Listen to camera'
-                }
+                title={listening ? 'Mute camera audio' : 'Listen to camera'}
                 onClick={() => {
                   const next = !listening;
                   const current = ++playbackGeneration.current;
@@ -691,7 +704,7 @@ export function LiveVideo({
               <button
                 aria-pressed={talkState === 'speaking'}
                 className={`video-control${talkState === 'speaking' ? ' is-active' : ''}`}
-                data-tooltip={
+                title={
                   talkState === 'speaking'
                     ? 'Stop talking'
                     : 'Talk through camera'
@@ -765,7 +778,7 @@ export function LiveVideo({
             {canRecord && !recordingReady && (
               <button
                 className="video-control"
-                data-tooltip="Connect Google Drive to record"
+                title="Connect Google Drive to record"
                 onClick={onConnectDriveForRecording}
                 type="button"
               >
@@ -781,9 +794,9 @@ export function LiveVideo({
                 className={`video-control${
                   clip.state.status === 'recording' ? ' is-active' : ''
                 }`}
-                data-tooltip={
+                title={
                   clip.state.status === 'recording'
-                    ? `Recording… ${formatClipTimer(clip.state.elapsedMs)} · tap to stop`
+                    ? 'Tap to stop recording'
                     : clip.state.status === 'failed'
                       ? 'Retry encrypted upload'
                       : 'Record a short clip'
@@ -825,7 +838,7 @@ export function LiveVideo({
             )}
             <button
               className="video-control"
-              data-tooltip={fullscreen ? 'Exit full screen' : 'Full screen'}
+              title={fullscreen ? 'Exit full screen' : 'Full screen'}
               ref={fullscreenButton}
               onClick={() => {
                 setControlError('');

@@ -71,3 +71,49 @@ it('retries a failed Drive upload without recording the clip again', async () =>
     ),
   ).toHaveLength(1);
 });
+
+/** A minimal fake MediaStreamTrack/MediaStream good enough to exercise the
+ * 'ended' watcher without a real getUserMedia/RTCPeerConnection stream. */
+function fakeStreamWithTrack() {
+  const listeners = new Map<string, () => void>();
+  const track = {
+    addEventListener: vi.fn((type: string, handler: () => void) => {
+      listeners.set(type, handler);
+    }),
+    removeEventListener: vi.fn((type: string) => {
+      listeners.delete(type);
+    }),
+  };
+  return {
+    stream: { getVideoTracks: () => [track] } as unknown as MediaStream,
+    track,
+    fireEnded: () => listeners.get('ended')?.(),
+  };
+}
+
+it('aborts (without uploading) when the source stream ends unexpectedly', async () => {
+  mocks.request.mockResolvedValueOnce({ recording: { id: 'recording-2' } });
+  mocks.request.mockResolvedValueOnce(undefined); // best-effort /fail report
+  const { result } = renderHook(() => useClipRecorder('camera-1'));
+  const { stream, fireEnded } = fakeStreamWithTrack();
+
+  act(() => result.current.start(stream));
+  await waitFor(() => expect(result.current.state.status).toBe('recording'));
+
+  act(() => fireEnded());
+
+  expect(result.current.state.status).toBe('failed');
+  expect(result.current.state.error).toMatch(/stream ended/i);
+  expect(mocks.upload).not.toHaveBeenCalled();
+  expect(mocks.request).toHaveBeenCalledWith(
+    '/api/recordings/recording-2/fail',
+    expect.objectContaining({
+      body: JSON.stringify({ reason: 'capture_failed' }),
+    }),
+  );
+  // A second 'ended' after the stream is already discarded is a no-op --
+  // nothing left to abort twice.
+  mocks.request.mockClear();
+  act(() => fireEnded());
+  expect(mocks.request).not.toHaveBeenCalled();
+});

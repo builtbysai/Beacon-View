@@ -457,6 +457,95 @@ describe('LiveVideo', () => {
     unmount();
   });
 
+  it('aborts an in-progress recording instead of uploading a broken clip when the connection drops', async () => {
+    FakeWebSocket.instances = [];
+    FakePeer.instances = [];
+    FakeMediaRecorder.instances = [];
+    FakeMediaRecorder.supportedTypes = new Set(['video/webm']);
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    vi.stubGlobal('MediaStream', FakeMediaStream);
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    const fetchMock = vi.fn<
+      (input: string | URL, init?: RequestInit) => Promise<Response>
+    >((input, init) => {
+      const url = String(input);
+      if (url === '/api/recordings' && init?.method === 'POST')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ recording: { id: 'rec-2', status: 'requested' } }),
+            { status: 202 },
+          ),
+        );
+      if (url === '/api/recordings/rec-2/fail')
+        return Promise.resolve(new Response(null, { status: 204 }));
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} canRecord />);
+    const socket = FakeWebSocket.instances[0]!;
+    await act(async () => {
+      socket.message({
+        type: 'ready',
+        connectionId: 'connection-a',
+        iceServers: [],
+        iceTransportPolicy: 'all',
+      });
+      await Promise.resolve();
+    });
+    const peer = FakePeer.instances[0]!;
+    await act(async () => {
+      peer.connectionState = 'connected';
+      peer.onconnectionstatechange?.();
+      peer.ontrack?.({
+        receiver: {},
+        streams: [new FakeMediaStream()],
+      } as unknown as RTCTrackEvent);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Record a short clip' }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button', { name: /Recording,/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    // The connection drops mid-recording -- ICE failure, no retry grace
+    // period, unlike a brief 'disconnected' blip.
+    await act(async () => {
+      peer.connectionState = 'failed';
+      peer.onconnectionstatechange?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Retry encrypted recording upload',
+        }),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(/connection.*lost/i);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/recordings/rec-2/fail',
+      expect.objectContaining({
+        body: JSON.stringify({ reason: 'capture_failed' }),
+        method: 'POST',
+      }),
+    );
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/recordings/rec-2/upload-session',
+      expect.anything(),
+    );
+  });
+
   it('offers to connect Google Drive instead of a dead-end error when recording is not ready', () => {
     vi.stubGlobal('WebSocket', FakeWebSocket);
     const onConnectDriveForRecording = vi.fn();
