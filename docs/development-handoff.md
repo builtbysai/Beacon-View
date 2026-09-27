@@ -1,5 +1,41 @@
 # Beacon SecureView development handoff
 
+## September 27, 2026 — Clips library gets the same search/filter/day-grouping treatment as Activity
+
+Followed the Activity feed rebuild with its sibling: the PWA's
+`RecordingLibrary.tsx` has the same search box, camera and time-range filter
+selects, a result count, and day-grouping as the Activity feed, layered on
+top of the playback/share/delete functionality Android already had. Unlike
+Activity, this needed **no API changes** -- `/api/recordings` has no
+server-side filter params at all, so the PWA itself filters/sorts whatever
+page it has already loaded client-side rather than re-querying, and Android
+now does the same (`filteredRecordings`/`groupRecordingsByDay` in
+`RecordingLibrary.kt`, reusing the Activity feed's `activityDayLabel`
+day-grouping helper rather than duplicating it).
+
+Kept `AndroidRecordingLibrary`'s existing hoisted-state architecture
+(recordings/playback/delete/share state still lives in `MonitorHome`,
+already working and tested) rather than converting it to a fully
+self-contained composable like `BeaconActivityFeed` -- the new search/
+camera-filter/time-filter state is pure presentation, doesn't drive any
+network call the way Activity's filters do, and adding it as local state
+inside the existing composable was the smaller, lower-risk change that
+still gets to the same result. Added an "N clips" result count and a
+"No matching clips" empty state distinct from the existing "No recorded
+clips yet." zero-clips state, matching the PWA's own two-empty-states
+distinction.
+
+9 new unit tests (`RecordingLibraryTest.kt`) cover camera/time/search
+filtering and day-grouping. Validated: full local gate (`testDebugUnitTest
+lintDebug assembleDebug assembleRelease`) passes. Physically confirmed the
+zero-clips state renders correctly with the search/filter UI correctly
+hidden (matching the PWA's own `cameras.length > 0` guard around its
+controls); the non-empty search/filter/grouping UI itself wasn't
+re-verified live against a real clip in this pass since none exists on the
+current test account, but it reuses the exact same, already-visually-verified
+components as the Activity feed (search field, filter dropdowns, day
+headers) plus its own dedicated unit tests.
+
 ## September 27, 2026 — Activity feed fully rebuilt to match the PWA's "v3" feed, not just the header
 
 The previous entry flagged the PWA's real Activity feed (search, camera/time

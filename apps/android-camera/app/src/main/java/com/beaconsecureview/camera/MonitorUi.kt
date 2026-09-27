@@ -916,6 +916,7 @@ internal fun MonitorHome(
                         AndroidRecordingLibrary(
                         api = api,
                         sessionToken = currentSession.token,
+                        cameras = cameras,
                         recordings = recordings,
                         loaded = recordingsLoaded,
                         loadingMore = recordingsLoadingMore,

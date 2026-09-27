@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -58,6 +59,7 @@ import java.time.format.DateTimeFormatter
 internal fun AndroidRecordingLibrary(
     api: BeaconApi,
     sessionToken: String,
+    cameras: List<BeaconApi.MonitorCamera>,
     recordings: List<BeaconApi.RecordingSummary>,
     loaded: Boolean,
     loadingMore: Boolean,
@@ -77,6 +79,12 @@ internal fun AndroidRecordingLibrary(
     onRequestShare: (BeaconApi.RecordingSummary) -> Unit,
     onDismissShare: () -> Unit,
 ) {
+    var search by remember { mutableStateOf("") }
+    var cameraFilter by remember { mutableStateOf<String?>(null) }
+    var timeFilterDays by remember { mutableStateOf<Int?>(null) }
+    var cameraMenuOpen by remember { mutableStateOf(false) }
+    var timeMenuOpen by remember { mutableStateOf(false) }
+
     Text(
         "Clips your cameras recorded, encrypted in your connected Google Drive. Playback and download happen only on this device.",
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -84,6 +92,53 @@ internal fun AndroidRecordingLibrary(
     OutlinedButton(onClick = onRefresh) {
         Icon(Icons.Outlined.Refresh, null)
         Text("Refresh", modifier = Modifier.padding(start = 6.dp))
+    }
+
+    if (recordings.isNotEmpty()) {
+        androidx.compose.material3.OutlinedTextField(
+            value = search,
+            onValueChange = { search = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Search clips") },
+            leadingIcon = { Icon(Icons.Outlined.Search, null) },
+            singleLine = true,
+        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val cameraLabel = cameras.find { it.id == cameraFilter }?.deviceName ?: "All devices"
+            Column(modifier = Modifier.weight(1f)) {
+                OutlinedButton(onClick = { cameraMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(cameraLabel, maxLines = 1)
+                }
+                androidx.compose.material3.DropdownMenu(expanded = cameraMenuOpen, onDismissRequest = { cameraMenuOpen = false }) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("All devices") }, onClick = { cameraFilter = null; cameraMenuOpen = false })
+                    cameras.forEach { camera ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(camera.deviceName) },
+                            onClick = { cameraFilter = camera.id; cameraMenuOpen = false },
+                        )
+                    }
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                val timeLabel = when (timeFilterDays) { 1 -> "Last 24 hours"; 7 -> "Last 7 days"; else -> "All time" }
+                OutlinedButton(onClick = { timeMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(timeLabel, maxLines = 1)
+                }
+                androidx.compose.material3.DropdownMenu(expanded = timeMenuOpen, onDismissRequest = { timeMenuOpen = false }) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Last 24 hours") }, onClick = { timeFilterDays = 1; timeMenuOpen = false })
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Last 7 days") }, onClick = { timeFilterDays = 7; timeMenuOpen = false })
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("All time") }, onClick = { timeFilterDays = null; timeMenuOpen = false })
+                }
+            }
+        }
+    }
+
+    val visibleRecordings = filteredRecordings(recordings, cameraFilter, timeFilterDays, search)
+    if (recordings.isNotEmpty()) {
+        Text(
+            "${visibleRecordings.size} ${if (visibleRecordings.size == 1) "clip" else "clips"}",
+            fontWeight = FontWeight.Bold,
+        )
     }
 
     when {
@@ -98,17 +153,26 @@ internal fun AndroidRecordingLibrary(
                 )
             }
         }
-        else -> recordings.forEach { recording ->
-            RecordingRow(
-                api = api,
-                sessionToken = sessionToken,
-                recording = recording,
-                busy = busyRecordingId != null,
-                canDelete = canDelete,
-                onPlay = { onPlay(recording) },
-                onDelete = { onRequestDelete(recording) },
-                onShare = { onRequestShare(recording) },
-            )
+        visibleRecordings.isEmpty() -> {
+            BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+                Text("No matching clips", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("No clips match these filters.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        else -> groupRecordingsByDay(visibleRecordings).forEach { (day, entries) ->
+            Text(day, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
+            entries.forEach { recording ->
+                RecordingRow(
+                    api = api,
+                    sessionToken = sessionToken,
+                    recording = recording,
+                    busy = busyRecordingId != null,
+                    canDelete = canDelete,
+                    onPlay = { onPlay(recording) },
+                    onDelete = { onRequestDelete(recording) },
+                    onShare = { onRequestShare(recording) },
+                )
+            }
         }
     }
 
@@ -400,6 +464,49 @@ internal fun formatRecordingDuration(durationMs: Long?): String? {
     if (durationMs == null || durationMs <= 0) return null
     val totalSeconds = (durationMs / 1_000L).coerceAtLeast(1L)
     return "%d:%02d".format(totalSeconds / 60L, totalSeconds % 60L)
+}
+
+/** Mirrors the PWA's `RecordingLibrary.tsx` `filtered` memo: client-side
+ * camera/time/search filtering then newest-first sort -- the `/api/recordings`
+ * endpoint has no server-side filter params, so (like the web) this filters
+ * whatever page has already loaded rather than re-querying per filter. */
+internal fun filteredRecordings(
+    recordings: List<BeaconApi.RecordingSummary>,
+    cameraFilter: String?,
+    timeFilterDays: Int?,
+    search: String,
+): List<BeaconApi.RecordingSummary> {
+    var result = recordings
+    if (cameraFilter != null) {
+        result = result.filter { it.cameraId == cameraFilter }
+    }
+    if (timeFilterDays != null) {
+        val sinceMillis = System.currentTimeMillis() - timeFilterDays * 86_400_000L
+        result = result.filter {
+            val createdMillis = runCatching { Instant.parse(it.createdAt).toEpochMilli() }.getOrDefault(0L)
+            createdMillis >= sinceMillis
+        }
+    }
+    val trimmedSearch = search.trim().lowercase(java.util.Locale.getDefault())
+    if (trimmedSearch.isNotEmpty()) {
+        result = result.filter {
+            it.cameraName.lowercase(java.util.Locale.getDefault()).contains(trimmedSearch) ||
+                it.deviceName.lowercase(java.util.Locale.getDefault()).contains(trimmedSearch)
+        }
+    }
+    return result.sortedByDescending { it.createdAt }
+}
+
+/** Groups already-filtered/sorted clips under their day label, reusing the
+ * Activity feed's `activityDayLabel` (Today/Yesterday/full date). */
+internal fun groupRecordingsByDay(
+    recordings: List<BeaconApi.RecordingSummary>,
+): List<Pair<String, List<BeaconApi.RecordingSummary>>> {
+    val groups = LinkedHashMap<String, MutableList<BeaconApi.RecordingSummary>>()
+    for (recording in recordings) {
+        groups.getOrPut(activityDayLabel(recording.createdAt)) { mutableListOf() }.add(recording)
+    }
+    return groups.map { (label, items) -> label to items }
 }
 
 /** Mirrors the PWA's `recording-status.ts` `recordingStatusLabels` exactly --
