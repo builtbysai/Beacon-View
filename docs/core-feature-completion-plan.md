@@ -131,15 +131,48 @@ not considered complete.
 
 ### 6. UI/UX pass (after core)
 
-- Rework settings, sidebar, recording controls/library, notification states,
-  household management, and recovery guidance against the finished contracts.
-- Add accessibility, responsive, loading, empty, error, and reconnect states.
+- [x] **Recording controls/library** — September 26-27 batch. The Activity feed
+      is now split from a dedicated Clips library, with a clip attached to the
+      event that caused it (`recordings.trigger_motion_event_id`) instead of
+      showing recording-lifecycle transitions as their own timeline rows.
+      Clips gained keyset pagination, per-camera-grant read access (previously
+      owner-only), time-limited external share links (ADR 0077), and
+      client-captured encrypted thumbnails for browser-recorded clips (ADR
+      0078, Android capture still open). The manual-record control's
+      previously inert `data-tooltip` state indicator was replaced with a
+      persistent, accessible `RecordingBadge`, and an in-progress recording
+      now aborts intentionally (visible failure, not a silent one) if its
+      source stream drops or ends unexpectedly (ADR 0079).
+- [ ] Rework settings, sidebar, notification states, household management, and
+      recovery guidance against the finished contracts. Not started.
+- [ ] Add accessibility, responsive, loading, empty, error, and reconnect
+      states. Done for the Clips/Activity surfaces above; the rest of the app
+      still needs the systematic audit in [responsive-audit.md](responsive-audit.md).
+- [ ] **Android/web feature-and-design parity pass** — owner-requested
+      September 27. The owner wants the Android app's UI to match the PWA's
+      current look, and both platforms to expose the same feature set with
+      nothing missing on either side. Needs its own audit before
+      implementation: enumerate every web-viewer screen/control against its
+      Android equivalent (or absence), then design tokens/components Android
+      can actually render natively (Compose is not CSS; "identical" means
+      matching layout, color, type, and spacing intent, not a literal port).
+      No implementation should start until that audit exists and the owner
+      has reviewed the gap list.
 
 ### 7. Release gate (last)
 
 - Privacy/trust/legal copy, Google OAuth verification, email-domain operations,
   support/retention disclosures, SBOM/CI/signing/staged rollout, and final
   security review.
+- [ ] **MFA/passkeys** — owner-approved September 27 (roadmap N5): add where
+      applicable and on devices that support it. Proposed shape: WebAuthn
+      (passkey) registration/login for the web app as the primary path, since
+      it needs no new server-side OTP delivery channel; Android via Credential
+      Manager passkeys where the device supports it, falling back to the
+      existing password flow everywhere else. Not started -- no MFA/passkey
+      code exists yet on either platform. Needs a design decision on whether a
+      passkey can be the *only* credential on an account (recovery story if
+      the authenticator is lost) before implementation.
 
 ## Explicit scope boundaries
 
@@ -147,3 +180,13 @@ Beacon will not claim end-to-end encryption unless the implemented key model and
 threat model support that claim. Cloud recording is opt-in, visible to the camera
 user, short-clip based, and disabled while privacy mode is active. Google Drive
 is a user-owned cloud processor and recordings consume the user's quota.
+
+## Camera use-case profiles — research and proposal
+
+The owner is considering purpose-built camera profiles (e.g. doorbell: dormant
+until motion/button; car camera; the current always-on profile) rather than one
+undifferentiated camera behavior. See
+[camera-use-case-profiles.md](camera-use-case-profiles.md) for the research and
+a proposed incremental implementation plan. No implementation has started; this
+is a research deliverable awaiting owner direction on which profile (if any) to
+build first.
