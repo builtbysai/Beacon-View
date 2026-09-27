@@ -77,10 +77,9 @@ internal fun AndroidRecordingLibrary(
     onRequestShare: (BeaconApi.RecordingSummary) -> Unit,
     onDismissShare: () -> Unit,
 ) {
-    BeaconPageHeader(
-        eyebrow = "Encrypted in your Drive",
-        title = "Clips",
-        supportingText = "Playback is authorized by Beacon and decrypted only on this device.",
+    Text(
+        "Clips your cameras recorded, encrypted in your connected Google Drive. Playback and download happen only on this device.",
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     OutlinedButton(onClick = onRefresh) {
         Icon(Icons.Outlined.Refresh, null)
@@ -88,13 +87,13 @@ internal fun AndroidRecordingLibrary(
     }
 
     when {
-        !loaded -> Text("Loading clips…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        !loaded -> Text("Loading recordings…", color = MaterialTheme.colorScheme.onSurfaceVariant)
         recordings.isEmpty() -> {
             BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.Movie, null)
-                Text("No recorded clips yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("No recorded clips yet.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "A clip appears here after a camera finishes an approved recording upload.",
+                    "A clip appears here once a recording finishes uploading.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

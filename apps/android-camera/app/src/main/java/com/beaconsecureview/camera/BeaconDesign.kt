@@ -344,6 +344,20 @@ internal fun BeaconTrustLine(
     }
 }
 
+/** Mirrors one row of the PWA Privacy section's `privacy-settings-facts`:
+ * a bold one-line label plus a short explanation. */
+@Composable
+internal fun BeaconPrivacyFact(
+    label: String,
+    detail: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
 @Composable
 internal fun BeaconTrustBadge(
     icon: ImageVector,

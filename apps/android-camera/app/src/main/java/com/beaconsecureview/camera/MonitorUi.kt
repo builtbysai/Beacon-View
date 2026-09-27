@@ -56,7 +56,6 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.Videocam
@@ -121,7 +120,6 @@ import org.webrtc.SurfaceViewRenderer
 internal fun MonitorHome(
     api: BeaconApi,
     sessionStore: AccountSessionStore,
-    cameraPaired: Boolean,
     onCameraMode: () -> Unit,
     onSetUpThisDevice: (String) -> Unit,
     onAccountDeleted: () -> Unit,
@@ -912,16 +910,15 @@ internal fun MonitorHome(
                 MonitorPage.Events -> {
                     BeaconEventsViewSwitch(selected = eventsView, onSelect = { eventsView = it })
                     if (eventsView == MonitorEventsView.Activity) {
-                        BeaconPageHeader(
-                            eyebrow = "On-device detection",
-                            title = "Motion events",
-                            supportingText = "Camera, time, and motion intensity—never an image or recording.",
+                        Text(
+                            "A chronological feed of events detected by your devices. What appears here depends on each device's capabilities.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (!motionEventsLoaded) Text("Loading activity…")
+                        if (!motionEventsLoaded) Text("Loading…")
                         if (motionEventsLoaded && motionEvents.isEmpty()) {
                             BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                                Text("No activity yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Text("Motion events will appear here after you connect a camera.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("No activity yet.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("Activity will appear here after you connect a camera.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         motionEvents.forEach { event -> MotionEventRow(event) }
@@ -1008,19 +1005,11 @@ internal fun MonitorHome(
                     }
                 }
                 MonitorPage.Settings -> {
-                    BeaconPageHeader(
-                        eyebrow = "Beacon / account",
-                        title = "Settings",
-                        supportingText = "Manage alerts, household data, and your account.",
-                    )
+                    Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
                     BeaconHouseholdOverviewCard(household = household, cameraCount = cameras.size)
                     BeaconSectionHeader("Notifications", "Control private alerts from this phone.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("Private camera alerts", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(
-                            "Motion and availability alerts never include camera names, images, or recordings.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Text("Notifications", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Button(
                             enabled = !notificationBusy,
                             onClick = {
@@ -1093,64 +1082,9 @@ internal fun MonitorHome(
                         isAdmin = currentSession.householdRole == "owner" || currentSession.householdRole == "admin",
                         onAuthorizationLost = ::expireSession,
                     )
-                    BeaconSectionHeader("This device", "Use this phone as a visible Beacon camera.")
-                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("Camera mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("Switch this phone into visible Camera mode.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Button(
-                            onClick = { onSetUpThisDevice(currentSession.token) },
-                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                        ) {
-                            Icon(Icons.Outlined.Smartphone, null, modifier = Modifier.size(18.dp))
-                            Text(
-                                if (cameraPaired) "Open Camera mode" else "Set up this device",
-                                modifier = Modifier.padding(start = 7.dp),
-                            )
-                        }
-                    }
-                    BeaconSectionHeader("Security", "Review signed-in devices and camera access.")
-                    BeaconSignedInDevicesPanel(
-                        api = api,
-                        sessionToken = currentSession.token,
-                        onAuthorizationLost = ::expireSession,
-                    )
-                    Text("Recent access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp))
-                    if (!accessHistoryLoaded) Text("Loading access history…")
-                    if (accessHistoryLoaded && accessEvents.isEmpty()) {
-                        Text("No recent camera access.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (accessEvents.isNotEmpty()) {
-                        val pageSize = 5
-                        val pageCount = (accessEvents.size + pageSize - 1) / pageSize
-                        val page = accessHistoryPage.coerceIn(0, pageCount - 1)
-                        accessEvents.drop(page * pageSize).take(pageSize).forEach { event ->
-                            AccessEventRow(event, currentSession.email)
-                        }
-                        if (pageCount > 1) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                androidx.compose.material3.TextButton(
-                                    enabled = page > 0,
-                                    onClick = { accessHistoryPage = page - 1 },
-                                ) { Text("Previous") }
-                                Text("Page ${page + 1} of $pageCount", style = MaterialTheme.typography.labelLarge)
-                                androidx.compose.material3.TextButton(
-                                    enabled = page < pageCount - 1,
-                                    onClick = { accessHistoryPage = page + 1 },
-                                ) { Text("Next") }
-                            }
-                        }
-                    }
                     BeaconSectionHeader("Data & storage", "Choose how long motion metadata is kept.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("Motion history", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(
-                            "Beacon stores motion time, camera name, and intensity—not recordings, images, or audio.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                         if (motionRetentionDays == null) {
                             Text("Loading retention setting…", modifier = Modifier.padding(top = 12.dp))
                         } else {
@@ -1201,6 +1135,42 @@ internal fun MonitorHome(
                             onAuthorizationLost = ::expireSession,
                         )
                     }
+                    BeaconSectionHeader("Security", "Review signed-in devices and camera access.")
+                    BeaconSignedInDevicesPanel(
+                        api = api,
+                        sessionToken = currentSession.token,
+                        onAuthorizationLost = ::expireSession,
+                    )
+                    Text("Recent access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp))
+                    if (!accessHistoryLoaded) Text("Loading…")
+                    if (accessHistoryLoaded && accessEvents.isEmpty()) {
+                        Text("No recent camera access.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (accessEvents.isNotEmpty()) {
+                        val pageSize = 5
+                        val pageCount = (accessEvents.size + pageSize - 1) / pageSize
+                        val page = accessHistoryPage.coerceIn(0, pageCount - 1)
+                        accessEvents.drop(page * pageSize).take(pageSize).forEach { event ->
+                            AccessEventRow(event, currentSession.email)
+                        }
+                        if (pageCount > 1) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                androidx.compose.material3.TextButton(
+                                    enabled = page > 0,
+                                    onClick = { accessHistoryPage = page - 1 },
+                                ) { Text("Previous") }
+                                Text("Page ${page + 1} of $pageCount", style = MaterialTheme.typography.labelLarge)
+                                androidx.compose.material3.TextButton(
+                                    enabled = page < pageCount - 1,
+                                    onClick = { accessHistoryPage = page + 1 },
+                                ) { Text("Next") }
+                            }
+                        }
+                    }
                     BeaconSectionHeader("Account", "Manage your signed-in session and data.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         BeaconAccountProfileCard(
@@ -1212,7 +1182,7 @@ internal fun MonitorHome(
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("Delete account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
-                            "Permanently remove your Beacon household and its data.",
+                            "Permanently removes your Beacon account, data and access.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         OutlinedButton(
@@ -1224,28 +1194,40 @@ internal fun MonitorHome(
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                         ) { Text("Delete account") }
                     }
-                    OutlinedButton(
-                        onClick = {
-                            val token = currentSession.token
-                            val active = session
-                            NotificationConsentStore(context).mute()
-                            notificationConsent = false
-                            sessionStore.clear()
-                            session = null
-                            selectedCameraId = null
-                            cameras = emptyList()
-                            monitorPage = MonitorPage.Home
-                            scope.launch(Dispatchers.IO) {
-                                runCatching { disableAndroidNotifications(context, api, active) }
-                                runCatching { api.logout(token) }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Sign out") }
-                    BeaconSectionHeader("Privacy", "Understand the capture and storage defaults.")
+                    BeaconSectionHeader("Privacy", "Understand the data Beacon keeps and where to find the full details.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        BeaconTrustLine("Cloud recording is off unless you turn it on for a camera.")
-                        BeaconTrustLine("Camera and microphone use always stays visible on the camera device.")
+                        Text("Your privacy defaults", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            "The important parts are summarized here. Full technical details remain on Trust & privacy.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            BeaconPrivacyFact("Motion history", "Event time, camera and motion metadata follow your retention setting.")
+                            BeaconPrivacyFact("Security activity", "Session and access history is shown without a device fingerprint.")
+                            BeaconPrivacyFact("Cloud storage", "Google Drive is optional and recording is controlled separately.")
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Trust & privacy", fontWeight = FontWeight.Bold)
+                                Text(
+                                    "Capture, sharing, retention and account-data details.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BEACON_API_URL.trimEnd('/')}/trust")))
+                                },
+                            ) { Text("View details") }
+                        }
                     }
                 }
             }

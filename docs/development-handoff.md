@@ -1,5 +1,81 @@
 # Beacon SecureView development handoff
 
+## September 27, 2026 — Settings and Activity/Clips headers de-slopped; Login screen audited clean; two large remaining gaps identified
+
+The owner's framing this round was the reverse of earlier passes: not "Android
+looks different," but "Android has leftover text and invented sections the
+web no longer has." Audited screen by screen, reading each PWA source fresh
+rather than trusting earlier assumptions.
+
+**Login/Sign-in (`MonitorAuthScreen.kt`) — audited, no slop found.** Compared
+line-by-line against `AuthScreen.tsx`'s current login/register/forgot-password
+views: copy, field order, and structure already match closely (this was
+rebuilt correctly in an earlier session). One real, deferred gap: Android has
+no `googleAvailable` capability check, so it always renders a clickable
+"Continue with Google" button even when a backend has Google sign-in
+disabled, where the PWA shows a disabled "Google sign-in unavailable" state.
+Fixing this needs a new capabilities fetch at startup, not a text edit --
+left as an open item rather than rushed.
+
+**Settings (`MonitorUi.kt`) — the actual source of the "slop" complaint.**
+Found and removed, all with no PWA counterpart at all:
+- The page-level header (`eyebrow = "Beacon / account"` + a supporting
+  sentence) -- the PWA's Settings page has no page-level intro, only each
+  section's own one-line `SectionHead`. Replaced with a bare "Settings"
+  title, same fix already applied to Cameras.
+- A whole invented **"This device"** section (a "Camera mode" card
+  duplicating the "Add camera" action that already exists on the Cameras
+  page and Home) -- deleted outright, including the now-unused `cameraPaired`
+  parameter threaded through `MonitorHome`/`MainActivity.kt`.
+- A duplicate inline **"Sign out"** button at the bottom of the Settings
+  body -- the drawer's account menu already has an identical one (confirmed
+  by comparing `onLogout` wiring), and the PWA's `SettingsPage.tsx` has no
+  sign-out control in the page body at all, only in its sidebar account menu.
+- Explanatory paragraphs invented beyond the PWA's trimmed copy: a privacy
+  reassurance line under Notifications ("Motion and availability alerts
+  never include camera names, images, or recordings.") and one under Motion
+  history ("Beacon stores motion time, camera name, and intensity—not
+  recordings, images, or audio.") -- neither exists in `NotificationSettings.tsx`
+  or `MotionRetentionSettings.tsx`.
+
+Also fixed two real accuracy/ordering issues found while comparing against
+`SettingsPage.tsx`: **Data & storage and Security were in the wrong order**
+(Android had Security first; the PWA has Data & storage first), and the
+Delete-account description had drifted to claim a narrower scope than it
+actually has ("Permanently remove your Beacon household and its data" ->
+corrected to match the PWA's actual "Permanently removes your Beacon
+account, data and access."). Rebuilt the Privacy section, which had shrunk
+to two generic trust-line bullets, to match the PWA's real structure: an
+intro, three privacy-fact rows (Motion history / Security activity / Cloud
+storage), and a "Trust & privacy -> View details" row linking out (new
+`BeaconPrivacyFact` composable in `BeaconDesign.kt`).
+
+**Activity and Clips headers de-slopped, but a much bigger gap surfaced
+underneath.** Both `MonitorPage.Events`'s Activity view and
+`RecordingLibrary.kt`'s Clips view had the same invented eyebrow+title
++supporting-text header pattern; replaced both with the PWA's actual single
+intro paragraph (`MotionEventList.tsx` / `RecordingLibrary.tsx`). While
+reading those PWA components to get the real copy, found that **the PWA's
+current Activity and Clips screens are a full "v3" feed** -- search box,
+camera and time-range filters, kind-filter chips with live counts, sort
+control, day-grouped headers, an inline "How detection works" explainer, and
+a detail drawer -- none of which exists on Android today (it's a bare
+list with no search/filter/sort at all). This is the opposite direction of
+the "slop" complaint: a real, large feature gap, not extra text. Given the
+size (this is comparable in scope to the Home/Cameras/live-viewer rebuilds
+combined), it's flagged here as its own future milestone rather than
+attempted under this same pass -- attempting it hastily would produce a
+worse result than the deliberate, verified approach used for the other
+screens.
+
+Validated: full local gate (`testDebugUnitTest lintDebug assembleDebug
+assembleRelease`) passes. Physically confirmed on `emulator-5556`: Settings
+now renders Household -> Notifications -> People & access -> Data & storage
+-> Security -> Account -> Privacy in that order, with no page-level header,
+no "This device" section, no duplicate Sign-out, and the rebuilt Privacy
+section (intro, three facts, Trust & privacy link) all matching; Activity's
+new intro paragraph and empty state confirmed too.
+
 ## September 27, 2026 — Live viewer ported to match the PWA; a likely, unconfirmed Android WebRTC connectivity gap found
 
 Continued the CSS-driven port onto the live camera viewer

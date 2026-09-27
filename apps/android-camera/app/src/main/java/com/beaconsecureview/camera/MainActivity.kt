@@ -346,7 +346,6 @@ private fun BeaconCameraApp(
                 MonitorHome(
                     api = api,
                     sessionStore = accountSessionStore,
-                    cameraPaired = credential != null,
                     onCameraMode = { selectMonitor(false) },
                     onSetUpThisDevice = {
                         if (credential == null) pairSignedInCamera(it) else selectMonitor(false)
