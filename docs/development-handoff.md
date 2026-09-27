@@ -1,5 +1,78 @@
 # Beacon SecureView development handoff
 
+## September 27, 2026 — Activity feed fully rebuilt to match the PWA's "v3" feed, not just the header
+
+The previous entry flagged the PWA's real Activity feed (search, camera/time
+filters, kind chips with live counts, sort, day-grouping, a "How detection
+works" explainer, a detail drawer) as a large gap to defer. The owner's
+follow-up instruction was explicit: keep going screen by screen, don't take
+shortcuts, and reorganize the Android API layer if that's what matching the
+web actually requires. Built it for real instead of deferring it.
+
+**Backend/API layer changes** (`BeaconApi.kt`) -- this genuinely needed
+reorganizing, not just a UI pass:
+- `MotionEvent` gained `recordingId`/`recordingStatus`, which the backend's
+  `/api/motion-events` response already included but Android was silently
+  discarding -- needed for the "View clip" tag on a motion row and the
+  detail dialog's Clip fact.
+- `motionEvents()` changed from a fixed `?limit=50` fetch returning a bare
+  list to a properly paginated call accepting `cameraId`/`since`/`cursor`/
+  `limit` and returning a `MotionEventPage(events, nextCursor)`, matching
+  `parseMotionHistoryQuery`'s actual contract in `motion-history.ts`.
+- Added `motionEventById()`, `clearMotionEvents()` (`DELETE /api/motion-events`),
+  and a new `householdActivity()` call against `/api/activity` --
+  the household-wide audit feed the PWA merges with motion events on this
+  page. This is a *different* endpoint from `/api/access-history` (already
+  wired as `accessHistory()`/`AccessEvent` for Settings > Security's
+  narrower "signed-in access" log) -- conflating the two would have been
+  wrong. `/api/activity` is owner/admin-only server-side, so the new
+  `HouseholdActivityEvent` fetch is gated the same way client-side.
+- Fixed a real, separate bug found while reading `recording-status.ts` for
+  the clip tag: Android's `recordingStatusLabel` didn't match the PWA's
+  labels at all ("Preparing recording" vs "Recording starting", etc.) and
+  had **no case for `"available"`** -- a ready clip fell through to a
+  generic "Unavailable" label. Rewrote it to match `recordingStatusLabels`
+  exactly and added `recordingStatusTone` (link/pending/failed), shared
+  between the new Activity clip tag and the existing Clips library status
+  pill so the two views never describe the same recording state two
+  different ways again.
+
+**New presentation layer** (`ActivityFeedPresentation.kt`, unit-tested):
+a sealed `ActivityFeedEvent` (`MotionActivityEvent` | `HouseholdActivityFeedEvent`)
+mirrors the PWA's `MotionEvent | HouseholdEvent` discriminated union;
+`activityLabel`/`activityDeviceName`/`activitySourceName` port the exact
+`activityLabels` lookup table and rename special-cases from
+`MotionEventList.tsx`; `filteredActivityEvents` ports the camera/kind/search
+filter and all four sort orders; `groupActivityByDay` ports the
+Today/Yesterday/full-date grouping. 11 new unit tests.
+
+**New UI** (`ActivityFeedUi.kt`, `BeaconActivityFeed`): a self-contained
+composable (owns its own network/filter state, matching this session's other
+Settings-panel composables) rendering the intro + "How detection works"
+disclosure, a search field, camera and time-range filter menus, kind chips
+with live counts, a result count with a sort menu, day-grouped rows (each
+showing label, time, an optional clip tag, and device/source/confidence),
+Load more (across both paginated sources independently), Clear motion
+history (owner/admin only), and a detail dialog with the event's full facts
+and contextual actions (View clip / Open device). Wired into
+`MonitorPage.Events`, replacing the old bare list.
+
+Deliberately not ported (real, separate follow-ups, not this pass): the
+PWA's client-side re-filter by time range on top of the server's own
+`since` query (Android relies on the server query alone); cross-navigation
+polish (`onViewClip` switches to the Clips tab but doesn't scroll to/
+highlight the specific clip; a `focusMotionEventId` deep link from Clips
+back into Activity was not added either).
+
+Validated: full local gate (`testDebugUnitTest lintDebug assembleDebug
+assembleRelease`, 90 unit tests) passes. Physically confirmed on
+`emulator-5556` against real household-activity data generated earlier this
+session (pairing, camera-source-added, live-view-started, device-disconnected):
+day grouping under "Today", kind chips showing live counts (All 4 / Motion 0
+/ Household 4), the camera and time-range dropdown menus opening and
+applying, and tapping a row opening the detail dialog with the correct
+facts and a working "Back to activity" action.
+
 ## September 27, 2026 — Settings and Activity/Clips headers de-slopped; Login screen audited clean; two large remaining gaps identified
 
 The owner's framing this round was the reverse of earlier passes: not "Android

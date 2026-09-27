@@ -362,23 +362,14 @@ internal fun MonitorHome(
             MonitorPage.Home -> {
                 val result = withContext(Dispatchers.IO) { runCatching { api.motionEvents(active.token) } }
                 result.onSuccess {
-                    motionEvents = it
+                    motionEvents = it.events
                     motionEventsLoaded = true
                 }.onFailure {
                     message = it.userFacingMessage("Activity is temporarily unavailable")
                     motionEventsLoaded = true
                 }
             }
-            MonitorPage.Events -> if (eventsView == MonitorEventsView.Activity) {
-                val result = withContext(Dispatchers.IO) { runCatching { api.motionEvents(active.token) } }
-                result.onSuccess {
-                    motionEvents = it
-                    motionEventsLoaded = true
-                }.onFailure {
-                    message = it.userFacingMessage("Activity is temporarily unavailable")
-                    motionEventsLoaded = true
-                }
-            } else {
+            MonitorPage.Events -> if (eventsView != MonitorEventsView.Activity) {
                 recordingsLoaded = false
                 val result = withContext(Dispatchers.IO) { runCatching { api.recordings(active.token) } }
                 result.onSuccess {
@@ -910,18 +901,17 @@ internal fun MonitorHome(
                 MonitorPage.Events -> {
                     BeaconEventsViewSwitch(selected = eventsView, onSelect = { eventsView = it })
                     if (eventsView == MonitorEventsView.Activity) {
-                        Text(
-                            "A chronological feed of events detected by your devices. What appears here depends on each device's capabilities.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        val isAdmin = currentSession.householdRole == "owner" || currentSession.householdRole == "admin"
+                        BeaconActivityFeed(
+                            api = api,
+                            sessionToken = currentSession.token,
+                            cameras = cameras,
+                            includeHouseholdActivity = isAdmin,
+                            canClearHistory = isAdmin,
+                            onOpenCamera = { id -> selectedCameraId = id },
+                            onViewClip = { eventsView = MonitorEventsView.Clips },
+                            onAuthorizationLost = ::expireSession,
                         )
-                        if (!motionEventsLoaded) Text("Loading…")
-                        if (motionEventsLoaded && motionEvents.isEmpty()) {
-                            BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                                Text("No activity yet.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Text("Activity will appear here after you connect a camera.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        motionEvents.forEach { event -> MotionEventRow(event) }
                     } else {
                         AndroidRecordingLibrary(
                         api = api,

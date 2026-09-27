@@ -228,30 +228,6 @@ internal fun AccessEventRow(
 }
 
 @Composable
-internal fun MotionEventRow(event: BeaconApi.MotionEvent) {
-    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Motion detected", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(event.deviceName, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(event.cameraName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            BeaconStatusPill("${(event.confidence * 100).toInt()}%", BeaconWarning)
-        }
-        Text(
-            friendlyAccessTime(event.occurredAt),
-            modifier = Modifier.padding(top = 10.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
 internal fun MotionEventPreviewRow(event: BeaconApi.MotionEvent) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),

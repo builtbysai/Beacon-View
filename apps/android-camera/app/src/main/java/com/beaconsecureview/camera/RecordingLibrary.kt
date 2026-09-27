@@ -402,14 +402,30 @@ internal fun formatRecordingDuration(durationMs: Long?): String? {
     return "%d:%02d".format(totalSeconds / 60L, totalSeconds % 60L)
 }
 
+/** Mirrors the PWA's `recording-status.ts` `recordingStatusLabels` exactly --
+ * shared here between the Clips library's own status pill and the Activity
+ * feed's inline clip tag, so the two views never describe the same
+ * recording state two different ways. */
 internal fun recordingStatusLabel(status: String): String =
     when (status) {
-        "requested" -> "Preparing recording"
-        "recording" -> "Recording"
-        "uploading" -> "Uploading securely"
+        "requested" -> "Recording starting"
+        "recording" -> "Recording…"
+        "uploading" -> "Uploading…"
+        "available" -> "Ready"
         "failed" -> "Recording failed"
-        "deleting" -> "Deleting"
+        "deleting" -> "Removing clip"
         else -> "Unavailable"
+    }
+
+/** Mirrors the PWA's `recordingStatusTone`: "link" once there is a clip to
+ * open, "failed" when it never will be, "pending" for everything between. */
+internal enum class RecordingStatusTone { Link, Pending, Failed }
+
+internal fun recordingStatusTone(status: String): RecordingStatusTone =
+    when (status) {
+        "available" -> RecordingStatusTone.Link
+        "failed" -> RecordingStatusTone.Failed
+        else -> RecordingStatusTone.Pending
     }
 
 internal fun formatRecordingTime(value: String): String =

@@ -105,6 +105,34 @@ class BeaconApi(private val baseUrl: String) {
         val deviceName: String,
         val confidence: Double,
         val occurredAt: String,
+        val recordingId: String? = null,
+        val recordingStatus: String? = null,
+    )
+
+    data class MotionEventPage(
+        val events: List<MotionEvent>,
+        val nextCursor: String?,
+    )
+
+    /** Mirrors the PWA's `HouseholdEvent`: the household-wide audit feed
+     * shown alongside motion events in the Activity feed (owner/admin only,
+     * see `/api/activity`) -- distinct from `AccessEvent`/`/api/access-history`,
+     * which is Settings > Security's narrower "signed-in access" log. */
+    data class HouseholdActivityEvent(
+        val id: String,
+        val actorEmail: String?,
+        val deviceName: String?,
+        val cameraSourceId: String?,
+        val sourceName: String?,
+        val eventType: String,
+        val occurredAt: String,
+        val success: Boolean,
+        val metadata: Map<String, String>,
+    )
+
+    data class HouseholdActivityPage(
+        val events: List<HouseholdActivityEvent>,
+        val total: Int,
     )
 
     data class CameraMotionSettings(
@@ -413,8 +441,21 @@ class BeaconApi(private val baseUrl: String) {
         }
     }
 
-    fun motionEvents(sessionToken: String): List<MotionEvent> {
-        val connection = connection("/api/motion-events?limit=50", "GET")
+    fun motionEvents(
+        sessionToken: String,
+        cameraId: String? = null,
+        since: String? = null,
+        cursor: String? = null,
+        limit: Int = 50,
+    ): MotionEventPage {
+        val query =
+            buildList {
+                add("limit=$limit")
+                cameraId?.let { add("cameraId=${urlPathSegment(it)}") }
+                since?.let { add("since=${urlPathSegment(it)}") }
+                cursor?.let { add("cursor=${urlPathSegment(it)}") }
+            }.joinToString("&")
+        val connection = connection("/api/motion-events?$query", "GET")
         connection.setRequestProperty("Authorization", "Bearer $sessionToken")
         val body = responseBody(connection)
         if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
@@ -423,19 +464,113 @@ class BeaconApi(private val baseUrl: String) {
         if (connection.responseCode != HttpURLConnection.HTTP_OK) {
             throw IllegalStateException("Activity is temporarily unavailable")
         }
-        val events = JSONObject(body).getJSONArray("events")
-        return (0 until events.length()).map { index ->
-            events.getJSONObject(index).let {
-                MotionEvent(
-                    id = it.getString("id"),
-                    cameraId = it.getString("cameraId"),
-                    cameraName = it.getString("cameraName"),
-                    deviceName = it.getString("deviceName"),
-                    confidence = it.getDouble("confidence"),
-                    occurredAt = it.getString("occurredAt"),
-                )
-            }
+        val root = JSONObject(body)
+        val events = root.getJSONArray("events")
+        return MotionEventPage(
+            events =
+                (0 until events.length()).map { index ->
+                    events.getJSONObject(index).let {
+                        MotionEvent(
+                            id = it.getString("id"),
+                            cameraId = it.getString("cameraId"),
+                            cameraName = it.getString("cameraName"),
+                            deviceName = it.getString("deviceName"),
+                            confidence = it.getDouble("confidence"),
+                            occurredAt = it.getString("occurredAt"),
+                            recordingId = nullableApiText(it.optString("recordingId")),
+                            recordingStatus = nullableApiText(it.optString("recordingStatus")),
+                        )
+                    }
+                },
+            nextCursor = nullableApiText(root.optString("nextCursor")),
+        )
+    }
+
+    fun motionEventById(sessionToken: String, motionEventId: String): MotionEvent {
+        val connection = connection("/api/motion-events/${urlPathSegment(motionEventId)}", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
         }
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("That event could not be found. It may have expired.")
+        }
+        val it = JSONObject(body)
+        return MotionEvent(
+            id = it.getString("id"),
+            cameraId = it.getString("cameraId"),
+            cameraName = it.getString("cameraName"),
+            deviceName = it.getString("deviceName"),
+            confidence = it.getDouble("confidence"),
+            occurredAt = it.getString("occurredAt"),
+            recordingId = nullableApiText(it.optString("recordingId")),
+            recordingStatus = nullableApiText(it.optString("recordingStatus")),
+        )
+    }
+
+    fun clearMotionEvents(sessionToken: String) {
+        val connection = connection("/api/motion-events", "DELETE")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_NO_CONTENT) {
+            throw IllegalStateException("Motion history could not be cleared. Try clearing it again.")
+        }
+    }
+
+    /** Household-wide audit feed for the Activity page's "Household" kind
+     * filter -- owner/admin only, matching the backend's own role gate. */
+    fun householdActivity(
+        sessionToken: String,
+        limit: Int = 50,
+        offset: Int = 0,
+        cameraId: String? = null,
+        since: String? = null,
+    ): HouseholdActivityPage {
+        val query =
+            buildList {
+                add("limit=$limit")
+                add("offset=$offset")
+                cameraId?.let { add("cameraId=${urlPathSegment(it)}") }
+                since?.let { add("since=${urlPathSegment(it)}") }
+            }.joinToString("&")
+        val connection = connection("/api/activity?$query", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Activity is temporarily unavailable")
+        }
+        val root = JSONObject(body)
+        val events = root.getJSONArray("events")
+        return HouseholdActivityPage(
+            events =
+                (0 until events.length()).map { index ->
+                    events.getJSONObject(index).let {
+                        val metadata = it.optJSONObject("metadata")
+                        HouseholdActivityEvent(
+                            id = it.getString("id"),
+                            actorEmail = nullableApiText(it.optString("actorEmail")),
+                            deviceName = nullableApiText(it.optString("deviceName")),
+                            cameraSourceId = nullableApiText(it.optString("cameraSourceId")),
+                            sourceName = nullableApiText(it.optString("sourceName")),
+                            eventType = it.getString("eventType"),
+                            occurredAt = it.getString("occurredAt"),
+                            success = it.getBoolean("success"),
+                            metadata =
+                                metadata?.keys()?.asSequence()?.associateWith { key -> metadata.optString(key) }
+                                    ?: emptyMap(),
+                        )
+                    }
+                },
+            total = root.getInt("total"),
+        )
     }
 
     fun monitorMotionSettings(sessionToken: String, deviceId: String): List<CameraMotionSettings> {
