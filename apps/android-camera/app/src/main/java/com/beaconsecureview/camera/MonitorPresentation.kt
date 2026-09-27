@@ -183,11 +183,49 @@ internal fun homeFavoriteCameras(
 ): List<BeaconApi.MonitorCamera> =
     if (favoriteCameraIds.isEmpty()) hostCameras.take(4) else hostCameras.filter { it.id in favoriteCameraIds }
 
-internal fun monitorVisibleCameras(
+/** Mirrors the PWA's `CameraBrowser` filter pills exactly (availability
+ * filter with live counts), applied on top of the free-text search. */
+internal enum class CameraCatalogFilter(val label: String) {
+    All("All cameras"),
+    Ready("Ready to view"),
+    Privacy("Privacy on"),
+    Attention("Need attention"),
+}
+
+internal fun cameraCatalogMatchesFilter(
+    camera: BeaconApi.MonitorCamera,
+    filter: CameraCatalogFilter,
+): Boolean =
+    when (filter) {
+        CameraCatalogFilter.All -> true
+        CameraCatalogFilter.Ready -> camera.online && !camera.privacyMode
+        CameraCatalogFilter.Privacy -> camera.privacyMode
+        CameraCatalogFilter.Attention -> !camera.online && !camera.privacyMode
+    }
+
+/** Mirrors the PWA's search box: matches against both the camera name and
+ * its device name, case-insensitively. */
+internal fun cameraCatalogSearchMatches(camera: BeaconApi.MonitorCamera, query: String): Boolean =
+    "${camera.name} ${camera.deviceName}"
+        .lowercase(Locale.getDefault())
+        .contains(query.trim().lowercase(Locale.getDefault()))
+
+internal fun cameraCatalogVisible(
     cameras: List<BeaconApi.MonitorCamera>,
-    favoriteCameraIds: Set<String>,
-    favoritesOnly: Boolean,
+    filter: CameraCatalogFilter,
+    query: String,
 ): List<BeaconApi.MonitorCamera> =
-    cameras.filter { !favoritesOnly || it.id in favoriteCameraIds }
+    cameras.filter { cameraCatalogMatchesFilter(it, filter) && cameraCatalogSearchMatches(it, query) }
+
+/** Mirrors the PWA's `resultsMessage` computation exactly. */
+internal fun cameraCatalogResultsMessage(query: String, visibleCount: Int, totalCount: Int): String {
+    val trimmed = query.trim()
+    return if (trimmed.isNotEmpty()) {
+        val word = if (visibleCount == 1) "camera matches" else "cameras match"
+        "$visibleCount $word “$trimmed”."
+    } else {
+        "$visibleCount of $totalCount cameras shown"
+    }
+}
 
 internal fun shouldRunNativeViewer(lifecycleStarted: Boolean): Boolean = lifecycleStarted

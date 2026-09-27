@@ -1,5 +1,73 @@
 # Beacon SecureView development handoff
 
+## September 27, 2026 — Cameras catalog ported to match the PWA; physical Pixel swapped for two emulators
+
+Continued the CSS-driven port from Home onto the Cameras catalog
+(`MonitorPage.Cameras` in `MonitorUi.kt`), following the same methodology:
+read the PWA's actual `CameraBrowser.tsx`/`.css` and `App.tsx` topbar code
+rather than approximating. Found the same class of gap as Home: Android's
+Cameras page had **invented UI with no PWA counterpart** -- a page header
+with an eyebrow and supporting text (`BeaconPageHeader`), and a toolbar with
+"Refresh", "Favorites"/"All", and "Reorder" buttons (the last enabling drag-
+style "Earlier"/"Later" arrows on every camera card). None of this exists on
+the web: the PWA's Cameras page is just an `h1` ("Cameras") with a role-gated
+"Add camera" button top-right, and the actual `CameraBrowser` component has a
+search box, four filter pills with live counts (All/Ready to view/Privacy
+on/Need attention), and a results-count line -- none of which Android had at
+all.
+
+Rewrote the page to match: dropped the eyebrow/supporting-text header and the
+Refresh/Favorites/Reorder toolbar (the "Reorder" feature was Android-only and
+had no web equivalent, so `movedCameraId` in `CameraOrderStore.kt` and the
+reordering params on `MonitorCameraGrid`/`MonitorCameraCard` were deleted
+outright rather than left dead); added a search field, four `FilterChip`
+pills with counts, and a results message, all driven by new pure functions in
+`MonitorPresentation.kt` (`CameraCatalogFilter`, `cameraCatalogMatchesFilter`,
+`cameraCatalogSearchMatches`, `cameraCatalogVisible`,
+`cameraCatalogResultsMessage`) that mirror `CameraBrowser.tsx`'s `matches`/
+`resultsMessage` logic exactly, including the PWA's curly-quoted search
+message. Empty states now match the web too: plain "No cameras yet." text
+with no button when the account has zero cameras (previously Android showed
+an invented "Set up this device" panel here), and a "No matching cameras" /
+"Clear filters" card when a search or filter yields nothing, matching the
+PWA's `camera-no-results` block.
+
+**One real bug caught during physical verification, not code review**: the
+first version put the four filter pills in a plain `Row`, which doesn't wrap
+or scroll -- on a phone-width screen the fourth pill ("Need attention") was
+silently clipped off the right edge of the screen with no visual indication
+anything was missing. Fixed by wrapping the pills in
+`Modifier.horizontalScroll(rememberScrollState())`, matching the PWA's own
+`overflow-x: auto` behavior for `.filter-pills` at mobile widths. This is
+exactly the kind of thing screenshot comparison catches and code review
+doesn't -- the Kotlin looked correct and compiled fine.
+
+Known, documented gap not addressed this pass: the web's Cameras page also
+shows a `PendingDeviceRow` for a paired device that hasn't reported a camera
+yet (name, status, "Settings" link) -- Android has no concept of a paired-
+but-camera-less device separate from `MonitorCamera`, so this wasn't
+portable without a data-model change. Left as an open item.
+
+Also swapped the physical Pixel (now reserved by the owner for other use)
+for two hand-built AVDs, since neither `avdmanager` nor `sdkmanager` is
+installed on this machine (`cmdline-tools` component missing) -- `Beacon_Phone`
+(monitor viewer) and `Beacon_Camera` (paired as a live camera under the same
+test account) were created by hand-writing `~/.android/avd/<name>.ini` and
+`config.ini` against the already-installed
+`system-images/android-36/google_apis_playstore/x86_64` image. **Pitfall hit
+twice**: writing `config.ini` through a bash heredoc with escaped
+double-backslashes for the Windows SDK path corrupted the file -- a trailing
+single backslash at end-of-line before a newline is a line-continuation in
+an unquoted heredoc, so `image.sysdir.1=...x86_64\` silently merged with the
+next line (`runtime.network.latency=none`) into one bad key, and the emulator
+failed at startup with `Cannot find AVD system path`. Fixed by writing the
+file with the Write/Edit tools instead of a bash heredoc for any file
+containing literal Windows path backslashes. With both emulators running
+(one signed in as camera, one as monitor, `adb reverse tcp:3000 tcp:3000` on
+each), the full non-empty Cameras catalog -- badge, search, filter counts,
+scrollable pills, results text, no-match state -- was visually confirmed
+end-to-end against a real paired camera, not just the zero-camera state.
+
 ## September 27, 2026 — Android Home screen was structurally wrong, not just styled differently
 
 The owner asked why Android still "looks like slop" next to the PWA despite

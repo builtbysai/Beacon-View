@@ -210,23 +210,6 @@ class StreamingStateTest {
     }
 
     @Test
-    fun favoritesFilterWithoutChangingSavedCameraOrder() {
-        val kitchen = BeaconApi.MonitorCamera("kitchen", "Kitchen", "Pixel", true, false, 0)
-        val garage = BeaconApi.MonitorCamera("garage", "Garage", "Tablet", true, false, 0)
-        val cameras = listOf(kitchen, garage)
-
-        assertEquals(
-            listOf("kitchen", "garage"),
-            monitorVisibleCameras(cameras, setOf("garage"), favoritesOnly = false).map { it.id },
-        )
-        assertEquals(
-            listOf("garage"),
-            monitorVisibleCameras(cameras, setOf("garage"), favoritesOnly = true).map { it.id },
-        )
-        assertEquals(2, cameras.size)
-    }
-
-    @Test
     fun savedCameraOrderPrunesRemovedCamerasAndAppendsNewOnes() {
         assertEquals(
             listOf("garage", "kitchen", "yard"),
@@ -238,13 +221,48 @@ class StreamingStateTest {
     }
 
     @Test
-    fun cameraOrderingMovesOnlyWithinAvailableBounds() {
-        val original = listOf("kitchen", "garage", "yard")
-        assertEquals(listOf("garage", "kitchen", "yard"), movedCameraId(original, "garage", -1))
-        assertEquals(listOf("kitchen", "yard", "garage"), movedCameraId(original, "garage", 1))
+    fun cameraCatalogFilterMatchesReadyPrivacyAndAttentionExclusively() {
+        val ready = BeaconApi.MonitorCamera("ready", "Kitchen", "Pixel", true, false, 0)
+        val privacy = BeaconApi.MonitorCamera("privacy", "Garage", "Tablet", true, true, 0)
+        val offline = BeaconApi.MonitorCamera("offline", "Yard", "Phone", false, false, 0)
+        val cameras = listOf(ready, privacy, offline)
+
         assertEquals(
-            listOf("kitchen", "garage"),
-            movedCameraId(listOf("kitchen", "garage"), "kitchen", -1),
+            listOf("ready", "privacy", "offline"),
+            cameraCatalogVisible(cameras, CameraCatalogFilter.All, "").map { it.id },
+        )
+        assertEquals(listOf("ready"), cameraCatalogVisible(cameras, CameraCatalogFilter.Ready, "").map { it.id })
+        assertEquals(listOf("privacy"), cameraCatalogVisible(cameras, CameraCatalogFilter.Privacy, "").map { it.id })
+        assertEquals(listOf("offline"), cameraCatalogVisible(cameras, CameraCatalogFilter.Attention, "").map { it.id })
+    }
+
+    @Test
+    fun cameraCatalogSearchMatchesNameOrDeviceNameCaseInsensitively() {
+        val kitchen = BeaconApi.MonitorCamera("kitchen", "Front door", "Kitchen Pixel", true, false, 0)
+        val garage = BeaconApi.MonitorCamera("garage", "Driveway", "Garage Tablet", true, false, 0)
+        val cameras = listOf(kitchen, garage)
+
+        assertEquals(
+            listOf("kitchen"),
+            cameraCatalogVisible(cameras, CameraCatalogFilter.All, "kitchen").map { it.id },
+        )
+        assertEquals(
+            listOf("garage"),
+            cameraCatalogVisible(cameras, CameraCatalogFilter.All, "DRIVEWAY").map { it.id },
+        )
+        assertEquals(2, cameras.size)
+    }
+
+    @Test
+    fun cameraCatalogResultsMessageReportsSearchMatchOrPlainCount() {
+        assertEquals("2 of 3 cameras shown", cameraCatalogResultsMessage("", 2, 3))
+        assertEquals(
+            "1 camera matches “kitchen”.",
+            cameraCatalogResultsMessage("kitchen", 1, 3),
+        )
+        assertEquals(
+            "2 cameras match “cam”.",
+            cameraCatalogResultsMessage("cam", 2, 3),
         )
     }
 

@@ -161,8 +161,6 @@ internal fun MonitorCameraGrid(
     cameras: List<BeaconApi.MonitorCamera>,
     onView: (BeaconApi.MonitorCamera) -> Unit,
     onSettings: ((BeaconApi.MonitorCamera) -> Unit)? = null,
-    reordering: Boolean = false,
-    onMove: (BeaconApi.MonitorCamera, Int) -> Unit = { _, _ -> },
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val columns = monitorColumnCount(maxWidth.value)
@@ -171,17 +169,11 @@ internal fun MonitorCameraGrid(
         Column(verticalArrangement = Arrangement.spacedBy(gap)) {
             cameras.chunked(columns).forEach { rowCameras ->
                 Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    rowCameras.forEachIndexed { index, camera ->
-                        val absoluteIndex = cameras.indexOf(camera)
+                    rowCameras.forEach { camera ->
                         MonitorCameraCard(
                             camera = camera,
                             onView = { onView(camera) },
                             onSettings = onSettings?.let { settings -> { settings(camera) } },
-                            reordering = reordering,
-                            canMoveEarlier = absoluteIndex > 0,
-                            canMoveLater = absoluteIndex < cameras.lastIndex,
-                            onMoveEarlier = { onMove(camera, -1) },
-                            onMoveLater = { onMove(camera, 1) },
                             modifier = Modifier.width(tileWidth),
                         )
                     }
@@ -305,11 +297,6 @@ private fun MonitorCameraCard(
     camera: BeaconApi.MonitorCamera,
     onView: () -> Unit,
     onSettings: (() -> Unit)?,
-    reordering: Boolean,
-    canMoveEarlier: Boolean,
-    canMoveLater: Boolean,
-    onMoveEarlier: () -> Unit,
-    onMoveLater: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val available = camera.online && !camera.privacyMode
@@ -402,20 +389,6 @@ private fun MonitorCameraCard(
                     modifier = Modifier.padding(top = 5.dp),
                 )
             }
-        if (reordering) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    enabled = canMoveEarlier,
-                    onClick = onMoveEarlier,
-                    modifier = Modifier.weight(1f),
-                ) { Text("Earlier") }
-                OutlinedButton(
-                    enabled = canMoveLater,
-                    onClick = onMoveLater,
-                    modifier = Modifier.weight(1f),
-                ) { Text("Later") }
-            }
-        }
         }
     }
 }

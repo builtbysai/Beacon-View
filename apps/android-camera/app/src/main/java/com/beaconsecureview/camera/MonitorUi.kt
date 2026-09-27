@@ -20,6 +20,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -53,7 +54,7 @@ import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.MicOff
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.QrCodeScanner
-import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material.icons.outlined.Star
@@ -146,8 +147,8 @@ internal fun MonitorHome(
     var cameraOrderIds by remember(session?.userId) {
         mutableStateOf(session?.let { orderStore.read(it.userId) } ?: emptyList())
     }
-    var favoritesOnly by rememberSaveable(session?.userId) { mutableStateOf(false) }
-    var reordering by rememberSaveable(session?.userId) { mutableStateOf(false) }
+    var cameraCatalogQuery by rememberSaveable(session?.userId) { mutableStateOf("") }
+    var cameraCatalogFilter by rememberSaveable(session?.userId) { mutableStateOf(CameraCatalogFilter.All) }
     var monitorPage by rememberSaveable(session?.userId) { mutableStateOf(MonitorPage.Home) }
     var eventsView by rememberSaveable(session?.userId) { mutableStateOf(MonitorEventsView.Activity) }
     var navigationOpen by rememberSaveable(session?.userId) { mutableStateOf(false) }
@@ -833,50 +834,87 @@ internal fun MonitorHome(
                             },
                         )
                     } else {
-                        BeaconPageHeader(
-                            eyebrow = "Beacon / your household",
-                            title = "Cameras",
-                            supportingText = "Find a camera and watch it live.",
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { refresh(currentSession.token, true) }) {
-                                Icon(Icons.Outlined.Refresh, null, modifier = Modifier.size(18.dp))
-                                Text("Refresh", modifier = Modifier.padding(start = 6.dp))
-                            }
-                            if (favoriteCameraIds.isNotEmpty()) {
-                                OutlinedButton(onClick = { favoritesOnly = !favoritesOnly }) {
-                                    Text(if (favoritesOnly) "All" else "Favorites")
-                                }
-                            }
-                            if (orderedCameras.size > 1 && !favoritesOnly) {
-                                OutlinedButton(onClick = { reordering = !reordering }) {
-                                    Text(if (reordering) "Done" else "Reorder")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("Cameras", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                            if (currentSession.householdRole !in setOf("viewer", "guest")) {
+                                Button(onClick = { onSetUpThisDevice(currentSession.token) }) {
+                                    Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
+                                    Text("Add camera", modifier = Modifier.padding(start = 6.dp))
                                 }
                             }
                         }
                         if (busy) Text("Loading cameras…")
-                        val visibleCameras = monitorVisibleCameras(orderedCameras, favoriteCameraIds, favoritesOnly)
-                        if (!busy && visibleCameras.isEmpty()) {
-                            BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                                Text("No cameras yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Text("Use Camera mode on a phone, tablet, laptop, or browser to add one.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Button(
-                                    onClick = { onSetUpThisDevice(currentSession.token) },
-                                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                                ) { Text(if (cameraPaired) "Open Camera mode" else "Set up this device") }
+                        if (!busy && orderedCameras.isEmpty()) {
+                            Text("No cameras yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else if (!busy) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                OutlinedTextField(
+                                    value = cameraCatalogQuery,
+                                    onValueChange = { cameraCatalogQuery = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    placeholder = { Text("Find a camera or device") },
+                                    leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                                    singleLine = true,
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    CameraCatalogFilter.entries.forEach { filterOption ->
+                                        val count = orderedCameras.count { cameraCatalogMatchesFilter(it, filterOption) }
+                                        androidx.compose.material3.FilterChip(
+                                            selected = cameraCatalogFilter == filterOption,
+                                            onClick = { cameraCatalogFilter = filterOption },
+                                            label = { Text("${filterOption.label} $count") },
+                                            colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            ),
+                                        )
+                                    }
+                                }
+                                val visibleCameras = cameraCatalogVisible(orderedCameras, cameraCatalogFilter, cameraCatalogQuery)
+                                Text(
+                                    cameraCatalogResultsMessage(cameraCatalogQuery, visibleCameras.size, orderedCameras.size),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                if (visibleCameras.isEmpty()) {
+                                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                        ) {
+                                            Text("No matching cameras", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                "Try another name or choose a different status.",
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                            OutlinedButton(
+                                                onClick = {
+                                                    cameraCatalogQuery = ""
+                                                    cameraCatalogFilter = CameraCatalogFilter.All
+                                                },
+                                                modifier = Modifier.padding(top = 12.dp),
+                                            ) { Text("Clear filters") }
+                                        }
+                                    }
+                                } else {
+                                    MonitorCameraGrid(
+                                        cameras = visibleCameras,
+                                        onView = { selectedCameraId = it.id },
+                                        onSettings = { selectedSettingsDeviceId = it.deviceId },
+                                    )
+                                }
                             }
                         }
-                        MonitorCameraGrid(
-                            cameras = visibleCameras,
-                            reordering = reordering,
-                            onView = { selectedCameraId = it.id },
-                            onSettings = { selectedSettingsDeviceId = it.deviceId },
-                            onMove = { camera, direction ->
-                                val updated = movedCameraId(cameraOrderIds, camera.id, direction)
-                                cameraOrderIds = updated
-                                orderStore.write(currentSession.userId, updated)
-                            },
-                        )
                     }
                 }
                 MonitorPage.Events -> {
