@@ -42,6 +42,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Cameraswitch
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.Home
@@ -59,6 +60,7 @@ import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
@@ -605,30 +607,93 @@ internal fun MonitorHome(
             val currentSession = session!!
             when (monitorPage) {
                 MonitorPage.Home -> {
-                    BeaconHeroPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("HOME", color = BeaconActionBright, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                        Text(homeHeadline(cameras), color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-                        Text(homeSupportingText(cameras), color = BeaconHeroSupporting)
-                        Spacer(Modifier.height(16.dp))
-                        Button(
-                            onClick = { monitorPage = MonitorPage.Cameras },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = BeaconActionBright, contentColor = Color(0xFF04101C)),
-                        ) { Text(if (cameras.isEmpty()) "Add or view cameras" else "View all cameras") }
-                    }
-                    if (cameras.isNotEmpty()) {
-                        val health = monitorHealth(monitorHostCameras(cameras))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            BeaconMetric(health.online.toString(), "Ready to view", Icons.Outlined.Videocam, BeaconOnline, Modifier.weight(1f))
-                            BeaconMetric(health.viewers.toString(), "Watching now", Icons.Outlined.Visibility, BeaconLive, Modifier.weight(1f))
+                    val isHouseholdManager = currentSession.householdRole == "owner" || currentSession.householdRole == "admin"
+                    val hostCameras = monitorHostCameras(cameras)
+                    if (cameras.isEmpty()) {
+                        // Mirrors the PWA's .dash-empty card exactly (App.css/App.tsx):
+                        // a plain, dashed-outline card -- not a solid hero panel.
+                        Column(
+                            modifier =
+                                Modifier.fillMaxWidth()
+                                    .beaconDashedBorder(MaterialTheme.colorScheme.outlineVariant, BeaconRadii.Lg)
+                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(BeaconRadii.Lg))
+                                    .padding(40.dp),
+                            verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Lg),
+                        ) {
+                            Text(
+                                if (isHouseholdManager) "Add your first device" else "No cameras shared with you yet",
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                if (isHouseholdManager) {
+                                    "Turn a spare phone, tablet, or computer into a camera."
+                                } else {
+                                    "Ask the household owner or an admin to grant you access to a camera from Settings → People & access."
+                                },
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (isHouseholdManager) {
+                                Button(onClick = { monitorPage = MonitorPage.Cameras }) {
+                                    Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
+                                    Text("Add device", modifier = Modifier.padding(start = 6.dp))
+                                }
+                            }
                         }
-                        BeaconPageHeader("Your cameras", "Around your home")
-                        MonitorCameraGrid(
-                            cameras = orderedCameras.take(2),
-                            onView = { selectedCameraId = it.id },
+                    } else {
+                        // Mirrors the PWA's home-welcome: a plain h2 greeting plus a
+                        // small secondary-colored subtitle -- no card, no background.
+                        Text(homeGreeting(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            homeSubtitle(hostCameras),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp),
                         )
+                        val attentionCameras = homeAttentionCameras(hostCameras)
+                        if (attentionCameras.isNotEmpty()) {
+                            BeaconPanel(modifier = Modifier.fillMaxWidth().padding(top = BeaconSpacing.Lg)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(BeaconSpacing.Md)) {
+                                    Icon(Icons.Outlined.Warning, null, tint = BeaconWarning)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(homeAttentionTitle(attentionCameras), fontWeight = FontWeight.Bold)
+                                        Text(homeAttentionDescription(attentionCameras), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    androidx.compose.material3.TextButton(onClick = { monitorPage = MonitorPage.Cameras }) {
+                                        Text(if (attentionCameras.size == 1) "Check status" else "Review ${attentionCameras.size} cameras")
+                                    }
+                                }
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = BeaconSpacing.Xl),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("Favorites", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            androidx.compose.material3.TextButton(onClick = { monitorPage = MonitorPage.Cameras }) { Text("Edit") }
+                        }
+                        val favoriteCameras = homeFavoriteCameras(hostCameras, favoriteCameraIds)
+                        if (favoriteCameras.isEmpty()) {
+                            Column(
+                                modifier =
+                                    Modifier.fillMaxWidth()
+                                        .beaconDashedBorder(MaterialTheme.colorScheme.outlineVariant, BeaconRadii.Lg)
+                                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(BeaconRadii.Lg))
+                                        .padding(BeaconSpacing.Xxl),
+                                verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Md),
+                            ) {
+                                Text("No favorites chosen yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                OutlinedButton(onClick = { monitorPage = MonitorPage.Cameras }) { Text("Choose favorites") }
+                            }
+                        } else {
+                            MonitorCameraGrid(
+                                cameras = favoriteCameras,
+                                onView = { selectedCameraId = it.id },
+                            )
+                        }
                     }
-                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+                    BeaconPanel(modifier = Modifier.fillMaxWidth().padding(top = BeaconSpacing.Lg)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,

@@ -106,7 +106,7 @@ confirm the wide layout; that's the next acceptance step, not yet done.
 
 | Web screen/feature                                                                                                                                                                      | Android status                                     | Notes                                                                                                                                                                                                                                                                                                                                         |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dashboard/Home                                                                                                                                                                          | Equivalent (`MonitorHome`/`MonitorPage.Home`)      | Web's favorites grid + latest-activity sidecard ≈ Android's hero panel + top-2 camera grid + 3-item activity preview. Reasonably close already.                                                                                                                                                                                               |
+| Dashboard/Home                                                                                                                                                                          | **Rebuilt to match** (`MonitorHome`/`MonitorPage.Home`) | This row's original "reasonably close already" assessment was wrong -- it was based on a glance, not reading the PWA's actual `App.tsx`/`App.css`. Android was rendering a solid dark hero panel with invented copy that has no PWA counterpart at all. Rebuilt to match the PWA's real structure: a dashed-border `.dash-empty` card for zero cameras (not a dark hero), a plain greeting + subtitle for the non-empty state (not a hero), a real attention banner shown only when a camera needs it, and an actual Favorites grid. See development-handoff.md's September 27 "Home screen was structurally wrong" entry. Physically confirmed for the zero-camera state; the non-empty state is unit-tested but not yet confirmed on a real device with a paired camera. No dedicated favorites-editor dialog exists yet -- "Edit"/"Choose favorites" navigate to Cameras instead.                                                                                                                                                                                               |
 | Cameras catalog                                                                                                                                                                         | Equivalent (`MonitorPage.Cameras`)                 | Web has search/filter pills and pagination; Android has favorites-only filter and manual reorder but no text search. Minor gap.                                                                                                                                                                                                               |
 | Live camera viewer                                                                                                                                                                      | Equivalent (`AndroidLiveView`/`NativeLiveView.kt`) | Web has more connection sub-states (reconnecting-with-retry-count, signaling-unavailable, etc.) and a full recording UI (see below); Android's live view itself is close.                                                                                                                                                                     |
 | Camera settings (device)                                                                                                                                                                | Equivalent (`MonitorDeviceSettings`)               |                                                                                                                                                                                                                                                                                                                                               |
@@ -153,9 +153,30 @@ depend on earlier ones:
    grant editing (`PUT .../members/:id/grants`) remains open -- needs a
    second real account to accept an invitation and be granted/restricted
    access before it's meaningfully testable, not just a UI-writing task.
-5. **Finish token migration and screen-by-screen visual QA.** The shared Inter,
-   type, spacing, radius, shape, top-bar, and sidebar foundations now exist;
-   older screen literals and responsive states still need systematic review.
+5. **Finish the screen-by-screen visual port, reading each screen's actual
+   CSS rather than approximating from screenshots.** The shared Inter, type,
+   spacing, radius, and shape tokens exist, but the web itself doesn't put
+   everything on that shared scale -- individual components have their own
+   tuned one-off values (confirmed by grepping every web `*.css` file: dozens
+   of `border-radius` values outside the four shared tokens). "Port onto the
+   shared tokens" is the wrong mental model for the remaining screens; "read
+   the component's actual CSS and match it" is the one that found and fixed
+   Home's real problem (see below) instead of a cosmetic one. Home is done;
+   Cameras catalog, the live viewer, and the auth screens are next, roughly
+   in that order of how often the owner actually looks at them.
+
+   **Home already surfaced something bigger than styling**: it wasn't
+   approximately right, it was structurally wrong. The screen rendered a
+   solid dark hero panel with entirely Android-invented copy ("Set up your
+   first camera" / "Your home is within reach") that has no counterpart
+   anywhere in the PWA. The PWA's actual zero-camera state is a plain card
+   with a **dashed** border and real copy ("Add your first device"); its
+   non-empty state is a plain `h2` greeting with no card at all, a real
+   attention banner shown only when something needs it, and a genuine
+   Favorites grid -- none of which Android had. Rebuilt to match; see
+   development-handoff.md's September 27 entry for the full detail. Worth
+   assuming other not-yet-audited screens may have the same class of gap,
+   not just a color/spacing mismatch.
 
 ## Open questions for the owner
 

@@ -316,9 +316,9 @@ private fun MonitorCameraCard(
     Column(
         modifier =
             modifier
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
-                .clip(RoundedCornerShape(14.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(BeaconRadii.Lg))
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(BeaconRadii.Lg))
+                .clip(RoundedCornerShape(BeaconRadii.Lg))
                 .clickable(
                     enabled = available,
                     onClickLabel = "View ${camera.name} live",

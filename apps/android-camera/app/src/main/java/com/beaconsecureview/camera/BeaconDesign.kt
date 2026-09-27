@@ -24,14 +24,18 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -239,6 +243,26 @@ internal fun BeaconHeroPanel(
         content()
     }
 }
+
+/** Matches the PWA's `.dash-empty` card (App.css): a dashed rather than
+ * solid outline, used for the "nothing here yet" onboarding state. Plain
+ * `Modifier.border` only draws solid strokes, so this dashes it manually. */
+internal fun Modifier.beaconDashedBorder(
+    color: Color,
+    cornerRadius: Dp,
+    strokeWidth: Dp = 1.dp,
+): Modifier =
+    drawBehind {
+        val stroke = Stroke(
+            width = strokeWidth.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx()), 0f),
+        )
+        drawRoundRect(
+            color = color,
+            style = stroke,
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius.toPx()),
+        )
+    }
 
 @Composable
 internal fun BeaconPanel(

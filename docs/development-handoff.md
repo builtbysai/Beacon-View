@@ -1,5 +1,79 @@
 # Beacon SecureView development handoff
 
+## September 27, 2026 — Android Home screen was structurally wrong, not just styled differently
+
+The owner asked why Android still "looks like slop" next to the PWA despite
+the Settings work above, and to research a better porting approach. Answer
+after investigation: eyeballing PWA screenshots and approximating Compose
+values (what this session had been doing) isn't reliable enough --
+**the web itself doesn't put everything on the shared 4-step radius/spacing
+token scale**; individual components have their own tuned one-off CSS values
+(confirmed by grepping every web `*.css` file for `border-radius` outside
+`var(--radius-*)` -- dozens of one-off values like 14px, 18px, 9px scattered
+across component stylesheets). So "port every screen onto BeaconRadii/
+BeaconSpacing" was the wrong mental model. The right one, agreed with the
+owner: keep the native Compose UI (a WebView wrapper was considered and
+rejected -- it would discard a real, tested native Settings/Clips/household
+implementation just to fix an execution problem, and camera mode has to stay
+native regardless), and port each remaining screen by reading its actual web
+CSS file and matching those exact values, the same way ADR 0080 already did
+for the shared base tokens.
+
+Applied that to Home first, and found something bigger than a styling gap:
+**Android's Home screen was structurally wrong**, not just visually
+approximate. `MonitorPage.Home` always rendered a solid dark hero panel
+("BeaconHeroPanel") with an Android-invented headline
+("Set up your first camera" / "A camera needs your attention" / "Your home
+is within reach") that has no counterpart anywhere in the PWA. Reading
+`App.tsx` directly: the PWA's zero-camera state is `.dash-empty` -- a plain
+card with a **dashed** border (`border: 1px dashed var(--border-default)`),
+not a solid dark background, with real copy ("Add your first device" for an
+owner/admin, "No cameras shared with you yet" for a viewer/guest) and a
+"+ Add device" button. The non-empty state is even further off: the PWA
+renders a plain `h2` greeting (time-of-day: Good morning/afternoon/evening)
+and a small secondary-colored subtitle ("N of M cameras are ready to view."),
+*not* a card at all, with a real attention banner (only shown when a camera
+actually needs attention) and a genuine Favorites grid -- none of which
+Android had; it always showed the same hero regardless of state, plus two
+stat tiles ("Ready to view"/"Watching now") that don't exist on the web at
+all.
+
+Rewrote `MonitorPage.Home` in `MonitorUi.kt` to match the PWA's actual
+structure: `Modifier.beaconDashedBorder` (new, in `BeaconDesign.kt` -- plain
+`Modifier.border` can't draw dashed strokes, so this draws one manually) for
+the two empty-state cards (zero cameras, zero favorites), and new
+`homeGreeting`/`homeSubtitle`/`homeAttentionCameras`/`homeAttentionTitle`/
+`homeAttentionDescription`/`homeFavoriteCameras` helpers in
+`MonitorPresentation.kt` that mirror the PWA's own `App.tsx` computations
+line-for-line (same ready-count phrasing, same privacy-mention precedence,
+same first-four-cameras favorites fallback). One deliberate, documented
+simplification: the PWA's attention-banner text distinguishes "needs
+pairing" from "offline" and lists every camera name by grammar for 2-4
+cameras; Android has no equivalent pairing-state signal to tell those apart
+yet, so it covers the single- and multi-camera cases with simpler, still-
+accurate phrasing rather than faking a distinction it can't verify. The
+"Edit"/"Choose favorites" buttons navigate to the Cameras tab rather than
+opening a dedicated favorites-editor dialog, since no such dialog exists on
+Android yet (the web's `FavoritesEditor.tsx` has no native counterpart) --
+noted as an open gap rather than building a new dialog under time pressure.
+
+Validated: full local gate (`testDebugUnitTest lintDebug assembleDebug
+assembleRelease`) passes, including new unit tests for the `home*` helpers
+matching the PWA's exact copy/logic. Physically confirmed on the Pixel
+(landscape, ≥600dp so the wide-layout sidebar also happened to be exercised):
+the zero-camera dashed-border card renders correctly and matches the PWA's
+`dash-empty` card side-by-side (both open at once, compared directly). The
+non-empty state (greeting, subtitle, attention banner, Favorites grid) is
+implemented and unit-tested but **not yet physically confirmed** -- this
+test account has no paired camera, so the only state actually exercised on
+a real device is the zero-camera one.
+
+**This is one screen.** The same structural gap (Android inventing UI that
+doesn't exist on the web, rather than being a literal styling approximation
+of something that does) likely exists on other screens not yet given this
+treatment -- Cameras catalog, the live viewer, and the auth screens are the
+next candidates, roughly in that order of user-facing visibility.
+
 ## September 27, 2026 — real Android bug found and fixed: bodyless DELETE requests were broken app-wide
 
 While verifying the new Signed-in devices Revoke button against real hardware
