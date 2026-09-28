@@ -1,5 +1,75 @@
 # Beacon SecureView development handoff
 
+## September 27, 2026 — Sign-in/register/forgot-password screens audited against the PWA; two real bugs found and fixed, not just styling
+
+Continued the screen-by-screen sweep onto the auth screens, per the parity
+audit's own "auth screens are next" recommendation. `MonitorAuthScreen.kt`
+had clearly been ported from the real PWA source before (structure, copy,
+and field order already matched closely), but a close read against
+`AuthScreen.tsx`/`AuthScreen.css` still found six real discrepancies, two of
+them meaningful bugs rather than visual nitpicks.
+
+**Visual/structural fixes**: the forgot-password view had an invented
+icon-only back button with no visible label; the PWA's actual back action is
+a text link ("← Back to sign in") shown below the form, styled like the
+other "switch" links elsewhere on the screen -- replaced to match. The
+"Check your email" success view was missing the PWA's green checkmark
+circle entirely -- added, reusing the same `color.copy(alpha = 0.14f)`
+convention `BeaconStatusPill` already uses for semantic-color backgrounds
+elsewhere in the app rather than inventing new values. The error/alert
+banner rendered below the "Sign in"/"Create your account" heading; the PWA
+renders it above the heading (before the view's `card-head` in the JSX) --
+reordered on both the sign-in and register views. The password-visibility
+toggle always showed the same eye icon regardless of state; the PWA swaps
+to an eye-off icon once revealed -- added `Icons.Outlined.VisibilityOff` and
+swap logic in both password fields. Deliberately not ported: the marketing
+aside panel ("Welcome back" eyebrow/headline/trust note) -- confirmed via
+`AuthScreen.css`'s own `@media (max-width: 800px) { .auth .context { display:
+none } }` rule that the PWA itself hides this panel at phone width, so its
+absence on Android is correct parity, not a missed section.
+
+**Real bug #1 -- a privacy/enumeration-resistance property was silently
+broken**: `AuthScreen.tsx`'s `onResetSubmit` deliberately swallows every
+failure from `/api/auth/password-reset/request` and always shows "Check your
+email" ("the response is intentionally identical whether the account
+exists"). Android's equivalent instead treated a network/backend failure as
+a real error and displayed "Reset email could not be sent. Try again." --
+which leaks exactly the signal the PWA's design is built to hide (a
+different response for existing vs. non-existent accounts, or even just for
+whether the local dev backend has an email provider configured, is
+observable to an attacker probing for valid emails). Fixed to always advance
+to the sent view regardless of the request's outcome, matching the PWA
+exactly.
+
+**Real bug #2 -- Android silently dropped Google sign-in failures**: the
+backend's Android-specific OAuth redirects use `/auth/mobile#status=failed`
+or `#status=linkRequired` (the mobile equivalent of the web's
+`?googleSignIn=failed`/`linkRequired` query params) when it has no handoff
+code to hand back. `parseMobileGoogleAuthLink` only ever extracted a `code`
+parameter and returned `null` for anything else, so a failed or
+link-required Google sign-in attempt silently returned the user to a blank
+sign-in screen with no explanation at all -- strictly worse than the PWA's
+clear red alert ("Google sign-in could not be completed" / "...you need to
+sign in with your password first to link the account"). Reworked
+`parseMobileGoogleAuthLink` to return a `MobileGoogleAuthResult(code,
+status)` instead of a bare nullable string, threaded the new type through
+`MainActivity.kt` and `MonitorUi.kt`, and wired both status cases to the
+same alert copy as `AuthScreen.tsx`. Added a new unit test
+(`surfacesGoogleSignInFailureAndLinkRequiredStatuses`) alongside the
+existing trusted-link test in `PairingQrTest.kt`.
+
+Validated: full local gate (`testDebugUnitTest lintDebug assembleDebug
+assembleRelease`) passes. Physically confirmed end-to-end on emulator: the
+forgot-password view now shows the text back-link in the right place;
+submitting a reset request against this environment's backend (which has no
+email provider configured, so the request genuinely fails server-side)
+still reaches "Check your email" with the checkmark circle rendering
+correctly; the password-visibility icon now visibly swaps between eye and
+eye-off on both the sign-in and register screens. The Google sign-in
+failure/link-required path was fixed by code inspection and a unit test,
+not a live OAuth failure reproduction -- forcing a real Google-side failure
+or an existing-account collision wasn't practical in this environment.
+
 ## September 27, 2026 — Household per-camera grant editing completed, plus a missing confirmation step found and fixed
 
 Continued the screen-by-screen sweep onto the last explicitly-deferred

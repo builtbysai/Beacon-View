@@ -4,16 +4,20 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -70,7 +74,6 @@ internal fun MonitorAuthScreen(
     var view by rememberSaveable { mutableStateOf(AndroidAuthView.SignIn) }
     var resetEmail by rememberSaveable { mutableStateOf("") }
     var resetBusy by remember { mutableStateOf(false) }
-    var resetError by remember { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
 
     Column(
@@ -101,10 +104,6 @@ internal fun MonitorAuthScreen(
         ) {
             when (view) {
                     AndroidAuthView.SignIn -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Xs)) {
-                            Text("Sign in", style = MaterialTheme.typography.headlineMedium)
-                            Text("Continue to your Beacon cameras.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                         if (message.isNotBlank()) {
                             Text(
                                 message,
@@ -114,6 +113,10 @@ internal fun MonitorAuthScreen(
                                         .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f), RoundedCornerShape(BeaconRadii.Md))
                                         .padding(BeaconSpacing.Md),
                             )
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Xs)) {
+                            Text("Sign in", style = MaterialTheme.typography.headlineMedium)
+                            Text("Continue to your Beacon cameras.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Sm)) {
                             Text("Email", style = MaterialTheme.typography.labelMedium)
@@ -143,7 +146,10 @@ internal fun MonitorAuthScreen(
                                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                                 trailingIcon = {
                                     IconButton(onClick = { onShowPasswordChange(!showPassword) }) {
-                                        Icon(Icons.Outlined.Visibility, if (showPassword) "Hide password" else "Show password")
+                                        Icon(
+                                            if (showPassword) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                            if (showPassword) "Hide password" else "Show password",
+                                        )
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -189,10 +195,6 @@ internal fun MonitorAuthScreen(
                         }
                     }
                     AndroidAuthView.Register -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Xs)) {
-                            Text("Create your account", style = MaterialTheme.typography.headlineMedium)
-                            Text("Set up Beacon in a few moments.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                         if (message.isNotBlank()) {
                             Text(
                                 message,
@@ -202,6 +204,10 @@ internal fun MonitorAuthScreen(
                                         .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f), RoundedCornerShape(BeaconRadii.Md))
                                         .padding(BeaconSpacing.Md),
                             )
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Xs)) {
+                            Text("Create your account", style = MaterialTheme.typography.headlineMedium)
+                            Text("Set up Beacon in a few moments.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Sm)) {
                             Text("Email", style = MaterialTheme.typography.labelMedium)
@@ -221,7 +227,10 @@ internal fun MonitorAuthScreen(
                                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                                 trailingIcon = {
                                     IconButton(onClick = { onShowPasswordChange(!showPassword) }) {
-                                        Icon(Icons.Outlined.Visibility, if (showPassword) "Hide password" else "Show password")
+                                        Icon(
+                                            if (showPassword) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                            if (showPassword) "Hide password" else "Show password",
+                                        )
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -283,11 +292,10 @@ internal fun MonitorAuthScreen(
                         }
                     }
                     AndroidAuthView.ForgotPassword -> {
-                        IconButton(onClick = { view = AndroidAuthView.SignIn }) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to sign in")
+                        Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Xs)) {
+                            Text("Reset your password", style = MaterialTheme.typography.headlineMedium)
+                            Text("Enter your email and we'll send you a reset link.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Text("Reset your password", style = MaterialTheme.typography.headlineMedium)
-                        Text("Enter your email and we'll send you a reset link.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         OutlinedTextField(
                             value = resetEmail,
                             onValueChange = { resetEmail = it },
@@ -295,29 +303,53 @@ internal fun MonitorAuthScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        if (resetError.isNotBlank()) Text(resetError, color = MaterialTheme.colorScheme.error)
                         Button(
                             enabled = resetEmail.isNotBlank() && !resetBusy,
                             onClick = {
                                 resetBusy = true
-                                resetError = ""
                                 scope.launch {
+                                    // Mirrors the PWA's onResetSubmit exactly: the response is
+                                    // intentionally identical whether or not the account exists,
+                                    // so a transport failure here still moves on to "sent" rather
+                                    // than leaking success/failure as a signal.
                                     requestPasswordReset(resetEmail)
-                                        .onSuccess { view = AndroidAuthView.ResetSent }
-                                        .onFailure { resetError = "Reset email could not be sent. Try again." }
                                     resetBusy = false
+                                    view = AndroidAuthView.ResetSent
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.surface),
+                            shape = RoundedCornerShape(BeaconRadii.Md),
                         ) { Text(if (resetBusy) "Sending…" else "Send reset link") }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                            TextButton(onClick = { view = AndroidAuthView.SignIn }) {
+                                Text(
+                                    "← Back to sign in",
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Bold,
+                                    textDecoration = TextDecoration.Underline,
+                                )
+                            }
+                        }
                     }
                     AndroidAuthView.ResetSent -> {
-                        Text("Check your email", style = MaterialTheme.typography.headlineMedium)
-                        Text(
-                            "If an account exists for that address, you'll receive a password reset link shortly.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Button(onClick = { view = AndroidAuthView.SignIn }, modifier = Modifier.fillMaxWidth()) { Text("Back to sign in") }
+                        Box(
+                            modifier = Modifier.size(42.dp).background(BeaconOnline.copy(alpha = 0.14f), CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("✓", color = BeaconOnline, fontWeight = FontWeight.Black) }
+                        Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Xs)) {
+                            Text("Check your email", style = MaterialTheme.typography.headlineMedium)
+                            Text(
+                                "If an account exists for that address, you'll receive a password reset link shortly.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Button(
+                            onClick = { view = AndroidAuthView.SignIn },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.surface),
+                            shape = RoundedCornerShape(BeaconRadii.Md),
+                        ) { Text("Back to sign in") }
                     }
             }
         }

@@ -46,7 +46,7 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 
 class MainActivity : ComponentActivity() {
     private var inboundPairingCode by mutableStateOf<String?>(null)
-    private var inboundGoogleAuthCode by mutableStateOf<String?>(null)
+    private var inboundGoogleAuthCode by mutableStateOf<MobileGoogleAuthResult?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -132,7 +132,7 @@ private fun BeaconCameraApp(
     installationId: String,
     inboundPairingCode: String?,
     onInboundPairingCodeHandled: () -> Unit,
-    inboundGoogleAuthCode: String?,
+    inboundGoogleAuthCode: MobileGoogleAuthResult?,
     onInboundGoogleAuthCodeHandled: () -> Unit,
 ) {
     val context = LocalContext.current

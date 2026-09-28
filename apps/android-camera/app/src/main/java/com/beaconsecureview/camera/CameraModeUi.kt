@@ -346,7 +346,15 @@ internal fun parsePairingQr(rawValue: String?, trustedApiUrl: String? = null): S
     return code?.trim()?.uppercase()?.takeIf(::isValidPairingCode)
 }
 
-internal fun parseMobileGoogleAuthLink(rawValue: String?, trustedApiUrl: String?): String? {
+/** A successful exchange carries [code]; a failed or link-required attempt
+ * (the backend redirects to `/auth/mobile#status=failed` or
+ * `#status=linkRequired` when it has no handoff code to give, matching the
+ * web's `?googleSignIn=failed`/`linkRequired` query param) carries [status]
+ * instead so the caller can still show the PWA's equivalent message rather
+ * than silently doing nothing. */
+internal data class MobileGoogleAuthResult(val code: String? = null, val status: String? = null)
+
+internal fun parseMobileGoogleAuthLink(rawValue: String?, trustedApiUrl: String?): MobileGoogleAuthResult? {
     if (rawValue == null) return null
     val link = runCatching { java.net.URI(rawValue.trim()) }.getOrNull() ?: return null
     val trustedHost = trustedApiUrl?.let { runCatching { java.net.URI(it).host }.getOrNull() }
@@ -360,12 +368,19 @@ internal fun parseMobileGoogleAuthLink(rawValue: String?, trustedApiUrl: String?
             link.host.equals("auth", ignoreCase = true) &&
             link.path == "/mobile"
     if (!trustedHttps && !trustedAppReturn) return null
+    val parameters = (link.rawQuery ?: link.rawFragment)?.split('&') ?: return null
     val code =
-        (link.rawQuery ?: link.rawFragment)
-            ?.split('&')
-            ?.firstOrNull { it.substringBefore('=').equals("code", ignoreCase = true) }
+        parameters
+            .firstOrNull { it.substringBefore('=').equals("code", ignoreCase = true) }
             ?.substringAfter('=', missingDelimiterValue = "")
-    return code?.takeIf { it.length in 32..512 && it.matches(Regex("[A-Za-z0-9_-]+")) }
+            ?.takeIf { it.length in 32..512 && it.matches(Regex("[A-Za-z0-9_-]+")) }
+    val status =
+        parameters
+            .firstOrNull { it.substringBefore('=').equals("status", ignoreCase = true) }
+            ?.substringAfter('=', missingDelimiterValue = "")
+            ?.takeIf { it == "failed" || it == "linkRequired" }
+    if (code == null && status == null) return null
+    return MobileGoogleAuthResult(code = code, status = status)
 }
 
 @Composable

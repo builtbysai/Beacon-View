@@ -123,7 +123,7 @@ internal fun MonitorHome(
     onCameraMode: () -> Unit,
     onSetUpThisDevice: (String) -> Unit,
     onAccountDeleted: () -> Unit,
-    inboundGoogleAuthCode: String?,
+    inboundGoogleAuthCode: MobileGoogleAuthResult?,
     onInboundGoogleAuthCodeHandled: () -> Unit,
     onGoogleSignIn: () -> Unit,
     themePreference: BeaconThemePreference,
@@ -261,21 +261,33 @@ internal fun MonitorHome(
     }
 
     LaunchedEffect(inboundGoogleAuthCode) {
-        val code = inboundGoogleAuthCode ?: return@LaunchedEffect
-        if (session == null) {
-            busy = true
-            val result =
-                withContext(Dispatchers.IO) { runCatching { api.exchangeGoogleSignIn(code) } }
-            result.onSuccess {
-                sessionStore.save(it)
-                session = it
-                message = ""
-            }.onFailure {
-                message = it.userFacingMessage("Google sign-in could not be completed.")
+        val inbound = inboundGoogleAuthCode ?: return@LaunchedEffect
+        when {
+            inbound.code != null && session == null -> {
+                busy = true
+                val result =
+                    withContext(Dispatchers.IO) { runCatching { api.exchangeGoogleSignIn(inbound.code) } }
+                result.onSuccess {
+                    sessionStore.save(it)
+                    session = it
+                    message = ""
+                }.onFailure {
+                    message = it.userFacingMessage("Google sign-in could not be completed.")
+                }
+                busy = false
             }
-            busy = false
+            // Mirrors AuthScreen.tsx's `googleResult === 'linkRequired'`/`'failed'`
+            // alerts -- the backend redirects here with a status instead of a
+            // handoff code when it has no session to hand back.
+            inbound.status == "linkRequired" -> {
+                message =
+                    "Google sign-in succeeded, but you need to sign in with your password first to link the account. Once you do, we'll link your Google account automatically."
+            }
+            inbound.status == "failed" -> {
+                message = "Google sign-in could not be completed. Please try again."
+            }
         }
-        // Clearing this state before the awaited exchange would cancel this
+        // Clearing this state before an awaited exchange above would cancel this
         // LaunchedEffect and discard the successfully returned session.
         onInboundGoogleAuthCodeHandled()
     }
