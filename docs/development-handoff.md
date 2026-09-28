@@ -1,5 +1,66 @@
 # Beacon SecureView development handoff
 
+## September 27, 2026 — Root-caused and fixed the flagged live-video connection failure: local dev setup, not a signaling bug
+
+A prior entry flagged that live video from an Android viewer connected once
+then failed on every subsequent attempt, hypothesizing the signaling
+server's role-based ICE-server selection had no case for a native mobile
+viewer. Investigated properly before touching any shared backend code,
+since `SignalingHub`'s ICE-server factories are computed once at hub
+startup (not per-connection), so a real fix would have meant plumbing a
+`platform` dimension through the WebSocket query and signaling
+architecture — real production-signaling surgery, not something to do
+without confirming the diagnosis first.
+
+**Actual root cause was local environment, not code**: `createIceServers(config,
+role)` already differentiates `device` vs `viewer` STUN/TURN endpoints
+correctly (a legitimate need — production may route camera-device and
+viewer traffic differently), so there is no platform-blind bug in the
+signaling code itself. Two local problems combined instead:
+
+1. `docker ps` showed the local `coturn` container as `Created`, never
+   `Up` — the local STUN/TURN server had never actually been started in
+   this environment. Any live-video success up to now was relying on raw
+   host ICE candidates between processes on the same machine, which is
+   inherently flakier than a working STUN/TURN path — explaining the
+   "worked once, then failed" pattern exactly.
+2. This local `apps/backend/.env` had `DEVICE_STUN_URL`/`DEVICE_TURN_URL`
+   correctly set to `10.0.2.2` (the standard Android-emulator alias for the
+   host machine) but left `VIEWER_STUN_URL`/`VIEWER_TURN_URL`/
+   `VIEWER_TURN_TCP_URL` at `127.0.0.1` — correct for a _browser_ viewer on
+   the same machine, meaningless from a native Android viewer's own
+   network namespace. The `.env` file already carries a comment reminding
+   whoever sets up LAN/physical-device testing to point every URL at the
+   same reachable address; this two-emulator (Android monitor + Android
+   camera) local setup just hadn't had that applied to the viewer URLs.
+
+**Fix**: started the `coturn` container (`docker compose up -d coturn` in
+`infrastructure/docker`), then changed local `VIEWER_STUN_URL`/
+`VIEWER_TURN_URL`/`VIEWER_TURN_TCP_URL` to `10.0.2.2` to match
+`DEVICE_STUN_URL`/etc., and restarted the backend dev server to pick up the
+`.env` change. `.env` is gitignored — no code and no committed
+configuration changed.
+
+**Physically verified end-to-end**, not just inferred: re-paired the test
+camera emulator (its access had separately been revoked from earlier
+session testing, unrelated to this fix, and needed a fresh reconnect code),
+then opened the live viewer on the monitor emulator. The feed showed
+"LIVE" and rendered the camera emulator's actual virtual-camera scene in
+real time, still connected and rendering several seconds later — not a
+single frame or a status-label false positive.
+
+**Caveat for whoever picks this up next**: this makes native
+Android-to-Android live-video testing work against the local dev backend,
+but it trades away simultaneous browser-viewer testing against the same
+backend, since `10.0.2.2` has no meaning to a real browser process on the
+host. Switch `VIEWER_STUN_URL`/etc. back to `127.0.0.1` for browser-only
+testing, or point every `VIEWER_`/`DEVICE_` URL at the machine's real LAN
+IP (the `.env`'s own comment, and `scripts/Start-BeaconLanDev.ps1`,
+already document this) to test both platforms at once. None of this
+affects production: a real deployment's STUN/TURN URLs are a real public
+address reachable identically by any platform, so the loopback/emulator-
+alias mismatch this session hit is specific to local dev.
+
 ## September 27, 2026 — Sign-in/register/forgot-password screens audited against the PWA; two real bugs found and fixed, not just styling
 
 Continued the screen-by-screen sweep onto the auth screens, per the parity
