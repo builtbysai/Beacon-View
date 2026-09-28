@@ -1,5 +1,64 @@
 # Beacon SecureView development handoff
 
+## September 28, 2026 — Talk (two-way audio) and the WebRTC quality-metrics panel implemented on Android's live viewer
+
+Continued the live-viewer work from the previous entry (the ICE-server fix)
+onto its two remaining "not ported" items: Talk and the quality-metrics
+panel. Both were genuinely unbuilt on the viewer side, but Talk turned out
+to be half-built already: `WebRtcCameraSession.kt` (the camera/device role)
+already had a dedicated `RECV_ONLY` "beacon-talk" audio transceiver,
+`setTalkEnabled()`, and even a confirmation beep via `ToneGenerator`, all
+wired to incoming `talk-state` signaling messages -- from earlier session
+work building out the device side. Only the viewer (monitor) side had never
+been built at all.
+
+**New files**: `TalkSession.kt` is a close Kotlin port of the PWA's
+`talk.ts` -- same `TalkState` enum (`idle/permission/connecting/speaking/
+busy/unavailable/recovering`), same generation-counter pattern to guard
+against races, same 10-second connecting timeout, same "track stays
+disabled until the server grants ownership" sequencing. `StreamQuality.kt`
+ports `live-video-quality.ts`'s `readStreamQuality` against Android's
+`RTCStatsReport`/`RTCStats` (`getMembers()` in place of JS's flexible stat
+object), computing the same bitrate-from-byte-delta, path classification
+(direct/relay/unknown from candidate-pair types), fps, jitter, RTT, and
+lost-packet fields.
+
+**The one non-obvious detail, ported exactly rather than rediscovered**:
+`LiveVideo.tsx` explicitly forces every audio transceiver's direction to
+`sendrecv` right before calling `createAnswer()`. Skipping this, the
+offered `recvonly` talk-back line negotiates to `inactive` instead of
+`sendonly` and Talk silently never works, no matter how correct the rest of
+the plumbing is -- this is _why_ `sender.replaceTrack()` alone is enough
+later even though no explicit renegotiation ever happens for the talk
+line's direction. Replicated verbatim in `AndroidViewerSession.kt`'s
+`applyOffer()`.
+
+**Wiring**: `AndroidViewerSession.kt` now parses `canTalk` from the `ready`
+signaling message (previously silently dropped alongside a `canListen` that
+was already read), creates a `TalkSession` alongside the peer connection,
+routes incoming `talk-state` messages to it, and polls `peer.getStats()`
+every 2 seconds once connected for the quality panel. `NativeLiveView.kt`
+adds a Talk button (mic/mic-off icon swap, matching the PWA's disabled-state
+logic across `switching`/`privacyMode`/connection-state) that requests
+`RECORD_AUDIO` at tap time via `rememberLauncherForActivityResult` --
+deliberately just-in-time like the PWA's own `getUserMedia` prompt, not
+gated upfront the way the camera side's own mic permission already is for a
+different reason (continuous background capture vs. one-off viewer talk) --
+a talk-status footer line using `talkStatusText` (copy-identical to the
+PWA's `talkStatusText`), and a `Path`/`Video`/`Latency`/`Loss` block inside
+the existing "Stream details" disclosure.
+
+Validated: full local gate (`testDebugUnitTest lintDebug assembleDebug
+assembleRelease`) passes, plus a new `TalkSessionTest.kt` covering
+`talkStatusText`'s copy for every state. Physically verified end-to-end on
+the same two-Android-emulator setup used for the ICE-server fix: granted
+the runtime mic permission, watched the Talk button turn red with
+"Speaking · microphone on" (matching the PWA's copy exactly), confirmed the
+quality panel showing real, live numbers (`3 fps · 249 kbps`, `10 ms RTT ·
+114 ms jitter`, `79 packets`, `Direct` path) that updated over time, and
+confirmed Stop cleanly released the microphone back to the idle button
+state without disrupting the underlying video connection.
+
 ## September 27, 2026 — Root-caused and fixed the flagged live-video connection failure: local dev setup, not a signaling bug
 
 A prior entry flagged that live video from an Android viewer connected once

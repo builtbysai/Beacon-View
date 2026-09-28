@@ -1,7 +1,12 @@
 package com.beaconsecureview.camera
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +26,8 @@ import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Cameraswitch
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FiberManualRecord
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.MicOff
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Button
@@ -77,6 +84,9 @@ internal fun AndroidLiveView(
     var reconnectAttempt by remember(camera.id) { mutableStateOf(0) }
     var canListen by remember(camera.id) { mutableStateOf(false) }
     var listening by remember(camera.id) { mutableStateOf(false) }
+    var canTalk by remember(camera.id) { mutableStateOf(false) }
+    var talkState by remember(camera.id) { mutableStateOf(TalkState.Idle) }
+    var quality by remember(camera.id) { mutableStateOf<StreamQuality?>(null) }
     var fullscreen by remember(camera.id) { mutableStateOf(false) }
     var statsOpen by remember(camera.id) { mutableStateOf(false) }
     var viewerSession by remember(camera.id) { mutableStateOf<AndroidViewerSession?>(null) }
@@ -106,6 +116,26 @@ internal fun AndroidLiveView(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    val microphonePermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) viewerSession?.startTalk() else talkState = TalkState.Unavailable
+        }
+
+    fun toggleTalk() {
+        if (talkState == TalkState.Permission || talkState == TalkState.Connecting || talkState == TalkState.Speaking) {
+            viewerSession?.stopTalk()
+            return
+        }
+        val granted =
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            viewerSession?.startTalk()
+        } else {
+            microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     DisposableEffect(
         camera.id,
         sessionToken,
@@ -114,6 +144,9 @@ internal fun AndroidLiveView(
     ) {
         canListen = false
         listening = false
+        canTalk = false
+        talkState = TalkState.Idle
+        quality = null
         val viewer =
             if (shouldRunNativeViewer(lifecycleStarted)) {
                 state = StreamingState.Connecting
@@ -128,6 +161,9 @@ internal fun AndroidLiveView(
                         canListen = allowed
                         if (!allowed) listening = false
                     },
+                    onCanTalk = { allowed -> canTalk = allowed },
+                    onTalkState = { talkState = it },
+                    onQuality = { quality = it },
                     onAuthorizationLost = onAuthorizationLost,
                 ).also {
                     viewerSession = it
@@ -254,6 +290,19 @@ internal fun AndroidLiveView(
                         Text(if (listening) "Mute" else "Listen")
                     }
                 }
+                if (canTalk) {
+                    OutlinedButton(
+                        enabled =
+                            state == StreamingState.Connected ||
+                                talkState == TalkState.Permission ||
+                                talkState == TalkState.Connecting ||
+                                talkState == TalkState.Speaking,
+                        onClick = ::toggleTalk,
+                    ) {
+                        Icon(if (talkState == TalkState.Speaking) Icons.Outlined.MicOff else Icons.Outlined.Mic, null, modifier = Modifier.size(19.dp))
+                        Text(if (talkState == TalkState.Speaking) "Stop talking" else "Talk")
+                    }
+                }
                 if (canRecord) {
                     ManualRecordingControl(
                         enabled = state == StreamingState.Connected,
@@ -338,6 +387,9 @@ internal fun AndroidLiveView(
             if (recordingError.isNotBlank()) {
                 Text(recordingError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
+            if (talkState != TalkState.Idle) {
+                Text(talkStatusText(talkState), color = Color.White, style = MaterialTheme.typography.bodySmall)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (canListen) {
                     Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
@@ -348,6 +400,33 @@ internal fun AndroidLiveView(
                             },
                         ) {
                             Icon(if (listening) Icons.AutoMirrored.Outlined.VolumeUp else Icons.AutoMirrored.Outlined.VolumeOff, if (listening) "Mute" else "Listen", tint = Color.White)
+                        }
+                    }
+                }
+                if (canTalk) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (talkState == TalkState.Speaking) BeaconLive else BeaconVideoControl,
+                    ) {
+                        IconButton(
+                            enabled =
+                                state == StreamingState.Connected ||
+                                    talkState == TalkState.Permission ||
+                                    talkState == TalkState.Connecting ||
+                                    talkState == TalkState.Speaking,
+                            onClick = ::toggleTalk,
+                        ) {
+                            Icon(
+                                if (talkState == TalkState.Speaking) Icons.Outlined.MicOff else Icons.Outlined.Mic,
+                                if (talkState == TalkState.Speaking) {
+                                    "Stop talking"
+                                } else if (talkState == TalkState.Permission || talkState == TalkState.Connecting) {
+                                    "Cancel talk"
+                                } else {
+                                    "Talk"
+                                },
+                                tint = Color.White,
+                            )
                         }
                     }
                 }
@@ -425,9 +504,33 @@ internal fun AndroidLiveView(
                         color = BeaconVideoMuted,
                         style = MaterialTheme.typography.labelSmall,
                     )
+                    quality?.let { StreamQualityFacts(it) }
                 }
             }
         }
+    }
+}
+
+/** Mirrors the PWA's `<dl className="stream-quality">` (LiveVideo.tsx) exactly:
+ * Path, Video (fps/bitrate), Latency (RTT/jitter), Loss (lost packets). */
+@Composable
+private fun StreamQualityFacts(quality: StreamQuality) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        StreamQualityRow("Path", quality.path)
+        StreamQualityRow("Video", "${quality.fps} fps · ${quality.bitrateKbps} kbps")
+        StreamQualityRow("Latency", "${quality.rttMs} ms RTT · ${quality.jitterMs} ms jitter")
+        StreamQualityRow("Loss", "${quality.lostPackets} packets")
+    }
+}
+
+@Composable
+private fun StreamQualityRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = BeaconVideoMuted, style = MaterialTheme.typography.labelSmall)
+        Text(value, color = Color.White, style = MaterialTheme.typography.labelSmall)
     }
 }
 
