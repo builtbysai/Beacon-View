@@ -1,5 +1,35 @@
 # Beacon SecureView development handoff
 
+## September 28, 2026 — Motion-settings save/apply acceptance closed; manual-recording request path acceptance-verified
+
+Continued onto the remaining "real device acceptance" items the audit had
+open: motion settings (blocked before on "the current household returned no
+editable motion rows") and manual recording (blocked on a real Drive-backed
+capture).
+
+**Motion settings — now fully closed.** The self-paired "Android Camera"
+test source from earlier live-video testing gave a real editable motion
+row. Changed sensitivity to High, enabled record-on-motion, and enabled
+quiet hours (22:00-07:00, America/New_York) through the native panel,
+saved, and independently confirmed all four fields actually persisted via
+a direct `camera_sources` query -- not inferring success from the app's own
+"Saved" message alone.
+
+**Manual recording — request path verified, capture path confirmed
+blocked on missing credentials, not a bug.** Tapping Record against the
+same live connection sent a real `POST /api/recordings`; the backend
+responded `503` (this environment has no Google Drive OAuth client
+configured, so `recordingAccessToken` throws "Recording storage is
+unavailable" by design), and Android surfaced exactly the expected error
+("Recording could not be started. Try again.") rather than crashing,
+hanging, or silently doing nothing. This confirms the full request-side
+wiring (owner-gated control → API call → error surfacing) is correct.
+**What remains open is not fixable from the app side**: a genuine
+successful capture, encrypted upload, and Clips-library playback need a
+real Google Cloud OAuth client provisioned for this environment. That's an
+infrastructure/credentials decision, not implementation work -- flagging
+for the owner rather than attempting to fabricate credentials locally.
+
 ## September 28, 2026 — Talk (two-way audio) and the WebRTC quality-metrics panel implemented on Android's live viewer
 
 Continued the live-viewer work from the previous entry (the ICE-server fix)
