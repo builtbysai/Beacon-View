@@ -584,6 +584,33 @@ describe.skipIf(!app || !store)('recording routes', () => {
     device.close();
   });
 
+  it('dispatches camera-captured manual recordings over the authenticated device socket', async () => {
+    const owner = await registerAndSignIn(
+      'camera-capture@example.com',
+      '10.2.0.61',
+    );
+    const camera = await pairCamera(owner, 'Entry');
+    await connectDrive(owner.userId);
+    const device = connectDevice(camera.cameraId, camera.credential);
+    await nextMessage(device);
+
+    const command = nextMessage(device);
+    const created = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { cameraId: camera.cameraId, captureMode: 'camera' },
+      url: '/api/recordings',
+    });
+    expect(created.statusCode).toBe(202);
+    const recordingId = created.json<{ recording: { id: string } }>().recording
+      .id;
+    await expect(command).resolves.toEqual({
+      recordingId,
+      type: 'recording-request',
+    });
+    device.close();
+  });
+
   it('paginates /api/recordings newest-first with a keyset cursor', async () => {
     const owner = await registerAndSignIn(
       'recordings-page@example.com',

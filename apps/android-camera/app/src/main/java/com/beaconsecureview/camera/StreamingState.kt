@@ -71,6 +71,7 @@ data class CameraRuntimeState(
     val privacyMode: Boolean = false,
     val privacyChangePending: Boolean = false,
     val privacySyncPending: Boolean = false,
+    val recordingActive: Boolean = false,
 )
 
 data class RegisteredCameraSource(
@@ -94,18 +95,6 @@ fun deviceStateFor(
 
 fun stateAfterPeerConnection(connected: Boolean): StreamingState =
     if (connected) StreamingState.Connected else StreamingState.Reconnecting
-
-fun viewerStatusText(state: StreamingState, reconnectAttempt: Int): String =
-    when (state) {
-        StreamingState.Connected -> "● Live"
-        StreamingState.Connecting ->
-            if (reconnectAttempt > 0) "Reconnecting…" else "Connecting…"
-        StreamingState.Reconnecting -> "Connection interrupted. Reconnecting…"
-        StreamingState.Offline -> "Camera offline. Beacon will reconnect automatically."
-        StreamingState.Failed -> "Unable to connect. Beacon will keep trying."
-        StreamingState.PermissionRequired -> "Camera permission is required on the camera device."
-        StreamingState.Ready -> "Ready"
-    }
 
 fun canSwitchCameraSource(
     selectedCameraId: String?,

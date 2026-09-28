@@ -793,6 +793,55 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     expect(revoked.statusCode).toBe(401);
   });
 
+  it('registers Android monitor accounts with revocable bearer sessions', async () => {
+    const invalid = await app!.inject({
+      method: 'POST',
+      payload: { email: 'mobile-new@example.com', password: 'too short' },
+      remoteAddress: '127.0.0.21',
+      url: '/api/mobile/auth/register',
+    });
+    expect(invalid.statusCode).toBe(400);
+
+    const registration = await app!.inject({
+      headers: { 'user-agent': 'Beacon Android test' },
+      method: 'POST',
+      payload: {
+        email: ' Mobile-New@Example.com ',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.21',
+      url: '/api/mobile/auth/register',
+    });
+    expect(registration.statusCode).toBe(201);
+    expect(registration.headers['set-cookie']).toBeUndefined();
+    const body = registration.json<{
+      sessionToken: string;
+      user: { email: string; id: string };
+    }>();
+    expect(body.sessionToken.length).toBeGreaterThan(32);
+    expect(body.user.email).toBe('mobile-new@example.com');
+
+    const account = await app!.inject({
+      headers: { authorization: `Bearer ${body.sessionToken}` },
+      method: 'GET',
+      url: '/api/auth/me',
+    });
+    expect(account.statusCode).toBe(200);
+    expect(account.json<{ user: { id: string } }>().user.id).toBe(body.user.id);
+
+    const duplicate = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'mobile-new@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.21',
+      url: '/api/mobile/auth/register',
+    });
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json()).toEqual({ error: 'Unable to create account' });
+  });
+
   it('immediately rejects idle-expired sessions', async () => {
     const registration = await app!.inject({
       method: 'POST',

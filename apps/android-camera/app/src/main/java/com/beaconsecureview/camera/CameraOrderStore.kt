@@ -22,13 +22,3 @@ internal fun normalizedCameraOrder(savedIds: List<String>, availableIds: List<St
     val available = availableIds.toSet()
     return savedIds.filter { it in available }.distinct() + availableIds.filter { it !in savedIds }
 }
-
-internal fun movedCameraId(order: List<String>, cameraId: String, offset: Int): List<String> {
-    val currentIndex = order.indexOf(cameraId)
-    val targetIndex = currentIndex + offset
-    if (currentIndex < 0 || targetIndex !in order.indices) return order
-    return order.toMutableList().apply {
-        this[currentIndex] = this[targetIndex]
-        this[targetIndex] = cameraId
-    }
-}
