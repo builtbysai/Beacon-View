@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -67,7 +68,7 @@ internal fun BeaconEventsViewSwitch(
                 val active = selected == view
                 TextButton(
                     onClick = { onSelect(view) },
-                    modifier = Modifier.weight(1f).height(40.dp).semantics { this.selected = active },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { this.selected = active },
                     colors =
                         ButtonDefaults.textButtonColors(
                             containerColor = if (active) MaterialTheme.colorScheme.surface else Color.Transparent,
@@ -320,7 +321,7 @@ private fun BeaconSidebarButton(
     Row(
         modifier =
             Modifier.fillMaxWidth()
-                .height(48.dp)
+                .heightIn(min = 48.dp)
                 .background(background)
                 .clickable(role = Role.Button, onClick = onClick)
                 .semantics { this.selected = selected },

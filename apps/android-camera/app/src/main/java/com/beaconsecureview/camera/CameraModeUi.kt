@@ -133,7 +133,7 @@ internal fun PairingScreen(
                 .padding(horizontal = 16.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
+        IconButton(onClick = onBack) {
             Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back")
         }
         BeaconPageHeader(

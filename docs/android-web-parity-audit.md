@@ -196,11 +196,18 @@ depend on earlier ones:
   viewer row above. Was a local `.env`/Docker setup gap (coturn never
   started, viewer STUN/TURN URLs not pointed at the Android-emulator host
   alias), not a signaling-code bug. No backend code changed.
-- This audit is scoped to screens/features/design tokens only. It does not
-  cover accessibility parity (TalkBack vs. web screen readers, focus order,
-  reduced-motion) — that would need its own pass once the feature/design gaps
-  above are resolved, since matching behavior on non-existent screens isn't
-  meaningful yet.
+- This audit was originally scoped to screens/features/design tokens only,
+  not accessibility parity. A first Android accessibility pass has since
+  happened (see `docs/roadmap.md`'s N8 row): a static sweep of every
+  `Icon`/`IconButton` call site, fixed-height containers that clip text at
+  large system font scale (7 fixed, live-verified at 200%), and touch
+  targets below Android's 48dp minimum (2 fixed) and unlabeled
+  checkbox-and-text rows with no tap-to-toggle on the label (2 fixed,
+  matching an existing `Modifier.semantics{contentDescription=...}` pattern
+  already correct elsewhere in the app). Still open: a live TalkBack
+  traversal-order pass (interrupted by an emulator display glitch,
+  unrelated to the code change), rotation/split-screen/tablet-foldable, and
+  the web side's cross-browser assistive-technology checks entirely.
 
 ## Incidental finding (not part of this audit's scope)
 

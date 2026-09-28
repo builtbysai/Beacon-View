@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -389,8 +391,16 @@ private fun ShareClipDialog(
                                 ) { Text("${option}h") }
                             }
                         }
-                        Row(verticalAlignment = Alignment.Top) {
-                            Checkbox(checked = consent, onCheckedChange = { consent = it })
+                        Row(
+                            modifier =
+                                Modifier.toggleable(
+                                    value = consent,
+                                    role = Role.Checkbox,
+                                    onValueChange = { consent = it },
+                                ),
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            Checkbox(checked = consent, onCheckedChange = null)
                             Text(
                                 "I understand anyone with this link can view this clip without a Beacon " +
                                     "account until it expires or I revoke it.",

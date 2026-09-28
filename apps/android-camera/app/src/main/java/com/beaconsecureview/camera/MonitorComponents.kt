@@ -236,7 +236,12 @@ internal fun MonitorDeviceSettings(
                     Text("Privacy", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text("Pause capture from every camera on this phone.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(checked = privacyMode, enabled = (online || privacyMode) && !busy, onCheckedChange = { onPrivacyChange(!privacyMode) })
+                Switch(
+                    checked = privacyMode,
+                    enabled = (online || privacyMode) && !busy,
+                    modifier = Modifier.semantics { contentDescription = "Privacy: pause capture from every camera on this phone" },
+                    onCheckedChange = { onPrivacyChange(!privacyMode) },
+                )
             }
             Text(
                 "Local privacy is the fastest way to stop camera and microphone capture.",
@@ -653,7 +658,7 @@ private fun MonitorCameraCard(
             ) {
                 Text(camera.deviceName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
                 if (onSettings != null) {
-                    IconButton(onClick = onSettings, modifier = Modifier.size(36.dp)) {
+                    IconButton(onClick = onSettings) {
                         Icon(Icons.Outlined.Settings, "Settings for ${camera.deviceName}", modifier = Modifier.size(20.dp))
                     }
                 }

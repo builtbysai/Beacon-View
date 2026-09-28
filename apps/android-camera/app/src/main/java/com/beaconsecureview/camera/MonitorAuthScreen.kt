@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -82,7 +83,7 @@ internal fun MonitorAuthScreen(
     ) {
         Column {
             Row(
-                modifier = Modifier.fillMaxWidth().height(76.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 76.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -158,7 +159,7 @@ internal fun MonitorAuthScreen(
                         Button(
                             enabled = !busy,
                             onClick = onSignIn,
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.surface),
                             shape = RoundedCornerShape(BeaconRadii.Md),
                         ) { Text(if (busy) "Signing in…" else "Sign in") }
@@ -166,7 +167,7 @@ internal fun MonitorAuthScreen(
                         OutlinedButton(
                             enabled = !busy,
                             onClick = onGoogleSignIn,
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             shape = RoundedCornerShape(BeaconRadii.Md),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
                         ) {
@@ -258,7 +259,7 @@ internal fun MonitorAuthScreen(
                         Button(
                             enabled = registrationReady(email, password, confirmPassword) && !busy,
                             onClick = onCreateAccount,
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.surface),
                             shape = RoundedCornerShape(BeaconRadii.Md),
                         ) { Text(if (busy) "Creating account…" else "Create account") }
@@ -266,7 +267,7 @@ internal fun MonitorAuthScreen(
                         OutlinedButton(
                             enabled = !busy,
                             onClick = onGoogleSignIn,
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             shape = RoundedCornerShape(BeaconRadii.Md),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
                         ) {
@@ -317,7 +318,7 @@ internal fun MonitorAuthScreen(
                                     view = AndroidAuthView.ResetSent
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.surface),
                             shape = RoundedCornerShape(BeaconRadii.Md),
                         ) { Text(if (resetBusy) "Sending…" else "Send reset link") }
@@ -346,7 +347,7 @@ internal fun MonitorAuthScreen(
                         }
                         Button(
                             onClick = { view = AndroidAuthView.SignIn },
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.surface),
                             shape = RoundedCornerShape(BeaconRadii.Md),
                         ) { Text("Back to sign in") }

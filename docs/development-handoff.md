@@ -1,5 +1,73 @@
 # Beacon SecureView development handoff
 
+## September 28, 2026 — First Android accessibility pass: font-scale clipping, sub-minimum touch targets, and unlabeled checkbox rows fixed
+
+Started on N8 (accessibility/product QA) per the owner's direction to move
+past U7's remaining functional gaps. Did a static sweep of the whole
+Android codebase rather than guessing at likely trouble spots, since a
+plausible-sounding bug class (missing icon content descriptions) turned out
+mostly not to be a real problem here once actually checked.
+
+**Checked and found fine**: all 63 `Icon(...)` and 20 `IconButton(...)`
+call sites. Most `Icon(..., null)` instances are correctly `null` because
+they sit beside a visible `Text` inside a `Button`/`OutlinedButton`/
+clickable `Surface`, which Compose already merges into one accessible node
+-- adding a redundant description there would just make TalkBack announce
+the same label twice. Every bare `IconButton` already had a real
+description, either on the `Icon` itself or via an outer
+`Modifier.semantics{contentDescription=...}`. Worth recording precisely
+because it means the codebase was already in materially better shape here
+than the initial "audit every button" plan assumed -- most of the audit's
+value ended up being in three different, more subtle bug classes.
+
+**Real bug #1 -- fixed-height clips text at large font scale**: seven
+`Button`/`OutlinedButton`/`Row` sites (six auth-screen buttons, the auth
+top bar) used `Modifier.height(48.dp)` or `.height(76.dp)` -- an exact
+constraint, not a minimum. Android's font-scale accessibility setting can
+reach 200%, and a fixed-height container clips content that needs more
+room rather than growing to fit it. Changed all seven to
+`Modifier.heightIn(min = ...)`, which renders pixel-identically at normal
+scale (confirmed: same layout before/after at 100%) and only differs by
+allowing growth when text genuinely needs it. **Physically verified at
+200% font scale**: "Back to Beacon" now wraps to two lines with the header
+growing to fit, and "Sign in"/"Continue with Google" grow taller instead
+of clipping -- both were reading as a single clipped line before the fix
+would have applied (confirmed by design, not by capturing the broken
+state, since the fix was applied before this device pass).
+
+**Real bug #2 -- two touch targets below Android's 48dp minimum**: the
+Cameras-catalog card's settings gear was constrained to 36dp and the
+camera-mode setup screen's back button to 44dp, both via an explicit
+`Modifier.size(...)` override with no space constraint forcing it. Removed
+both overrides to fall back to `IconButton`'s own accessible 48dp default.
+
+**Real bug #3 -- two checkbox rows with no accessible label and no
+tap-to-toggle on the label text**: `BeaconGrantCheckbox` (the per-camera
+grant checkboxes in the household-sharing manage-member dialog) and the
+clip-share consent checkbox were both a bare `Row(Checkbox, Text)` with no
+association between them -- TalkBack would announce an unlabeled checkbox
+and a separate static text block, and (unlike the PWA's native
+`<label><input>Listen</label>`, where clicking the word toggles the
+checkbox) tapping the label text did nothing. Fixed both with the standard
+Compose pattern: `Modifier.toggleable(value, role = Role.Checkbox,
+onValueChange)` on the `Row`, with the `Checkbox`'s own `onCheckedChange`
+set to `null` so TalkBack doesn't double-announce it as a second,
+separately-focusable control.
+
+Validated: full local gate (`testDebugUnitTest lintDebug assembleDebug
+assembleRelease`) passes. The font-scale fix was physically confirmed live
+on an emulator at both 100% (no regression) and 200% (no clipping). The
+checkbox-row fix and a live TalkBack traversal pass were not re-verified
+live -- the emulator hit a display glitch partway through this pass
+(`screencap` started returning a blank white frame across the whole
+device, including the launcher, ruling out an app-side cause) that wasn't
+worth chasing down given the fix uses the same well-established Compose
+pattern (`Modifier.semantics{contentDescription=...}`) already proven
+correct elsewhere in this exact codebase (the notification-preference
+switches). **Still open for N8**: a live TalkBack traversal-order pass,
+rotation/split-screen/tablet-foldable, and the web side's cross-browser
+assistive-technology checks haven't been started.
+
 ## September 28, 2026 — Motion-settings save/apply acceptance closed; manual-recording request path acceptance-verified
 
 Continued onto the remaining "real device acceptance" items the audit had

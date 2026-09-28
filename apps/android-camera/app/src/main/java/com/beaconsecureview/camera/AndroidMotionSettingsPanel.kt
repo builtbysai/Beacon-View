@@ -22,6 +22,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.ZoneId
@@ -89,6 +91,7 @@ internal fun AndroidMotionSettingsPanel(
                     Switch(
                         checked = active.enabled,
                         enabled = !busy,
+                        modifier = Modifier.semantics { contentDescription = "Motion detection: create motion events when activity is detected" },
                         onCheckedChange = { onChange(active.copy(enabled = it)) },
                     )
                 }
@@ -114,6 +117,7 @@ internal fun AndroidMotionSettingsPanel(
                     Switch(
                         checked = active.recordOnMotion,
                         enabled = !busy && active.enabled,
+                        modifier = Modifier.semantics { contentDescription = "Record on motion: save a short clip when motion is detected" },
                         onCheckedChange = { onChange(active.copy(recordOnMotion = it)) },
                     )
                 }
@@ -139,6 +143,7 @@ internal fun AndroidMotionSettingsPanel(
                     Switch(
                         checked = active.quietHours != null,
                         enabled = !busy && active.enabled,
+                        modifier = Modifier.semantics { contentDescription = "Quiet hours: pause motion events on a daily schedule" },
                         onCheckedChange = { enabled ->
                             onChange(
                                 active.copy(
