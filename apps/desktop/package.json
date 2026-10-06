@@ -1,0 +1,29 @@
+{
+  "name": "@beacon/desktop",
+  "productName": "Beacon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Beacon SecureView desktop app for Windows, macOS, and Linux",
+  "author": "Beacon SecureView",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "pnpm build && electron .",
+    "icons": "node scripts/render-icons.mjs",
+    "package": "pnpm build && electron-builder --publish never",
+    "package:linux": "pnpm build && electron-builder --linux --publish never",
+    "package:mac": "pnpm build && electron-builder --mac --publish never",
+    "package:win": "pnpm build && electron-builder --win --publish never",
+    "start": "pnpm build && electron .",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  }
+}

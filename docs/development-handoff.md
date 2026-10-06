@@ -1,5 +1,72 @@
 # Beacon SecureView development handoff
 
+## October 6, 2026 — Desktop app (Windows, macOS, Linux) built with Electron
+
+The owner approved a dedicated desktop app that looks exactly like the PWA and
+keeps running in the background. iOS was deferred. Branch `claude/desktop-app`
+is cut from `origin/main` (aa6182d) in a separate worktree
+(`C:DevBeacon-Desktop`). The uncommitted `codex/u7-emulator-parity` work in
+the main checkout was not touched.
+
+**Decision (ADR 0082):** Electron, not Tauri. WebKitGTK 2.54 disabled WebRTC, so
+Tauri on Linux could not play live video, and Tauri's background-throttling
+control is macOS-only. The window loads the canonical origin, so the UI is the
+PWA itself.
+
+**What changed**
+
+- `apps/desktop` (new):
+  - Electron main process: navigation lock to the Beacon origin, least-privilege
+    permissions, sandboxed preload with a single frozen capture bridge.
+  - Tray, close-to-tray, single instance, opt-in start at sign-in, and a Camera
+    Mode live indicator with a power lock.
+  - Offline page, pinned by a CSP hash.
+  - Google sign-in through the system browser with PKCE.
+  - electron-builder config with hardening fuses; icons rendered from
+    `favicon.svg`.
+- Backend:
+  - `platform=desktop&challenge=…` on `/api/auth/google`.
+  - A desktop branch in the callback that issues a PKCE-bound handoff code to
+    `beaconsecureview://auth/desktop`.
+  - New `POST /api/desktop/auth/google`, which requires a JSON body and
+    `x-beacon-desktop: 1`.
+  - The pending Google link now travels with the handoff.
+  - Pure logic lives in `desktop-google-handoff.ts`.
+- Web viewer:
+  - `desktop-shell.ts` bridge.
+  - Browser Camera Mode reports capture state.
+  - Notification settings show "Unavailable" inside the app, because Electron
+    has no push service.
+- CI sets `ELECTRON_SKIP_BINARY_DOWNLOAD=1`. pnpm allows the `electron` build
+  script and denies `electron-winstaller`.
+
+**Verified locally**
+
+- Unit tests: 23 desktop, 8 backend handoff, plus the new web-viewer tests.
+- The real-Electron smoke test (`scripts/Test-BeaconDesktop.mjs`) passes all
+  10 checks.
+- A Windows x64 NSIS installer was built. Its fuses were read back from the
+  binary, and its ASAR contents were checked.
+- The packaged `Beacon.exe` loaded production with the bridge present and no
+  Node exposure.
+
+**Not verified here**
+
+- The PostgreSQL route integration test
+  (`desktop-google-auth.integration.test.ts`) only runs where
+  `TEST_DATABASE_URL` exists, i.e. CI.
+- macOS and Linux packages: build them on those OSes.
+- Real Google sign-in end to end: this needs the backend deployed.
+- Real camera capture from the desktop app.
+
+**Before release**
+
+- Deploy the backend handoff. Until then, desktop Google sign-in shows the
+  existing failed-sign-in message; email/password sign-in works.
+- The owner decides on code-signing certificates and auto-update hosting.
+- Physical install checks on Windows, macOS, and Linux.
+- A desktop alert transport (follow-up milestone).
+
 ## September 28, 2026 — First Android accessibility pass: font-scale clipping, sub-minimum touch targets, and unlabeled checkbox rows fixed
 
 Started on N8 (accessibility/product QA) per the owner's direction to move

@@ -1,0 +1,70 @@
+# Packaging for the Beacon desktop app (ADR 0082). Builds are unsigned until
+# the owner provisions Windows code-signing and Apple Developer ID
+# credentials; see apps/desktop/README.md.
+appId: com.builtbysai.beacon
+productName: Beacon
+copyright: Copyright © 2026 Beacon SecureView
+
+directories:
+  buildResources: resources
+  output: release
+
+files:
+  - package.json
+  - dist/**
+  - static/**
+  - assets/**
+
+protocols:
+  - name: Beacon sign-in
+    schemes:
+      - beaconsecureview
+
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+
+win:
+  icon: resources/icon.png
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+
+nsis:
+  oneClick: true
+  perMachine: false
+  runAfterFinish: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Beacon
+  artifactName: Beacon-Setup-${version}-${arch}.${ext}
+
+mac:
+  icon: resources/icon.png
+  category: public.app-category.utilities
+  hardenedRuntime: true
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  extendInfo:
+    NSCameraUsageDescription: Beacon uses the camera only while you turn on Camera Mode.
+    NSMicrophoneUsageDescription: Beacon uses the microphone only while you use Talk.
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+
+linux:
+  icon: resources/icon.png
+  category: Utility
+  maintainer: Beacon SecureView
+  synopsis: Turn any device into a secure camera and watch it live
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  artifactName: Beacon-${version}-${arch}.${ext}

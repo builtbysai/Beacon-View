@@ -11,6 +11,8 @@ import { formatClipTimer } from './recording-capture';
 import { RecordingBadge } from './RecordingBadge';
 import { useClipRecorder } from './useClipRecorder';
 import { rememberLocalBrowserDevice } from './browser-camera-local';
+import { reportDesktopCapture } from './desktop-shell';
+import { randomUuid } from './random-id';
 
 interface RegisteredSource {
   id: string;
@@ -78,7 +80,7 @@ function installationId(): string {
   try {
     const existing = localStorage.getItem(INSTALLATION_KEY);
     if (existing) return existing;
-    const created = crypto.randomUUID();
+    const created = randomUuid();
     localStorage.setItem(INSTALLATION_KEY, created);
     return created;
   } catch {
@@ -165,6 +167,15 @@ export function BrowserCameraMode({
       void acquireWakeLock();
     }
   }, [backgrounded, wakeLockEnabled]);
+
+  // The desktop app keeps running in the tray with its window hidden; it
+  // shows a live-capture indicator there for as long as this is true.
+  const capturing = activeCameraId !== null;
+  useEffect(() => {
+    if (!capturing) return;
+    reportDesktopCapture(true);
+    return () => reportDesktopCapture(false);
+  }, [capturing]);
 
   async function discover() {
     setError('');

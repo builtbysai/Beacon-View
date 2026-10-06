@@ -17,6 +17,7 @@ import {
 import { formatClipTimer } from './recording-capture';
 import { RecordingBadge } from './RecordingBadge';
 import { useClipRecorder } from './useClipRecorder';
+import { randomUuid } from './random-id';
 
 import {
   type ConnectionFailure,
@@ -131,7 +132,7 @@ export function LiveVideo({
   // automatic reconnects (so access-history can group them), regenerated
   // when the viewer deliberately starts a fresh attempt (mount, switching
   // cameras, or clicking Reconnect).
-  const viewerSessionId = useRef(crypto.randomUUID());
+  const viewerSessionId = useRef(randomUuid());
   const previousCameraId = useRef<string | null>(null);
   const retryCount = useRef(0);
   const retryTimer = useRef<number | null>(null);
@@ -246,7 +247,7 @@ export function LiveVideo({
     setRetryDisplay(0);
     generation.current.cancel();
     if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
-    viewerSessionId.current = crypto.randomUUID();
+    viewerSessionId.current = randomUuid();
     setStatus('connecting');
     setAttempt((value) => value + 1);
   }, []);
@@ -264,7 +265,7 @@ export function LiveVideo({
       current === 'reconnecting' ? current : 'connecting',
     );
     if (previousCameraId.current !== camera.id) {
-      viewerSessionId.current = crypto.randomUUID();
+      viewerSessionId.current = randomUuid();
       previousCameraId.current = camera.id;
     }
     const currentGeneration = generation.current.next();
