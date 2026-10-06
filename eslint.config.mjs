@@ -15,10 +15,10 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked.map((config) => ({
     ...config,
-    files: ['**/*.ts', '**/*.tsx'],
+    files: ['**/*.ts', '**/*.cts', '**/*.tsx'],
   })),
   {
-    files: ['**/*.ts', '**/*.tsx'],
+    files: ['**/*.ts', '**/*.cts', '**/*.tsx'],
     languageOptions: {
       parserOptions: {
         projectService: true,
@@ -39,7 +39,16 @@ export default tseslint.config(
     languageOptions: { globals: globals.node },
   },
   {
-    files: ['scripts/**/*.mjs', 'apps/backend/**/*.mjs', 'tools/**/*.js'],
+    files: ['apps/desktop/**/*.ts', 'apps/desktop/**/*.cts'],
+    languageOptions: { globals: globals.node },
+  },
+  {
+    files: [
+      'scripts/**/*.mjs',
+      'apps/backend/**/*.mjs',
+      'apps/desktop/scripts/**/*.mjs',
+      'tools/**/*.js',
+    ],
     languageOptions: { globals: globals.node },
   },
   {

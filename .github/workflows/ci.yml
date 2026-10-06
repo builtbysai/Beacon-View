@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# CI never launches Electron (the desktop unit tests are Electron-free), so
+# skip its ~100 MB runtime download on every install.
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
 jobs:
   validate:
     runs-on: ubuntu-latest

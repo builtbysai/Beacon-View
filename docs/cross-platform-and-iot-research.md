@@ -130,6 +130,11 @@ wrapper would mainly remove the "keep a browser tab open" ergonomic tax rather t
 fundamentally new capability, since the media path is the same browser-producer flow that
 already exists.
 
+> **Superseded October 6, 2026 (ADR 0082):** the desktop app was built with Electron, not
+> Tauri. WebKitGTK 2.54 disabled WebRTC, so a Tauri Linux build could not play live video,
+> and Tauri's background-throttling control is macOS/iOS-only. The paragraph below is kept
+> as the original research.
+
 ### If a thin native wrapper is pursued
 
 Prefer **Tauri** (Rust-based, small binary, no bundled Chromium runtime) over Electron for a

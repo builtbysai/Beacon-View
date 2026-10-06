@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-RT/1ZvtTDujQnJkT+1z/agVTuwQuTmoj2MDI/aULjyQ='">
+<title>Beacon</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #090d16; color: #e2e8f0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 380px; padding: 24px; text-align: center; }
+  svg { width: 72px; height: 72px; }
+  h1 { margin: 20px 0 8px; font-size: 22px; font-weight: 650; color: #f8fafc; }
+  p { margin: 0 0 24px; color: #94a3b8; }
+  a { display: inline-block; padding: 10px 22px; border-radius: 999px; background: #0ea5e9; color: #04111f; font-weight: 600; text-decoration: none; }
+  a:focus-visible { outline: 3px solid #7dd3fc; outline-offset: 3px; }
+</style>
+</head>
+<body>
+<main>
+<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#071b31"/><path d="M18 18c-8 7-8 21 0 28M46 18c8 7 8 21 0 28" fill="none" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/><path d="M23 23c-4.5 4.5-4.5 13.5 0 18M41 23c4.5 4.5 4.5 13.5 0 18" fill="none" stroke="#7dd3fc" stroke-width="3.5" stroke-linecap="round"/><circle cx="32" cy="32" r="12" fill="#0ea5e9"/><circle cx="32" cy="32" r="7" fill="#071b31"/><circle cx="32" cy="32" r="2.8" fill="#e0f2fe"/><path d="M32 44v7M24 53h16" fill="none" stroke="#e0f2fe" stroke-width="3.5" stroke-linecap="round"/></svg>
+<h1>Can’t reach Beacon</h1>
+<p>Check this computer’s internet connection. Beacon reconnects automatically when it’s back.</p>
+<a id="retry" href="#">Try again</a>
+</main>
+<script>(() => {
+  const origin = new URLSearchParams(location.search).get('origin') ?? '';
+  if (!/^https?:\/\/[^/]+$/.test(origin)) return;
+  const retry = document.getElementById('retry');
+  retry.href = `${origin}/`;
+  const reconnect = () => location.assign(retry.href);
+  addEventListener('online', reconnect);
+  setInterval(() => {
+    if (navigator.onLine) reconnect();
+  }, 30000);
+})();</script>
+</body>
+</html>

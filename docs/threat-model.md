@@ -91,6 +91,35 @@ Android, backend, PostgreSQL, and TURN are separate trust zones.
   the replacement.
 - Diagnostics expose only public identifiers and sanitized connection state.
 
+## Desktop app controls (ADR 0082)
+
+- The Electron window renders only the canonical Beacon origin. A single tested
+  navigation policy sends other web links to the system browser and blocks
+  every other scheme. Off-origin subframe navigation and `<webview>` are refused.
+- Renderers are sandboxed and context-isolated with no Node integration. The
+  preload exposes one frozen `beaconDesktop` object (capture state only), and
+  the main process accepts it only from the Beacon origin's main frame.
+- Web permissions are limited to camera/microphone, clipboard write, and
+  fullscreen for the Beacon origin. Everything else is denied, and macOS adds
+  TCC prompts.
+- Packaged builds fuse off `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS`, and
+  `--inspect`. They enable cookie encryption at rest, ASAR integrity, and
+  ASAR-only loading.
+- Google sign-in runs in the system browser. Its deep-link handoff code is
+  single-use, expires after 10 minutes, and is bound to an RFC 7636 S256
+  challenge whose verifier never leaves the app, so another app that claims
+  `beaconsecureview://` cannot redeem an intercepted code. Any redemption
+  attempt consumes the code. The exchange requires a JSON body plus
+  `x-beacon-desktop: 1`, so cross-site forms cannot cause login CSRF.
+- Camera Mode in a hidden window stays visible through a tray live indicator,
+  a notification, and a quit confirmation.
+- Residual risks:
+  - Builds are unsigned and have no auto-update channel, so Electron/Chromium
+    security fixes reach users only when they reinstall.
+  - Handoff codes live in process memory.
+  - A compromised Beacon origin would control the window exactly as it would
+    control a browser tab.
+
 ## Residual risk and deferrals
 
 Production secret management, CA lifecycle, TURN abuse controls and capacity,
