@@ -13,7 +13,14 @@ import {
   verifyDriveRecordingAccess,
 } from './google-drive-client.js';
 import {
+  desktopChallengeFromState,
+  desktopDeepLink,
+  DesktopGoogleHandoffs,
+  desktopOAuthState,
+} from './desktop-google-handoff.js';
+import {
   credentialsSchema,
+  desktopGoogleExchangeSchema,
   googleCallbackSchema,
   googleStartSchema,
   mobileGoogleExchangeSchema,
@@ -90,11 +97,28 @@ export function registerAuthenticationRoutes(
       googleSubject: string;
     }
   >();
-  function prunePendingGoogleLinks(now: number): void {
+  function holdPendingGoogleLink(
+    reply: FastifyReply,
+    pending: { avatarUrl: string | null; email: string; googleSubject: string },
+  ): void {
+    const linkToken = generateToken();
+    const now = Date.now();
     for (const [key, value] of pendingGoogleLinks) {
       if (value.expiresAt <= now) pendingGoogleLinks.delete(key);
     }
+    pendingGoogleLinks.set(hashSecret(linkToken), {
+      ...pending,
+      expiresAt: now + TEN_MINUTES,
+    });
+    reply.setCookie(PENDING_GOOGLE_LINK_COOKIE, linkToken, {
+      httpOnly: true,
+      maxAge: TEN_MINUTES / 1_000,
+      path: '/',
+      sameSite: 'lax',
+      secure: config.NODE_ENV === 'production',
+    });
   }
+  const desktopGoogleHandoffs = new DesktopGoogleHandoffs(TEN_MINUTES);
   const googleClient = config.GOOGLE_OAUTH_CLIENT_ID
     ? new OAuth2Client(
         config.GOOGLE_OAUTH_CLIENT_ID,
@@ -308,7 +332,10 @@ export function registerAuthenticationRoutes(
     if (!start.success)
       return reply.code(400).send({ error: 'Invalid sign-in request' });
     const android = start.data.platform === 'android';
-    const state = `${android ? 'android.' : 'web.'}${generateToken()}`;
+    const state =
+      start.data.platform === 'desktop' && start.data.challenge
+        ? desktopOAuthState(start.data.challenge)
+        : `${android ? 'android.' : 'web.'}${generateToken()}`;
     reply.setCookie(GOOGLE_STATE_COOKIE, state, {
       httpOnly: true,
       maxAge: TEN_MINUTES / 1_000,
@@ -417,6 +444,12 @@ export function registerAuthenticationRoutes(
       const googleClientId = config.GOOGLE_OAUTH_CLIENT_ID;
       const googleRedirectUri = config.GOOGLE_OAUTH_REDIRECT_URI;
       const android = state?.startsWith('android.') === true;
+      const desktopChallenge = desktopChallengeFromState(state);
+      const signInFailed = desktopChallenge
+        ? desktopDeepLink({ status: 'failed' })
+        : android
+          ? '/auth/mobile#status=failed'
+          : '/?googleSignIn=failed';
       reply.clearCookie(GOOGLE_STATE_COOKIE, { path: '/' });
       reply.clearCookie(GOOGLE_DRIVE_STATE_COOKIE, { path: '/' });
       reply.clearCookie(GOOGLE_INTENT_COOKIE, { path: '/' });
@@ -605,19 +638,14 @@ export function registerAuthenticationRoutes(
         !state ||
         !secretsEqual(state, callback.data.state)
       ) {
-        return reply.redirect(
-          android ? '/auth/mobile#status=failed' : '/?googleSignIn=failed',
-        );
+        return reply.redirect(signInFailed);
       }
       try {
         const token = await googleClient.getToken({
           code: callback.data.code,
           redirect_uri: googleRedirectUri,
         });
-        if (!token.tokens.id_token)
-          return reply.redirect(
-            android ? '/auth/mobile#status=failed' : '/?googleSignIn=failed',
-          );
+        if (!token.tokens.id_token) return reply.redirect(signInFailed);
         const ticket = await googleClient.verifyIdToken({
           audience: googleClientId,
           idToken: token.tokens.id_token,
@@ -628,33 +656,29 @@ export function registerAuthenticationRoutes(
           !payload.email ||
           payload.email_verified !== true
         ) {
-          return reply.redirect(
-            android ? '/auth/mobile#status=failed' : '/?googleSignIn=failed',
-          );
+          return reply.redirect(signInFailed);
         }
         const email = normalizeEmail(payload.email);
         const avatarUrl = payload.picture ?? null;
         let user = await store.findUserByGoogleSubject(payload.sub);
         if (!user) {
           if (await store.findUserByEmail(email)) {
-            if (!android) {
-              const linkToken = generateToken();
-              const now = Date.now();
-              prunePendingGoogleLinks(now);
-              pendingGoogleLinks.set(hashSecret(linkToken), {
-                avatarUrl,
-                email,
-                expiresAt: now + TEN_MINUTES,
-                googleSubject: payload.sub,
+            const pendingLink = {
+              avatarUrl,
+              email,
+              googleSubject: payload.sub,
+            };
+            // The desktop app's webview, not this browser, is where the
+            // password sign-in that completes the link will happen, so the
+            // pending link travels with the handoff code instead.
+            if (desktopChallenge) {
+              const code = desktopGoogleHandoffs.issue(desktopChallenge, {
+                kind: 'linkRequired',
+                ...pendingLink,
               });
-              reply.setCookie(PENDING_GOOGLE_LINK_COOKIE, linkToken, {
-                httpOnly: true,
-                maxAge: TEN_MINUTES / 1_000,
-                path: '/',
-                sameSite: 'lax',
-                secure: config.NODE_ENV === 'production',
-              });
+              return reply.redirect(desktopDeepLink({ code }));
             }
+            if (!android) holdPendingGoogleLink(reply, pendingLink);
             return reply.redirect(
               android
                 ? '/auth/mobile#status=linkRequired'
@@ -694,15 +718,23 @@ export function registerAuthenticationRoutes(
             `beaconsecureview://auth/mobile?code=${encodeURIComponent(handoffCode)}`,
           );
         }
+        if (desktopChallenge) {
+          const code = desktopGoogleHandoffs.issue(desktopChallenge, {
+            kind: 'session',
+            addPassword: addPasswordIntent,
+            email: user.email,
+            householdId: user.householdId,
+            userId: user.id,
+          });
+          return reply.redirect(desktopDeepLink({ code }));
+        }
         await recordSignIn(user.id);
         await issueSession(reply, user.id, true, request.headers['user-agent']);
         return reply.redirect(
           addPasswordIntent ? '/settings?section=account&addPassword=1' : '/',
         );
       } catch {
-        return reply.redirect(
-          android ? '/auth/mobile#status=failed' : '/?googleSignIn=failed',
-        );
+        return reply.redirect(signInFailed);
       }
     },
   );
@@ -741,6 +773,62 @@ export function registerAuthenticationRoutes(
     return reply.send({
       sessionToken: token,
       user: { email: handoff.email, id: handoff.userId },
+    });
+  });
+
+  // Runs inside the desktop app's webview (same origin as the web viewer),
+  // so the session lands in that webview's cookie jar exactly like a web
+  // sign-in. A JSON body plus a custom header keeps it unreachable from
+  // cross-site form posts (login CSRF): either one forces a CORS preflight,
+  // which this API never grants.
+  app.post('/api/desktop/auth/google', async (request, reply) => {
+    const parsed = desktopGoogleExchangeSchema.safeParse(request.body);
+    if (
+      request.headers['x-beacon-desktop'] !== '1' ||
+      !request.headers['content-type']?.startsWith('application/json') ||
+      !parsed.success ||
+      !limiter.take(`desktop-google:${request.ip}`, 10, FIFTEEN_MINUTES)
+    ) {
+      return reply
+        .code(401)
+        .send({ error: 'Google sign-in could not be completed' });
+    }
+    const outcome = desktopGoogleHandoffs.redeem(
+      parsed.data.code,
+      parsed.data.verifier,
+    );
+    if (!outcome) {
+      return reply
+        .code(401)
+        .send({ error: 'Google sign-in could not be completed' });
+    }
+    if (outcome.kind === 'linkRequired') {
+      holdPendingGoogleLink(reply, {
+        avatarUrl: outcome.avatarUrl,
+        email: outcome.email,
+        googleSubject: outcome.googleSubject,
+      });
+      return reply.send({ status: 'linkRequired' });
+    }
+    await store.audit({
+      eventType: 'desktop_google_login_succeeded',
+      householdId: outcome.householdId,
+      ipAddress: request.ip,
+      success: true,
+      userId: outcome.userId,
+    });
+    await recordSignIn(outcome.userId);
+    await issueSession(
+      reply,
+      outcome.userId,
+      true,
+      request.headers['user-agent'],
+    );
+    return reply.send({
+      status: 'signedIn',
+      redirect: outcome.addPassword
+        ? '/settings?section=account&addPassword=1'
+        : '/',
     });
   });
 
