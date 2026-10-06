@@ -684,6 +684,74 @@ describe('BrowserCameraMode', () => {
     expect(stop).toHaveBeenCalled();
   });
 
+  it('keeps the desktop app’s live-capture indicator in step with the broadcast', async () => {
+    const setCaptureActive = vi.fn();
+    window.beaconDesktop = { setCaptureActive, version: 1 };
+    const stream = {
+      getTracks: () => [{ stop: vi.fn() }],
+      getVideoTracks: () => [{ id: 'track' }],
+    } as unknown as MediaStream;
+    Object.defineProperty(window, 'isSecureContext', {
+      configurable: true,
+      value: true,
+    });
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: vi.fn().mockResolvedValue([
+          {
+            deviceId: 'built-in',
+            kind: 'videoinput',
+            label: 'Built-in webcam',
+          },
+        ]),
+        getUserMedia: vi.fn().mockResolvedValue(stream),
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            cameras: [
+              {
+                id: 'camera-one',
+                name: 'Built-in webcam',
+                sourceKey: 'browser:built-in',
+              },
+            ],
+          }),
+        ok: true,
+        status: 201,
+      }),
+    );
+    vi.stubGlobal('WebSocket', CameraSocket);
+    try {
+      const view = render(<BrowserCameraMode onBack={() => undefined} />);
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Allow camera access' }),
+      );
+      await screen.findByText('Built-in webcam');
+      expect(setCaptureActive).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
+      await waitFor(() =>
+        expect(setCaptureActive.mock.calls).toEqual([[true]]),
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Stop Camera Mode' }));
+      await waitFor(() =>
+        expect(setCaptureActive.mock.calls).toEqual([[true], [false]]),
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
+      await waitFor(() => expect(setCaptureActive).toHaveBeenCalledTimes(3));
+      view.unmount();
+      expect(setCaptureActive).toHaveBeenLastCalledWith(false);
+    } finally {
+      delete window.beaconDesktop;
+    }
+  });
+
   it('lets the owner capture and upload a clip of its own broadcast stream', async () => {
     FakeMediaRecorder.instances = [];
     FakeMediaRecorder.supportedTypes = new Set(['video/webm']);

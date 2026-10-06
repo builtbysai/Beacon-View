@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { request } from './api';
+import { isDesktopShell } from './desktop-shell';
 import { useSettingsAutosave } from './SettingsAutosave';
 import { SettingsRow } from './SettingsUI';
 import { Switch } from './Switch';
@@ -54,10 +55,14 @@ export async function disableWebNotifications(): Promise<void> {
 }
 
 export function NotificationSettings({
-  webPushAvailable = true,
+  webPushAvailable: serverWebPushAvailable = true,
 }: {
   webPushAvailable?: boolean;
 }) {
+  // Electron has no push service, so the desktop app cannot hold a Web Push
+  // subscription even though the API objects exist (ADR 0082).
+  const desktopShell = isDesktopShell();
+  const webPushAvailable = serverWebPushAvailable && !desktopShell;
   const { run } = useSettingsAutosave();
   const [preferences, setPreferences] = useState<Preference[] | null>(null);
   const [enabled, setEnabled] = useState(false);
@@ -242,7 +247,11 @@ export function NotificationSettings({
     <div className="notification-settings">
       <SettingsRow
         title="Browser notifications"
-        description="Receive private Beacon alerts on this browser."
+        description={
+          desktopShell
+            ? 'The Beacon desktop app can’t receive alerts yet. Turn them on in Chrome, Edge, or the Android app.'
+            : 'Receive private Beacon alerts on this browser.'
+        }
       >
         <div className="notification-channel-action">
           <span

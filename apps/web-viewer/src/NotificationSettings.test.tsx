@@ -256,4 +256,19 @@ describe('NotificationSettings', () => {
       screen.getByText('Unavailable', { selector: '.pill' }),
     ).toBeVisible();
   });
+
+  it('explains that the desktop app cannot hold a push subscription', async () => {
+    window.beaconDesktop = { setCaptureActive: vi.fn(), version: 1 };
+    try {
+      renderNotificationSettings();
+      expect(
+        await screen.findByRole('button', { name: 'Unavailable' }),
+      ).toBeDisabled();
+      expect(
+        screen.getByText(/desktop app can’t receive alerts yet/),
+      ).toBeVisible();
+    } finally {
+      delete window.beaconDesktop;
+    }
+  });
 });
