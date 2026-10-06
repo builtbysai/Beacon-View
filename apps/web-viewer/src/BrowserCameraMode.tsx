@@ -11,6 +11,7 @@ import { formatClipTimer } from './recording-capture';
 import { RecordingBadge } from './RecordingBadge';
 import { useClipRecorder } from './useClipRecorder';
 import { rememberLocalBrowserDevice } from './browser-camera-local';
+import { randomUuid } from './random-id';
 
 interface RegisteredSource {
   id: string;
@@ -78,7 +79,7 @@ function installationId(): string {
   try {
     const existing = localStorage.getItem(INSTALLATION_KEY);
     if (existing) return existing;
-    const created = crypto.randomUUID();
+    const created = randomUuid();
     localStorage.setItem(INSTALLATION_KEY, created);
     return created;
   } catch {

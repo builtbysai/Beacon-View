@@ -3,6 +3,7 @@ import { request } from './api';
 import { useSettingsAutosave } from './SettingsAutosave';
 import { SettingsRow } from './SettingsUI';
 import { Switch } from './Switch';
+import { randomUuid } from './random-id';
 import './NotificationSettings.css';
 
 interface Preference {
@@ -30,7 +31,7 @@ function installationId(): string {
   const key = 'beacon.notification.installation.v1';
   const existing = localStorage.getItem(key);
   if (existing) return existing;
-  const created = crypto.randomUUID();
+  const created = randomUuid();
   localStorage.setItem(key, created);
   return created;
 }
