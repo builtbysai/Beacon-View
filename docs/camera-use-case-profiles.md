@@ -23,19 +23,19 @@ which alerts are active without changing the hardware.
 **Dash/car cameras.** "Parking mode" puts the camera in low-power standby
 and wakes it on motion or on a G-sensor (accelerometer)-detected impact.
 G-sensor-triggered clips are protected from being overwritten by loop
-recording — ordinary loop recording continuously overwrites the *oldest
-unprotected* footage once storage fills, but an impact event locks its clip
+recording — ordinary loop recording continuously overwrites the _oldest
+unprotected_ footage once storage fills, but an impact event locks its clip
 so a hit-and-run or break-in isn't erased by the next few minutes of normal
 driving.
 
 **Baby monitors/nursery cameras.** Unlike doorbell and dash cameras, these are
-built around continuous *live viewing*, not event-triggered clips — a parent
+built around continuous _live viewing_, not event-triggered clips — a parent
 wants to check the crib at any moment, not review a clip after the fact.
 Distinguishing features across existing products: audio always streams (not
 gated behind a motion/event trigger), a prominent low-latency two-way-talk
 control for soothing the child remotely, and a "sound alert" that fires on
 loud/sustained audio (crying) using simple decibel/frequency thresholding —
-notably *not* speech content analysis or voice-print identification, which
+notably _not_ speech content analysis or voice-print identification, which
 would be a privacy overreach and a regulatory risk for a device pointed at a
 child. Night vision/IR matters a lot for this use case; ordinary phone
 cameras have materially worse low-light performance than purpose-built IR
@@ -61,6 +61,7 @@ not a sub-task of "add a car profile."
 
 **Beacon runs on repurposed Android phones, not purpose-built low-power
 camera hardware.** This cuts both ways:
+
 - No hardware doorbell button exists. A literal "press a button" doorbell
   alert would require new hardware (e.g. pairing a Bluetooth button) — that's
   a real feature with its own pairing/reliability surface, not a small
@@ -68,7 +69,7 @@ camera hardware.** This cuts both ways:
   screen itself could act as a tap-to-alert surface for a mounted device, but
   that's a UX/mounting assumption the owner would need to confirm makes sense
   for the target hardware.
-- Every Android phone already has an accelerometer. That *is* a genuine,
+- Every Android phone already has an accelerometer. That _is_ a genuine,
   already-present equivalent to a dash-cam's G-sensor — a real, buildable new
   trigger type, distinct from Beacon's existing luma-based motion detection.
 - Phones don't have the same battery-conservation profile as purpose-built
@@ -79,7 +80,7 @@ camera hardware.** This cuts both ways:
 - Beacon already streams live audio and supports Listen/Talk with consent
   gating (per [roadmap.md](roadmap.md) N2). A baby-monitor profile's core
   need — always-available audio and a fast path to Talk — is mostly a UX/
-  defaults question, not new plumbing. A cry-detection *alert* (simple
+  defaults question, not new plumbing. A cry-detection _alert_ (simple
   audio-level thresholding) would be a new, small detector; it must not
   become speech or voice analysis — that would cross into the biometric/
   identity territory this repo's privacy rules already forbid
@@ -112,7 +113,7 @@ A profile picker that silently does nothing on the backend, or that exposes a
 availability, motion-triggered and manual short clips as already configured.
 This is the default and needs no new work.
 
-**Doorbell.** A named preset over *existing* settings — high
+**Doorbell.** A named preset over _existing_ settings — high
 `motion_sensitivity`, short `motion_cooldown_seconds` (e.g. 30s), and
 `motion_record_enabled` on by default — plus, if useful, an elevated
 notification priority for this camera's motion alerts vs. a regular camera's.
@@ -122,9 +123,10 @@ constraint above); if the owner wants it later, scope it separately.
 
 **Car / Dashcam.** Two genuinely different pieces, and they should not be
 proposed as one feature:
+
 - A preset (motion-triggered short clips, tuned sensitivity/cooldown for a
   parked vehicle) — same low-risk shape as Doorbell, buildable soon.
-- A *new* trigger: reading the Android accelerometer as a second, independent
+- A _new_ trigger: reading the Android accelerometer as a second, independent
   detector alongside luma motion, so an impact while parked produces a
   protected clip even if the luma detector misses it (e.g. low light, camera
   facing a wall). This needs new Android code but fits the existing
@@ -135,15 +137,16 @@ proposed as one feature:
 
 **Baby monitor / nursery.** The easiest of the three to ship, because it
 needs almost no new capture capability — it's mostly a UX/defaults preset on
-top of Beacon's *existing* always-on live view and Listen/Talk, not a new
+top of Beacon's _existing_ always-on live view and Listen/Talk, not a new
 recording behavior:
+
 - A preset that surfaces Listen and Talk prominently and by default, rather
-  than the general camera UI's usual layout, and turns *off* motion-triggered
+  than the general camera UI's usual layout, and turns _off_ motion-triggered
   recording by default (a sleeping baby moving in a crib is not a
   security-relevant motion event the way it is for a doorbell or car).
-- Continuous *live view* is exactly what this profile wants, and — unlike a
+- Continuous _live view_ is exactly what this profile wants, and — unlike a
   "car camera records the whole drive" feature — this doesn't conflict with
-  the no-continuous-*recording* boundary at all: live viewing has always been
+  the no-continuous-_recording_ boundary at all: live viewing has always been
   Beacon's core feature; nothing here proposes storing continuous footage.
 - Optional: a cry-detection alert as a new, small audio-level detector
   (decibel/frequency thresholding only, never content/voice analysis — see
@@ -175,7 +178,7 @@ recording behavior:
    continuous/loop recording for driving is something Beacon wants to support
    at all, given the no-continuous-recording boundary. This needs its own
    privacy/product review before any implementation — do not start it as a
-   natural extension of Phase 1/2. (Baby monitor's continuous *live view* is
+   natural extension of Phase 1/2. (Baby monitor's continuous _live view_ is
    not part of this decision — that's existing behavior, not new recording.)
 
 **Recommendation:** start with Phase 1. It's real, low-risk, doesn't touch
