@@ -26,9 +26,11 @@ import { Brand, Icon } from './Icon';
 import { Sidebar, SidebarProvider, SidebarTrigger } from './Sidebar';
 import { PendingDeviceRow } from './PendingDeviceRow';
 import { AddCameraPage } from './AddCameraPage';
+import { type DesktopAlert, desktopBridge } from './desktop-shell';
 import { PairingDialog } from './PairingDialog';
 import { SettingsPage } from './SettingsPage';
 import {
+  DesktopAuthReturnPage,
   MobileAuthReturnPage,
   PairLinkPage,
   PublicTrustPage,
@@ -253,6 +255,7 @@ export function App() {
       window.location.pathname === '/trust' ||
       window.location.pathname === '/pair' ||
       window.location.pathname === '/auth/mobile' ||
+      window.location.pathname === '/auth/desktop/complete' ||
       window.location.pathname === '/account/verify-email' ||
       window.location.pathname === '/account/reset-password' ||
       window.location.pathname.startsWith('/g/') ||
@@ -384,6 +387,16 @@ export function App() {
 
   const handleHouseholdEvent = useCallback(
     (message: HouseholdEvent) => {
+      if (message.type === 'notification') {
+        // Only the desktop app subscribes to this channel; it validates the
+        // alert again before showing an OS notification.
+        desktopBridge()?.showAlert?.({
+          category: message.category as DesktopAlert['category'],
+          eventId: message.eventId ?? '',
+          route: message.route as DesktopAlert['route'],
+        });
+        return;
+      }
       if (
         message.type === 'camera-paired' ||
         message.type === 'camera-presence-changed' ||
@@ -857,6 +870,8 @@ export function App() {
       />
     );
   if (window.location.pathname === '/pair') return <PairLinkPage />;
+  if (window.location.pathname === '/auth/desktop/complete')
+    return <DesktopAuthReturnPage />;
   if (window.location.pathname === '/auth/mobile')
     return <MobileAuthReturnPage />;
   if (window.location.pathname === '/account/verify-email')

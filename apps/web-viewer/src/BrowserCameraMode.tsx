@@ -11,7 +11,17 @@ import { formatClipTimer } from './recording-capture';
 import { RecordingBadge } from './RecordingBadge';
 import { useClipRecorder } from './useClipRecorder';
 import { rememberLocalBrowserDevice } from './browser-camera-local';
-import { reportDesktopCapture } from './desktop-shell';
+import {
+  cameraActivity,
+  type CameraPower,
+  loadCameraPower,
+  loadMicrophoneEnabled,
+  readAutoStartRequest,
+  saveCameraPower,
+  saveMicrophoneEnabled,
+  STANDBY_RELEASE_DELAY_MS,
+} from './camera-power';
+import { desktopBridge, reportDesktopCameraActivity } from './desktop-shell';
 import { randomUuid } from './random-id';
 
 interface RegisteredSource {
@@ -67,13 +77,31 @@ function rememberDeviceName(name: string): void {
 /** The four states a viewer of the broadcast stage's own status line needs
  * to tell apart at a glance, per the concise-state list this screen is
  * built around: ready, actively watched, reconnecting, or stopped. */
-function broadcastStatusLabel(state: string, viewerCount: number): string {
+function broadcastStatusLabel(
+  state: string,
+  viewerCount: number,
+  standby: boolean,
+): string {
   if (state === 'streaming') {
     return viewerCount === 1 ? '1 watching' : `${viewerCount} watching`;
   }
   if (state === 'reconnecting') return 'Reconnecting…';
   if (state === 'error') return 'Offline';
-  return 'Camera Mode ready';
+  return standby ? 'Standby · camera off' : 'Camera Mode ready';
+}
+
+/** The path the desktop app reopens at startup to resume this camera. */
+function resumePath(
+  standalone: boolean,
+  power: CameraPower,
+  microphone: boolean,
+): string {
+  const params = new URLSearchParams({
+    autostart: '1',
+    mic: microphone ? '1' : '0',
+    power,
+  });
+  return `${standalone ? '/camera-mode/setup' : '/camera-mode'}?${params.toString()}`;
 }
 
 function installationId(): string {
@@ -120,6 +148,24 @@ export function BrowserCameraMode({
   const wakeLockEnabledRef = useRef(wakeLockEnabled);
   wakeLockEnabledRef.current = wakeLockEnabled;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Read once: the URL is cleaned up after the first render.
+  const [autoStart] = useState(() =>
+    readAutoStartRequest(window.location.search),
+  );
+  const autoStartPending = useRef(autoStart !== null);
+  const [power, setPower] = useState<CameraPower>(
+    () => autoStart?.power ?? loadCameraPower(),
+  );
+  const powerRef = useRef(power);
+  powerRef.current = power;
+  const [microphone, setMicrophone] = useState(
+    () => autoStart?.microphone ?? loadMicrophoneEnabled(),
+  );
+  const microphoneRef = useRef(microphone);
+  microphoneRef.current = microphone;
+  const [streamOpen, setStreamOpen] = useState(false);
+  const pendingStream = useRef<Promise<MediaStream> | null>(null);
+  const releaseTimer = useRef<number | null>(null);
   const [pairingCode, setPairingCode] = useState(
     () =>
       new URLSearchParams(window.location.search).get('code')?.toUpperCase() ??
@@ -156,9 +202,14 @@ export function BrowserCameraMode({
     return () => {
       startGeneration.current += 1;
       document.removeEventListener('visibilitychange', visibility);
+      if (releaseTimer.current !== null)
+        window.clearTimeout(releaseTimer.current);
       producerRef.current?.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
       void wakeLockRef.current?.release();
+      // Leaving Camera Mode in-app ends it; a reload or quitting the app
+      // never runs this, so the desktop app still resumes after a restart.
+      desktopBridge()?.setCameraResume?.(null);
     };
   }, []);
 
@@ -169,13 +220,110 @@ export function BrowserCameraMode({
   }, [backgrounded, wakeLockEnabled]);
 
   // The desktop app keeps running in the tray with its window hidden; it
-  // shows a live-capture indicator there for as long as this is true.
-  const capturing = activeCameraId !== null;
+  // shows whether this camera is live or on standby there.
+  const activity = cameraActivity(activeCameraId !== null, streamOpen);
   useEffect(() => {
-    if (!capturing) return;
-    reportDesktopCapture(true);
-    return () => reportDesktopCapture(false);
-  }, [capturing]);
+    if (activity === 'off') return;
+    reportDesktopCameraActivity(activity);
+    return () => reportDesktopCameraActivity('off');
+  }, [activity]);
+
+  // While Camera Mode runs inside the desktop app, the app reopens it after
+  // the computer restarts. Stopping Camera Mode (or leaving it) clears that.
+  const registered = activeCameraId !== null;
+  useEffect(() => {
+    if (!registered) return;
+    desktopBridge()?.setCameraResume?.(
+      resumePath(standalone, power, microphone),
+    );
+  }, [registered, standalone, power, microphone]);
+
+  // Auto-start: run both setup steps without clicks once cameras are found.
+  useEffect(() => {
+    if (!autoStartPending.current) return;
+    if (inputs.length === 0) {
+      void discover();
+      return;
+    }
+    autoStartPending.current = false;
+    // registerAndStart reads this render's state; it only needs to run once
+    // the camera list exists.
+    void registerAndStart();
+  }, [inputs]);
+
+  function cancelRelease() {
+    if (releaseTimer.current === null) return;
+    window.clearTimeout(releaseTimer.current);
+    releaseTimer.current = null;
+  }
+
+  function releaseStream() {
+    cancelRelease();
+    pendingStream.current = null;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (previewRef.current) previewRef.current.srcObject = null;
+    setStreamOpen(false);
+  }
+
+  function openCamera(deviceId: string): Promise<MediaStream> {
+    return navigator.mediaDevices.getUserMedia({
+      audio: microphoneRef.current,
+      video: {
+        deviceId: { exact: deviceId },
+        frameRate: { ideal: 24, max: 30 },
+        height: { ideal: 720, max: 1080 },
+        width: { ideal: 1280, max: 1920 },
+      },
+    });
+  }
+
+  function installStream(stream: MediaStream) {
+    for (const track of stream.getVideoTracks()) track.contentHint = 'motion';
+    streamRef.current = stream;
+    if (previewRef.current) previewRef.current.srcObject = stream;
+    setStreamOpen(true);
+  }
+
+  /** Opens (or reuses) the camera for `deviceId` when a standby camera
+   * wakes. Concurrent viewers share one getUserMedia call. */
+  function acquireStream(deviceId: string): Promise<MediaStream> {
+    cancelRelease();
+    if (streamRef.current) return Promise.resolve(streamRef.current);
+    if (pendingStream.current) return pendingStream.current;
+    const generation = startGeneration.current;
+    const pending = openCamera(deviceId)
+      .then((stream) => {
+        if (generation !== startGeneration.current) {
+          stream.getTracks().forEach((track) => track.stop());
+          throw new Error('Camera Mode changed while the camera was starting');
+        }
+        installStream(stream);
+        return stream;
+      })
+      .finally(() => {
+        if (pendingStream.current === pending) pendingStream.current = null;
+      });
+    pendingStream.current = pending;
+    return pending;
+  }
+
+  /** In standby, turn the camera off once nobody has watched for a while. */
+  function scheduleStandbyRelease(viewers: number) {
+    if (powerRef.current !== 'standby' || viewers > 0) {
+      cancelRelease();
+      return;
+    }
+    if (!streamRef.current || releaseTimer.current !== null) return;
+    releaseTimer.current = window.setTimeout(() => {
+      releaseTimer.current = null;
+      if (clipBusyRef.current) {
+        scheduleStandbyRelease(0);
+        return;
+      }
+      releaseStream();
+    }, STANDBY_RELEASE_DELAY_MS);
+  }
 
   async function discover() {
     setError('');
@@ -274,30 +422,26 @@ export function BrowserCameraMode({
         (source) => source.sourceKey === `browser:${selected.deviceId}`,
       );
       if (!camera) throw new Error('Camera registration was incomplete');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          deviceId: { exact: selected.deviceId },
-          frameRate: { ideal: 24, max: 30 },
-          height: { ideal: 720, max: 1080 },
-          width: { ideal: 1280, max: 1920 },
-        },
-      });
+      const deviceId = selected.deviceId;
+      // Always-on opens the new camera before releasing the current one, so
+      // a failed switch leaves the working camera running. Standby opens
+      // nothing until a viewer arrives.
+      const fresh = power === 'always' ? await openCamera(deviceId) : null;
       if (generation !== startGeneration.current) {
-        stream.getTracks().forEach((track) => track.stop());
+        fresh?.getTracks().forEach((track) => track.stop());
         return;
       }
       producerRef.current?.stop();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      for (const track of stream.getVideoTracks()) track.contentHint = 'motion';
-      streamRef.current = stream;
-      activeSourceKey.current = selected.deviceId;
-      setSelectedKey(selected.deviceId);
+      releaseStream();
+      if (fresh) installStream(fresh);
+      saveCameraPower(power);
+      saveMicrophoneEnabled(microphone);
+      activeSourceKey.current = deviceId;
+      setSelectedKey(deviceId);
       setActiveCameraId(camera.id);
-      if (previewRef.current) previewRef.current.srcObject = stream;
       producerRef.current = new BrowserProducer(
         camera.id,
-        stream,
+        fresh ?? (() => acquireStream(deviceId)),
         (next, viewers, retries) => {
           if (next === 'error') {
             stop();
@@ -307,6 +451,7 @@ export function BrowserCameraMode({
           setState(next);
           setViewerCount(viewers);
           setRetryCount(retries);
+          scheduleStandbyRelease(viewers);
         },
         (cameraId) => {
           const source = result.cameras.find((item) => item.id === cameraId);
@@ -315,6 +460,13 @@ export function BrowserCameraMode({
           setSelectedKey(nextKey);
           void registerAndStart(nextKey);
         },
+        (wakeError) =>
+          setError(
+            wakeError instanceof DOMException &&
+              wakeError.name === 'NotAllowedError'
+              ? 'Camera permission was removed. Allow camera access to keep this camera available.'
+              : 'The camera could not turn on for a viewer. Check that no other app is using it.',
+          ),
       );
       producerRef.current.start();
       if (wakeLockEnabled) await acquireWakeLock();
@@ -336,11 +488,10 @@ export function BrowserCameraMode({
     startGeneration.current += 1;
     producerRef.current?.stop();
     producerRef.current = null;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
+    releaseStream();
     activeSourceKey.current = null;
     setActiveCameraId(null);
-    if (previewRef.current) previewRef.current.srcObject = null;
+    desktopBridge()?.setCameraResume?.(null);
     setState('offline');
     setViewerCount(0);
     void wakeLockRef.current?.release();
@@ -409,6 +560,16 @@ export function BrowserCameraMode({
           playsInline
           muted
         />
+        {activity === 'standby' && (
+          <div className="broadcast-standby" role="status">
+            <Icon name="camera" />
+            <strong>Camera is off</strong>
+            <span>
+              It turns on by itself when someone opens the live view, and turns
+              off again after they leave.
+            </span>
+          </div>
+        )}
         <div className="broadcast-top">
           <div className="video-badges-row">
             <span
@@ -416,7 +577,7 @@ export function BrowserCameraMode({
               role="status"
             >
               <span aria-hidden="true" className="broadcast-live-dot" />
-              {broadcastStatusLabel(state, viewerCount)}
+              {broadcastStatusLabel(state, viewerCount, activity === 'standby')}
             </span>
             <RecordingBadge state={clip.state} />
           </div>
@@ -483,8 +644,10 @@ export function BrowserCameraMode({
             <span className="broadcast-eyebrow">THIS DEVICE IS A CAMERA</span>
             <strong>{deviceName}</strong>
             <span>
-              {viewerCount === 1 ? '1 viewer' : `${viewerCount} viewers`} · Keep
-              this tab open
+              {viewerCount === 1 ? '1 viewer' : `${viewerCount} viewers`} ·{' '}
+              {desktopBridge()
+                ? 'Runs in the background'
+                : 'Keep this tab open'}
             </span>
           </div>
           <div className="broadcast-controls">
@@ -593,6 +756,14 @@ export function BrowserCameraMode({
                 }
               />
             </div>
+            <CameraPowerFields
+              idPrefix="active"
+              disabled={clipBusy}
+              microphone={microphone}
+              power={power}
+              onMicrophoneChange={setMicrophone}
+              onPowerChange={setPower}
+            />
             {wakeLockSupported() && (
               <label className="local-check full">
                 <input
@@ -780,6 +951,14 @@ export function BrowserCameraMode({
               />
               <div className="local-hint">You can rename it later.</div>
             </div>
+            <CameraPowerFields
+              idPrefix="setup"
+              disabled={clipBusy}
+              microphone={microphone}
+              power={power}
+              onMicrophoneChange={setMicrophone}
+              onPowerChange={setPower}
+            />
             {wakeLockSupported() && (
               <label className="local-check full">
                 <input
@@ -848,5 +1027,57 @@ export function BrowserCameraMode({
     <ModalDialog labelledBy="localTitle" onDismiss={onBack}>
       {setup}
     </ModalDialog>
+  );
+}
+
+function CameraPowerFields({
+  disabled,
+  idPrefix,
+  microphone,
+  onMicrophoneChange,
+  onPowerChange,
+  power,
+}: {
+  disabled: boolean;
+  idPrefix: string;
+  microphone: boolean;
+  onMicrophoneChange: (enabled: boolean) => void;
+  onPowerChange: (power: CameraPower) => void;
+  power: CameraPower;
+}) {
+  return (
+    <fieldset className="local-field full camera-power" disabled={disabled}>
+      <legend>When nobody is watching</legend>
+      <label className="local-check">
+        <input
+          checked={power === 'always'}
+          name={`${idPrefix}CameraPower`}
+          onChange={() => onPowerChange('always')}
+          type="radio"
+        />
+        <span>
+          <b>Keep the camera on</b> — viewers see video instantly
+        </span>
+      </label>
+      <label className="local-check">
+        <input
+          checked={power === 'standby'}
+          name={`${idPrefix}CameraPower`}
+          onChange={() => onPowerChange('standby')}
+          type="radio"
+        />
+        <span>
+          <b>Standby</b> — camera stays off until someone opens the live view
+        </span>
+      </label>
+      <label className="local-check">
+        <input
+          checked={microphone}
+          onChange={(event) => onMicrophoneChange(event.target.checked)}
+          type="checkbox"
+        />
+        <span>Include sound so viewers can listen</span>
+      </label>
+    </fieldset>
   );
 }

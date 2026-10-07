@@ -175,4 +175,86 @@ describe('BrowserProducer', () => {
     vi.runAllTimers();
     expect(FakeSocket.instances).toHaveLength(1);
   });
+
+  it('turns a standby camera on only when a viewer arrives', async () => {
+    vi.stubGlobal('WebSocket', FakeSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    const wake = vi.fn().mockResolvedValue(stream);
+    const producer = new BrowserProducer('camera', wake, () => undefined);
+    producer.start();
+    const socket = FakeSocket.instances[0]!;
+    socket.open();
+    expect(wake).not.toHaveBeenCalled();
+    socket.emit({
+      connectionId: 'viewer-one',
+      iceServers: [],
+      iceTransportPolicy: 'all',
+      type: 'viewer-ready',
+    });
+    await vi.waitFor(() =>
+      expect(socket.sent).toContainEqual(
+        expect.objectContaining({ connectionId: 'viewer-one', type: 'offer' }),
+      ),
+    );
+    expect(wake).toHaveBeenCalledTimes(1);
+    producer.stop();
+  });
+
+  it('ends only that viewer when the camera cannot wake', async () => {
+    vi.stubGlobal('WebSocket', FakeSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    const failure = new DOMException('busy', 'NotReadableError');
+    const onWakeError = vi.fn();
+    const producer = new BrowserProducer(
+      'camera',
+      () => Promise.reject(failure),
+      () => undefined,
+      undefined,
+      onWakeError,
+    );
+    producer.start();
+    const socket = FakeSocket.instances[0]!;
+    socket.open();
+    socket.emit({
+      connectionId: 'viewer-one',
+      iceServers: [],
+      iceTransportPolicy: 'all',
+      type: 'viewer-ready',
+    });
+    await vi.waitFor(() => expect(onWakeError).toHaveBeenCalledWith(failure));
+    expect(socket.sent).toContainEqual({
+      connectionId: 'viewer-one',
+      type: 'disconnect',
+    });
+    expect(FakePeer.instances).toHaveLength(0);
+    expect(FakeSocket.instances).toHaveLength(1);
+    expect(socket.readyState).toBe(FakeSocket.OPEN);
+    producer.stop();
+  });
+
+  it('drops a wake that finishes after the socket reconnected', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('WebSocket', FakeSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    let finishWake: (value: MediaStream) => void = () => undefined;
+    const producer = new BrowserProducer(
+      'camera',
+      () => new Promise<MediaStream>((resolve) => (finishWake = resolve)),
+      () => undefined,
+    );
+    producer.start();
+    const first = FakeSocket.instances[0]!;
+    first.emit({
+      connectionId: 'stale-viewer',
+      iceServers: [],
+      iceTransportPolicy: 'all',
+      type: 'viewer-ready',
+    });
+    first.onerror?.();
+    finishWake(stream);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(FakePeer.instances).toHaveLength(0);
+    producer.stop();
+  });
 });

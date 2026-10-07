@@ -4,6 +4,10 @@ import { eventsUrl } from './app-navigation';
 
 export interface HouseholdEvent {
   cameraId?: string;
+  /** Desktop alerts (type 'notification', ADR 0083) carry these. */
+  category?: string;
+  eventId?: string;
+  route?: string;
   type: string;
 }
 

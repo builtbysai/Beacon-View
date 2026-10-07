@@ -915,3 +915,176 @@ describe('BrowserCameraMode', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('BrowserCameraMode standby (wake on view)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    window.history.replaceState(null, '', '/');
+  });
+
+  class FakePeer {
+    connectionState = 'new';
+    onconnectionstatechange: (() => void) | null = null;
+    onicecandidate: (() => void) | null = null;
+    addTrack() {}
+    close() {}
+    createOffer() {
+      return Promise.resolve({ sdp: 'offer', type: 'offer' as const });
+    }
+    setLocalDescription() {
+      return Promise.resolve();
+    }
+  }
+
+  function setup(search = '') {
+    const trackStop = vi.fn();
+    const stream = {
+      getAudioTracks: () => [],
+      getTracks: () => [{ stop: trackStop }],
+      getVideoTracks: () => [{ id: 'track' }],
+    } as unknown as MediaStream;
+    const getUserMedia = vi.fn().mockResolvedValue(stream);
+    Object.defineProperty(window, 'isSecureContext', {
+      configurable: true,
+      value: true,
+    });
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: vi
+          .fn()
+          .mockResolvedValue([
+            { deviceId: 'built-in', kind: 'videoinput', label: 'Webcam' },
+          ]),
+        getUserMedia,
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            cameras: [
+              {
+                id: 'camera-one',
+                name: 'Webcam',
+                sourceKey: 'browser:built-in',
+              },
+            ],
+          }),
+        ok: true,
+        status: 201,
+      }),
+    );
+    vi.stubGlobal('WebSocket', CameraSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    window.history.replaceState(null, '', `/camera-mode${search}`);
+    return { getUserMedia, trackStop };
+  }
+
+  /** getUserMedia calls that actually open a camera for streaming (the
+   * discovery permission probe asks for `video: true`). */
+  function streamingOpens(getUserMedia: ReturnType<typeof vi.fn>) {
+    return getUserMedia.mock.calls.filter(
+      ([constraints]) =>
+        typeof (constraints as MediaStreamConstraints).video === 'object',
+    ).length;
+  }
+
+  function viewerArrives(connectionId: string) {
+    CameraSocket.instances[0]!.onmessage?.({
+      data: JSON.stringify({
+        canListen: true,
+        connectionId,
+        iceServers: [],
+        iceTransportPolicy: 'all',
+        type: 'viewer-ready',
+      }),
+    } as MessageEvent);
+  }
+
+  it('stays connected with the camera off until a viewer opens it', async () => {
+    const { getUserMedia, trackStop } = setup();
+    render(<BrowserCameraMode onBack={() => undefined} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Allow camera access' }),
+    );
+    await screen.findByText('Webcam');
+    fireEvent.click(screen.getByRole('radio', { name: /Standby/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
+
+    expect(await screen.findByText('Standby · camera off')).toBeVisible();
+    expect(screen.getByText('Camera is off')).toBeVisible();
+    expect(streamingOpens(getUserMedia)).toBe(0);
+    expect(localStorage.getItem('beacon_browser_camera_power')).toBe('standby');
+
+    viewerArrives('viewer-one');
+    await waitFor(() => expect(streamingOpens(getUserMedia)).toBe(1));
+    await waitFor(() =>
+      expect(screen.queryByText('Camera is off')).not.toBeInTheDocument(),
+    );
+
+    // A second viewer shares the already-open camera.
+    viewerArrives('viewer-two');
+    await act(() => Promise.resolve());
+    expect(streamingOpens(getUserMedia)).toBe(1);
+
+    // The discovery permission probe already stopped its own tracks.
+    const stopsBeforeRelease = trackStop.mock.calls.length;
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    for (const connectionId of ['viewer-one', 'viewer-two'])
+      CameraSocket.instances[0]!.onmessage?.({
+        data: JSON.stringify({ code: 'x', connectionId, type: 'peer-left' }),
+      } as MessageEvent);
+    await act(() => vi.advanceTimersByTimeAsync(19_000));
+    expect(trackStop).toHaveBeenCalledTimes(stopsBeforeRelease);
+    await act(() => vi.advanceTimersByTimeAsync(2_000));
+    expect(trackStop.mock.calls.length).toBeGreaterThan(stopsBeforeRelease);
+    expect(await screen.findByText('Camera is off')).toBeVisible();
+  });
+
+  it('starts without clicks from an autostart link and tells the desktop app to resume it', async () => {
+    const { getUserMedia } = setup('?autostart=1&power=standby&mic=1');
+    const setCameraResume = vi.fn();
+    const setCameraActivity = vi.fn();
+    window.beaconDesktop = {
+      setCameraActivity,
+      setCameraResume,
+      setCaptureActive: vi.fn(),
+      version: 1,
+    };
+    try {
+      const view = render(<BrowserCameraMode onBack={() => undefined} />);
+      expect(await screen.findByText('Standby · camera off')).toBeVisible();
+      expect(streamingOpens(getUserMedia)).toBe(0);
+      expect(setCameraResume).toHaveBeenLastCalledWith(
+        '/camera-mode?autostart=1&mic=1&power=standby',
+      );
+      expect(setCameraActivity).toHaveBeenLastCalledWith('standby');
+      expect(screen.getByText(/Runs in the background/)).toBeVisible();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Stop Camera Mode' }));
+      await waitFor(() =>
+        expect(setCameraResume).toHaveBeenLastCalledWith(null),
+      );
+      expect(setCameraActivity).toHaveBeenLastCalledWith('off');
+      view.unmount();
+    } finally {
+      delete window.beaconDesktop;
+    }
+  });
+
+  it('reports a camera that cannot wake without dropping standby', async () => {
+    const { getUserMedia } = setup('?autostart=1&power=standby');
+    render(<BrowserCameraMode onBack={() => undefined} />);
+    await screen.findByText('Standby · camera off');
+    getUserMedia.mockRejectedValueOnce(
+      new DOMException('busy', 'NotReadableError'),
+    );
+    viewerArrives('viewer-one');
+    expect(
+      await screen.findByText(/camera could not turn on for a viewer/),
+    ).toBeVisible();
+    expect(screen.getByText('Standby · camera off')).toBeVisible();
+  });
+});
