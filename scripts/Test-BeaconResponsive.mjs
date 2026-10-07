@@ -1,5 +1,5 @@
 // Run against a local Vite server. All API/media interactions are isolated fixtures.
-/* global window, document, innerWidth, innerHeight, getComputedStyle, HTMLElement */
+/* global window, document, innerWidth, innerHeight, getComputedStyle */
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { mkdirSync, writeFileSync } = require('node:fs');
