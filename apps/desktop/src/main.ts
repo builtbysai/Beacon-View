@@ -4,6 +4,8 @@ import {
   app,
   BrowserWindow,
   dialog,
+  type IpcMainEvent,
+  type IpcMainInvokeEvent,
   ipcMain,
   Menu,
   type MenuItemConstructorOptions,
@@ -14,19 +16,20 @@ import {
   systemPreferences,
 } from 'electron';
 
+import { ALERT_BODY, parseDesktopAlert, RecentAlerts } from './alerts.js';
 import {
   autostartSupported,
   getOpenAtLogin,
   launchedInBackground,
   setOpenAtLogin,
 } from './autostart.js';
-import { APP_ID, resolveAppOrigin } from './config.js';
 import {
-  DEEP_LINK_SCHEME,
-  type DesktopAuthLink,
-  findDesktopAuthLink,
-  parseDesktopAuthLink,
-} from './deep-link.js';
+  type CameraSetupRequest,
+  cameraSetupPath,
+  validResumePath,
+} from './camera-setup.js';
+import { APP_ID, resolveAppOrigin } from './config.js';
+import { DEEP_LINK_SCHEME, type DesktopAuthLink } from './deep-link.js';
 import {
   exchangeScript,
   googleStartUrl,
@@ -34,13 +37,20 @@ import {
   PendingGoogleSignIn,
 } from './google-sign-in.js';
 import {
+  findLaunchInput,
+  type LaunchInput,
+  parseLaunchUrl,
+  readSetupFile,
+  takePendingInstallerSetup,
+} from './launch-inputs.js';
+import {
   classifyNavigation,
   isAppUrl,
   type NavigationDecision,
 } from './navigation-policy.js';
 import { isPermissionGranted } from './permissions.js';
 import { readPreferences, writePreferences } from './preferences.js';
-import { BeaconTray } from './tray.js';
+import { BeaconTray, type CameraActivity } from './tray.js';
 
 const appRoot = path.join(import.meta.dirname, '..');
 const assetsDirectory = path.join(appRoot, 'assets');
@@ -60,15 +70,29 @@ const preferencesFile = path.join(
 );
 const preferences = readPreferences(preferencesFile);
 const pendingSignIn = new PendingGoogleSignIn(SIGN_IN_TTL_MS);
+const recentAlerts = new RecentAlerts();
 
 let mainWindow: BrowserWindow | null = null;
 let tray: BeaconTray | null = null;
 let quitting = false;
-let captureActive = false;
-let captureBlocker: number | null = null;
+let cameraActivity: CameraActivity = 'off';
+let cameraBlocker: number | null = null;
 
 function appUrl(pathname: string): string {
   return new URL(pathname, appOrigin).href;
+}
+
+/** A computer set up as a camera reopens Camera Mode; otherwise Home. */
+function startPath(): string {
+  return preferences.cameraResumePath ?? '/';
+}
+
+function savePreferences(): void {
+  try {
+    writePreferences(preferencesFile, preferences);
+  } catch {
+    // Preferences are conveniences; failing to save one is not fatal.
+  }
 }
 
 function notify(title: string, body: string): void {
@@ -86,40 +110,118 @@ function showWindow(): BrowserWindow {
   return window;
 }
 
-// --- Capture visibility -----------------------------------------------------
+/** After a deep link from the browser, the app should come to the front.
+ * Windows refuses focus to background processes, so float the window above
+ * others for a moment instead. */
+function bringToFront(): BrowserWindow {
+  const window = showWindow();
+  if (process.platform === 'win32') {
+    window.setAlwaysOnTop(true);
+    window.focus();
+    window.setAlwaysOnTop(false);
+  } else if (process.platform === 'darwin') {
+    app.focus({ steal: true });
+  }
+  return window;
+}
 
-function notifyStillLive(): void {
-  notify(
-    'Beacon Camera Mode is still live',
-    'This computer keeps broadcasting while the window is closed. Choose Quit Beacon in the tray to stop.',
+/** IPC is honored only from Beacon's own page in this window's main frame. */
+function trustedSender(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
+  const frame = event.senderFrame;
+  return Boolean(
+    mainWindow &&
+    event.sender === mainWindow.webContents &&
+    frame &&
+    frame === event.sender.mainFrame &&
+    isAppUrl(frame.url, appOrigin),
   );
 }
 
-function setCaptureActive(active: boolean): void {
-  if (active === captureActive) return;
-  captureActive = active;
-  tray?.setLive(active);
-  if (active) {
-    captureBlocker = powerSaveBlocker.start('prevent-app-suspension');
-    if (mainWindow && !mainWindow.isVisible()) notifyStillLive();
-  } else if (captureBlocker !== null) {
-    powerSaveBlocker.stop(captureBlocker);
-    captureBlocker = null;
-  }
+// --- Camera visibility (ADRs 0082 and 0083) ---------------------------------
+
+function notifyCameraInBackground(): void {
+  if (cameraActivity === 'live')
+    notify(
+      'Beacon camera is on',
+      'This computer keeps broadcasting while the window is closed. Choose Quit Beacon in the tray to stop.',
+    );
+  else if (cameraActivity === 'standby')
+    notify(
+      'Beacon camera is on standby',
+      'The camera stays off and turns on only while someone views it. Choose Quit Beacon in the tray to stop.',
+    );
 }
 
-ipcMain.on('beacon:capture-state', (event, active: unknown) => {
-  const frame = event.senderFrame;
+function setCameraActivity(next: CameraActivity): void {
+  const previous = cameraActivity;
+  if (next === previous) return;
+  cameraActivity = next;
+  tray?.setActivity(next);
+  // A camera on standby must stay reachable, so the computer stays awake
+  // (the display may still sleep) whenever Camera Mode runs.
+  if (next === 'off') {
+    if (cameraBlocker !== null) powerSaveBlocker.stop(cameraBlocker);
+    cameraBlocker = null;
+  } else if (cameraBlocker === null) {
+    cameraBlocker = powerSaveBlocker.start('prevent-app-suspension');
+  }
+  // Capture that starts while the window is hidden is announced, so the
+  // person at this computer always knows when the camera turns on.
+  if (next === 'live' && mainWindow && !mainWindow.isVisible())
+    notify(
+      'Beacon camera turned on',
+      previous === 'standby'
+        ? 'Someone is viewing this camera. It turns off again after they leave.'
+        : 'This computer is broadcasting. Choose Quit Beacon in the tray to stop.',
+    );
+}
+
+ipcMain.on('beacon:camera-activity', (event, activity: unknown) => {
   if (
-    !mainWindow ||
-    event.sender !== mainWindow.webContents ||
-    !frame ||
-    frame !== event.sender.mainFrame ||
-    !isAppUrl(frame.url, appOrigin) ||
-    typeof active !== 'boolean'
+    trustedSender(event) &&
+    (activity === 'off' || activity === 'standby' || activity === 'live')
   )
-    return;
-  setCaptureActive(active);
+    setCameraActivity(activity);
+});
+
+ipcMain.on('beacon:camera-resume', (event, value: unknown) => {
+  if (!trustedSender(event)) return;
+  const resume = value === null ? null : validResumePath(value);
+  if (value !== null && !resume) return;
+  if (preferences.cameraResumePath === resume) return;
+  preferences.cameraResumePath = resume;
+  savePreferences();
+});
+
+ipcMain.handle('beacon:get-autostart', (event) =>
+  trustedSender(event) ? getOpenAtLogin() : false,
+);
+
+ipcMain.handle('beacon:set-autostart', (event, enabled: unknown) => {
+  if (!trustedSender(event) || typeof enabled !== 'boolean')
+    return getOpenAtLogin();
+  setOpenAtLogin(enabled);
+  tray?.refresh();
+  return getOpenAtLogin();
+});
+
+// --- Desktop alerts (ADR 0083) ----------------------------------------------
+
+ipcMain.on('beacon:show-alert', (event, value: unknown) => {
+  if (!trustedSender(event) || !Notification.isSupported()) return;
+  const alert = parseDesktopAlert(value);
+  if (!alert || !recentAlerts.firstSighting(alert.eventId)) return;
+  const notification = new Notification({
+    body: ALERT_BODY[alert.category],
+    // Security alerts stay until dismissed, like the PWA's requireInteraction.
+    timeoutType: alert.category === 'security' ? 'never' : 'default',
+    title: 'Beacon',
+  });
+  notification.on('click', () => {
+    const window = bringToFront();
+    void window.loadURL(appUrl(alert.route)).catch(() => undefined);
+  });
+  notification.show();
 });
 
 // --- Google sign-in through the system browser (ADR 0082) -------------------
@@ -133,7 +235,7 @@ async function completeGoogleSignIn(link: DesktopAuthLink): Promise<void> {
   const verifier = pendingSignIn.take();
   // A link this app did not ask for (no verifier) is dropped silently.
   if (!verifier) return;
-  const window = showWindow();
+  const window = bringToFront();
   let destination = '/?googleSignIn=failed';
   if (link.kind === 'code') {
     try {
@@ -154,8 +256,28 @@ async function completeGoogleSignIn(link: DesktopAuthLink): Promise<void> {
   await window.loadURL(appUrl(destination)).catch(() => undefined);
 }
 
-function handleDeepLink(link: DesktopAuthLink | null): void {
-  if (link) void completeGoogleSignIn(link);
+// --- One-click camera setup (ADR 0083) --------------------------------------
+
+function startCameraSetup(request: CameraSetupRequest): void {
+  // A camera should come back after the computer restarts. The setup page
+  // says so; the tray menu and Settings can turn it off again.
+  if (autostartSupported() && !getOpenAtLogin()) {
+    setOpenAtLogin(true);
+    tray?.refresh();
+    notify(
+      'Beacon will start with this computer',
+      'So this camera stays available after a restart. Change this from the Beacon tray menu.',
+    );
+  }
+  const window = bringToFront();
+  void window.loadURL(appUrl(cameraSetupPath(request))).catch(() => undefined);
+}
+
+function handleLaunchInput(input: LaunchInput | null): boolean {
+  if (!input) return false;
+  if (input.kind === 'auth') void completeGoogleSignIn(input.link);
+  else startCameraSetup(input.request);
+  return true;
 }
 
 // --- Navigation -------------------------------------------------------------
@@ -261,7 +383,7 @@ function createWindow(): BrowserWindow {
   contents.on('did-start-navigation', (event) => {
     // A reload or full navigation tears down Camera Mode without running
     // its cleanup, so the indicator resets with the document.
-    if (event.isMainFrame && !event.isSameDocument) setCaptureActive(false);
+    if (event.isMainFrame && !event.isSameDocument) setCameraActivity('off');
   });
   contents.on(
     'did-fail-load',
@@ -275,8 +397,8 @@ function createWindow(): BrowserWindow {
     },
   );
   contents.on('render-process-gone', () => {
-    setCaptureActive(false);
-    void window.loadURL(appUrl('/')).catch(() => undefined);
+    setCameraActivity('off');
+    void window.loadURL(appUrl(startPath())).catch(() => undefined);
   });
   contents.on('context-menu', (_event, params) => {
     const template: MenuItemConstructorOptions[] = params.isEditable
@@ -298,19 +420,15 @@ function createWindow(): BrowserWindow {
     // Closing hides to the tray; Quit Beacon (tray) really exits.
     event.preventDefault();
     window.hide();
-    if (captureActive) {
-      notifyStillLive();
+    if (cameraActivity !== 'off') {
+      notifyCameraInBackground();
     } else if (!preferences.trayHintShown) {
       notify(
         'Beacon is still running',
         'Open it again from the tray or by launching Beacon. Choose Quit Beacon in the tray to close it completely.',
       );
       preferences.trayHintShown = true;
-      try {
-        writePreferences(preferencesFile, preferences);
-      } catch {
-        // Showing the hint again next time is harmless.
-      }
+      savePreferences();
     }
   });
   window.on('closed', () => {
@@ -318,7 +436,7 @@ function createWindow(): BrowserWindow {
   });
 
   mainWindow = window;
-  void window.loadURL(appUrl('/')).catch(() => undefined);
+  void window.loadURL(appUrl(startPath())).catch(() => undefined);
   return window;
 }
 
@@ -394,13 +512,19 @@ function configureApplicationMenu(): void {
 }
 
 async function quitFromTray(): Promise<void> {
-  if (captureActive) {
+  if (cameraActivity !== 'off') {
     const options = {
-      buttons: ['Stop Camera Mode and quit', 'Cancel'],
+      buttons: ['Stop camera and quit', 'Cancel'],
       cancelId: 1,
       defaultId: 1,
-      detail: 'Quitting Beacon stops broadcasting from this computer.',
-      message: 'Camera Mode is live',
+      detail:
+        cameraActivity === 'live'
+          ? 'Quitting Beacon stops broadcasting from this computer.'
+          : 'Quitting Beacon takes this camera offline until Beacon starts again.',
+      message:
+        cameraActivity === 'live'
+          ? 'This camera is on'
+          : 'This camera is on standby',
       type: 'warning' as const,
     };
     const { response } = mainWindow
@@ -414,9 +538,10 @@ async function quitFromTray(): Promise<void> {
 // --- Lifecycle --------------------------------------------------------------
 
 function registerDeepLinkScheme(): void {
-  // Packaged installers also register the scheme (electron-builder
-  // `protocols`). Development builds register only on request, so running
-  // from source never repoints the machine's handler at a dev checkout.
+  // Packaged installers also register the scheme (resources/installer.nsh
+  // on Windows, electron-builder `protocols` elsewhere). Development builds
+  // register only on request, so running from source never repoints the
+  // machine's handler at a dev checkout.
   if (app.isPackaged) app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
   else if (process.env.BEACON_DESKTOP_REGISTER_PROTOCOL === '1')
     app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME, process.execPath, [
@@ -431,18 +556,28 @@ if (!app.requestSingleInstanceLock()) {
   app.enableSandbox();
   registerDeepLinkScheme();
 
+  // macOS delivers deep links and opened files as events, possibly before
+  // `ready`; those are held until the window exists.
+  const early: LaunchInput[] = [];
+  const deliver = (input: LaunchInput | null): void => {
+    if (!input) return;
+    if (app.isReady() && mainWindow) handleLaunchInput(input);
+    else early.push(input);
+  };
+
   app.on('web-contents-created', (_event, contents) => {
     contents.on('will-attach-webview', (event) => event.preventDefault());
   });
   app.on('second-instance', (_event, argv) => {
-    const link = findDesktopAuthLink(argv);
-    if (link) handleDeepLink(link);
-    else showWindow();
+    if (!handleLaunchInput(findLaunchInput(argv, appOrigin))) showWindow();
   });
-  // macOS delivers deep links as open-url, possibly before `ready`.
   app.on('open-url', (event, url) => {
     event.preventDefault();
-    handleDeepLink(parseDesktopAuthLink(url));
+    deliver(parseLaunchUrl(url));
+  });
+  app.on('open-file', (event, filePath) => {
+    event.preventDefault();
+    deliver(readSetupFile(filePath, appOrigin));
   });
   app.on('activate', () => showWindow());
   app.on('before-quit', () => {
@@ -462,13 +597,21 @@ if (!app.requestSingleInstanceLock()) {
       },
       open: () => showWindow(),
       quit: () => void quitFromTray(),
-      reload: () => {
-        const window = showWindow();
-        void window.loadURL(appUrl('/')).catch(() => undefined);
-      },
+      reload: () => showWindow().webContents.reload(),
     });
     const window = createWindow();
-    if (!launchedInBackground(process.argv))
+    const installerSetup = takePendingInstallerSetup(app.getPath('userData'));
+    const inputs = [
+      findLaunchInput(process.argv, appOrigin),
+      ...early.splice(0),
+      installerSetup
+        ? { kind: 'camera-setup' as const, request: installerSetup }
+        : null,
+    ];
+    let handled = false;
+    for (const input of inputs) handled = handleLaunchInput(input) || handled;
+    // A login-item launch stays in the tray (a camera resumes there).
+    if (!handled && !launchedInBackground(process.argv))
       window.once('ready-to-show', () => window.show());
   });
 }

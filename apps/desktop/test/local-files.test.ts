@@ -51,17 +51,45 @@ describe('desktop preferences', () => {
   it('defaults when the file is missing or malformed', () => {
     const directory = temporaryDirectory();
     const file = path.join(directory, 'prefs.json');
-    expect(readPreferences(file)).toEqual({ trayHintShown: false });
+    expect(readPreferences(file)).toEqual({
+      cameraResumePath: null,
+      trayHintShown: false,
+    });
     writeFileSync(file, '{not json');
-    expect(readPreferences(file)).toEqual({ trayHintShown: false });
+    expect(readPreferences(file)).toEqual({
+      cameraResumePath: null,
+      trayHintShown: false,
+    });
     writeFileSync(file, JSON.stringify({ trayHintShown: 'yes' }));
-    expect(readPreferences(file)).toEqual({ trayHintShown: false });
+    expect(readPreferences(file)).toEqual({
+      cameraResumePath: null,
+      trayHintShown: false,
+    });
   });
 
   it('round-trips through an atomic write', () => {
     const file = path.join(temporaryDirectory(), 'nested', 'prefs.json');
-    writePreferences(file, { trayHintShown: true });
-    expect(readPreferences(file)).toEqual({ trayHintShown: true });
+    const saved = {
+      cameraResumePath: '/camera-mode/setup?autostart=1&power=standby',
+      trayHintShown: true,
+    };
+    writePreferences(file, saved);
+    expect(readPreferences(file)).toEqual(saved);
+  });
+
+  it('drops a resume path that is not a Camera Mode path', () => {
+    const file = path.join(temporaryDirectory(), 'prefs.json');
+    writeFileSync(
+      file,
+      JSON.stringify({
+        cameraResumePath: '//evil.example/x',
+        trayHintShown: true,
+      }),
+    );
+    expect(readPreferences(file)).toEqual({
+      cameraResumePath: null,
+      trayHintShown: true,
+    });
   });
 });
 

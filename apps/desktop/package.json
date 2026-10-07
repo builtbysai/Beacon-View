@@ -1,7 +1,7 @@
 {
   "name": "@beacon/desktop",
   "productName": "Beacon",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Beacon SecureView desktop app for Windows, macOS, and Linux",
   "author": "Beacon SecureView",

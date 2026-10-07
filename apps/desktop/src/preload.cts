@@ -6,12 +6,37 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import electron = require('electron');
 
+const { ipcRenderer } = electron;
+
 electron.contextBridge.exposeInMainWorld(
   'beaconDesktop',
   Object.freeze({
+    getAutostart(): Promise<boolean> {
+      return ipcRenderer.invoke('beacon:get-autostart') as Promise<boolean>;
+    },
+    setAutostart(enabled: unknown): Promise<boolean> {
+      return ipcRenderer.invoke(
+        'beacon:set-autostart',
+        enabled === true,
+      ) as Promise<boolean>;
+    },
+    setCameraActivity(activity: unknown): void {
+      if (activity === 'off' || activity === 'standby' || activity === 'live')
+        ipcRenderer.send('beacon:camera-activity', activity);
+    },
+    setCameraResume(path: unknown): void {
+      if (path === null || typeof path === 'string')
+        ipcRenderer.send('beacon:camera-resume', path);
+    },
     setCaptureActive(active: unknown): void {
       if (typeof active === 'boolean')
-        electron.ipcRenderer.send('beacon:capture-state', active);
+        ipcRenderer.send('beacon:camera-activity', active ? 'live' : 'off');
+    },
+    showAlert(alert: unknown): void {
+      if (alert && typeof alert === 'object') {
+        const { category, eventId, route } = alert as Record<string, unknown>;
+        ipcRenderer.send('beacon:show-alert', { category, eventId, route });
+      }
     },
     version: 1,
   }),
