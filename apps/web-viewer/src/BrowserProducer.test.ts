@@ -47,7 +47,18 @@ class FakePeer {
     FakePeer.instances.push(this);
   }
 
+  ontrack: ((event: RTCTrackEvent) => void) | null = null;
+  transceivers: Array<{ direction: string; kind: string }> = [];
   addTrack() {}
+  addTransceiver(
+    trackOrKind: MediaStreamTrack | string,
+    init: { direction: string },
+  ) {
+    this.transceivers.push({
+      direction: init.direction,
+      kind: typeof trackOrKind === 'string' ? trackOrKind : trackOrKind.kind,
+    });
+  }
   addIceCandidate() {
     return Promise.resolve();
   }
@@ -67,6 +78,7 @@ class FakePeer {
 }
 
 const stream = {
+  getAudioTracks: () => [],
   getVideoTracks: () => [{ id: 'shared-track' }],
 } as unknown as MediaStream;
 
@@ -255,6 +267,85 @@ describe('BrowserProducer', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(FakePeer.instances).toHaveLength(0);
+    producer.stop();
+  });
+
+  it('always offers an audio section so a viewer can Talk, sending sound only when shared', async () => {
+    vi.stubGlobal('WebSocket', FakeSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    const withSound = {
+      getAudioTracks: () => [{ kind: 'audio' }],
+      getVideoTracks: () => [{ id: 'video' }],
+    } as unknown as MediaStream;
+    for (const [source, canListen, direction] of [
+      [stream, true, 'recvonly'],
+      [withSound, true, 'sendrecv'],
+      [withSound, false, 'recvonly'],
+    ] as const) {
+      FakePeer.instances = [];
+      FakeSocket.instances = [];
+      const producer = new BrowserProducer('camera', source, () => undefined);
+      producer.start();
+      FakeSocket.instances[0]!.emit({
+        canListen,
+        connectionId: 'viewer',
+        iceServers: [],
+        iceTransportPolicy: 'all',
+        type: 'viewer-ready',
+      });
+      await vi.waitFor(() => expect(FakePeer.instances).toHaveLength(1));
+      expect(FakePeer.instances[0]!.transceivers).toEqual([
+        { direction, kind: 'audio' },
+      ]);
+      producer.stop();
+    }
+  });
+
+  it('plays Talk audio only while the server grants that viewer the floor', async () => {
+    vi.stubGlobal('WebSocket', FakeSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    vi.stubGlobal(
+      'MediaStream',
+      class {
+        constructor(readonly tracks: unknown[]) {}
+      },
+    );
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+    const talking: boolean[] = [];
+    const producer = new BrowserProducer(
+      'camera',
+      stream,
+      () => undefined,
+      undefined,
+      undefined,
+      (active) => talking.push(active),
+    );
+    producer.start();
+    const socket = FakeSocket.instances[0]!;
+    socket.emit({
+      canListen: true,
+      connectionId: 'viewer',
+      iceServers: [],
+      iceTransportPolicy: 'all',
+      type: 'viewer-ready',
+    });
+    await vi.waitFor(() => expect(FakePeer.instances).toHaveLength(1));
+    const created: HTMLAudioElement[] = [];
+    const original = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const element = original(tag);
+      if (tag === 'audio') created.push(element as HTMLAudioElement);
+      return element;
+    });
+    FakePeer.instances[0]!.ontrack?.({
+      track: { kind: 'audio' },
+    } as unknown as RTCTrackEvent);
+    expect(created[0]!.muted).toBe(true);
+    socket.emit({ active: true, connectionId: 'viewer', type: 'talk-state' });
+    await vi.waitFor(() => expect(created[0]!.muted).toBe(false));
+    socket.emit({ active: false, connectionId: 'viewer', type: 'talk-state' });
+    await vi.waitFor(() => expect(created[0]!.muted).toBe(true));
+    expect(talking).toEqual([true, false]);
     producer.stop();
   });
 });

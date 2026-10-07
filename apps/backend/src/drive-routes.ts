@@ -3,6 +3,11 @@ import type { FastifyInstance } from 'fastify';
 
 import type { AppConfig } from './config.js';
 import {
+  DRIVE_HEALTH_CHECK_INTERVAL_MS,
+  expireDriveConnection,
+} from './drive-connection-health.js';
+import {
+  DriveReconnectRequiredError,
   GOOGLE_DRIVE_RECORDING_SCOPE,
   refreshDriveAccessToken,
   revokeDriveRefreshToken,
@@ -17,12 +22,53 @@ export function registerDriveRoutes(
   dependencies: { auth: SessionAuth; config: AppConfig; store: MilestoneStore },
 ): void {
   const { auth, config, store } = dependencies;
+  // When each user's Drive token was last confirmed live (in memory; a
+  // restart just means one extra check).
+  const lastHealthCheck = new Map<string, number>();
+
+  /** Returns false when Google rejected the token and the connection was
+   * dropped. Transient failures count as healthy -- only an explicit
+   * invalid_grant ends a connection. */
+  async function driveTokenAlive(
+    userId: string,
+    householdId: string,
+  ): Promise<boolean> {
+    const checkedAt = lastHealthCheck.get(userId) ?? 0;
+    if (Date.now() - checkedAt < DRIVE_HEALTH_CHECK_INTERVAL_MS) return true;
+    const refreshToken = await store.getGoogleDriveRefreshToken(userId);
+    if (!refreshToken || !config.GOOGLE_OAUTH_CLIENT_ID) return true;
+    try {
+      await refreshDriveAccessToken(
+        new OAuth2Client(
+          config.GOOGLE_OAUTH_CLIENT_ID,
+          config.GOOGLE_OAUTH_CLIENT_SECRET,
+          config.GOOGLE_OAUTH_REDIRECT_URI,
+        ),
+        refreshToken,
+      );
+      lastHealthCheck.set(userId, Date.now());
+      return true;
+    } catch (error) {
+      if (!(error instanceof DriveReconnectRequiredError)) return true;
+      lastHealthCheck.delete(userId);
+      await expireDriveConnection(store, userId, householdId);
+      return false;
+    }
+  }
 
   app.get('/api/drive/status', async (request, reply) => {
     const session = await auth.authenticate(request, reply);
     if (!session) return;
     reply.header('Cache-Control', 'no-store');
-    const connection = await store.getGoogleDriveConnection(session.userId);
+    let connection = await store.getGoogleDriveConnection(session.userId);
+    let expired = false;
+    if (
+      connection &&
+      !(await driveTokenAlive(session.userId, session.householdId))
+    ) {
+      connection = null;
+      expired = true;
+    }
     const configured =
       store.googleDriveConfigured() &&
       Boolean(
@@ -33,6 +79,8 @@ export function registerDriveRoutes(
     return {
       connected: Boolean(connection),
       configured,
+      // Google stopped accepting the connection; the owner must reconnect.
+      expired,
       recordingsConnected: Boolean(
         connection && hasScope(connection.scopes, GOOGLE_DRIVE_RECORDING_SCOPE),
       ),

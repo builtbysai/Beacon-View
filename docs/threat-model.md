@@ -141,6 +141,20 @@ Android, backend, PostgreSQL, and TURN are separate trust zones.
 - Camera use cases change only existing motion settings, and never enable
   continuous recording.
 
+## Desktop automatic updates (ADR 0085)
+
+- Updates come only from `https://<origin>/downloads/` over HTTPS, and
+  each installer must match the SHA-512 in its `latest*.yml`. Downgrades
+  and prereleases are refused.
+- **Residual risk:** builds are unsigned. Anyone who can write to the
+  server's downloads folder can ship native code to every desktop. The
+  folder is deploy-user owned and mounted read-only into the web container.
+  A Windows certificate (`publisherName`) and Apple notarization close this
+  gap.
+- Updates install only when the window is hidden and the camera isn't
+  live. They never change capture indicators, and they keep sessions and
+  camera credentials (user data is never deleted).
+
 ## Residual risk and deferrals
 
 Production secret management, CA lifecycle, TURN abuse controls and capacity,

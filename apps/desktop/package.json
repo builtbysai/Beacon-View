@@ -1,7 +1,7 @@
 {
   "name": "@beacon/desktop",
   "productName": "Beacon",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Beacon SecureView desktop app for Windows, macOS, and Linux",
   "author": "Beacon SecureView",
@@ -26,5 +26,8 @@
     "electron-builder": "26.15.3",
     "typescript": "5.9.3",
     "vitest": "4.1.10"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
   }
 }

@@ -926,7 +926,9 @@ describe('BrowserCameraMode standby (wake on view)', () => {
     connectionState = 'new';
     onconnectionstatechange: (() => void) | null = null;
     onicecandidate: (() => void) | null = null;
+    ontrack: (() => void) | null = null;
     addTrack() {}
+    addTransceiver() {}
     close() {}
     createOffer() {
       return Promise.resolve({ sdp: 'offer', type: 'offer' as const });

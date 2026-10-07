@@ -154,11 +154,25 @@ following:
 - Phase 1 camera use cases (Security, Baby monitor, Door camera)
 
 The same batch repaired the responsive audit and made `migrate-verify`
-check every migration statement. Code signing is not required while the
-deployment is self-hosted.
-Model selection, a default-off feature flag, and device evidence remain open, and IP
-cameras/other clients still require their own design milestone per ADR 0067 and the table
-below.
+check every migration statement.
+
+October 7 desktop 0.3: owner-reported audio and recording failures fixed:
+
+- Computer cameras now always negotiate an audio section, so Talk works, and
+  they play Talk audio only while that viewer holds the talk floor, with an
+  on-screen notice.
+- Viewers see Listen disabled when a camera shares no sound.
+- Microphones can be chosen, both for a computer camera and for Talk.
+- An expired Google Drive connection (Testing-mode OAuth tokens last 7
+  days) is detected, removed, and shown as "Reconnect" instead of a generic
+  upload failure.
+- Recording from a standby camera wakes it.
+- ADR 0085 adds automatic desktop updates that keep sessions and paired
+  cameras. Code signing is not required while the
+  deployment is self-hosted.
+  Model selection, a default-off feature flag, and device evidence remain open, and IP
+  cameras/other clients still require their own design milestone per ADR 0067 and the table
+  below.
 
 Notification Transport v1 is implemented through its Chrome Web Push baseline; native
 FCM and the remaining physical acceptance matrix remain external evidence gates. On

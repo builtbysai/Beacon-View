@@ -566,7 +566,7 @@
 .local-actions .btn {
   min-height: 38px;
 }
-.local-field input,
+.local-field input:not([type='checkbox'], [type='radio']),
 .local-field select {
   min-height: 40px;
   border-radius: 9px;

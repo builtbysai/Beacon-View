@@ -15,9 +15,12 @@ import {
   cameraActivity,
   type CameraPower,
   loadCameraPower,
+  loadMicrophoneDevice,
   loadMicrophoneEnabled,
+  microphoneConstraints,
   readAutoStartRequest,
   saveCameraPower,
+  saveMicrophoneDevice,
   saveMicrophoneEnabled,
   STANDBY_RELEASE_DELAY_MS,
 } from './camera-power';
@@ -164,6 +167,11 @@ export function BrowserCameraMode({
   const microphoneRef = useRef(microphone);
   microphoneRef.current = microphone;
   const [streamOpen, setStreamOpen] = useState(false);
+  const [talking, setTalking] = useState(false);
+  const [microphones, setMicrophones] = useState<VideoInput[]>([]);
+  const [microphoneId, setMicrophoneId] = useState(loadMicrophoneDevice);
+  const microphoneIdRef = useRef(microphoneId);
+  microphoneIdRef.current = microphoneId;
   const pendingStream = useRef<Promise<MediaStream> | null>(null);
   const releaseTimer = useRef<number | null>(null);
   const [pairingCode, setPairingCode] = useState(
@@ -266,16 +274,75 @@ export function BrowserCameraMode({
     setStreamOpen(false);
   }
 
-  function openCamera(deviceId: string): Promise<MediaStream> {
-    return navigator.mediaDevices.getUserMedia({
-      audio: microphoneRef.current,
-      video: {
-        deviceId: { exact: deviceId },
-        frameRate: { ideal: 24, max: 30 },
-        height: { ideal: 720, max: 1080 },
-        width: { ideal: 1280, max: 1920 },
-      },
-    });
+  async function openCamera(deviceId: string): Promise<MediaStream> {
+    const video = {
+      deviceId: { exact: deviceId },
+      frameRate: { ideal: 24, max: 30 },
+      height: { ideal: 720, max: 1080 },
+      width: { ideal: 1280, max: 1920 },
+    };
+    const chosenMicrophone = microphoneIdRef.current;
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: microphoneRef.current
+          ? microphoneConstraints(chosenMicrophone)
+          : false,
+        video,
+      });
+    } catch (error) {
+      // The chosen microphone was unplugged: fall back to the default one
+      // rather than failing the whole camera.
+      if (
+        microphoneRef.current &&
+        chosenMicrophone &&
+        error instanceof DOMException &&
+        (error.name === 'OverconstrainedError' ||
+          error.name === 'NotFoundError')
+      )
+        return navigator.mediaDevices.getUserMedia({ audio: true, video });
+      throw error;
+    }
+  }
+
+  /** Lists microphones. Their names need microphone permission, which is
+   * asked for only once sound is turned on. */
+  async function refreshMicrophones() {
+    try {
+      const probe = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+      probe.getTracks().forEach((track) => track.stop());
+      const devices = (await navigator.mediaDevices.enumerateDevices())
+        .filter((device) => device.kind === 'audioinput')
+        .map((device, index) => ({
+          deviceId: device.deviceId,
+          label: device.label
+            ? friendlyDeviceLabel(device.label)
+            : 'Microphone ' + String(index + 1),
+        }));
+      setMicrophones(devices);
+      if (
+        microphoneIdRef.current &&
+        !devices.some((device) => device.deviceId === microphoneIdRef.current)
+      )
+        setMicrophoneId('');
+    } catch {
+      setMicrophones([]);
+      setError(
+        'Microphone access was denied, so this camera can’t share sound.',
+      );
+    }
+  }
+
+  function changeMicrophone(enabled: boolean) {
+    setMicrophone(enabled);
+    if (enabled) void refreshMicrophones();
+  }
+
+  function chooseMicrophone(deviceId: string) {
+    setMicrophoneId(deviceId);
+    saveMicrophoneDevice(deviceId);
   }
 
   function installStream(stream: MediaStream) {
@@ -346,6 +413,7 @@ export function BrowserCameraMode({
             : `Camera ${index + 1}`,
         }));
       setInputs(devices);
+      if (microphoneRef.current) void refreshMicrophones();
       setSourceNames(
         Object.fromEntries(
           devices.map((device) => [device.deviceId, device.label]),
@@ -467,6 +535,7 @@ export function BrowserCameraMode({
               ? 'Camera permission was removed. Allow camera access to keep this camera available.'
               : 'The camera could not turn on for a viewer. Check that no other app is using it.',
           ),
+        setTalking,
       );
       producerRef.current.start();
       if (wakeLockEnabled) await acquireWakeLock();
@@ -499,10 +568,25 @@ export function BrowserCameraMode({
   }
 
   function startRecording() {
-    if (!streamRef.current) return;
     setError('');
-    clip.start(streamRef.current);
+    if (streamRef.current) {
+      clip.start(streamRef.current);
+      return;
+    }
+    // A standby camera turns on for the recording and goes back to standby
+    // once it ends and nobody is watching.
+    const deviceId = activeSourceKey.current;
+    if (!deviceId) return;
+    void acquireStream(deviceId).then(
+      (stream) => clip.start(stream),
+      () => setError('The camera could not turn on to record.'),
+    );
   }
+
+  useEffect(() => {
+    if (!clipBusy) scheduleStandbyRelease(viewerCount);
+    // Only re-evaluate when a recording finishes.
+  }, [clipBusy]);
 
   // Clears a finished clip's status back to the plain record control a few
   // seconds after it lands, matching the live viewer's own record button.
@@ -560,6 +644,11 @@ export function BrowserCameraMode({
           playsInline
           muted
         />
+        {talking && (
+          <p className="broadcast-talking" role="status">
+            <Icon name="speaker" /> Someone is talking through this camera
+          </p>
+        )}
         {activity === 'standby' && (
           <div className="broadcast-standby" role="status">
             <Icon name="camera" />
@@ -761,7 +850,10 @@ export function BrowserCameraMode({
               disabled={clipBusy}
               microphone={microphone}
               power={power}
-              onMicrophoneChange={setMicrophone}
+              microphoneId={microphoneId}
+              microphones={microphones}
+              onMicrophoneChange={changeMicrophone}
+              onMicrophoneSelect={chooseMicrophone}
               onPowerChange={setPower}
             />
             {wakeLockSupported() && (
@@ -956,7 +1048,10 @@ export function BrowserCameraMode({
               disabled={clipBusy}
               microphone={microphone}
               power={power}
-              onMicrophoneChange={setMicrophone}
+              microphoneId={microphoneId}
+              microphones={microphones}
+              onMicrophoneChange={changeMicrophone}
+              onMicrophoneSelect={chooseMicrophone}
               onPowerChange={setPower}
             />
             {wakeLockSupported() && (
@@ -1034,14 +1129,20 @@ function CameraPowerFields({
   disabled,
   idPrefix,
   microphone,
+  microphoneId,
+  microphones,
   onMicrophoneChange,
+  onMicrophoneSelect,
   onPowerChange,
   power,
 }: {
   disabled: boolean;
   idPrefix: string;
   microphone: boolean;
+  microphoneId: string;
+  microphones: { deviceId: string; label: string }[];
   onMicrophoneChange: (enabled: boolean) => void;
+  onMicrophoneSelect: (deviceId: string) => void;
   onPowerChange: (power: CameraPower) => void;
   power: CameraPower;
 }) {
@@ -1078,6 +1179,22 @@ function CameraPowerFields({
         />
         <span>Include sound so viewers can listen</span>
       </label>
+      {microphone && microphones.length > 1 && (
+        <label className="camera-power-microphone">
+          <span>Microphone</span>
+          <select
+            onChange={(event) => onMicrophoneSelect(event.target.value)}
+            value={microphoneId}
+          >
+            <option value="">System default</option>
+            {microphones.map((device) => (
+              <option key={device.deviceId} value={device.deviceId}>
+                {device.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
     </fieldset>
   );
 }

@@ -7,6 +7,8 @@ interface DriveStatus {
   connected: boolean;
   configured: boolean;
   recordingsConnected: boolean;
+  /** Google stopped accepting the connection (expired or revoked). */
+  expired?: boolean;
   providerEmail: string | null;
   updatedAt: string | null;
 }
@@ -116,19 +118,23 @@ export function GoogleDriveSettings() {
             ? status.providerEmail
               ? `Connected as ${status.providerEmail}.`
               : 'Connected.'
-            : 'Store Beacon app data and optional recordings in your Drive.'
+            : status.expired
+              ? 'Your Google Drive connection expired, so recordings can’t be saved. Reconnect to continue.'
+              : 'Store Beacon app data and optional recordings in your Drive.'
         }
       >
         {status.connected ? (
           <span className="pill pill-on">Connected</span>
         ) : status.configured ? (
           <>
-            <span className="pill">Not connected</span>
+            <span className={status.expired ? 'pill pill-warn' : 'pill'}>
+              {status.expired ? 'Expired' : 'Not connected'}
+            </span>
             <a
               className="secondary button-link"
               href="/api/drive/connect?purpose=recordings"
             >
-              Connect
+              {status.expired ? 'Reconnect' : 'Connect'}
             </a>
           </>
         ) : (

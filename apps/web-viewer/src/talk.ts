@@ -1,3 +1,5 @@
+import { openTalkMicrophone } from './talk-microphone';
+
 export type TalkState =
   | 'idle'
   | 'permission'
@@ -59,14 +61,7 @@ export class TalkSession {
     const current = ++this.generation;
     this.update('permission');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          autoGainControl: true,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-        video: false,
-      });
+      const stream = await openTalkMicrophone();
       if (this.disposed || current !== this.generation) {
         stream.getTracks().forEach((track) => track.stop());
         return;

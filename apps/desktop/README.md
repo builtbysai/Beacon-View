@@ -97,9 +97,23 @@ which the web container mounts read-only at `/downloads/`.
 
 1. Build: run the **Desktop release builds** workflow (Windows, macOS,
    Linux), or package locally.
-2. Put the installers in one folder, then run
+2. Put every OS's installers, `.blockmap` files, and `latest*.yml` update
+   feeds in one folder, then run
    `node scripts/build-desktop-manifest.mjs <folder> <version>`.
-3. Copy the installers and `manifest.json` to `/opt/beacon/downloads`.
+3. Copy the installers and blockmaps, then the `latest*.yml` files, and
+   finally `manifest.json` to `/opt/beacon/downloads`.
+
+## Automatic updates
+
+Installed apps check `/downloads/latest*.yml` a minute after launch and every
+four hours (ADR 0085). Windows and AppImage builds install updates on their
+own, and only when the window is hidden and the camera isn't live. Otherwise
+they wait for Quit or **Restart to update** in the tray. macOS (unsigned) and
+`.deb` installs show **Download Beacon x.y.z…** in the tray instead.
+
+Updates keep everyone signed in and every camera paired: sessions and camera
+credentials live in the user-data folder, which updates never touch. **Never
+change `appId` or `productName`**; they name that folder.
 
 The landing page and the one-click setup offer only what the manifest lists.
 

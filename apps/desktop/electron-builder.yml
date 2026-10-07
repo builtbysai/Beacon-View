@@ -9,6 +9,15 @@ extraMetadata:
   name: beacon
 copyright: Copyright © 2026 Beacon SecureView
 
+# Automatic updates (ADR 0085): each build writes latest*.yml next to its
+# installers; publishing them to /downloads/ on the Beacon server is the
+# release. Never change appId or productName: they name the user-data folder
+# that holds sessions and camera credentials, so changing either would sign
+# everyone out and unpair desktop cameras after an update.
+publish:
+  provider: generic
+  url: https://beacon.builtbysai.com/downloads/
+
 directories:
   buildResources: resources
   output: release

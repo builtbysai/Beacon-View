@@ -28,6 +28,7 @@ import {
   cameraSetupPath,
   validResumePath,
 } from './camera-setup.js';
+import { BeaconAutoUpdater } from './auto-updater.js';
 import { APP_ID, resolveAppOrigin } from './config.js';
 import { DEEP_LINK_SCHEME, type DesktopAuthLink } from './deep-link.js';
 import {
@@ -74,6 +75,7 @@ const recentAlerts = new RecentAlerts();
 
 let mainWindow: BrowserWindow | null = null;
 let tray: BeaconTray | null = null;
+let updater: BeaconAutoUpdater | null = null;
 let quitting = false;
 let cameraActivity: CameraActivity = 'off';
 let cameraBlocker: number | null = null;
@@ -165,6 +167,7 @@ function setCameraActivity(next: CameraActivity): void {
   } else if (cameraBlocker === null) {
     cameraBlocker = powerSaveBlocker.start('prevent-app-suspension');
   }
+  updater?.consider();
   // Capture that starts while the window is hidden is announced, so the
   // person at this computer always knows when the camera turns on.
   if (next === 'live' && mainWindow && !mainWindow.isVisible())
@@ -420,6 +423,7 @@ function createWindow(): BrowserWindow {
     // Closing hides to the tray; Quit Beacon (tray) really exits.
     event.preventDefault();
     window.hide();
+    updater?.consider();
     if (cameraActivity !== 'off') {
       notifyCameraInBackground();
     } else if (!preferences.trayHintShown) {
@@ -598,8 +602,27 @@ if (!app.requestSingleInstanceLock()) {
       open: () => showWindow(),
       quit: () => void quitFromTray(),
       reload: () => showWindow().webContents.reload(),
+      version: app.getVersion(),
     });
     const window = createWindow();
+    const afterUpdate = preferences.relaunchHidden;
+    if (afterUpdate) {
+      preferences.relaunchHidden = false;
+      savePreferences();
+    }
+    updater = new BeaconAutoUpdater({
+      beforeQuietRestart: () => {
+        preferences.relaunchHidden = true;
+        savePreferences();
+      },
+      moment: () => ({
+        cameraActivity,
+        windowVisible: Boolean(mainWindow?.isVisible()),
+      }),
+      offer: (offer) => tray?.setUpdate(offer),
+      openDownloadPage: () => openExternal(appUrl('/#download')),
+    });
+    updater.start();
     const installerSetup = takePendingInstallerSetup(app.getPath('userData'));
     const inputs = [
       findLaunchInput(process.argv, appOrigin),
@@ -611,7 +634,7 @@ if (!app.requestSingleInstanceLock()) {
     let handled = false;
     for (const input of inputs) handled = handleLaunchInput(input) || handled;
     // A login-item launch stays in the tray (a camera resumes there).
-    if (!handled && !launchedInBackground(process.argv))
+    if (!handled && !afterUpdate && !launchedInBackground(process.argv))
       window.once('ready-to-show', () => window.show());
   });
 }

@@ -8,6 +8,9 @@ import { validResumePath } from './camera-setup.js';
 export interface DesktopPreferences {
   /** Camera Mode path to reopen at startup (ADR 0083), or null. */
   cameraResumePath: string | null;
+  /** Set just before an automatic update restarts Beacon, so the next launch
+   * stays in the tray like the one it replaces (ADR 0085). Used once. */
+  relaunchHidden: boolean;
   trayHintShown: boolean;
 }
 
@@ -15,19 +18,22 @@ export function readPreferences(file: string): DesktopPreferences {
   try {
     const parsed = JSON.parse(readFileSync(file, 'utf8')) as unknown;
     if (parsed && typeof parsed === 'object') {
-      const { cameraResumePath, trayHintShown } = parsed as Record<
-        string,
-        unknown
-      >;
+      const { cameraResumePath, relaunchHidden, trayHintShown } =
+        parsed as Record<string, unknown>;
       return {
         cameraResumePath: validResumePath(cameraResumePath),
+        relaunchHidden: relaunchHidden === true,
         trayHintShown: trayHintShown === true,
       };
     }
   } catch {
     // Missing or unreadable preferences fall back to defaults.
   }
-  return { cameraResumePath: null, trayHintShown: false };
+  return {
+    cameraResumePath: null,
+    relaunchHidden: false,
+    trayHintShown: false,
+  };
 }
 
 export function writePreferences(

@@ -143,6 +143,10 @@ export function LiveVideo({
   const [retryDisplay, setRetryDisplay] = useState(0);
   const [quality, setQuality] = useState<StreamQuality | null>(null);
   const [listening, setListening] = useState(false);
+  // Whether the camera actually sends sound on this connection (null until
+  // negotiated). A camera always offers an audio section for Talk, but only
+  // sends its own sound when it shares it.
+  const [cameraSound, setCameraSound] = useState<boolean | null>(null);
   const [permissions, setPermissions] = useState({
     canListen: true,
     canTalk: true,
@@ -278,6 +282,7 @@ export function LiveVideo({
   useEffect(() => {
     if (
       !videoReady ||
+      cameraSound !== true ||
       camera.useCase !== 'baby' ||
       !permissions.canListen ||
       autoListened.current === camera.id
@@ -286,12 +291,19 @@ export function LiveVideo({
     autoListened.current = camera.id;
     setAudio(true);
     // setAudio only touches refs and setters; rerun only when these change.
-  }, [videoReady, camera.id, camera.useCase, permissions.canListen]);
+  }, [
+    videoReady,
+    cameraSound,
+    camera.id,
+    camera.useCase,
+    permissions.canListen,
+  ]);
 
   useEffect(() => {
     setQuality(null);
     setVideoReady(false);
     setListening(false);
+    setCameraSound(null);
     setPermissions({ canListen: true, canTalk: true });
     if (!enabled || privacyMode) {
       setStatus(privacyMode ? 'privacy on' : 'stream unavailable');
@@ -506,6 +518,16 @@ export function LiveVideo({
         }
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
+        setCameraSound(
+          peer
+            .getTransceivers()
+            .some(
+              (transceiver) =>
+                transceiver.receiver.track.kind === 'audio' &&
+                (transceiver.currentDirection === 'recvonly' ||
+                  transceiver.currentDirection === 'sendrecv'),
+            ),
+        );
         if (!active || !generation.current.isCurrent(currentGeneration)) return;
         socket.send(
           JSON.stringify({
@@ -709,7 +731,14 @@ export function LiveVideo({
               <button
                 aria-pressed={listening}
                 className="video-control"
-                title={listening ? 'Mute camera audio' : 'Listen to camera'}
+                disabled={cameraSound === false}
+                title={
+                  cameraSound === false
+                    ? 'This camera isn’t sharing sound. Turn on “Include sound” on that camera.'
+                    : listening
+                      ? 'Mute camera audio'
+                      : 'Listen to camera'
+                }
                 onClick={() => setAudio(!listening)}
                 type="button"
               >

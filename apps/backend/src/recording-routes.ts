@@ -6,12 +6,18 @@ import { z } from 'zod';
 import type { AppConfig } from './config.js';
 import {
   deleteDriveRecordingFile,
+  DriveReconnectRequiredError,
   downloadDriveRecordingFile,
   GOOGLE_DRIVE_RECORDING_SCOPE,
+  GoogleDriveRequestError,
   initiateDriveRecordingUpload,
   refreshDriveAccessToken,
   verifyDriveRecordingFile,
 } from './google-drive-client.js';
+import {
+  DRIVE_RECONNECT_MESSAGE,
+  expireDriveConnection,
+} from './drive-connection-health.js';
 import {
   parseRecordingHistoryQuery,
   recordingHistoryCursor,
@@ -137,7 +143,15 @@ export function registerRecordingRoutes(
       config.GOOGLE_OAUTH_CLIENT_SECRET,
       config.GOOGLE_OAUTH_REDIRECT_URI,
     );
-    return refreshDriveAccessToken(client, refreshToken);
+    try {
+      return await refreshDriveAccessToken(client, refreshToken);
+    } catch (error) {
+      // A dead token never recovers on its own: drop the connection so the
+      // app stops offering recordings and asks the owner to reconnect.
+      if (error instanceof DriveReconnectRequiredError)
+        await expireDriveConnection(store, userId).catch(() => undefined);
+      throw error;
+    }
   };
 
   app.get('/api/recordings', async (request, reply) => {
@@ -573,10 +587,19 @@ export function registerRecordingRoutes(
         app.log.warn(
           {
             errorName: error instanceof Error ? error.name : 'UnknownError',
+            providerStatus:
+              error instanceof GoogleDriveRequestError
+                ? error.status
+                : undefined,
             recordingId: claim.recordingId,
           },
           'recording upload session failed',
         );
+        if (error instanceof DriveReconnectRequiredError)
+          return reply.code(409).send({
+            code: 'drive_reconnect_required',
+            error: DRIVE_RECONNECT_MESSAGE,
+          });
         return reply
           .code(503)
           .send({ error: 'Recording upload is temporarily unavailable' });

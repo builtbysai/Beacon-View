@@ -1592,7 +1592,9 @@ export function App() {
                   )}
                   {browserCameraActive && (
                     <BrowserCameraMode
-                      canRecord={household?.role === 'owner'}
+                      canRecord={
+                        household?.role === 'owner' && driveRecordingReady
+                      }
                       onBack={() => setBrowserCameraActive(false)}
                     />
                   )}

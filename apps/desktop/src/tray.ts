@@ -14,6 +14,7 @@ export interface TrayActions {
   open(): void;
   quit(): void;
   reload(): void;
+  version: string;
 }
 
 /**
@@ -27,6 +28,7 @@ export class BeaconTray {
   private readonly tray: Tray;
   private readonly icons;
   private activity: CameraActivity = 'off';
+  private update: { label: string; run(): void } | null = null;
 
   constructor(
     assetsDirectory: string,
@@ -50,6 +52,12 @@ export class BeaconTray {
   }
 
   refresh(): void {
+    this.render();
+  }
+
+  /** Shows (or removes) the update entry, e.g. "Restart to update". */
+  setUpdate(update: { label: string; run(): void } | null): void {
+    this.update = update;
     this.render();
   }
 
@@ -95,7 +103,11 @@ export class BeaconTray {
           type: 'checkbox',
         },
         { label: 'Reload', click: () => actions.reload() },
+        ...(this.update
+          ? [{ click: () => this.update?.run(), label: this.update.label }]
+          : []),
         { type: 'separator' },
+        { enabled: false, label: `Beacon ${actions.version}` },
         { label: 'Quit Beacon', click: () => actions.quit() },
       ]),
     );

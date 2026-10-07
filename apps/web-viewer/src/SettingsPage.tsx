@@ -4,6 +4,7 @@ import type { IconName } from './Icon';
 
 import { AccessHistory } from './AccessHistory';
 import { Avatar } from './Avatar';
+import { AudioSettings } from './AudioSettings';
 import { BrowserSessions } from './BrowserSessions';
 import { DesktopComputerSettings } from './DesktopComputerSettings';
 import { desktopSupportsAutostart } from './desktop-shell';
@@ -41,6 +42,7 @@ type SettingsPageProps = {
 type SettingsSection =
   | 'household'
   | 'computer'
+  | 'audio'
   | 'notifications'
   | 'access'
   | 'data'
@@ -58,6 +60,7 @@ const sectionInfo: Record<SettingsSection, { label: string; icon: IconName }> =
   {
     household: { label: 'Household', icon: 'home' },
     computer: { label: 'This computer', icon: 'browser' },
+    audio: { label: 'Audio', icon: 'speaker' },
     notifications: { label: 'Notifications', icon: 'alert' },
     access: { label: 'People & access', icon: 'users' },
     data: { label: 'Data & storage', icon: 'cloud' },
@@ -94,6 +97,7 @@ export function SettingsPage({
     () => [
       'household',
       ...(desktopApp ? (['computer'] as const) : []),
+      'audio',
       ...(manager ? (['notifications'] as const) : []),
       'access',
       'data',
@@ -243,6 +247,19 @@ export function SettingsPage({
               <DesktopComputerSettings />
             </section>
           )}
+
+          <section
+            id="audio"
+            className="settings-section"
+            ref={(element) => {
+              sectionRefs.current.audio = element;
+            }}
+          >
+            <SectionHead title="Audio">
+              Choose the microphone you use to talk through cameras.
+            </SectionHead>
+            <AudioSettings />
+          </section>
 
           {manager && (
             <section

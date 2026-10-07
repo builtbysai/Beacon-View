@@ -19,5 +19,10 @@
 !macroend
 
 !macro customUnInstall
-  DeleteRegKey SHCTX "Software\Classes\beaconsecureview"
+  ; An update runs the old uninstaller before installing the new version
+  ; (ADR 0085); keep the link handler so nothing breaks mid-update. User data
+  ; (sessions, camera credentials) is never deleted either way.
+  ${ifNot} ${isUpdated}
+    DeleteRegKey SHCTX "Software\Classes\beaconsecureview"
+  ${endIf}
 !macroend
