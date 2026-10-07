@@ -69,6 +69,7 @@ mac:
   target:
     - target: dmg
       arch: [x64, arm64]
+  artifactName: Beacon-${version}-${arch}.${ext}
 
 linux:
   icon: resources/icon.png

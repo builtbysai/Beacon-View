@@ -1,5 +1,10 @@
 # Camera use-case profiles — research and proposal
 
+> **Phase 1 implemented October 7, 2026 (ADR 0084).** Security camera, Baby
+> monitor, and Door camera are presets over existing settings. Android
+> cameras get matching motion presets; browser and desktop cameras get
+> standby and sound defaults. Phases 2 and 3 below remain proposals.
+
 Status: research/proposal only. No implementation has started. This exists to
 give the owner a concrete decision to make, not to announce a feature.
 
