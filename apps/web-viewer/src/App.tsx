@@ -1,7 +1,8 @@
 import './App.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ApiError, request } from './api';
+import { ApiError, errorMessage, request, SESSION_ENDED_EVENT } from './api';
+import { useDriveRecording } from './drive-recording';
 import { nextPairingState } from './lifecycle';
 import { cameraStatus } from './camera-status';
 import type { PairingLifecycle } from './lifecycle';
@@ -86,6 +87,9 @@ export function App() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [authBusy, setAuthBusy] = useState(false);
   const [error, setError] = useState('');
+  // Beacon couldn't be reached while opening (not the same as signed out).
+  const [startupError, setStartupError] = useState('');
+  const [startupAttempt, setStartupAttempt] = useState(0);
   const [pendingConfirmBusy, setPendingConfirmBusy] = useState(false);
   const [reauthenticationOpen, setReauthenticationOpen] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<{
@@ -123,7 +127,6 @@ export function App() {
     null,
   );
   const [membershipRevision, setMembershipRevision] = useState(0);
-  const [driveRecordingReady, setDriveRecordingReady] = useState(false);
   const [capabilities, setCapabilities] = useState<BackendCapabilities | null>(
     null,
   );
@@ -210,6 +213,15 @@ export function App() {
     if (message) setError(message);
   }, []);
 
+  const signedIn = user !== null;
+  useEffect(() => {
+    if (!signedIn) return;
+    const ended = () =>
+      clearLocalSession('Your session ended. Sign in again to continue.');
+    window.addEventListener(SESSION_ENDED_EVENT, ended);
+    return () => window.removeEventListener(SESSION_ENDED_EVENT, ended);
+  }, [clearLocalSession, signedIn]);
+
   const loadCameras = useCallback(async () => {
     const [cameraResult, deviceResult] = await Promise.all([
       request<{ cameras: Camera[] }>('/api/cameras'),
@@ -267,16 +279,42 @@ export function App() {
       return;
     void request<{ household: HouseholdSession; user: User }>('/api/auth/me')
       .then(async (result) => {
-        await loadCameras();
+        // Signed in: a camera list that fails to load is reported in the
+        // workspace, never shown as being signed out.
+        await loadCameras().catch((caught: unknown) =>
+          setError(
+            `Your cameras couldn’t be loaded. ${errorMessage(caught, 'Try again.')}`,
+          ),
+        );
+        setStartupError('');
         setUser(result.user);
         setHousehold(result.household ?? { id: '', role: 'owner' });
       })
-      .catch(() => {
+      .catch((caught: unknown) => {
         setUser(null);
         setHousehold(null);
+        // Only "not signed in" leads to the sign-in screen; an outage or a
+        // dropped connection gets an explanation and a retry instead.
+        if (!(caught instanceof ApiError && caught.status === 401))
+          setStartupError(
+            errorMessage(caught, 'Beacon couldn’t be opened. Try again.'),
+          );
       })
       .finally(() => setLoading(false));
-  }, [loadCameras]);
+  }, [loadCameras, startupAttempt]);
+
+  const retryStartup = useCallback(() => {
+    setStartupError('');
+    setLoading(true);
+    setStartupAttempt((attempt) => attempt + 1);
+  }, []);
+
+  // Coming back online retries a start that failed for lack of a network.
+  useEffect(() => {
+    if (!startupError) return;
+    window.addEventListener('online', retryStartup);
+    return () => window.removeEventListener('online', retryStartup);
+  }, [retryStartup, startupError]);
 
   useEffect(() => {
     if (loading || capabilities || (user && page !== 'settings')) return;
@@ -316,29 +354,14 @@ export function App() {
     };
   }, [user !== null]);
 
-  // Only the household owner can request recordings, and only the live
-  // viewer (where the record control actually appears) needs to know
-  // whether Drive is ready to accept one -- fetched just for that view
-  // rather than globally, so it drives whether LiveVideo shows a working
-  // record button or a way to connect Drive instead of a dead-end error
-  // after tapping record.
-  useEffect(() => {
-    if (!selectedCamera || household?.role !== 'owner') {
-      setDriveRecordingReady(false);
-      return;
-    }
-    let cancelled = false;
-    void request<{ recordingsConnected: boolean }>('/api/drive/status')
-      .then((result) => {
-        if (!cancelled) setDriveRecordingReady(result.recordingsConnected);
-      })
-      .catch(() => {
-        if (!cancelled) setDriveRecordingReady(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedCamera, household?.role]);
+  // Only the household owner records. Drive readiness is tracked while a
+  // record control can be on screen (a live view or Camera Mode), so it
+  // shows a working record button, or "Connect/Reconnect Google Drive"
+  // that fixes things in place -- never a dead-end error after recording.
+  const drive = useDriveRecording(
+    household?.role === 'owner' &&
+      (selectedCamera !== null || browserCameraActive),
+  );
 
   // Applies a /join link's stashed token once a session exists -- either
   // immediately (already signed in) or right after this same load's sign-in/
@@ -422,20 +445,27 @@ export function App() {
                 },
               ).catch(() => undefined)
             : Promise.resolve();
-        void applied.then(loadCameras).then(() => {
-          if (message.type === 'camera-paired' && message.cameraId) {
-            setActivityNotice('A new camera is connected and ready to use.');
-            window.setTimeout(() => setActivityNotice(''), 6_000);
-            setPairingState((state) => nextPairingState(state, 'completed'));
-            setHighlightedCameraId(message.cameraId);
-            window.setTimeout(() => setHighlightedCameraId(null), 5_000);
-            window.setTimeout(() => {
-              setPairingOpen(false);
-              setPairingCode('');
-              navigate('cameras');
-            }, 900);
-          }
-        });
+        void applied
+          .then(loadCameras)
+          .then(() => {
+            if (message.type === 'camera-paired' && message.cameraId) {
+              setActivityNotice('A new camera is connected and ready to use.');
+              window.setTimeout(() => setActivityNotice(''), 6_000);
+              setPairingState((state) => nextPairingState(state, 'completed'));
+              setHighlightedCameraId(message.cameraId);
+              window.setTimeout(() => setHighlightedCameraId(null), 5_000);
+              window.setTimeout(() => {
+                setPairingOpen(false);
+                setPairingCode('');
+                navigate('cameras');
+              }, 900);
+            }
+          })
+          .catch(() =>
+            setError(
+              'A camera changed, but the list couldn’t refresh. Reload to see it.',
+            ),
+          );
       }
       if (
         message.type === 'motion-event-created' ||
@@ -465,7 +495,8 @@ export function App() {
     [clearLocalSession],
   );
   const handleRefreshNeeded = useCallback(() => {
-    void loadCameras();
+    // A background refresh; the next event or focus refreshes again.
+    void loadCameras().catch(() => undefined);
     setMotionEventRevision((revision) => revision + 1);
     setMembershipRevision((revision) => revision + 1);
     void request<{ household: HouseholdSession; user: User }>('/api/auth/me')
@@ -922,6 +953,17 @@ export function App() {
       </main>
     );
 
+  if (startupError)
+    return (
+      <main className="shell loading-shell">
+        <Brand />
+        <p role="alert">{startupError}</p>
+        <button className="primary" onClick={retryStartup} type="button">
+          Try again
+        </button>
+      </main>
+    );
+
   if (!user && !splashSeen)
     return (
       <SplashScreen
@@ -1026,10 +1068,7 @@ export function App() {
           siblingCameras={siblings}
           onDevice={() => openCameraSettings(selectedCamera.deviceId)}
           canRecord={household?.role === 'owner'}
-          recordingReady={driveRecordingReady}
-          onConnectDriveForRecording={() =>
-            navigate('settings', '?section=storage')
-          }
+          drive={drive}
           canFlip={selectedCamera.canFlip ?? true}
           canPause={selectedCamera.canPause ?? true}
         />
@@ -1592,9 +1631,8 @@ export function App() {
                   )}
                   {browserCameraActive && (
                     <BrowserCameraMode
-                      canRecord={
-                        household?.role === 'owner' && driveRecordingReady
-                      }
+                      canRecord={household?.role === 'owner'}
+                      drive={drive}
                       onBack={() => setBrowserCameraActive(false)}
                     />
                   )}

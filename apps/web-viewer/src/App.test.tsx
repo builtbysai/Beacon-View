@@ -44,13 +44,46 @@ class TestSocket {
 }
 
 describe('App', () => {
+  it('explains an unreachable Beacon instead of showing sign-in, and retries', async () => {
+    localStorage.setItem('beacon.splash.seen.v1', 'true');
+    const fetch = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            code: 'session_required',
+            error: 'Authentication required',
+          }),
+        ok: false,
+        status: 401,
+      });
+    vi.stubGlobal('fetch', fetch);
+    render(<App />);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /can’t reach beacon/i,
+    );
+    expect(
+      screen.queryByRole('button', { name: /sign in/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() =>
+      expect(screen.queryByText(/can’t reach beacon/i)).not.toBeInTheDocument(),
+    );
+  });
+
   it('shows the one-time splash before sign-in, then remembers it was seen', async () => {
     localStorage.removeItem('beacon.splash.seen.v1');
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
-        json: () => Promise.resolve({ error: 'Authentication required' }),
+        json: () =>
+          Promise.resolve({
+            code: 'session_required',
+            error: 'Authentication required',
+          }),
         ok: false,
+        status: 401,
       }),
     );
     render(<App />);

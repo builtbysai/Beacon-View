@@ -18,11 +18,13 @@ export class PostgresGoogleDriveRepository {
     return this.cipher !== null;
   }
 
+  /** The usable connection, or null. An expired connection is not usable. */
   async get(userId: string): Promise<GoogleDriveConnectionRecord | null> {
     const result = await this.pool.query<GoogleDriveConnectionRecord>(
       `SELECT provider_email AS "providerEmail", scopes,
               updated_at AS "updatedAt"
-       FROM google_drive_connections WHERE user_id = $1`,
+       FROM google_drive_connections
+       WHERE user_id = $1 AND expired_at IS NULL`,
       [userId],
     );
     return result.rows[0] ?? null;
@@ -36,7 +38,8 @@ export class PostgresGoogleDriveRepository {
     }>(
       `SELECT refresh_token_ciphertext AS "refreshTokenCiphertext",
               refresh_token_iv AS "refreshTokenIv"
-       FROM google_drive_connections WHERE user_id = $1`,
+       FROM google_drive_connections
+       WHERE user_id = $1 AND expired_at IS NULL`,
       [userId],
     );
     const row = result.rows[0];
@@ -62,6 +65,7 @@ export class PostgresGoogleDriveRepository {
          refresh_token_iv = EXCLUDED.refresh_token_iv,
          provider_email = EXCLUDED.provider_email,
          scopes = EXCLUDED.scopes,
+         expired_at = NULL,
          updated_at = now()`,
       [
         input.userId,
@@ -71,6 +75,27 @@ export class PostgresGoogleDriveRepository {
         input.scopes,
       ],
     );
+  }
+
+  /** Marks a connection Google no longer accepts. Returns true only the
+   * first time, so the expiry is audited once. */
+  async markExpired(userId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE google_drive_connections
+       SET expired_at = now(), updated_at = now()
+       WHERE user_id = $1 AND expired_at IS NULL`,
+      [userId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async isExpired(userId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `SELECT 1 FROM google_drive_connections
+       WHERE user_id = $1 AND expired_at IS NOT NULL`,
+      [userId],
+    );
+    return (result.rowCount ?? 0) > 0;
   }
 
   async remove(userId: string): Promise<boolean> {

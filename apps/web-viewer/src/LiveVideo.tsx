@@ -14,9 +14,14 @@ import {
   type PreviousInboundBytes,
   type StreamQuality,
 } from './live-video-quality';
-import { formatClipTimer } from './recording-capture';
 import { RecordingBadge } from './RecordingBadge';
 import { useClipRecorder } from './useClipRecorder';
+import {
+  DRIVE_READY,
+  type DriveRecording,
+  isDriveProblem,
+} from './drive-recording';
+import { DriveReconnectNotice, RecordClipControl } from './RecordClipControl';
 import { randomUuid } from './random-id';
 
 import {
@@ -91,8 +96,7 @@ export function LiveVideo({
   onRename,
   onDelete,
   canRecord = false,
-  recordingReady = true,
-  onConnectDriveForRecording,
+  drive = DRIVE_READY,
   canFlip = true,
   canPause = true,
 }: {
@@ -116,8 +120,8 @@ export function LiveVideo({
   /** Whether Google Drive is connected with the recording scope granted.
    * When it isn't, the record control becomes a link to go connect it
    * instead of a button that always fails with a 409 once pressed. */
-  recordingReady?: boolean;
-  onConnectDriveForRecording?: () => void;
+  /** Whether recordings can be saved, and how to connect Drive. */
+  drive?: DriveRecording;
   /** Whether this camera's grant allows switching between its sibling
    * sources. Hidden, not disabled, when it doesn't -- same as Listen/Talk. */
   canFlip?: boolean;
@@ -204,9 +208,11 @@ export function LiveVideo({
     clip.start(stream);
   }, [clip]);
 
+  // A Drive problem has its own notice with a fix; others show here.
   useEffect(() => {
-    if (clip.state.error) setControlError(clip.state.error);
-  }, [clip.state.error]);
+    if (clip.state.error && !isDriveProblem(clip.state.errorCode))
+      setControlError(clip.state.error);
+  }, [clip.state.error, clip.state.errorCode]);
 
   // Clears a finished clip's status back to the plain "Record a short
   // clip" control a few seconds after it lands, the same pause the old
@@ -823,66 +829,14 @@ export function LiveVideo({
                 </span>
               </button>
             )}
-            {canRecord && !recordingReady && (
-              <button
+            {canRecord && (
+              <RecordClipControl
                 className="video-control"
-                title="Connect Google Drive to record"
-                onClick={onConnectDriveForRecording}
-                type="button"
-              >
-                <Icon name="record" />
-                <span className="visually-hidden">
-                  Connect Google Drive to record
-                </span>
-              </button>
-            )}
-            {canRecord && recordingReady && clip.supported && (
-              <button
-                aria-pressed={clip.state.status === 'recording'}
-                className={`video-control${
-                  clip.state.status === 'recording' ? ' is-active' : ''
-                }`}
-                title={
-                  clip.state.status === 'recording'
-                    ? 'Tap to stop recording'
-                    : clip.state.status === 'failed'
-                      ? 'Retry encrypted upload'
-                      : 'Record a short clip'
-                }
-                disabled={
-                  privacyMode ||
-                  status !== 'connected' ||
-                  clip.state.status === 'starting' ||
-                  clip.state.status === 'uploading' ||
-                  clip.state.status === 'available'
-                }
-                onClick={
-                  clip.state.status === 'recording'
-                    ? clip.stop
-                    : clip.state.status === 'failed'
-                      ? () => {
-                          setControlError('');
-                          clip.retry();
-                        }
-                      : startRecording
-                }
-                type="button"
-              >
-                <Icon name="record" />
-                <span className="visually-hidden">
-                  {clip.state.status === 'starting'
-                    ? 'Starting recording…'
-                    : clip.state.status === 'recording'
-                      ? `Recording, ${formatClipTimer(clip.state.elapsedMs)} elapsed. Tap to stop.`
-                      : clip.state.status === 'uploading'
-                        ? 'Uploading recording'
-                        : clip.state.status === 'available'
-                          ? 'Recording saved'
-                          : clip.state.status === 'failed'
-                            ? 'Retry encrypted recording upload'
-                            : 'Record a short clip'}
-                </span>
-              </button>
+                clip={clip}
+                disabled={privacyMode || status !== 'connected'}
+                drive={drive}
+                onStart={startRecording}
+              />
             )}
             <button
               className="video-control"
@@ -990,6 +944,9 @@ export function LiveVideo({
       <p className="visually-hidden" role="status">
         Connection: {status}
       </p>
+      {!compact && canRecord && (
+        <DriveReconnectNotice className="on-video" clip={clip} drive={drive} />
+      )}
       {!compact && (controlError || talkState !== 'idle') && (
         <div className="live-footer">
           {controlError && (

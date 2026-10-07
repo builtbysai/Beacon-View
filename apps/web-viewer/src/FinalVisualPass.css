@@ -684,3 +684,11 @@
     transition: none !important;
   }
 }
+
+/* Recovery page after an unexpected error (AppErrorBoundary). */
+.error-boundary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}

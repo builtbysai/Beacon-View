@@ -19,6 +19,12 @@ export interface ClipRecorderState {
   status: ClipRecorderStatus;
   elapsedMs: number;
   error: string;
+  /** The server's reason for a failure, e.g. `drive_reconnect_required`. */
+  errorCode?: string | undefined;
+}
+
+function errorCode(error: unknown): string | undefined {
+  return error instanceof ApiError ? error.code : undefined;
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -115,6 +121,8 @@ export function useClipRecorder(cameraId: string): {
    * recording is actually in progress. */
   reset: () => void;
   retry: () => void;
+  /** A finished clip is held here, waiting for a successful upload. */
+  hasPendingUpload: boolean;
   supported: boolean;
 } {
   const [state, setState] = useState<ClipRecorderState>({
@@ -208,6 +216,7 @@ export function useClipRecorder(cameraId: string): {
       setState({
         elapsedMs: 0,
         error: errorMessage(error, 'Recording could not be uploaded.'),
+        errorCode: errorCode(error),
         status: 'failed',
       });
     } finally {
@@ -264,6 +273,7 @@ export function useClipRecorder(cameraId: string): {
         setState({
           elapsedMs: 0,
           error: errorMessage(error, 'Recording could not be prepared.'),
+          errorCode: errorCode(error),
           status: 'failed',
         });
       } finally {
@@ -322,6 +332,7 @@ export function useClipRecorder(cameraId: string): {
           setState({
             elapsedMs: 0,
             error: errorMessage(error, 'Recording could not be started.'),
+            errorCode: errorCode(error),
             status: 'failed',
           });
         }
@@ -363,6 +374,7 @@ export function useClipRecorder(cameraId: string): {
 
   return {
     abort,
+    hasPendingUpload: pendingRef.current !== null,
     reset,
     retry,
     start,

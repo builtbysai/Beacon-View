@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { request } from './api';
+import { ApiError, request } from './api';
 import { SettingsCard, SettingsRow } from './SettingsUI';
 
 interface DriveStatus {
@@ -70,6 +70,8 @@ export function GoogleDriveSettings() {
       setError(
         caught instanceof Error ? caught.message : 'Drive verification failed',
       );
+      // Verification can discover the connection expired; show that state.
+      if (caught instanceof ApiError && caught.code) void load(false);
     } finally {
       setBusy(false);
     }
@@ -83,7 +85,13 @@ export function GoogleDriveSettings() {
       await request('/api/drive/connection', { method: 'DELETE' });
       setStatus((current) =>
         current
-          ? { ...current, connected: false, providerEmail: null }
+          ? {
+              ...current,
+              connected: false,
+              expired: false,
+              providerEmail: null,
+              recordingsConnected: false,
+            }
           : current,
       );
       setMessage('Google Drive disconnected.');

@@ -7,9 +7,14 @@ import { ModalDialog } from './ModalDialog';
 import { PairingCodeScanner } from './PairingCodeScanner';
 import './BrowserCameraModeSetup.css';
 import { browserOsLabel, friendlyDeviceLabel } from './naming';
-import { formatClipTimer } from './recording-capture';
 import { RecordingBadge } from './RecordingBadge';
 import { useClipRecorder } from './useClipRecorder';
+import {
+  DRIVE_READY,
+  type DriveRecording,
+  isDriveProblem,
+} from './drive-recording';
+import { DriveReconnectNotice, RecordClipControl } from './RecordClipControl';
 import { rememberLocalBrowserDevice } from './browser-camera-local';
 import {
   cameraActivity,
@@ -122,6 +127,7 @@ function installationId(): string {
 export function BrowserCameraMode({
   onBack,
   canRecord = false,
+  drive = DRIVE_READY,
   standalone = false,
 }: {
   onBack: () => void;
@@ -129,6 +135,8 @@ export function BrowserCameraMode({
   /** Only the household owner can request recordings (see POST
    * /api/recordings) -- matches the same live-viewer gate in LiveVideo. */
   canRecord?: boolean;
+  /** Whether recordings can be saved, and how to connect Drive. */
+  drive?: DriveRecording;
 }) {
   const previewRef = useRef<HTMLVideoElement>(null);
   const producerRef = useRef<BrowserProducer | null>(null);
@@ -596,9 +604,11 @@ export function BrowserCameraMode({
     return () => window.clearTimeout(timer);
   }, [clip.reset, clip.state.status]);
 
+  // A Drive problem has its own notice with a fix; others show here.
   useEffect(() => {
-    if (clip.state.error) setError(clip.state.error);
-  }, [clip.state.error]);
+    if (clip.state.error && !isDriveProblem(clip.state.errorCode))
+      setError(clip.state.error);
+  }, [clip.state.error, clip.state.errorCode]);
 
   async function acquireWakeLock() {
     const manager = (
@@ -671,51 +681,13 @@ export function BrowserCameraMode({
             <RecordingBadge state={clip.state} />
           </div>
           <div className="broadcast-top-actions">
-            {canRecord && clip.supported && activeCameraId && (
-              <button
-                aria-pressed={clip.state.status === 'recording'}
-                className={`broadcast-icon-button${
-                  clip.state.status === 'recording' ? ' is-active' : ''
-                }`}
-                title={
-                  clip.state.status === 'recording'
-                    ? 'Tap to stop recording'
-                    : clip.state.status === 'failed'
-                      ? 'Retry encrypted upload'
-                      : 'Record a short clip'
-                }
-                disabled={
-                  clip.state.status === 'starting' ||
-                  clip.state.status === 'uploading' ||
-                  clip.state.status === 'available'
-                }
-                onClick={
-                  clip.state.status === 'recording'
-                    ? clip.stop
-                    : clip.state.status === 'failed'
-                      ? () => {
-                          setError('');
-                          clip.retry();
-                        }
-                      : startRecording
-                }
-                type="button"
-              >
-                <Icon name="record" />
-                <span className="visually-hidden">
-                  {clip.state.status === 'starting'
-                    ? 'Starting recording…'
-                    : clip.state.status === 'recording'
-                      ? `Recording, ${formatClipTimer(clip.state.elapsedMs)} elapsed. Tap to stop.`
-                      : clip.state.status === 'uploading'
-                        ? 'Uploading recording'
-                        : clip.state.status === 'available'
-                          ? 'Recording saved'
-                          : clip.state.status === 'failed'
-                            ? 'Retry encrypted recording upload'
-                            : 'Record a short clip'}
-                </span>
-              </button>
+            {canRecord && activeCameraId && (
+              <RecordClipControl
+                className="broadcast-icon-button"
+                clip={clip}
+                drive={drive}
+                onStart={startRecording}
+              />
             )}
             <button
               aria-expanded={settingsOpen}
@@ -768,6 +740,13 @@ export function BrowserCameraMode({
             </button>
           </div>
         </div>
+        {canRecord && activeCameraId && (
+          <DriveReconnectNotice
+            className="on-broadcast"
+            clip={clip}
+            drive={drive}
+          />
+        )}
         {backgrounded && (
           <p className="broadcast-warning" role="status">
             This tab is backgrounded. Capture or networking may be throttled.

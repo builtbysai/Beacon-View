@@ -102,6 +102,8 @@ export const googleDriveConnections = pgTable('google_drive_connections', {
   refreshTokenIv: bytea('refresh_token_iv').notNull(),
   providerEmail: text('provider_email'),
   scopes: text('scopes').notNull(),
+  /** Google stopped accepting the refresh token (ADR 0086). */
+  expiredAt: timestamp('expired_at', { withTimezone: true }),
   ...timestamps,
 });
 

@@ -168,11 +168,19 @@ October 7 desktop 0.3: owner-reported audio and recording failures fixed:
   upload failure.
 - Recording from a standby camera wakes it.
 - ADR 0085 adds automatic desktop updates that keep sessions and paired
-  cameras. Code signing is not required while the
-  deployment is self-hosted.
-  Model selection, a default-off feature flag, and device evidence remain open, and IP
-  cameras/other clients still require their own design milestone per ADR 0067 and the table
-  below.
+  cameras.
+- ADR 0086 adds the in-place Google Drive reconnect flow and consistent
+  error handling:
+  - Drive is checked before a recording starts.
+  - A clip that hits an expired Drive is kept and uploads after reconnect.
+  - Server errors no longer leak internals.
+  - Start-up tells "offline" from "signed out".
+  - A lapsed session returns to sign-in with a reason.
+  - An error boundary replaces blank-page crashes. Code signing is not required while the
+    deployment is self-hosted.
+    Model selection, a default-off feature flag, and device evidence remain open, and IP
+    cameras/other clients still require their own design milestone per ADR 0067 and the table
+    below.
 
 Notification Transport v1 is implemented through its Chrome Web Push baseline; native
 FCM and the remaining physical acceptance matrix remain external evidence gates. On

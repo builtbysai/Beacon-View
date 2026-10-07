@@ -117,7 +117,8 @@ export function NotificationSettings({
           setEnabled(
             Boolean(await registration?.pushManager.getSubscription()),
           );
-        });
+        })
+        .catch(() => setEnabled(false));
     }
   }, []);
 

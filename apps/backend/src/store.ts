@@ -393,6 +393,14 @@ export class PostgresStore implements MilestoneStore {
     return this.googleDrive.remove(userId);
   }
 
+  async markGoogleDriveConnectionExpired(userId: string): Promise<boolean> {
+    return this.googleDrive.markExpired(userId);
+  }
+
+  async googleDriveConnectionExpired(userId: string): Promise<boolean> {
+    return this.googleDrive.isExpired(userId);
+  }
+
   async upsertNotificationSubscription(
     input: NotificationSubscriptionInput,
   ): Promise<string> {
