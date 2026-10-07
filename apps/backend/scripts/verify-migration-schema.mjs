@@ -25,7 +25,12 @@ export function extractSchemaRequirements(files) {
   const requirements = [];
 
   for (const { name: migration, sql } of files) {
-    for (const statement of sql.split(';')) {
+    // Drizzle separates statements with "--> statement-breakpoint" comment
+    // lines; left in place, they precede every statement after the first and
+    // defeat the start-anchored patterns below, so only each file's first
+    // object was ever checked. Drop full-line SQL comments before splitting.
+    const statements = sql.replace(/^[ 	]*--.*$/gm, '').split(';');
+    for (const statement of statements) {
       const createTable = new RegExp(
         `^\\s*CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?${identifier}`,
         'i',
