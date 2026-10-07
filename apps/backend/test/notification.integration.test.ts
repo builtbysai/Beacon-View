@@ -540,6 +540,11 @@ describe.skipIf(!store)('notification transport persistence', () => {
       securityEventType: 'sign_in',
       userId: owner.id,
     });
+    // Outbox rows default to the database clock; align with the fixture's.
+    await store!.pool.query(
+      'UPDATE notification_outbox SET next_attempt_at=$1',
+      [now],
+    );
     const [delivery] = await store!.claimNotificationDeliveries(now);
     expect(delivery).toMatchObject({
       channel: 'desktop',

@@ -12,6 +12,7 @@ import type {
   RecordingDeletionClaim,
   RecordingRecord,
 } from './recording-types.js';
+import type { CameraUseCase, MotionPreset } from './camera-use-case.js';
 import type { RecordingUploadClaim } from './recording-types.js';
 import type { RecordingPlaybackClaim } from './recording-types.js';
 import type {
@@ -125,6 +126,7 @@ export interface CameraRecord {
   enabled: boolean;
   privacyMode: boolean;
   name: string;
+  useCase: CameraUseCase;
   lastSeenAt: Date | null;
   credentialRevokedAt: Date | null;
   capabilities: Record<string, boolean | number | string>;
@@ -570,6 +572,14 @@ export interface MilestoneStore {
     publicCameraId: string,
     settings: MotionSettings,
   ): Promise<CameraMotionSettings | null>;
+  /** Sets a camera's use case and, for motion-capable (Android) cameras,
+   * applies its motion preset in the same statement (ADR 0084). */
+  setCameraUseCase(
+    householdId: string,
+    publicCameraId: string,
+    useCase: CameraUseCase,
+    preset: MotionPreset | null,
+  ): Promise<{ motionPresetApplied: boolean; useCase: CameraUseCase } | null>;
   close(): Promise<void>;
   createAccount(
     email: string,

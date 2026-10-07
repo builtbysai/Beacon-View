@@ -343,6 +343,7 @@ export const cameraSources = pgTable(
     motionQuietHoursEndMinute: integer('motion_quiet_hours_end_minute'),
     motionQuietHoursTimeZone: text('motion_quiet_hours_time_zone'),
     facing: text('facing').notNull().default('unknown'),
+    useCase: text('use_case').notNull().default('general'),
     capabilities: jsonb('capabilities').notNull().default({}),
     enabled: boolean('enabled').notNull().default(true),
     removedAt: timestamp('removed_at', { withTimezone: true }),
@@ -356,6 +357,10 @@ export const cameraSources = pgTable(
       table.sourceKey,
     ),
     index('camera_sources_device_idx').on(table.deviceId),
+    check(
+      'camera_sources_use_case_valid',
+      sql`${table.useCase} in ('general', 'security', 'baby', 'doorbell')`,
+    ),
     check(
       'camera_motion_sensitivity_valid',
       sql`${table.motionSensitivity} in ('low', 'medium', 'high')`,

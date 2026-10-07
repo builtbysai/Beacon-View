@@ -3,6 +3,7 @@ import {
   type CameraMotionSettings,
   type MotionSettings,
 } from './motion-settings.js';
+import type { CameraUseCase, MotionPreset } from './camera-use-case.js';
 import { PostgresMotionRepository } from './postgres-motion-repository.js';
 import { PostgresAuditRepository } from './postgres-audit-repository.js';
 import { PostgresAccountRepository } from './postgres-account-repository.js';
@@ -844,6 +845,20 @@ export class PostgresStore implements MilestoneStore {
       householdId,
       publicCameraId,
       settings,
+    );
+  }
+
+  async setCameraUseCase(
+    householdId: string,
+    publicCameraId: string,
+    useCase: CameraUseCase,
+    preset: MotionPreset | null,
+  ): Promise<{ motionPresetApplied: boolean; useCase: CameraUseCase } | null> {
+    return this.motion.setCameraUseCase(
+      householdId,
+      publicCameraId,
+      useCase,
+      preset,
     );
   }
 
