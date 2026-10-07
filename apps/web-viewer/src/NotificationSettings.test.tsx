@@ -298,7 +298,7 @@ describe('NotificationSettings', () => {
         .mock.calls.find(
           ([path]) => path === '/api/notification-subscriptions',
         );
-      expect(JSON.parse(String(subscribe?.[1]?.body))).toMatchObject({
+      expect(JSON.parse(subscribe?.[1]?.body as string)).toMatchObject({
         channel: 'desktop',
         deviceLabel: 'Beacon desktop app',
       });

@@ -1198,3 +1198,68 @@
     transition: none;
   }
 }
+
+/* Get Beacon on every device (ADR 0083). */
+.splash-v4 .get-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 14px;
+}
+.splash-v4 .get-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg-surface);
+}
+.splash-v4 .get-card.is-current {
+  border-color: var(--accent-base);
+  box-shadow: 0 0 0 1px var(--accent-base);
+}
+.splash-v4 .get-card-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+}
+.splash-v4 .get-card-head svg {
+  width: 20px;
+  height: 20px;
+  color: var(--accent-base);
+}
+.splash-v4 .get-card h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+.splash-v4 .get-tag {
+  margin-left: auto;
+  color: var(--accent-base);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.splash-v4 .get-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+.splash-v4 .get-note a {
+  color: var(--accent-base);
+}
+.splash-v4 .get-card .btn {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.splash-v4 .get-card .btn svg {
+  width: 16px;
+  height: 16px;
+}

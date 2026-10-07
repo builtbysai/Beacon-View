@@ -1,3 +1,5 @@
+import type { CameraUseCase } from './camera-use-case';
+
 export interface User {
   id: string;
   email: string;
@@ -40,6 +42,8 @@ export interface Camera {
   canTalk?: boolean;
   canFlip?: boolean;
   canPause?: boolean;
+  /** What the camera is for (ADR 0084). */
+  useCase?: CameraUseCase;
 }
 
 export interface Device {

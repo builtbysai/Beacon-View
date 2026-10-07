@@ -1,3 +1,4 @@
+import { type CameraUseCase, cameraUseCase } from './camera-use-case';
 import { useEffect, useRef, useState } from 'react';
 import { cameraStatus, type CameraAvailability } from './camera-status';
 import { Icon } from './Icon';
@@ -13,6 +14,7 @@ export interface TileCamera extends CameraAvailability {
   name: string;
   facing: string;
   platform: 'android' | 'browser';
+  useCase?: CameraUseCase;
   viewerCount: number;
   lastSeenAt: string | null;
   canRemove?: boolean;
@@ -170,6 +172,9 @@ export function CameraTile({
             )}
             <span className="camera-tile-secondary-status">
               {camera.platform === 'android' ? 'Android device' : 'Browser'}
+              {camera.useCase && camera.useCase !== 'general' && (
+                <> · {cameraUseCase(camera.useCase).label}</>
+              )}
               {!conciseStatus && <> · {secondaryStatus}</>}
             </span>
           </span>

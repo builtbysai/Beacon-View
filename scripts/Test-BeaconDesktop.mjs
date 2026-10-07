@@ -366,15 +366,13 @@ const relaunched = await electron.launch({
 });
 try {
   await check('resumes Camera Mode at startup after a restart', async () => {
-    await relaunched
-      .context()
-      .route('**/api/**', (route) =>
-        route.fulfill({
-          body: '{}',
-          contentType: 'application/json',
-          status: 401,
-        }),
-      );
+    await relaunched.context().route('**/api/**', (route) =>
+      route.fulfill({
+        body: '{}',
+        contentType: 'application/json',
+        status: 401,
+      }),
+    );
     const window = await relaunched.firstWindow();
     await window.waitForURL(/\/camera-mode\/setup/);
     assert.equal(

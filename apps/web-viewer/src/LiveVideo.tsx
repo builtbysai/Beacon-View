@@ -30,6 +30,8 @@ import './LiveVideo.css';
 interface Camera {
   id: string;
   name: string;
+  /** A baby monitor opens with sound (ADR 0084). */
+  useCase?: string;
 }
 
 interface ReadyMessage {
@@ -251,6 +253,40 @@ export function LiveVideo({
     setStatus('connecting');
     setAttempt((value) => value + 1);
   }, []);
+
+  function setAudio(next: boolean) {
+    const current = ++playbackGeneration.current;
+    setControlError('');
+    setListening(next);
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    video.muted = !next;
+    if (next)
+      void Promise.resolve(video.play()).catch(() => {
+        if (current !== playbackGeneration.current) return;
+        video.muted = true;
+        setListening(false);
+        setControlError(
+          'Sound could not start. Choose Listen to try again, and check your browser sound settings.',
+        );
+      });
+  }
+
+  // A baby monitor opens with sound (ADR 0084). If the browser's autoplay
+  // policy refuses, video keeps playing muted and the person taps Listen.
+  const autoListened = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !videoReady ||
+      camera.useCase !== 'baby' ||
+      !permissions.canListen ||
+      autoListened.current === camera.id
+    )
+      return;
+    autoListened.current = camera.id;
+    setAudio(true);
+    // setAudio only touches refs and setters; rerun only when these change.
+  }, [videoReady, camera.id, camera.useCase, permissions.canListen]);
 
   useEffect(() => {
     setQuality(null);
@@ -674,25 +710,7 @@ export function LiveVideo({
                 aria-pressed={listening}
                 className="video-control"
                 title={listening ? 'Mute camera audio' : 'Listen to camera'}
-                onClick={() => {
-                  const next = !listening;
-                  const current = ++playbackGeneration.current;
-                  setControlError('');
-                  setListening(next);
-                  if (videoRef.current) {
-                    const video = videoRef.current;
-                    video.muted = !next;
-                    if (next)
-                      void Promise.resolve(video.play()).catch(() => {
-                        if (current !== playbackGeneration.current) return;
-                        video.muted = true;
-                        setListening(false);
-                        setControlError(
-                          'Sound could not start. Choose Listen to try again, and check your browser sound settings.',
-                        );
-                      });
-                  }
-                }}
+                onClick={() => setAudio(!listening)}
                 type="button"
               >
                 <Icon name={listening ? 'speaker' : 'speakerOff'} />
