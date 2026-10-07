@@ -97,11 +97,11 @@ async function browserSignIn(challenge: string): Promise<string> {
     url: `/api/auth/google/callback?code=simulated&state=${encodeURIComponent(state!)}`,
   });
   expect(callback.statusCode).toBe(302);
-  const deepLink = new URL(String(callback.headers.location));
-  expect(`${deepLink.protocol}//${deepLink.host}${deepLink.pathname}`).toBe(
-    'beaconsecureview://auth/desktop',
-  );
-  const code = deepLink.searchParams.get('code');
+  // The browser lands on the completion page; the code rides in the
+  // fragment, which the browser never sends back to the server.
+  const landing = new URL(String(callback.headers.location), 'https://x.test');
+  expect(landing.pathname).toBe('/auth/desktop/complete');
+  const code = new URLSearchParams(landing.hash.slice(1)).get('code');
   expect(code).toBeTruthy();
   return code!;
 }
@@ -227,7 +227,7 @@ describe.skipIf(!app || !store)('desktop Google sign-in handoff', () => {
       url: '/api/auth/google/callback?code=simulated&state=tampered',
     });
     expect(callback.headers.location).toBe(
-      'beaconsecureview://auth/desktop?status=failed',
+      '/auth/desktop/complete#status=failed',
     );
   });
 });

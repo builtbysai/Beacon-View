@@ -559,6 +559,7 @@ export interface MilestoneStore {
     permanent: boolean,
     retryAfterMs?: number,
   ): Promise<void>;
+  markNotificationExpired(id: string, now: Date): Promise<void>;
   isReady(): Promise<boolean>;
   listMotionSettings(
     householdId: string,

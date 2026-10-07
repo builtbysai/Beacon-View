@@ -523,4 +523,41 @@ describe.skipIf(!store)('notification transport persistence', () => {
     );
     expect(rows.rows[0]!.outboxCount).toBe(0);
   });
+
+  it('accepts a desktop subscription, delivers its session ID to the sender, and expires stale alerts without revoking it', async () => {
+    const { now, owner, sessionId } = await fixture();
+    const subscriptionId = await store!.upsertNotificationSubscription({
+      channel: 'desktop',
+      consentedAt: now,
+      deviceLabel: 'Beacon desktop app',
+      installationId: randomUUID(),
+      providerMaterial: sessionId,
+      sessionId,
+      userId: owner.id,
+    });
+    await store!.recordSecurityEvent({
+      now,
+      securityEventType: 'sign_in',
+      userId: owner.id,
+    });
+    const [delivery] = await store!.claimNotificationDeliveries(now);
+    expect(delivery).toMatchObject({
+      channel: 'desktop',
+      providerMaterial: sessionId,
+      subscriptionId,
+    });
+    expect(delivery!.safePayload).toMatchObject({ category: 'security' });
+
+    await store!.markNotificationExpired(delivery!.id, now);
+    const outbox = await store!.pool.query<{ terminal: boolean }>(
+      'SELECT terminal_at IS NOT NULL AS terminal FROM notification_outbox WHERE id=$1',
+      [delivery!.id],
+    );
+    expect(outbox.rows).toEqual([{ terminal: true }]);
+    const subscription = await store!.pool.query<{ revoked: boolean }>(
+      'SELECT revoked_at IS NOT NULL AS revoked FROM notification_subscriptions WHERE id=$1',
+      [subscriptionId],
+    );
+    expect(subscription.rows).toEqual([{ revoked: false }]);
+  });
 });

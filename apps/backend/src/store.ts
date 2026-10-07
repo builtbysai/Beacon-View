@@ -462,6 +462,10 @@ export class PostgresStore implements MilestoneStore {
     );
   }
 
+  async markNotificationExpired(id: string, now: Date): Promise<void> {
+    await this.notifications.markExpired(id, now);
+  }
+
   async close(): Promise<void> {
     await this.pool.end();
   }

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   desktopChallengeFromState,
-  desktopDeepLink,
+  desktopCompletionPath,
   DesktopGoogleHandoffs,
   type DesktopGoogleOutcome,
   desktopOAuthState,
@@ -90,12 +90,12 @@ describe('desktop Google sign-in handoff', () => {
     expect(handoffs.redeem(fresh, second.verifier)).toEqual(session);
   });
 
-  it('builds only the fixed desktop deep link', () => {
-    expect(desktopDeepLink({ code: 'a+b/c' })).toBe(
-      'beaconsecureview://auth/desktop?code=a%2Bb%2Fc',
+  it('sends the browser to the completion page with the code in the fragment', () => {
+    expect(desktopCompletionPath({ code: 'a+b/c' })).toBe(
+      '/auth/desktop/complete#code=a%2Bb%2Fc',
     );
-    expect(desktopDeepLink({ status: 'failed' })).toBe(
-      'beaconsecureview://auth/desktop?status=failed',
+    expect(desktopCompletionPath({ status: 'failed' })).toBe(
+      '/auth/desktop/complete#status=failed',
     );
   });
 });

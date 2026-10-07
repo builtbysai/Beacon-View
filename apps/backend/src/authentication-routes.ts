@@ -14,7 +14,7 @@ import {
 } from './google-drive-client.js';
 import {
   desktopChallengeFromState,
-  desktopDeepLink,
+  desktopCompletionPath,
   DesktopGoogleHandoffs,
   desktopOAuthState,
 } from './desktop-google-handoff.js';
@@ -446,7 +446,7 @@ export function registerAuthenticationRoutes(
       const android = state?.startsWith('android.') === true;
       const desktopChallenge = desktopChallengeFromState(state);
       const signInFailed = desktopChallenge
-        ? desktopDeepLink({ status: 'failed' })
+        ? desktopCompletionPath({ status: 'failed' })
         : android
           ? '/auth/mobile#status=failed'
           : '/?googleSignIn=failed';
@@ -676,7 +676,7 @@ export function registerAuthenticationRoutes(
                 kind: 'linkRequired',
                 ...pendingLink,
               });
-              return reply.redirect(desktopDeepLink({ code }));
+              return reply.redirect(desktopCompletionPath({ code }));
             }
             if (!android) holdPendingGoogleLink(reply, pendingLink);
             return reply.redirect(
@@ -726,7 +726,7 @@ export function registerAuthenticationRoutes(
             householdId: user.householdId,
             userId: user.id,
           });
-          return reply.redirect(desktopDeepLink({ code }));
+          return reply.redirect(desktopCompletionPath({ code }));
         }
         await recordSignIn(user.id);
         await issueSession(reply, user.id, true, request.headers['user-agent']);

@@ -649,7 +649,7 @@ export const notificationSubscriptions = pgTable(
       .where(sql`${table.revokedAt} is null`),
     check(
       'notification_subscriptions_channel_valid',
-      sql`${table.channel} in ('fcm', 'web_push')`,
+      sql`${table.channel} in ('fcm', 'web_push', 'desktop')`,
     ),
     check(
       'notification_subscriptions_label_length',
