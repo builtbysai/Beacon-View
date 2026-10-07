@@ -1,5 +1,55 @@
 # Beacon SecureView development handoff
 
+## October 7, 2026 — Desktop 0.2: standby cameras, alerts, one-click setup, use cases
+
+Built on branch `claude/desktop-v2` (from main efcc4ec, which is what
+production was running). ADRs 0083 and 0084 record the decisions.
+
+**What changed**
+
+- **Standby (wake on view):** Browser Camera Mode can keep the camera off
+  until a viewer opens it; `BrowserProducer` takes an on-demand stream
+  source. No backend change was needed, because signaling already sends
+  `viewer-ready` on demand.
+- **Desktop app 0.2.0:**
+  - tray states off/standby/live, with a power lock while a camera runs
+  - a notification when the camera wakes while hidden
+  - Camera Mode resume after restart
+  - start at sign-in in Settings → This computer
+  - desktop alerts
+  - one-click setup from a link, a `.beaconcamera` file, or a
+    pre-configured Windows installer
+  - deep links bring the window to the front
+  - installs to `Programs\beacon`; the installer registers the link scheme
+- **Backend:**
+  - `desktop` notification channel (migration 0031) delivered over the
+    session's realtime socket, with an expire-without-revoke path
+  - Google sign-in completion page `/auth/desktop/complete` (the code
+    travels in the URL fragment)
+  - camera use cases (migration 0032, `PUT /api/cameras/:id/use-case`)
+  - fastify was already 5.12.2 from PR #78
+- **Web:**
+  - use-case picker and tile labels; baby monitors open with sound
+  - Add camera → Set up another computer
+  - landing "Get Beacon on every device", backed by `/downloads/manifest.json`
+- **Infrastructure:**
+  - `/opt/beacon/downloads` mounted read-only into the web container, with
+    a Caddy `/downloads/*` route
+  - `scripts/build-desktop-manifest.mjs`
+  - manual `desktop-release.yml` workflow for Windows, macOS, and Linux
+    builds
+- **Fixes:**
+  - the responsive audit was broken since the September redesign; it now
+    passes 123 checks
+  - `migrate-verify` only ever checked the first statement of each
+    migration; it now checks all 150 objects
+
+**Still needs a person**
+
+- Real camera hardware and a real Google account for end-to-end checks.
+- The Android private-alpha distribution decision.
+- Signing certificates, only if this stops being self-hosted.
+
 ## October 6, 2026 — Desktop app (Windows, macOS, Linux) built with Electron
 
 The owner approved a dedicated desktop app that looks exactly like the PWA and

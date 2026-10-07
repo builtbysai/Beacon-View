@@ -9,7 +9,7 @@
 /* global window, document, location, Notification */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
@@ -52,8 +52,14 @@ function check(name, fn) {
 
 try {
   // Record instead of opening the real browser or holding a power lock.
-  await app.evaluate(({ powerSaveBlocker, shell }) => {
-    globalThis.smoke = { blockers: [], opened: [] };
+  await app.evaluate(({ Notification, powerSaveBlocker, shell }) => {
+    globalThis.smoke = { blockers: [], notifications: [], opened: [] };
+    Notification.prototype.show = function show() {
+      globalThis.smoke.notifications.push({
+        body: this.body,
+        title: this.title,
+      });
+    };
     shell.openExternal = async (url) => {
       globalThis.smoke.opened.push(url);
     };
@@ -104,6 +110,9 @@ try {
   const page = await app.firstWindow();
   await page.addInitScript(() => {
     localStorage.setItem('beacon.splash.seen.v1', 'true');
+    // Never open this machine's real camera from a fixture-only test.
+    navigator.mediaDevices.getUserMedia = () =>
+      Promise.reject(new DOMException('Test camera', 'NotAllowedError'));
   });
   await page.reload();
   await page.waitForLoadState('domcontentloaded');
@@ -128,7 +137,15 @@ try {
         version: window.beaconDesktop?.version,
       }));
       assert.deepEqual(surface, {
-        bridge: ['setCaptureActive', 'version'],
+        bridge: [
+          'getAutostart',
+          'setAutostart',
+          'setCameraActivity',
+          'setCameraResume',
+          'setCaptureActive',
+          'showAlert',
+          'version',
+        ],
         frozen: true,
         process: 'undefined',
         require: 'undefined',
@@ -223,6 +240,93 @@ try {
     },
   );
 
+  await check('keeps the computer awake for a standby camera too', async () => {
+    const before = (await smoke()).blockers.length;
+    await page.evaluate(() =>
+      window.beaconDesktop.setCameraActivity('standby'),
+    );
+    await page.waitForTimeout(150);
+    await page.evaluate(() => window.beaconDesktop.setCameraActivity('live'));
+    await page.waitForTimeout(150);
+    assert.deepEqual((await smoke()).blockers.slice(before), [
+      ['start', 'prevent-app-suspension'],
+    ]);
+    await page.evaluate(() => window.beaconDesktop.setCameraActivity('off'));
+    await page.waitForTimeout(150);
+    assert.deepEqual((await smoke()).blockers.at(-1), ['stop']);
+  });
+
+  await check('refuses start-at-sign-in in a development build', async () => {
+    const result = await page.evaluate(async () => ({
+      after: await window.beaconDesktop.setAutostart(true),
+      before: await window.beaconDesktop.getAutostart(),
+    }));
+    assert.deepEqual(result, { after: false, before: false });
+  });
+
+  await check('remembers only a valid Camera Mode resume path', async () => {
+    const prefs = path.join(out, 'user-data', 'desktop-preferences.json');
+    const resume = '/camera-mode/setup?autostart=1&mic=0&power=standby';
+    await page.evaluate(
+      (value) => window.beaconDesktop.setCameraResume(value),
+      resume,
+    );
+    await page.waitForTimeout(300);
+    assert.equal(
+      JSON.parse(readFileSync(prefs, 'utf8')).cameraResumePath,
+      resume,
+    );
+    await page.evaluate(() =>
+      window.beaconDesktop.setCameraResume('https://evil.example/'),
+    );
+    await page.waitForTimeout(300);
+    assert.equal(
+      JSON.parse(readFileSync(prefs, 'utf8')).cameraResumePath,
+      resume,
+    );
+  });
+
+  await check('shows each desktop alert once, with generic copy', async () => {
+    const before = (await smoke()).notifications.length;
+    await page.evaluate(() => {
+      const alert = {
+        category: 'motion',
+        eventId: 'event-1',
+        route: '/activity',
+      };
+      window.beaconDesktop.showAlert(alert);
+      window.beaconDesktop.showAlert(alert);
+      window.beaconDesktop.showAlert({
+        category: 'motion',
+        eventId: 'event-2',
+        route: 'https://evil.example',
+      });
+    });
+    await page.waitForTimeout(300);
+    assert.deepEqual((await smoke()).notifications.slice(before), [
+      { body: 'Beacon detected activity.', title: 'Beacon' },
+    ]);
+  });
+
+  await check('opens a camera setup link in the web pairing page', async () => {
+    // The pairing page strips the one-time code from the address bar as
+    // soon as it loads, so check the navigation the app made instead.
+    const navigation = page.waitForRequest(
+      (request) =>
+        request.isNavigationRequest() &&
+        request.url().includes('/camera-mode/setup'),
+    );
+    await app.evaluate(({ app: electronApp }, link) => {
+      electronApp.emit('open-url', { preventDefault() {} }, link);
+    }, 'beaconsecureview://camera/setup?code=ABCDEFGHJK&power=standby');
+    const url = new URL((await navigation).url());
+    assert.equal(url.searchParams.get('autostart'), '1');
+    assert.equal(url.searchParams.get('code'), 'ABCDEFGHJK');
+    assert.equal(url.searchParams.get('power'), 'standby');
+    await page.waitForURL(/\/camera-mode\/setup/);
+    await page.waitForLoadState('load');
+  });
+
   await check('closing the window hides Beacon to the tray', async () => {
     const state = await app.evaluate(({ BrowserWindow }) => {
       const [window] = BrowserWindow.getAllWindows();
@@ -248,6 +352,36 @@ try {
   });
 } finally {
   await app.close();
+}
+
+// A computer set up as a camera reopens Camera Mode when Beacon starts.
+const relaunched = await electron.launch({
+  args: [desktopRoot],
+  env: {
+    ...process.env,
+    BEACON_DESKTOP_ORIGIN: base,
+    BEACON_DESKTOP_USER_DATA: path.join(out, 'user-data'),
+  },
+  executablePath,
+});
+try {
+  await check('resumes Camera Mode at startup after a restart', async () => {
+    await relaunched.context().route('**/api/**', (route) =>
+      route.fulfill({
+        body: '{}',
+        contentType: 'application/json',
+        status: 401,
+      }),
+    );
+    const window = await relaunched.firstWindow();
+    await window.waitForURL(/\/camera-mode\/setup/);
+    assert.equal(
+      new URL(window.url()).search,
+      '?autostart=1&mic=0&power=standby',
+    );
+  });
+} finally {
+  await relaunched.close();
 }
 
 if (failures.length > 0) {

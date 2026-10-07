@@ -3,6 +3,10 @@
 # credentials; see apps/desktop/README.md.
 appId: com.builtbysai.beacon
 productName: Beacon
+# Installed folder and Linux package name; the workspace name
+# (@beacon/desktop) would otherwise become "@beacondesktop".
+extraMetadata:
+  name: beacon
 copyright: Copyright © 2026 Beacon SecureView
 
 directories:
@@ -20,6 +24,14 @@ protocols:
     schemes:
       - beaconsecureview
 
+# One-click camera setup files (ADR 0083).
+fileAssociations:
+  - ext: beaconcamera
+    name: Beacon camera setup
+    description: Beacon camera setup
+    mimeType: application/x-beacon-camera-setup
+    role: Viewer
+
 electronFuses:
   runAsNode: false
   enableCookieEncryption: true
@@ -36,6 +48,7 @@ win:
       arch: [x64, arm64]
 
 nsis:
+  include: resources/installer.nsh
   oneClick: true
   perMachine: false
   runAfterFinish: true
@@ -56,6 +69,7 @@ mac:
   target:
     - target: dmg
       arch: [x64, arm64]
+  artifactName: Beacon-${version}-${arch}.${ext}
 
 linux:
   icon: resources/icon.png

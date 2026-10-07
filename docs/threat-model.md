@@ -120,6 +120,27 @@ Android, backend, PostgreSQL, and TURN are separate trust zones.
   - A compromised Beacon origin would control the window exactly as it would
     control a browser tab.
 
+## Desktop 0.2 controls (ADRs 0083 and 0084)
+
+- Standby cameras open the camera only for an authorized viewer's signaling
+  session, and the desktop tray, a notification, and the power lock make
+  every wake visible.
+- Desktop alerts reuse the outbox, preferences, and quiet hours. Each is
+  delivered only to the subscribing session's authenticated realtime
+  connection, carries the same generic payload as push, and expires instead
+  of revoking anything when the app is offline.
+- One-click setup carries only the existing single-use, 10-minute pairing
+  code:
+  - setup files must name the app's own origin
+  - the installer's recorded file name is read once, ignored after 30
+    minutes, and deleted
+  - the pairing page strips the code from the address bar
+  - a resume path is accepted only for Camera Mode paths without a code
+- The desktop sign-in completion page receives the code in the URL fragment,
+  so it is never sent to the server, and removes it from history.
+- Camera use cases change only existing motion settings, and never enable
+  continuous recording.
+
 ## Residual risk and deferrals
 
 Production secret management, CA lifecycle, TURN abuse controls and capacity,

@@ -42,6 +42,15 @@ const subscriptionSchema = z.discriminatedUnion('channel', [
         .strict(),
     })
     .strict(),
+  // The desktop app (ADR 0083): alerts arrive over this session's own
+  // authenticated realtime connection, so there is no provider token.
+  z
+    .object({
+      channel: z.literal('desktop'),
+      installationId: z.string().uuid(),
+      deviceLabel: z.string().trim().min(1).max(80),
+    })
+    .strict(),
 ]);
 const subscriptionParameterSchema = z.object({
   subscriptionId: z.string().uuid(),
@@ -116,7 +125,9 @@ export function registerNotificationRoutes(
     const providerMaterial =
       parsed.data.channel === 'fcm'
         ? (parsed.data.token ?? parsed.data.fid!)
-        : JSON.stringify(parsed.data.subscription);
+        : parsed.data.channel === 'desktop'
+          ? session.id
+          : JSON.stringify(parsed.data.subscription);
     const id = await store.upsertNotificationSubscription({
       channel: parsed.data.channel,
       consentedAt: new Date(),

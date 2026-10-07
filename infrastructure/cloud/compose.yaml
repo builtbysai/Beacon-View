@@ -155,6 +155,8 @@ services:
     volumes:
       - caddy-data:/data
       - caddy-config:/config
+      # Published desktop installers (ADR 0083); see apps/desktop/README.md.
+      - /opt/beacon/downloads:/srv/downloads:ro
 
 volumes:
   caddy-config:

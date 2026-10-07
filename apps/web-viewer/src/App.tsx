@@ -26,9 +26,13 @@ import { Brand, Icon } from './Icon';
 import { Sidebar, SidebarProvider, SidebarTrigger } from './Sidebar';
 import { PendingDeviceRow } from './PendingDeviceRow';
 import { AddCameraPage } from './AddCameraPage';
+import { ComputerCameraSetupDialog } from './ComputerCameraSetupDialog';
+import { takePendingUseCase } from './pending-use-case';
+import { type DesktopAlert, desktopBridge } from './desktop-shell';
 import { PairingDialog } from './PairingDialog';
 import { SettingsPage } from './SettingsPage';
 import {
+  DesktopAuthReturnPage,
   MobileAuthReturnPage,
   PairLinkPage,
   PublicTrustPage,
@@ -102,6 +106,7 @@ export function App() {
   const [pairingBusy, setPairingBusy] = useState(false);
   const [pairingState, setPairingState] = useState<PairingLifecycle>('pending');
   const [browserCameraActive, setBrowserCameraActive] = useState(false);
+  const [computerSetupOpen, setComputerSetupOpen] = useState(false);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(
     deviceSettingsIdFromPath,
@@ -253,6 +258,7 @@ export function App() {
       window.location.pathname === '/trust' ||
       window.location.pathname === '/pair' ||
       window.location.pathname === '/auth/mobile' ||
+      window.location.pathname === '/auth/desktop/complete' ||
       window.location.pathname === '/account/verify-email' ||
       window.location.pathname === '/account/reset-password' ||
       window.location.pathname.startsWith('/g/') ||
@@ -384,13 +390,39 @@ export function App() {
 
   const handleHouseholdEvent = useCallback(
     (message: HouseholdEvent) => {
+      if (message.type === 'notification') {
+        // Only the desktop app subscribes to this channel; it validates the
+        // alert again before showing an OS notification.
+        desktopBridge()?.showAlert?.({
+          category: message.category as DesktopAlert['category'],
+          eventId: message.eventId ?? '',
+          route: message.route as DesktopAlert['route'],
+        });
+        return;
+      }
       if (
         message.type === 'camera-paired' ||
         message.type === 'camera-presence-changed' ||
         message.type === 'device-credential-revoked' ||
         message.type === 'device-management-changed'
       ) {
-        void loadCameras().then(() => {
+        // A computer set up from "Set up a computer" gets the use case the
+        // owner picked there (ADR 0084).
+        const pendingUseCase =
+          message.type === 'camera-paired' && message.cameraId
+            ? takePendingUseCase()
+            : null;
+        const applied =
+          pendingUseCase && pendingUseCase !== 'general' && message.cameraId
+            ? request(
+                `/api/cameras/${encodeURIComponent(message.cameraId)}/use-case`,
+                {
+                  body: JSON.stringify({ useCase: pendingUseCase }),
+                  method: 'PUT',
+                },
+              ).catch(() => undefined)
+            : Promise.resolve();
+        void applied.then(loadCameras).then(() => {
           if (message.type === 'camera-paired' && message.cameraId) {
             setActivityNotice('A new camera is connected and ready to use.');
             window.setTimeout(() => setActivityNotice(''), 6_000);
@@ -857,6 +889,8 @@ export function App() {
       />
     );
   if (window.location.pathname === '/pair') return <PairLinkPage />;
+  if (window.location.pathname === '/auth/desktop/complete')
+    return <DesktopAuthReturnPage />;
   if (window.location.pathname === '/auth/mobile')
     return <MobileAuthReturnPage />;
   if (window.location.pathname === '/account/verify-email')
@@ -1548,8 +1582,14 @@ export function App() {
                   <AddCameraPage
                     onBack={() => navigate('dashboard')}
                     onPairAndroid={() => openPairing()}
+                    onSetUpComputer={() => setComputerSetupOpen(true)}
                     onUseBrowser={() => setBrowserCameraActive(true)}
                   />
+                  {computerSetupOpen && (
+                    <ComputerCameraSetupDialog
+                      onDismiss={() => setComputerSetupOpen(false)}
+                    />
+                  )}
                   {browserCameraActive && (
                     <BrowserCameraMode
                       canRecord={household?.role === 'owner'}

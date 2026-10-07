@@ -257,7 +257,7 @@ describe('NotificationSettings', () => {
     ).toBeVisible();
   });
 
-  it('explains that the desktop app cannot hold a push subscription', async () => {
+  it('asks an older desktop app (no alert support) to update', async () => {
     window.beaconDesktop = { setCaptureActive: vi.fn(), version: 1 };
     try {
       renderNotificationSettings();
@@ -265,10 +265,61 @@ describe('NotificationSettings', () => {
         await screen.findByRole('button', { name: 'Unavailable' }),
       ).toBeDisabled();
       expect(
-        screen.getByText(/desktop app can’t receive alerts yet/),
+        screen.getByText(/Update the Beacon desktop app to receive alerts/),
       ).toBeVisible();
     } finally {
       delete window.beaconDesktop;
+    }
+  });
+
+  it('turns desktop alerts on and off through the desktop channel', async () => {
+    window.beaconDesktop = {
+      setCaptureActive: vi.fn(),
+      showAlert: vi.fn(),
+      version: 1,
+    };
+    vi.mocked(request).mockImplementation((path, options) => {
+      if (path === '/api/notification-preferences')
+        return Promise.resolve({ preferences: [] });
+      if (path === '/api/notification-subscriptions')
+        return Promise.resolve({ id: 'desktop-subscription-1' });
+      expect(options?.method).toBe('DELETE');
+      return Promise.resolve(undefined);
+    });
+    try {
+      renderNotificationSettings();
+      expect(await screen.findByText('Desktop alerts')).toBeVisible();
+      fireEvent.click(screen.getByRole('button', { name: 'Turn on' }));
+      expect(
+        await screen.findByRole('button', { name: 'Turn off' }),
+      ).toBeVisible();
+      const subscribe = vi
+        .mocked(request)
+        .mock.calls.find(
+          ([path]) => path === '/api/notification-subscriptions',
+        );
+      expect(JSON.parse(subscribe?.[1]?.body as string)).toMatchObject({
+        channel: 'desktop',
+        deviceLabel: 'Beacon desktop app',
+      });
+      expect(
+        localStorage.getItem('beacon.notification.desktop-subscription.v1'),
+      ).toBe('desktop-subscription-1');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Turn off' }));
+      expect(
+        await screen.findByRole('button', { name: 'Turn on' }),
+      ).toBeVisible();
+      expect(request).toHaveBeenCalledWith(
+        '/api/notification-subscriptions/desktop-subscription-1',
+        { method: 'DELETE' },
+      );
+      expect(
+        localStorage.getItem('beacon.notification.desktop-subscription.v1'),
+      ).toBeNull();
+    } finally {
+      delete window.beaconDesktop;
+      localStorage.clear();
     }
   });
 });

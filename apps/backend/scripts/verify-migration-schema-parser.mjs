@@ -49,3 +49,31 @@ test('extracts all additive PostgreSQL objects from a migration', () => {
     },
   ]);
 });
+
+test('checks every statement in a drizzle migration, not only the first', () => {
+  const requirements = extractSchemaRequirements([
+    {
+      name: '0002_breakpoints.sql',
+      sql: [
+        '-- A leading comment line.',
+        'ALTER TABLE "example_records" ADD COLUMN "first" text;',
+        '--> statement-breakpoint',
+        'ALTER TABLE "example_records" ADD COLUMN "second" text;',
+        '--> statement-breakpoint',
+        'ALTER TABLE "example_records" ADD CONSTRAINT "example_records_second_valid" CHECK ("second" <> \'\');',
+        '--> statement-breakpoint',
+        'CREATE INDEX "example_records_second_idx" ON "example_records" ("second");',
+      ].join('\n'),
+    },
+  ]);
+
+  assert.deepEqual(
+    requirements.map(({ kind, name }) => `${kind}:${name}`),
+    [
+      'column:example_records.first',
+      'column:example_records.second',
+      'constraint:example_records_second_valid',
+      'index:example_records_second_idx',
+    ],
+  );
+});

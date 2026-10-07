@@ -1,6 +1,13 @@
 import path from 'node:path';
 
-import { Menu, nativeImage, Tray } from 'electron';
+import {
+  Menu,
+  type MenuItemConstructorOptions,
+  nativeImage,
+  Tray,
+} from 'electron';
+
+export type CameraActivity = 'off' | 'standby' | 'live';
 
 export interface TrayActions {
   autostart: { enabled: boolean; get(): boolean; set(value: boolean): void };
@@ -12,12 +19,14 @@ export interface TrayActions {
 /**
  * The tray is how Beacon stays reachable while its window is hidden, and it
  * is the desktop counterpart of Android's foreground-service notification:
- * whenever Camera Mode is broadcasting, the icon and tooltip say so.
+ * whenever this computer's camera is on, the icon (red dot), tooltip, and
+ * menu say so. On standby (camera off, waiting for a viewer) the tooltip and
+ * menu say that too.
  */
 export class BeaconTray {
   private readonly tray: Tray;
   private readonly icons;
-  private live = false;
+  private activity: CameraActivity = 'off';
 
   constructor(
     assetsDirectory: string,
@@ -34,9 +43,9 @@ export class BeaconTray {
     this.render();
   }
 
-  setLive(live: boolean): void {
-    if (live === this.live) return;
-    this.live = live;
+  setActivity(activity: CameraActivity): void {
+    if (activity === this.activity) return;
+    this.activity = activity;
     this.render();
   }
 
@@ -50,14 +59,30 @@ export class BeaconTray {
 
   private render(): void {
     const { actions } = this;
-    this.tray.setImage(this.live ? this.icons.live : this.icons.idle);
-    this.tray.setToolTip(this.live ? 'Beacon — Camera Mode is live' : 'Beacon');
+    const live = this.activity === 'live';
+    this.tray.setImage(live ? this.icons.live : this.icons.idle);
+    this.tray.setToolTip(
+      live
+        ? 'Beacon — camera is on'
+        : this.activity === 'standby'
+          ? 'Beacon — camera on standby (off until someone views)'
+          : 'Beacon',
+    );
+    const status: MenuItemConstructorOptions[] =
+      this.activity === 'off'
+        ? []
+        : [
+            {
+              enabled: false,
+              label: live
+                ? '● Camera is on'
+                : '○ Camera on standby — camera off',
+            },
+          ];
     this.tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: 'Open Beacon', click: () => actions.open() },
-        ...(this.live
-          ? [{ enabled: false, label: '● Camera Mode is live' } as const]
-          : []),
+        ...status,
         { type: 'separator' },
         {
           checked: actions.autostart.get(),

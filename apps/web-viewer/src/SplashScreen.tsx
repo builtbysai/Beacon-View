@@ -1,6 +1,7 @@
 import { Icon } from './Icon';
 import './SplashScreen.css';
 import { PublicHeader } from './PublicHeader';
+import { GetBeaconSection } from './GetBeaconSection';
 
 export function SplashScreen({ onContinue }: { onContinue: () => void }) {
   const listening = false;
@@ -9,6 +10,7 @@ export function SplashScreen({ onContinue }: { onContinue: () => void }) {
   const demoCamera: 'living' | 'entry' = 'living';
   const splashLinks = [
     { label: 'How it works', href: '#how' },
+    { label: 'Download', href: '#download' },
     { label: 'Privacy', href: '#privacy' },
     { label: 'Trust', href: '/trust' },
   ];
@@ -273,6 +275,8 @@ export function SplashScreen({ onContinue }: { onContinue: () => void }) {
               </div>
             </div>
           </section>
+
+          <GetBeaconSection onOpenWeb={onContinue} />
 
           <section className="section privacy" id="privacy">
             <div className="wrap privacy-grid">

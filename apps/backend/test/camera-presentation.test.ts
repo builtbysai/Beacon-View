@@ -24,6 +24,7 @@ const camera: AccessibleCameraRecord = {
   publicCameraId: '11111111-1111-4111-8111-111111111111',
   publicDeviceId: '22222222-2222-4222-8222-222222222222',
   sourceKey: 'rear',
+  useCase: 'general',
 };
 const owner = { role: 'owner', userId: 'owner-user' } as const;
 

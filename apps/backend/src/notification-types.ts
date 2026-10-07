@@ -1,4 +1,4 @@
-export type NotificationChannel = 'fcm' | 'web_push';
+export type NotificationChannel = 'fcm' | 'web_push' | 'desktop';
 export type NotificationCategory =
   'motion' | 'offline' | 'recovered' | 'security';
 
@@ -37,6 +37,9 @@ export interface NotificationDelivery {
 }
 
 export interface NotificationDeliveryOutcome {
+  /** The alert is no longer worth showing (the device was offline past the
+   * alert's useful life). Ends this delivery without revoking anything. */
+  expired?: boolean;
   permanent: boolean;
   retryAfterMs?: number;
   success: boolean;

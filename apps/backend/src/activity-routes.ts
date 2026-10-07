@@ -1,5 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 
+import { z } from 'zod';
+
+import { cameraUseCaseSchema, motionPresetFor } from './camera-use-case.js';
 import { isCameraOnline } from './camera-presentation.js';
 import type { HouseholdEventHub } from './household-events.js';
 import {
@@ -29,6 +32,10 @@ interface ActivityRouteDependencies {
   signaling: SignalingHub;
   store: MilestoneStore;
 }
+
+const cameraUseCaseBodySchema = z
+  .object({ useCase: cameraUseCaseSchema })
+  .strict();
 
 export function registerActivityRoutes(
   app: FastifyInstance,
@@ -254,6 +261,31 @@ export function registerActivityRoutes(
       metadata: { cameraId: result.cameraId },
     });
     return { settings: result };
+  });
+
+  app.put('/api/cameras/:cameraId/use-case', async (request, reply) => {
+    const session = await authenticateHouseholdAdminStateChange(request, reply);
+    if (!session) return;
+    const parameters = cameraParameterSchema.safeParse(request.params);
+    const body = cameraUseCaseBodySchema.safeParse(request.body);
+    if (!parameters.success || !body.success)
+      return reply.code(400).send({ error: 'Invalid camera use' });
+    const result = await store.setCameraUseCase(
+      session.householdId,
+      parameters.data.cameraId,
+      body.data.useCase,
+      motionPresetFor(body.data.useCase),
+    );
+    if (!result) return reply.code(404).send({ error: 'Camera unavailable' });
+    await store.audit({
+      eventType: 'camera_use_case_changed',
+      householdId: session.householdId,
+      userId: session.userId,
+      success: true,
+      ipAddress: request.ip,
+      metadata: { cameraId: parameters.data.cameraId, useCase: result.useCase },
+    });
+    return result;
   });
 
   app.get('/api/device/motion-settings', async (request, reply) => {

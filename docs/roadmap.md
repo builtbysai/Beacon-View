@@ -140,6 +140,22 @@ handoff (new `POST /api/desktop/auth/google`). Implemented in `apps/desktop` on 
 `claude/desktop-app`. Open before release: deploy the backend handoff, physical
 Windows/macOS/Linux install checks, owner decisions on code-signing certificates and
 auto-update hosting, and a desktop alert transport. iOS stays deferred.
+
+October 7 desktop 0.2: the owner approved, and ADRs 0083 and 0084 record, the
+following:
+
+- standby (wake-on-view) cameras
+- desktop alerts over the session's realtime connection
+- start at sign-in and Camera Mode resume
+- one-click computer camera setup (pre-configured Windows installer, setup
+  file or link, browser link)
+- the Google sign-in completion page
+- self-hosted downloads with a "Get Beacon" landing section
+- Phase 1 camera use cases (Security, Baby monitor, Door camera)
+
+The same batch repaired the responsive audit and made `migrate-verify`
+check every migration statement. Code signing is not required while the
+deployment is self-hosted.
 Model selection, a default-off feature flag, and device evidence remain open, and IP
 cameras/other clients still require their own design milestone per ADR 0067 and the table
 below.

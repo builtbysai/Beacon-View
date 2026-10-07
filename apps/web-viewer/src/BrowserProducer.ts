@@ -21,6 +21,12 @@ type ProducerMessage =
   | { cameraId: string; type: 'switch-source' }
   | { type: 'device-ready' };
 
+/** A ready stream (always-on camera), or a function that turns the camera on
+ * when the first viewer arrives (standby camera). The function is called for
+ * every new viewer, so it must return the already-open stream if there is
+ * one. */
+export type StreamSource = MediaStream | (() => Promise<MediaStream>);
+
 function producerUrl(cameraId: string): string {
   const url = new URL('/api/signaling', window.location.href);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -39,7 +45,7 @@ export class BrowserProducer {
 
   constructor(
     private readonly cameraId: string,
-    private readonly stream: MediaStream,
+    private readonly source: StreamSource,
     private readonly onState: (
       state: ProducerState,
       viewerCount: number,
@@ -47,6 +53,7 @@ export class BrowserProducer {
     ) => void,
     private readonly onSourceSwitch: (cameraId: string) => void = () =>
       undefined,
+    private readonly onWakeError: (error: unknown) => void = () => undefined,
   ) {}
 
   start(): void {
@@ -109,17 +116,33 @@ export class BrowserProducer {
 
   async #handle(message: ProducerMessage): Promise<void> {
     if (message.type === 'viewer-ready') {
+      const generation = this.#generation;
+      let stream: MediaStream;
+      try {
+        stream =
+          typeof this.source === 'function' ? await this.source() : this.source;
+      } catch (error) {
+        // The camera could not turn on (busy, unplugged, or permission
+        // revoked). End just this viewer's attempt; the camera stays
+        // connected and on standby for the next one.
+        this.#send({ connectionId: message.connectionId, type: 'disconnect' });
+        this.onWakeError(error);
+        return;
+      }
+      // Turning the camera on takes a moment; the socket may have closed or
+      // reconnected meanwhile, which makes this connection ID stale.
+      if (this.#stopped || generation !== this.#generation) return;
       const peer = new RTCPeerConnection({
         iceServers: message.iceServers,
         iceTransportPolicy: message.iceTransportPolicy,
       });
       this.#peers.set(message.connectionId, peer);
-      for (const track of this.stream.getVideoTracks()) {
-        peer.addTrack(track, this.stream);
+      for (const track of stream.getVideoTracks()) {
+        peer.addTrack(track, stream);
       }
       if (message.canListen) {
-        for (const track of this.stream.getAudioTracks()) {
-          peer.addTrack(track, this.stream);
+        for (const track of stream.getAudioTracks()) {
+          peer.addTrack(track, stream);
         }
       }
       peer.onicecandidate = (event) => {

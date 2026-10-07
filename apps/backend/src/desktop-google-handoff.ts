@@ -13,7 +13,10 @@ import { generateToken, hashSecret, secretsEqual } from './security.js';
  * leaves the desktop shell that started the sign-in.
  */
 
-export const DESKTOP_DEEP_LINK = 'beaconsecureview://auth/desktop';
+/** The browser lands here after Google; the page hands the code to the app
+ * through beaconsecureview://auth/desktop and tells the person the tab can
+ * be closed (apps/web-viewer DesktopAuthReturnPage). */
+export const DESKTOP_COMPLETION_PATH = '/auth/desktop/complete';
 
 /** BASE64URL(SHA-256(verifier)) is always exactly 43 characters. */
 export const PKCE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -52,12 +55,14 @@ export function desktopChallengeFromState(
   return challenge;
 }
 
-export function desktopDeepLink(
+/** The code travels in the URL fragment, which browsers never send back to
+ * the server, so it stays out of access logs and Referer headers. */
+export function desktopCompletionPath(
   result: { code: string } | { status: 'failed' },
 ): string {
   return 'code' in result
-    ? `${DESKTOP_DEEP_LINK}?code=${encodeURIComponent(result.code)}`
-    : `${DESKTOP_DEEP_LINK}?status=${result.status}`;
+    ? `${DESKTOP_COMPLETION_PATH}#code=${encodeURIComponent(result.code)}`
+    : `${DESKTOP_COMPLETION_PATH}#status=${result.status}`;
 }
 
 export type DesktopGoogleOutcome =
