@@ -326,10 +326,17 @@ function act(decision: NavigationDecision): void {
 
 // --- Window -----------------------------------------------------------------
 
-function showOfflinePage(window: BrowserWindow): void {
+/** Shows the offline page, which reconnects to `returnUrl` (the page that
+ * failed), so a computer camera comes back in Camera Mode, not on Home. */
+function showOfflinePage(window: BrowserWindow, returnUrl: string): void {
   void window
     .loadFile(path.join(appRoot, 'static', 'offline.html'), {
-      query: { origin: appOrigin },
+      query: {
+        origin: appOrigin,
+        return: isAppUrl(returnUrl, appOrigin)
+          ? returnUrl
+          : appUrl(startPath()),
+      },
     })
     .catch(() => undefined);
 }
@@ -396,7 +403,7 @@ function createWindow(): BrowserWindow {
         errorCode !== ERR_ABORTED &&
         isAppUrl(validatedUrl, appOrigin)
       )
-        showOfflinePage(window);
+        showOfflinePage(window, validatedUrl);
     },
   );
   contents.on('render-process-gone', () => {

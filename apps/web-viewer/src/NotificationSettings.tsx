@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { request } from './api';
+import { friendlyError } from './friendly-errors';
 import { desktopSupportsAlerts, isDesktopShell } from './desktop-shell';
 import { useSettingsAutosave } from './SettingsAutosave';
 import { SettingsRow } from './SettingsUI';
@@ -191,9 +192,7 @@ export function NotificationSettings({
       setEnabled(true);
     } catch (error) {
       setChannelError(
-        error instanceof Error
-          ? error.message
-          : 'Notifications could not be enabled.',
+        friendlyError(error, 'Notifications couldn’t be turned on. Try again.'),
       );
     } finally {
       setChannelBusy(false);

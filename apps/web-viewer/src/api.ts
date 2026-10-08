@@ -1,12 +1,17 @@
-/** A failed Beacon API call. `status` is 0 when Beacon could not be reached
- * at all (offline, DNS, timeout). `code` is the server's machine-readable
- * reason when it sent one (e.g. `drive_reconnect_required`). */
+import { friendlyServerError, statusMessage } from './friendly-errors';
+
+/** A failed Beacon API call. `message` is written for people (ADR 0087).
+ * `status` is 0 when Beacon could not be reached at all (offline, DNS,
+ * timeout). `code` is the machine-readable reason when there is one (e.g.
+ * `drive_reconnect_required`), and `serverMessage` the server's original
+ * text, for logs and support -- never compare display text. */
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
     readonly code?: string,
     readonly requestId?: string,
+    readonly serverMessage?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -36,27 +41,6 @@ export function csrfToken(): string {
       .find((value) => value.startsWith('beacon_csrf='))
       ?.split('=')[1] ?? ''
   );
-}
-
-/** A plain message for a failed response that carried none. */
-export function fallbackMessage(status: number): string {
-  if (status === 401) return 'Please sign in again.';
-  if (status === 403) return 'You don’t have access to do that.';
-  if (status === 404) return 'That item no longer exists.';
-  if (status === 409)
-    return 'That changed in the meantime. Refresh and try again.';
-  if (status === 413) return 'That is too large to send.';
-  if (status === 429) return 'Too many attempts. Wait a moment and try again.';
-  if (status >= 500)
-    return 'Beacon is having trouble right now. Try again in a moment.';
-  return 'That request didn’t work. Try again.';
-}
-
-/** The message to show for any caught error, preferring Beacon's own. */
-export function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
 }
 
 export async function request<T>(
@@ -102,16 +86,23 @@ export async function request<T>(
       error?: unknown;
       requestId?: unknown;
     };
-    const code = typeof payload.code === 'string' ? payload.code : undefined;
-    if (code === 'session_required' && typeof window !== 'undefined')
-      window.dispatchEvent(new Event(SESSION_ENDED_EVENT));
-    throw new ApiError(
+    const serverMessage =
       typeof payload.error === 'string' && payload.error
         ? payload.error
-        : fallbackMessage(response.status),
+        : undefined;
+    const friendly = friendlyServerError(
       response.status,
-      code,
+      serverMessage,
+      typeof payload.code === 'string' ? payload.code : undefined,
+    );
+    if (friendly.code === 'session_required' && typeof window !== 'undefined')
+      window.dispatchEvent(new Event(SESSION_ENDED_EVENT));
+    throw new ApiError(
+      friendly.message || statusMessage(response.status),
+      response.status,
+      friendly.code,
       typeof payload.requestId === 'string' ? payload.requestId : undefined,
+      serverMessage,
     );
   }
   return response.status === 204

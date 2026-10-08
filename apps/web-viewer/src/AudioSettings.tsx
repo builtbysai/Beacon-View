@@ -7,6 +7,7 @@ import {
   type Microphone,
   saveTalkMicrophone,
 } from './talk-microphone';
+import { mediaErrorMessage } from './friendly-errors';
 
 /** Which microphone this device uses when you Talk through a camera. A
  * camera's own microphone is chosen in Camera Mode on that camera. */
@@ -33,10 +34,8 @@ export function AudioSettings() {
     try {
       setMicrophones(await listMicrophones(true));
       setNamed(true);
-    } catch {
-      setError(
-        'Microphone access was denied. Allow it in your browser or system settings.',
-      );
+    } catch (caught) {
+      setError(mediaErrorMessage(caught, 'microphone'));
     }
   }
 

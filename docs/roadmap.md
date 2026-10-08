@@ -176,7 +176,14 @@ October 7 desktop 0.3: owner-reported audio and recording failures fixed:
   - Server errors no longer leak internals.
   - Start-up tells "offline" from "signed out".
   - A lapsed session returns to sign-in with a reason.
-  - An error boundary replaces blank-page crashes. Code signing is not required while the
+  - An error boundary replaces blank-page crashes.
+- ADR 0087 makes error messages user-friendly:
+  - Every server error is translated into plain words with a next step
+    (enforced by a test).
+  - Camera, microphone, and Talk failures name their cause.
+  - Errors are dismissible and clear on navigation.
+  - A failed camera list offers Retry instead of looking empty.
+  - The desktop app reconnects to Camera Mode after an outage. Code signing is not required while the
     deployment is self-hosted.
     Model selection, a default-off feature flag, and device evidence remain open, and IP
     cameras/other clients still require their own design milestone per ADR 0067 and the table

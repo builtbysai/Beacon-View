@@ -44,6 +44,49 @@ class TestSocket {
 }
 
 describe('App', () => {
+  it('offers a retry instead of “Add your first device” when cameras fail to load', async () => {
+    localStorage.setItem('beacon.splash.seen.v1', 'true');
+    let camerasFail = true;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((path: string) => {
+        const body =
+          path === '/api/auth/me'
+            ? {
+                household: { id: 'h', role: 'owner' },
+                user: { email: 'owner@example.com', id: 'u' },
+              }
+            : path === '/api/cameras'
+              ? camerasFail
+                ? {
+                    error:
+                      'Something went wrong on Beacon’s side. Try again in a moment.',
+                  }
+                : { cameras: [] }
+              : path === '/api/devices'
+                ? { devices: [] }
+                : {};
+        const failed = path === '/api/cameras' && camerasFail;
+        return Promise.resolve({
+          json: () => Promise.resolve(body),
+          ok: !failed,
+          status: failed ? 500 : 200,
+        });
+      }),
+    );
+    render(<App />);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /cameras couldn’t be loaded/i,
+    );
+    expect(screen.queryByText('Add your first device')).not.toBeInTheDocument();
+    camerasFail = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(
+      await screen.findByText('Add your first device'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('explains an unreachable Beacon instead of showing sign-in, and retries', async () => {
     localStorage.setItem('beacon.splash.seen.v1', 'true');
     const fetch = vi
@@ -338,11 +381,11 @@ describe('App', () => {
       failLogin({
         ok: false,
         status: 401,
-        json: () => Promise.resolve({ error: 'Invalid credentials' }),
+        json: () => Promise.resolve({ error: 'Invalid email or password' }),
       }),
     );
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Invalid credentials',
+      'That email and password don’t match',
     );
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
   });

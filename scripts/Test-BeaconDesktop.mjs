@@ -327,6 +327,21 @@ try {
     await page.waitForLoadState('load');
   });
 
+  await check(
+    'an outage reconnects to the page that failed, not Home',
+    async () => {
+      const failing = `${base}/camera-mode/setup?autostart=1`;
+      const offline = (route) => route.abort('internetdisconnected');
+      await app.context().route('**/camera-mode/setup**', offline);
+      await page.goto(failing).catch(() => undefined);
+      await page.waitForURL(/offline.html/);
+      const retry = await page.getByRole('link', { name: 'Try again' });
+      assert.equal(await retry.getAttribute('href'), failing);
+      await app.context().unroute('**/camera-mode/setup**', offline);
+      await page.goto(`${base}/`);
+    },
+  );
+
   await check('closing the window hides Beacon to the tray', async () => {
     const state = await app.evaluate(({ BrowserWindow }) => {
       const [window] = BrowserWindow.getAllWindows();

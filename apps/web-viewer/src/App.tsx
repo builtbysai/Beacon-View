@@ -1,8 +1,10 @@
 import './App.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ApiError, errorMessage, request, SESSION_ENDED_EVENT } from './api';
+import { ApiError, request, SESSION_ENDED_EVENT } from './api';
+import { friendlyError } from './friendly-errors';
 import { useDriveRecording } from './drive-recording';
+import { ErrorNotice } from './ErrorNotice';
 import { nextPairingState } from './lifecycle';
 import { cameraStatus } from './camera-status';
 import type { PairingLifecycle } from './lifecycle';
@@ -89,6 +91,9 @@ export function App() {
   const [error, setError] = useState('');
   // Beacon couldn't be reached while opening (not the same as signed out).
   const [startupError, setStartupError] = useState('');
+  // The camera list failed to load: say so (with Retry) instead of showing
+  // "Add your first device" as if there were none.
+  const [camerasError, setCamerasError] = useState('');
   const [startupAttempt, setStartupAttempt] = useState(0);
   const [pendingConfirmBusy, setPendingConfirmBusy] = useState(false);
   const [reauthenticationOpen, setReauthenticationOpen] = useState(false);
@@ -163,6 +168,7 @@ export function App() {
 
   const navigate = useCallback((next: Page, search?: string) => {
     pushRoute(`${pagePaths[next]}${search ?? ''}`);
+    setError('');
     setPage(next);
     setSelectedDeviceId(null);
     setSelectedCamera(null);
@@ -173,6 +179,7 @@ export function App() {
 
   useEffect(() => {
     const onPopState = () => {
+      setError('');
       const settingsId = deviceSettingsIdFromPath();
       const overlayState = window.history.state as {
         cameraSettingsBackgroundPage?: Page;
@@ -229,6 +236,7 @@ export function App() {
     ]);
     setCameras(cameraResult.cameras);
     setDevices(deviceResult.devices);
+    setCamerasError('');
     const cameraMatch = window.location.pathname.match(/^\/cameras\/([^/]+)$/);
     if (cameraMatch) {
       setSelectedCamera((current) => {
@@ -281,10 +289,12 @@ export function App() {
       .then(async (result) => {
         // Signed in: a camera list that fails to load is reported in the
         // workspace, never shown as being signed out.
-        await loadCameras().catch((caught: unknown) =>
-          setError(
-            `Your cameras couldn’t be loaded. ${errorMessage(caught, 'Try again.')}`,
-          ),
+        await loadCameras().then(
+          () => setCamerasError(''),
+          (caught: unknown) =>
+            setCamerasError(
+              `Your cameras couldn’t be loaded. ${friendlyError(caught, 'Try again.')}`,
+            ),
         );
         setStartupError('');
         setUser(result.user);
@@ -297,11 +307,21 @@ export function App() {
         // dropped connection gets an explanation and a retry instead.
         if (!(caught instanceof ApiError && caught.status === 401))
           setStartupError(
-            errorMessage(caught, 'Beacon couldn’t be opened. Try again.'),
+            friendlyError(caught, 'Beacon couldn’t be opened. Try again.'),
           );
       })
       .finally(() => setLoading(false));
   }, [loadCameras, startupAttempt]);
+
+  const retryCameras = useCallback(() => {
+    void loadCameras().then(
+      () => setCamerasError(''),
+      (caught: unknown) =>
+        setCamerasError(
+          `Your cameras still couldn’t be loaded. ${friendlyError(caught, 'Try again.')}`,
+        ),
+    );
+  }, [loadCameras]);
 
   const retryStartup = useCallback(() => {
     setStartupError('');
@@ -403,9 +423,10 @@ export function App() {
       })
       .catch((caught) => {
         setActivityNotice(
-          caught instanceof ApiError
-            ? caught.message
-            : 'That invitation could not be accepted.',
+          friendlyError(
+            caught,
+            'That invitation couldn’t be accepted. Ask for a new one.',
+          ),
         );
         window.setTimeout(() => setActivityNotice(''), 6_000);
       });
@@ -547,11 +568,14 @@ export function App() {
       }
     } catch (caught) {
       setError(
-        caught instanceof Error && caught.message === 'googleAccountExists'
+        caught instanceof ApiError && caught.code === 'google_account_exists'
           ? "This email already has a Google account. Use “Continue with Google” above, then add a password from Settings once you're signed in."
-          : caught instanceof Error
-            ? caught.message
-            : 'Request failed',
+          : friendlyError(
+              caught,
+              mode === 'login'
+                ? 'Sign-in didn’t work. Try again.'
+                : 'Your account couldn’t be created. Try again.',
+            ),
       );
     } finally {
       setAuthBusy(false);
@@ -611,7 +635,9 @@ export function App() {
       setPairingCode(result.code);
       setPairingState((state) => nextPairingState(state, 'code-created'));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Request failed');
+      setError(
+        friendlyError(caught, 'A pairing code couldn’t be created. Try again.'),
+      );
     } finally {
       setPairingBusy(false);
     }
@@ -635,7 +661,7 @@ export function App() {
       });
       await loadCameras();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Rename failed');
+      setError(friendlyError(caught, 'The name couldn’t be saved. Try again.'));
     }
   }
 
@@ -649,7 +675,7 @@ export function App() {
       });
       await loadCameras();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Rename failed');
+      setError(friendlyError(caught, 'The name couldn’t be saved. Try again.'));
     }
   }
 
@@ -678,7 +704,7 @@ export function App() {
       await loadCameras();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Could not switch camera.',
+        friendlyError(caught, 'The camera couldn’t be switched. Try again.'),
       );
     }
   }
@@ -713,9 +739,7 @@ export function App() {
       await loadCameras();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'The camera could not be removed.',
+        friendlyError(caught, 'The camera couldn’t be removed. Try again.'),
       );
     }
   }
@@ -758,9 +782,7 @@ export function App() {
       await loadCameras();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'The device could not be removed.',
+        friendlyError(caught, 'The device couldn’t be removed. Try again.'),
       );
     }
   }
@@ -772,9 +794,10 @@ export function App() {
       await loadCameras();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'This camera could not be removed from your view.',
+        friendlyError(
+          caught,
+          'This camera could not be removed from your view.',
+        ),
       );
     }
   }
@@ -842,9 +865,7 @@ export function App() {
         return;
       }
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Your account could not be deleted.',
+        friendlyError(caught, 'Your account couldn’t be deleted. Try again.'),
       );
     }
   }
@@ -859,9 +880,10 @@ export function App() {
       await loadCameras();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Privacy mode could not be changed.',
+        friendlyError(
+          caught,
+          'The camera couldn’t be paused or resumed. Try again.',
+        ),
       );
     }
   }
@@ -955,7 +977,7 @@ export function App() {
 
   if (startupError)
     return (
-      <main className="shell loading-shell">
+      <main className="shell loading-shell startup-error">
         <Brand />
         <p role="alert">{startupError}</p>
         <button className="primary" onClick={retryStartup} type="button">
@@ -1163,9 +1185,10 @@ export function App() {
 
           <div className={`page-content-inner page-body ${pageWidthClass}`}>
             {error && (
-              <p role="alert" style={{ color: 'var(--status-error)' }}>
-                {error}
-              </p>
+              <ErrorNotice message={error} onDismiss={() => setError('')} />
+            )}
+            {camerasError && (page === 'dashboard' || page === 'cameras') && (
+              <ErrorNotice message={camerasError} onRetry={retryCameras} />
             )}
             {activityNotice && (
               <p className="activity-toast" role="status">
@@ -1176,6 +1199,7 @@ export function App() {
 
             {page === 'dashboard' &&
               cameras.length === 0 &&
+              !camerasError &&
               (household?.role === 'owner' || household?.role === 'admin' ? (
                 <section className="dash-empty">
                   <h1>Add your first device</h1>
@@ -1493,7 +1517,9 @@ export function App() {
                 <CameraBrowser cameras={hostCameras} key={user.id}>
                   {(items) =>
                     items.length === 0 && pendingDevices.length === 0 ? (
-                      <p className="empty">No cameras yet.</p>
+                      camerasError ? null : (
+                        <p className="empty">No cameras yet.</p>
+                      )
                     ) : (
                       <div className="camera-tile-grid">
                         {items.map((camera) => (
@@ -1647,7 +1673,11 @@ export function App() {
             error={error}
             state={pairingState}
             reconnecting={reconnectDeviceId.current !== null}
-            onCopyError={() => setError('Could not copy the setup link.')}
+            onCopyError={() =>
+              setError(
+                'Couldn’t copy the setup link. Select it and copy it manually.',
+              )
+            }
             onDismiss={cancelPairing}
             onRetry={() => void createPairingCode()}
           />

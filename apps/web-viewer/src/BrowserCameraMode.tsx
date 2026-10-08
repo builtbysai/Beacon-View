@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { ApiError, request } from './api';
+import { friendlyError, mediaErrorMessage } from './friendly-errors';
 import { BrowserProducer } from './BrowserProducer';
 import { Brand, Icon } from './Icon';
 import { ModalDialog } from './ModalDialog';
@@ -335,10 +336,10 @@ export function BrowserCameraMode({
         !devices.some((device) => device.deviceId === microphoneIdRef.current)
       )
         setMicrophoneId('');
-    } catch {
+    } catch (error) {
       setMicrophones([]);
       setError(
-        'Microphone access was denied, so this camera can’t share sound.',
+        `This camera can’t share sound. ${mediaErrorMessage(error, 'microphone')}`,
       );
     }
   }
@@ -403,7 +404,9 @@ export function BrowserCameraMode({
   async function discover() {
     setError('');
     if (!window.isSecureContext || !navigator.mediaDevices) {
-      setError('Browser Camera Mode requires a trusted HTTPS connection.');
+      setError(
+        'Camera Mode needs a secure connection. Open Beacon from its https:// address.',
+      );
       return;
     }
     try {
@@ -429,11 +432,7 @@ export function BrowserCameraMode({
       );
       setSelectedKey((current) => current || devices[0]?.deviceId || '');
     } catch (caught) {
-      setError(
-        caught instanceof DOMException && caught.name === 'NotAllowedError'
-          ? 'Camera permission was denied. Allow access to use Camera Mode.'
-          : 'No usable camera was found.',
-      );
+      setError(mediaErrorMessage(caught, 'camera'));
     }
   }
 
@@ -521,7 +520,9 @@ export function BrowserCameraMode({
         (next, viewers, retries) => {
           if (next === 'error') {
             stop();
-            setError('Camera access was denied or revoked.');
+            setError(
+              'Beacon lost access to the camera. Allow camera access in your browser’s site settings, then start the camera again.',
+            );
             return;
           }
           setState(next);
@@ -538,10 +539,10 @@ export function BrowserCameraMode({
         },
         (wakeError) =>
           setError(
-            wakeError instanceof DOMException &&
-              wakeError.name === 'NotAllowedError'
-              ? 'Camera permission was removed. Allow camera access to keep this camera available.'
-              : 'The camera could not turn on for a viewer. Check that no other app is using it.',
+            `Someone tried to view this camera, but it couldn’t turn on. ${mediaErrorMessage(
+              wakeError,
+              microphoneRef.current ? 'camera and microphone' : 'camera',
+            )}`,
           ),
         setTalking,
       );
@@ -554,9 +555,12 @@ export function BrowserCameraMode({
       setError(
         standalone && caught instanceof ApiError && caught.status === 401
           ? 'Enter a fresh pairing code from a signed-in Beacon account.'
-          : caught instanceof Error
-            ? caught.message
-            : 'Unable to start camera',
+          : caught instanceof DOMException
+            ? mediaErrorMessage(
+                caught,
+                microphoneRef.current ? 'camera and microphone' : 'camera',
+              )
+            : friendlyError(caught, 'The camera couldn’t start. Try again.'),
       );
     }
   }
@@ -587,7 +591,10 @@ export function BrowserCameraMode({
     if (!deviceId) return;
     void acquireStream(deviceId).then(
       (stream) => clip.start(stream),
-      () => setError('The camera could not turn on to record.'),
+      (error: unknown) =>
+        setError(
+          `The camera couldn’t turn on to record. ${mediaErrorMessage(error, 'camera')}`,
+        ),
     );
   }
 

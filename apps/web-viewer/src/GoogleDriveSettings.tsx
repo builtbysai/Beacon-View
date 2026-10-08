@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { ApiError, request } from './api';
+import { friendlyError } from './friendly-errors';
 import { SettingsCard, SettingsRow } from './SettingsUI';
 
 interface DriveStatus {
@@ -29,7 +30,7 @@ export function GoogleDriveSettings() {
         'Google Drive permission was not granted. Try again when ready.',
       );
     } else if (result === 'failed') {
-      setError('Google Drive could not be connected. Please try again.');
+      setError('Google Drive couldn’t be connected. Try again.');
     }
     if (result) {
       parameters.delete('drive');
@@ -48,9 +49,10 @@ export function GoogleDriveSettings() {
       setStatus(await request<DriveStatus>('/api/drive/status'));
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Unable to load Drive status',
+        friendlyError(
+          caught,
+          'Google Drive status couldn’t be loaded. Try again.',
+        ),
       );
     }
   }
@@ -68,7 +70,7 @@ export function GoogleDriveSettings() {
       setMessage('Google Drive connection verified.');
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Drive verification failed',
+        friendlyError(caught, 'Google Drive couldn’t be checked. Try again.'),
       );
       // Verification can discover the connection expired; show that state.
       if (caught instanceof ApiError && caught.code) void load(false);
@@ -97,7 +99,10 @@ export function GoogleDriveSettings() {
       setMessage('Google Drive disconnected.');
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Unable to disconnect Drive',
+        friendlyError(
+          caught,
+          'Google Drive couldn’t be disconnected. Try again.',
+        ),
       );
     } finally {
       setBusy(false);

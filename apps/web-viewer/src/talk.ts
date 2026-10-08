@@ -6,8 +6,24 @@ export type TalkState =
   | 'connecting'
   | 'speaking'
   | 'busy'
+  /** Talk can't start on this connection (not connected yet, the camera
+   * didn't answer, or it offers no audio channel). */
   | 'unavailable'
+  /** This viewer's access doesn't include talking through this camera. */
+  | 'not_allowed'
+  /** The browser or OS blocked the microphone. */
+  | 'mic_blocked'
+  /** The microphone is missing, in use by another app, or stopped. */
+  | 'mic_failed'
   | 'recovering';
+
+/** Which failure a microphone error is, for the person to fix. */
+function microphoneFailure(error: unknown): TalkState {
+  return error instanceof DOMException &&
+    (error.name === 'NotAllowedError' || error.name === 'SecurityError')
+    ? 'mic_blocked'
+    : 'mic_failed';
+}
 
 /** One explicit microphone consent belongs to one live connection only. */
 export class TalkSession {
@@ -60,21 +76,30 @@ export class TalkSession {
     }
     const current = ++this.generation;
     this.update('permission');
+    let stream: MediaStream;
     try {
-      const stream = await openTalkMicrophone();
+      stream = await openTalkMicrophone();
+    } catch (error) {
+      if (current === this.generation && !this.disposed)
+        this.stop(microphoneFailure(error));
+      return;
+    }
+    try {
       if (this.disposed || current !== this.generation) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
       this.stream = stream;
       const track = stream.getAudioTracks()[0];
-      if (!track || track.readyState === 'ended')
-        throw new Error('Microphone unavailable');
+      if (!track || track.readyState === 'ended') {
+        this.stop('mic_failed');
+        return;
+      }
       // No microphone audio leaves the viewer until the server grants ownership.
       stream.getTracks().forEach((item) => {
         item.enabled = false;
       });
-      track.onended = () => this.stop('unavailable');
+      track.onended = () => this.stop('mic_failed');
       this.sender = transceiver.sender;
       await this.sender.replaceTrack(track);
       if (this.disposed || current !== this.generation) return;
@@ -106,7 +131,7 @@ export class TalkSession {
         message.reason === 'busy'
           ? 'busy'
           : message.reason === 'not_allowed'
-            ? 'unavailable'
+            ? 'not_allowed'
             : 'idle',
       );
     } else if (message.active) {

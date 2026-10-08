@@ -201,7 +201,7 @@ export function LiveVideo({
     const isMediaStream =
       typeof MediaStream !== 'undefined' && stream instanceof MediaStream;
     if (!isMediaStream) {
-      setControlError('Recording is not available yet -- still connecting.');
+      setControlError('Wait for the video to connect, then record.');
       return;
     }
     setControlError('');

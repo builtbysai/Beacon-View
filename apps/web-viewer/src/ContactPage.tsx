@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 
 import { request } from './api';
+import { friendlyError } from './friendly-errors';
 import { Icon } from './Icon';
 import { PublicHeader } from './PublicHeader';
 import './ContactPage.css';
@@ -38,9 +39,10 @@ export function ContactPage({
       formElement.reset();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Your message could not be sent. Please try again.',
+        friendlyError(
+          caught,
+          'Your message could not be sent. Please try again.',
+        ),
       );
     } finally {
       setBusy(false);

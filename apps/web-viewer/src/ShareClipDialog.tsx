@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { request } from './api';
+import { friendlyError } from './friendly-errors';
 import { Icon } from './Icon';
 import { ModalDialog } from './ModalDialog';
 import './ShareClipDialog.css';
@@ -53,7 +54,8 @@ export function ShareClipDialog({
         if (!cancelled) setActiveLink(result.active);
       })
       .catch(() => {
-        if (!cancelled) setError('Could not check for an existing link.');
+        if (!cancelled)
+          setError('Couldn’t check for an existing share link. Try again.');
       })
       .finally(() => {
         if (!cancelled) setChecking(false);
@@ -78,9 +80,7 @@ export function ShareClipDialog({
       setActiveLink(null);
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'The share link could not be created.',
+        friendlyError(caught, 'The share link couldn’t be created. Try again.'),
       );
     } finally {
       setBusy(false);
@@ -97,9 +97,10 @@ export function ShareClipDialog({
       setActiveLink(null);
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'The share link could not be revoked.',
+        friendlyError(
+          caught,
+          'The share link couldn’t be turned off. Try again.',
+        ),
       );
     } finally {
       setBusy(false);
@@ -112,7 +113,7 @@ export function ShareClipDialog({
       setCopied(true);
       window.setTimeout(() => setCopied(false), 3_000);
     } catch {
-      setError('Could not copy the link. Select and copy it manually.');
+      setError('Couldn’t copy the link. Select it and copy it manually.');
     }
   }
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { ApiError, request } from './api';
+import { friendlyError } from './friendly-errors';
 import { downloadBlob } from './browser-download';
 import { Brand } from './Icon';
 import {
@@ -75,9 +76,7 @@ export function SharedRecordingPage() {
       setPlayback({ type: blob.type, url });
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'The clip could not be loaded.',
+        friendlyError(caught, 'The clip couldn’t be loaded. Try again.'),
       );
     } finally {
       setLoadingClip(false);
@@ -95,9 +94,7 @@ export function SharedRecordingPage() {
       );
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'The clip could not be downloaded.',
+        friendlyError(caught, 'The clip couldn’t be downloaded. Try again.'),
       );
     } finally {
       setLoadingClip(false);
