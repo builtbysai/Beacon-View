@@ -1,11 +1,16 @@
 package com.beaconsecureview.camera
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
@@ -48,27 +53,61 @@ import kotlinx.coroutines.withContext
 internal fun BeaconHouseholdOverviewCard(
     household: BeaconApi.HouseholdSummary?,
     cameraCount: Int,
+    api: BeaconApi,
+    sessionToken: String,
 ) {
+    var memberCount by remember(sessionToken, household?.id) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(sessionToken, household?.id) {
+        if (household?.role in setOf("owner", "admin")) {
+            memberCount = withContext(Dispatchers.IO) {
+                runCatching { api.householdSharing(sessionToken).members.count { it.status == "active" } }.getOrNull()
+            }
+        }
+    }
     BeaconSectionHeader("Household", "Your shared Beacon space.")
     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
         if (household == null) {
             Text("Loading household…", color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
-            Text(household.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(28.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                BeaconHouseholdStat("CAMERAS", cameraCount.toString())
-                BeaconHouseholdStat("YOUR ROLE", household.role.replaceFirstChar { it.uppercase() })
+                Box(
+                    modifier = Modifier.size(48.dp).background(Color(0xFFEFF6FF), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(household.name.split(' ').filter { it.isNotBlank() }.take(2).joinToString("") { it.take(1).uppercase() },
+                        color = Color(0xFF2563EB), fontWeight = FontWeight.Bold)
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(household.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (household.role == "owner") "Your household" else "Shared household",
+                            modifier = Modifier.background(Color(0xFFDCF7ED), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 4.dp),
+                            color = Color(0xFF047857), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
+                        )
+                        Text("You are ${household.role.replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            Column(modifier = Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                BeaconHouseholdStat("PEOPLE", memberCount?.toString() ?: "—", if (memberCount == null) "Loading membership" else "In this household")
+                BeaconHouseholdStat("CAMERAS", cameraCount.toString(), "Available here")
+                BeaconHouseholdStat("YOUR ROLE", household.role.replaceFirstChar { it.uppercase() },
+                    if (household.role == "owner") "Full household access" else "Based on your membership")
             }
         }
     }
 }
 
 @Composable
-private fun BeaconHouseholdStat(label: String, value: String) {
-    Column {
+private fun BeaconHouseholdStat(label: String, value: String, detail: String) {
+    Column(modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f), RoundedCornerShape(12.dp)).padding(12.dp)) {
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
@@ -76,6 +115,7 @@ private fun BeaconHouseholdStat(label: String, value: String) {
             fontWeight = FontWeight.Bold,
         )
         Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
+        Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

@@ -374,6 +374,7 @@ class StreamingStateTest {
         assertEquals(listOf("Kitchen"), attention.map { it.name })
         assertEquals("Pixel needs attention", homeAttentionTitle(attention))
         assertEquals("Camera is offline. Reconnect it to restore live viewing.", homeAttentionDescription(attention))
+        assertEquals("Camera needs to be paired.", homeAttentionDescription(listOf(attention.first().copy(needsPairing = true))))
     }
 
     @Test
@@ -381,6 +382,7 @@ class StreamingStateTest {
         val cameras = (1..5).map { BeaconApi.MonitorCamera("id$it", "Cam $it", "Pixel", true, false, 0) }
         assertEquals(listOf("id1", "id2", "id3", "id4"), homeFavoriteCameras(cameras, emptySet()).map { it.id })
         assertEquals(listOf("id5"), homeFavoriteCameras(cameras, setOf("id5")).map { it.id })
+        assertEquals(emptyList<String>(), homeFavoriteCameras(cameras, emptySet(), hasSavedFavorites = true).map { it.id })
     }
 
     @Test

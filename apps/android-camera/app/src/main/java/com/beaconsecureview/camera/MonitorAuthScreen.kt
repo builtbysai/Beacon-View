@@ -3,6 +3,7 @@ package com.beaconsecureview.camera
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,6 +68,7 @@ internal fun MonitorAuthScreen(
     onSignIn: () -> Unit,
     onCreateAccount: () -> Unit,
     onGoogleSignIn: () -> Unit,
+    googleSignInAvailable: Boolean,
     onCameraMode: () -> Unit,
     requestPasswordReset: suspend (String) -> Result<Unit>,
 ) {
@@ -116,7 +118,7 @@ internal fun MonitorAuthScreen(
                             )
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Xs)) {
-                            Text("Sign in", style = MaterialTheme.typography.headlineMedium)
+                            Text("Sign in", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
                             Text("Continue to your Beacon cameras.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Sm)) {
@@ -165,31 +167,26 @@ internal fun MonitorAuthScreen(
                         ) { Text(if (busy) "Signing in…" else "Sign in") }
                         AuthDivider()
                         OutlinedButton(
-                            enabled = !busy,
+                            enabled = !busy && googleSignInAvailable,
                             onClick = onGoogleSignIn,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             shape = RoundedCornerShape(BeaconRadii.Md),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
                         ) {
                             Text("G", color = Color(0xFF4285F4), fontWeight = FontWeight.ExtraBold)
-                            Text("Continue with Google", modifier = Modifier.padding(start = BeaconSpacing.Sm))
+                            Text(if (googleSignInAvailable) "Continue with Google" else "Google sign-in unavailable", modifier = Modifier.padding(start = BeaconSpacing.Sm), fontWeight = FontWeight.Bold)
                         }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable {
+                                onPasswordChange("")
+                                confirmPassword = ""
+                                view = AndroidAuthView.Register
+                            },
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Text("New to Beacon?", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            TextButton(
-                                onClick = {
-                                    onPasswordChange("")
-                                    confirmPassword = ""
-                                    view = AndroidAuthView.Register
-                                },
-                            ) {
-                                Text(
-                                    "Create an account",
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Bold,
-                                    textDecoration = TextDecoration.Underline,
-                                )
-                            }
+                            Text("Create an account", modifier = Modifier.padding(start = BeaconSpacing.Xs), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, textDecoration = TextDecoration.Underline)
                         }
                         TextButton(onClick = onCameraMode, modifier = Modifier.fillMaxWidth()) {
                             Text("Use this device as a camera")
@@ -207,7 +204,7 @@ internal fun MonitorAuthScreen(
                             )
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Xs)) {
-                            Text("Create your account", style = MaterialTheme.typography.headlineMedium)
+                            Text("Create your account", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
                             Text("Set up Beacon in a few moments.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Sm)) {
@@ -265,14 +262,14 @@ internal fun MonitorAuthScreen(
                         ) { Text(if (busy) "Creating account…" else "Create account") }
                         AuthDivider()
                         OutlinedButton(
-                            enabled = !busy,
+                            enabled = !busy && googleSignInAvailable,
                             onClick = onGoogleSignIn,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             shape = RoundedCornerShape(BeaconRadii.Md),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
                         ) {
                             Text("G", color = Color(0xFF4285F4), fontWeight = FontWeight.ExtraBold)
-                            Text("Continue with Google", modifier = Modifier.padding(start = BeaconSpacing.Sm))
+                            Text(if (googleSignInAvailable) "Continue with Google" else "Google sign-in unavailable", modifier = Modifier.padding(start = BeaconSpacing.Sm), fontWeight = FontWeight.Bold)
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                             Text("Already have an account?", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -359,11 +356,11 @@ internal fun MonitorAuthScreen(
         Text("Beacon · Private alpha", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(horizontalArrangement = Arrangement.spacedBy(BeaconSpacing.Xl)) {
             TextButton(
-                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BEACON_API_URL.trimEnd('/')}/trust"))) },
+                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BEACON_WEB_URL.trimEnd('/')}/trust"))) },
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
             ) { Text("Trust & privacy", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             TextButton(
-                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BEACON_API_URL.trimEnd('/')}/contact"))) },
+                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BEACON_WEB_URL.trimEnd('/')}/contact"))) },
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
             ) { Text("Contact", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }

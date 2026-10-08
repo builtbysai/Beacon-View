@@ -32,9 +32,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -111,13 +113,14 @@ internal object BeaconRadii {
 
 internal enum class BeaconThemePreference { Light, System, Dark }
 
+@OptIn(ExperimentalTextApi::class)
 private val BeaconInter =
     FontFamily(
-        Font(R.font.inter_variable, FontWeight.Normal),
-        Font(R.font.inter_variable, FontWeight.Medium),
-        Font(R.font.inter_variable, FontWeight.SemiBold),
-        Font(R.font.inter_variable, FontWeight.Bold),
-        Font(R.font.inter_variable, FontWeight.ExtraBold),
+        Font(R.font.inter_variable, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+        Font(R.font.inter_variable, FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+        Font(R.font.inter_variable, FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+        Font(R.font.inter_variable, FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+        Font(R.font.inter_variable, FontWeight.ExtraBold, variationSettings = FontVariation.Settings(FontVariation.weight(800))),
     )
 
 /** PWA type tokens (`--text-xs` through `--text-4xl`) mapped to Compose roles. */

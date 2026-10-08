@@ -5,12 +5,15 @@ import android.net.Uri
 import android.widget.MediaController
 import android.widget.VideoView
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,6 +30,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,6 +52,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.Dispatchers
@@ -91,13 +96,14 @@ internal fun AndroidRecordingLibrary(
         "Clips your cameras recorded, encrypted in your connected Google Drive. Playback and download happen only on this device.",
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    OutlinedButton(onClick = onRefresh) {
+    OutlinedButton(onClick = onRefresh, shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
         Icon(Icons.Outlined.Refresh, null)
         Text("Refresh", modifier = Modifier.padding(start = 6.dp))
     }
 
-    if (recordings.isNotEmpty()) {
-        androidx.compose.material3.OutlinedTextField(
+    if (loaded) {
+        OutlinedTextField(
             value = search,
             onValueChange = { search = it },
             modifier = Modifier.fillMaxWidth(),
@@ -108,7 +114,8 @@ internal fun AndroidRecordingLibrary(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val cameraLabel = cameras.find { it.id == cameraFilter }?.deviceName ?: "All devices"
             Column(modifier = Modifier.weight(1f)) {
-                OutlinedButton(onClick = { cameraMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { cameraMenuOpen = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
                     Text(cameraLabel, maxLines = 1)
                 }
                 androidx.compose.material3.DropdownMenu(expanded = cameraMenuOpen, onDismissRequest = { cameraMenuOpen = false }) {
@@ -123,7 +130,8 @@ internal fun AndroidRecordingLibrary(
             }
             Column(modifier = Modifier.weight(1f)) {
                 val timeLabel = when (timeFilterDays) { 1 -> "Last 24 hours"; 7 -> "Last 7 days"; else -> "All time" }
-                OutlinedButton(onClick = { timeMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { timeMenuOpen = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
                     Text(timeLabel, maxLines = 1)
                 }
                 androidx.compose.material3.DropdownMenu(expanded = timeMenuOpen, onDismissRequest = { timeMenuOpen = false }) {
@@ -136,7 +144,7 @@ internal fun AndroidRecordingLibrary(
     }
 
     val visibleRecordings = filteredRecordings(recordings, cameraFilter, timeFilterDays, search)
-    if (recordings.isNotEmpty()) {
+    if (loaded) {
         Text(
             "${visibleRecordings.size} ${if (visibleRecordings.size == 1) "clip" else "clips"}",
             fontWeight = FontWeight.Bold,
@@ -146,17 +154,26 @@ internal fun AndroidRecordingLibrary(
     when {
         !loaded -> Text("Loading recordings…", color = MaterialTheme.colorScheme.onSurfaceVariant)
         recordings.isEmpty() -> {
-            BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Outlined.Movie, null)
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 260.dp)
+                    .beaconDashedBorder(MaterialTheme.colorScheme.outlineVariant, 14.dp).padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(Icons.Outlined.Movie, null,
+                    modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50)).padding(12.dp))
                 Text("No recorded clips yet.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     "A clip appears here once a recording finishes uploading.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
                 )
             }
         }
         visibleRecordings.isEmpty() -> {
-            BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.fillMaxWidth().heightIn(min = 260.dp)
+                .beaconDashedBorder(MaterialTheme.colorScheme.outlineVariant, 14.dp).padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text("No matching clips", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text("No clips match these filters.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

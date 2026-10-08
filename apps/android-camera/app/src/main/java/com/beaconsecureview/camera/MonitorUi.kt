@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -83,11 +84,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
@@ -102,6 +106,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -134,6 +139,7 @@ internal fun MonitorHome(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showPassword by rememberSaveable { mutableStateOf(false) }
+    var googleSignInAvailable by remember { mutableStateOf(true) }
     var cameras by remember { mutableStateOf<List<BeaconApi.MonitorCamera>>(emptyList()) }
     var devices by remember { mutableStateOf<List<BeaconApi.Device>>(emptyList()) }
     var selectedCameraId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -145,6 +151,10 @@ internal fun MonitorHome(
     var favoriteCameraIds by remember(session?.userId) {
         mutableStateOf(session?.let { favoritesStore.read(it.userId) } ?: emptySet())
     }
+    var hasSavedFavorites by remember(session?.userId) {
+        mutableStateOf(session?.let { favoritesStore.hasSaved(it.userId) } ?: false)
+    }
+    var favoritesEditorOpen by rememberSaveable(session?.userId) { mutableStateOf(false) }
     var cameraOrderIds by remember(session?.userId) {
         mutableStateOf(session?.let { orderStore.read(it.userId) } ?: emptyList())
     }
@@ -190,6 +200,12 @@ internal fun MonitorHome(
     var message by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(session) {
+        if (session == null) {
+            withContext(Dispatchers.IO) { runCatching { api.googleSignInAvailable() } }
+                .onSuccess { googleSignInAvailable = it }
+        }
+    }
     var notificationConsent by remember { mutableStateOf(NotificationConsentStore(context).enabled) }
     var notificationBusy by remember { mutableStateOf(false) }
     var notificationPreferences by remember(session?.userId) {
@@ -234,6 +250,8 @@ internal fun MonitorHome(
             else message = "Notifications were not allowed. You can change this in Android settings."
         }
     val monitorScrollState = rememberScrollState()
+    val settingsSectionOffsets = remember { mutableStateMapOf<String, Int>() }
+    val settingsSections = listOf("Household", "Notifications", "People & access", "Data & storage", "Security", "Account", "Privacy")
     val navigationPreferences =
         remember(context) { context.getSharedPreferences("beacon_navigation", Context.MODE_PRIVATE) }
 
@@ -318,11 +336,17 @@ internal fun MonitorHome(
                 if (it is AuthorizationLostException) {
                     expireSession()
                 } else {
-                    message = it.userFacingMessage("Cameras are temporarily unavailable")
+                    message = "Cameras are temporarily unavailable. ${it.userFacingMessage("Try again.")}"
                 }
             }
             withContext(Dispatchers.IO) { runCatching { api.devices(token) } }
-                .onSuccess { devices = it }
+                .onSuccess { refreshedDevices ->
+                    devices = refreshedDevices
+                    cameras = cameras.map { camera ->
+                        val device = refreshedDevices.find { it.id == camera.deviceId }
+                        camera.copy(needsPairing = device?.platform == "android" && (device.revoked || !device.online))
+                    }
+                }
                 .onFailure { if (it is AuthorizationLostException) expireSession() }
             if (showLoading) busy = false
         }
@@ -488,6 +512,7 @@ internal fun MonitorHome(
         selectedSettingsDeviceId = null
     }
     BackHandler(enabled = navigationOpen) { navigationOpen = false }
+    BackHandler(enabled = addCameraChoiceOpen) { addCameraChoiceOpen = false }
 
     // Android's conventional phone/tablet breakpoint. Below it, Beacon uses the
     // PWA's mobile drawer (BeaconMonitorTopBar + BeaconMonitorNavigation, unchanged
@@ -533,7 +558,31 @@ internal fun MonitorHome(
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
         Column(modifier = Modifier.fillMaxSize()) {
             if (session != null && !isWideLayout) {
-                BeaconMonitorTopBar(onOpenNavigation = { navigationOpen = true })
+                BeaconMonitorTopBar(
+                    onOpenNavigation = { navigationOpen = true },
+                    onAddCamera = if (!addCameraChoiceOpen && monitorPage in setOf(MonitorPage.Home, MonitorPage.Cameras) && session?.householdRole in setOf("owner", "admin")) {{ addCameraChoiceOpen = true }} else null,
+                )
+            }
+            if (session != null && monitorPage == MonitorPage.Settings && !addCameraChoiceOpen) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    settingsSections.filter { it !in setOf("Notifications", "Security") || session?.householdRole in setOf("owner", "admin") }
+                        .forEach { section ->
+                            val active = settingsSectionOffsets.entries
+                                .filter { monitorScrollState.value >= it.value - 32 }
+                                .maxByOrNull { it.value }?.key ?: "Household"
+                            androidx.compose.material3.TextButton(
+                                onClick = { scope.launch { monitorScrollState.animateScrollTo(settingsSectionOffsets[section] ?: 0) } },
+                                shape = RoundedCornerShape(50),
+                                colors = ButtonDefaults.textButtonColors(
+                                    containerColor = if (active == section) MaterialTheme.colorScheme.surface else Color.Transparent,
+                                    contentColor = if (active == section) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
+                            ) { Text(section, fontWeight = if (active == section) FontWeight.Bold else FontWeight.Medium) }
+                        }
+                }
             }
             Column(
                 modifier =
@@ -591,6 +640,7 @@ internal fun MonitorHome(
                     }
                 },
                 onGoogleSignIn = onGoogleSignIn,
+                googleSignInAvailable = googleSignInAvailable,
                 onCameraMode = onCameraMode,
                 requestPasswordReset = { resetEmail ->
                     withContext(Dispatchers.IO) { runCatching { api.requestPasswordReset(resetEmail) } }
@@ -605,39 +655,62 @@ internal fun MonitorHome(
             // the session they started with instead of risking a null-pointer
             // crash.
             val currentSession = session!!
-            when (monitorPage) {
+            if (addCameraChoiceOpen) {
+                BeaconAddCameraChoicePage(
+                    onDismiss = { addCameraChoiceOpen = false },
+                    onPairAnotherDevice = {
+                        pairAnotherDeviceOpen = true
+                    },
+                    onUseThisDevice = {
+                        addCameraChoiceOpen = false
+                        onSetUpThisDevice(currentSession.token)
+                    },
+                )
+            } else when (monitorPage) {
                 MonitorPage.Home -> {
                     val isHouseholdManager = currentSession.householdRole == "owner" || currentSession.householdRole == "admin"
                     val hostCameras = monitorHostCameras(cameras)
                     if (cameras.isEmpty()) {
-                        // Mirrors the PWA's .dash-empty card exactly (App.css/App.tsx):
-                        // a plain, dashed-outline card -- not a solid hero panel.
-                        Column(
-                            modifier =
-                                Modifier.fillMaxWidth()
-                                    .beaconDashedBorder(MaterialTheme.colorScheme.outlineVariant, BeaconRadii.Lg)
-                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(BeaconRadii.Lg))
-                                    .padding(40.dp),
-                            verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Lg),
+                        val loadFailed = message.startsWith("Cameras are temporarily unavailable.")
+                        Box(
+                            modifier = Modifier.fillMaxWidth()
+                                .heightIn(min = 520.dp)
+                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(BeaconRadii.Lg))
+                                .beaconDashedBorder(MaterialTheme.colorScheme.outlineVariant, BeaconRadii.Lg)
+                                .padding(28.dp),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Text(
-                                if (isHouseholdManager) "Add your first device" else "No cameras shared with you yet",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                if (isHouseholdManager) {
-                                    "Turn a spare phone, tablet, or computer into a camera."
-                                } else {
-                                    "Ask the household owner or an admin to grant you access to a camera from Settings → People & access."
-                                },
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            if (isHouseholdManager) {
-                                Button(onClick = { addCameraChoiceOpen = true }) {
-                                    Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
-                                    Text("Add device", modifier = Modifier.padding(start = 6.dp))
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Xl),
+                            ) {
+                                Text(
+                                    if (loadFailed) "Cameras are temporarily unavailable"
+                                    else if (isHouseholdManager) "Add your first device" else "No cameras shared with you yet",
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                )
+                                Text(
+                                    if (loadFailed) message.removePrefix("Cameras are temporarily unavailable. ")
+                                    else if (isHouseholdManager) "Turn a spare phone, tablet, or computer into a camera."
+                                    else "Ask the household owner or an admin to grant you access to a camera from Settings → Household sharing.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                )
+                                if (loadFailed) {
+                                    OutlinedButton(onClick = { refresh(currentSession.token) }) { Text("Retry") }
+                                } else if (isHouseholdManager) {
+                                    Button(
+                                        onClick = { addCameraChoiceOpen = true },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.surface),
+                                        shape = RoundedCornerShape(BeaconRadii.Md),
+                                    ) {
+                                        Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
+                                        Text("Add device", modifier = Modifier.padding(start = 6.dp), fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
@@ -653,14 +726,18 @@ internal fun MonitorHome(
                         val attentionCameras = homeAttentionCameras(hostCameras)
                         if (attentionCameras.isNotEmpty()) {
                             BeaconPanel(modifier = Modifier.fillMaxWidth().padding(top = BeaconSpacing.Lg)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(BeaconSpacing.Md)) {
+                                Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Sm)) {
                                     Icon(Icons.Outlined.Warning, null, tint = BeaconWarning)
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(homeAttentionTitle(attentionCameras), fontWeight = FontWeight.Bold)
-                                        Text(homeAttentionDescription(attentionCameras), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                                    }
-                                    androidx.compose.material3.TextButton(onClick = { monitorPage = MonitorPage.Cameras }) {
-                                        Text(if (attentionCameras.size == 1) "Check status" else "Review ${attentionCameras.size} cameras")
+                                    Text(homeAttentionTitle(attentionCameras), fontWeight = FontWeight.Bold)
+                                    Text(homeAttentionDescription(attentionCameras), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                    androidx.compose.material3.TextButton(onClick = {
+                                        if (attentionCameras.size == 1) selectedSettingsDeviceId = attentionCameras[0].deviceId
+                                        monitorPage = MonitorPage.Cameras
+                                    }) {
+                                        Text(if (attentionCameras.size == 1 && attentionCameras[0].needsPairing)
+                                            "Reconnect ${attentionCameras[0].deviceName} →"
+                                        else if (attentionCameras.size == 1) "Check status →"
+                                        else "Review ${attentionCameras.size} cameras →")
                                     }
                                 }
                             }
@@ -671,9 +748,9 @@ internal fun MonitorHome(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text("Favorites", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            androidx.compose.material3.TextButton(onClick = { monitorPage = MonitorPage.Cameras }) { Text("Edit") }
+                            androidx.compose.material3.TextButton(onClick = { favoritesEditorOpen = true }) { Text("Edit") }
                         }
-                        val favoriteCameras = homeFavoriteCameras(hostCameras, favoriteCameraIds)
+                        val favoriteCameras = homeFavoriteCameras(hostCameras, favoriteCameraIds, hasSavedFavorites)
                         if (favoriteCameras.isEmpty()) {
                             Column(
                                 modifier =
@@ -684,16 +761,32 @@ internal fun MonitorHome(
                                 verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Md),
                             ) {
                                 Text("No favorites chosen yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                OutlinedButton(onClick = { monitorPage = MonitorPage.Cameras }) { Text("Choose favorites") }
+                                OutlinedButton(onClick = { favoritesEditorOpen = true }) { Text("Choose favorites") }
                             }
                         } else {
                             MonitorCameraGrid(
                                 cameras = favoriteCameras,
                                 onView = { selectedCameraId = it.id },
+                                onSettings = {
+                                    selectedSettingsDeviceId = it.deviceId
+                                    monitorPage = MonitorPage.Cameras
+                                },
+                                onRemoveFavorite = { camera ->
+                                    val currentIds = if (hasSavedFavorites) favoriteCameraIds
+                                        else favoriteCameras.map { it.id }.toSet()
+                                    val updated = currentIds - camera.id
+                                    favoritesStore.replace(currentSession.userId, updated)
+                                    favoriteCameraIds = updated
+                                    hasSavedFavorites = true
+                                },
                             )
                         }
+                        androidx.compose.material3.TextButton(
+                            onClick = { monitorPage = MonitorPage.Cameras },
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                        ) { Text("View all ${hostCameras.size} device${if (hostCameras.size == 1) "" else "s"} →") }
                     }
-                    BeaconPanel(modifier = Modifier.fillMaxWidth().padding(top = BeaconSpacing.Lg)) {
+                    if (cameras.isNotEmpty()) BeaconPanel(modifier = Modifier.fillMaxWidth().padding(top = BeaconSpacing.Lg)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -710,11 +803,36 @@ internal fun MonitorHome(
                         when {
                             !motionEventsLoaded -> Text("Loading activity…", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             motionEvents.isEmpty() -> Text(
-                                "Motion events will appear here after you connect a camera.",
+                                "No recent activity.",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = BeaconSpacing.Xxl),
                             )
                             else -> motionEvents.take(3).forEach { event -> MotionEventPreviewRow(event) }
                         }
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                monitorPage = MonitorPage.Events
+                                eventsView = MonitorEventsView.Activity
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Open Activity") }
+                    }
+                    if (favoritesEditorOpen) {
+                        MonitorFavoritesEditor(
+                            cameras = hostCameras,
+                            selectedIds = if (hasSavedFavorites) favoriteCameraIds
+                                else homeFavoriteCameras(hostCameras, favoriteCameraIds).map { it.id }.toSet(),
+                            onToggle = { cameraId ->
+                                val currentIds = if (hasSavedFavorites) favoriteCameraIds
+                                    else homeFavoriteCameras(hostCameras, favoriteCameraIds).map { it.id }.toSet()
+                                val updated = toggledFavoriteIds(currentIds, cameraId)
+                                favoritesStore.replace(currentSession.userId, updated)
+                                favoriteCameraIds = updated
+                                hasSavedFavorites = true
+                            },
+                            onDismiss = { favoritesEditorOpen = false },
+                        )
                     }
                 }
                 MonitorPage.Cameras -> {
@@ -839,22 +957,15 @@ internal fun MonitorHome(
                             },
                         )
                     } else {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("Cameras", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-                            if (currentSession.householdRole !in setOf("viewer", "guest")) {
-                                Button(onClick = { addCameraChoiceOpen = true }) {
-                                    Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
-                                    Text("Add camera", modifier = Modifier.padding(start = 6.dp))
-                                }
-                            }
-                        }
                         if (busy) Text("Loading cameras…")
                         if (!busy && orderedCameras.isEmpty()) {
-                            Text("No cameras yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Box(
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 116.dp)
+                                    .beaconDashedBorder(MaterialTheme.colorScheme.outlineVariant, 12.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text("No cameras yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         } else if (!busy) {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1020,8 +1131,9 @@ internal fun MonitorHome(
                     }
                 }
                 MonitorPage.Settings -> {
-                    Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-                    BeaconHouseholdOverviewCard(household = household, cameraCount = cameras.size)
+                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["Household"] = it.positionInParent().y.roundToInt() })
+                    BeaconHouseholdOverviewCard(household = household, cameraCount = cameras.size, api = api, sessionToken = currentSession.token)
+                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["Notifications"] = it.positionInParent().y.roundToInt() })
                     BeaconSectionHeader("Notifications", "Control private alerts from this phone.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("Notifications", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -1091,6 +1203,7 @@ internal fun MonitorHome(
                             }
                         }
                     }
+                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["People & access"] = it.positionInParent().y.roundToInt() })
                     BeaconPeopleAccessPanel(
                         api = api,
                         sessionToken = currentSession.token,
@@ -1098,6 +1211,7 @@ internal fun MonitorHome(
                         isAdmin = currentSession.householdRole == "owner" || currentSession.householdRole == "admin",
                         onAuthorizationLost = ::expireSession,
                     )
+                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["Data & storage"] = it.positionInParent().y.roundToInt() })
                     BeaconSectionHeader("Data & storage", "Choose how long motion metadata is kept.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("Motion history", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -1151,6 +1265,7 @@ internal fun MonitorHome(
                             onAuthorizationLost = ::expireSession,
                         )
                     }
+                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["Security"] = it.positionInParent().y.roundToInt() })
                     BeaconSectionHeader("Security", "Review signed-in devices and camera access.")
                     BeaconSignedInDevicesPanel(
                         api = api,
@@ -1187,6 +1302,7 @@ internal fun MonitorHome(
                             }
                         }
                     }
+                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["Account"] = it.positionInParent().y.roundToInt() })
                     BeaconSectionHeader("Account", "Manage your signed-in session and data.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         BeaconAccountProfileCard(
@@ -1210,6 +1326,7 @@ internal fun MonitorHome(
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                         ) { Text("Delete account") }
                     }
+                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["Privacy"] = it.positionInParent().y.roundToInt() })
                     BeaconSectionHeader("Privacy", "Understand the data Beacon keeps and where to find the full details.")
                     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                         Text("Your privacy defaults", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -1240,7 +1357,7 @@ internal fun MonitorHome(
                             }
                             OutlinedButton(
                                 onClick = {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BEACON_API_URL.trimEnd('/')}/trust")))
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BEACON_WEB_URL.trimEnd('/')}/trust")))
                                 },
                             ) { Text("View details") }
                         }
@@ -1260,19 +1377,6 @@ internal fun MonitorHome(
                 )
             }
         }
-        }
-        if (addCameraChoiceOpen && session != null) {
-            BeaconAddCameraChoiceDialog(
-                onDismiss = { addCameraChoiceOpen = false },
-                onPairAnotherDevice = {
-                    addCameraChoiceOpen = false
-                    pairAnotherDeviceOpen = true
-                },
-                onUseThisDevice = {
-                    addCameraChoiceOpen = false
-                    onSetUpThisDevice(session!!.token)
-                },
-            )
         }
         if (pairAnotherDeviceOpen && session != null) {
             BeaconPairAnotherDeviceDialog(
@@ -1346,13 +1450,14 @@ internal fun MonitorHome(
                 themePreference = themePreference,
                 onDismiss = { navigationOpen = false },
                 onSelect = {
+                    addCameraChoiceOpen = false
                     monitorPage = it
                     if (it != MonitorPage.Cameras) selectedSettingsDeviceId = null
                 },
                 onThemePreferenceChange = onThemePreferenceChange,
                 onTrustAndPrivacy = {
-                    monitorPage = MonitorPage.Settings
                     navigationOpen = false
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BEACON_WEB_URL.trimEnd('/')}/trust")))
                 },
                 onLogout = {
                     val active = session ?: return@BeaconMonitorNavigation

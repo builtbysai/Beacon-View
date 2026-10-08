@@ -314,7 +314,7 @@ internal fun normalizePairingCodeInput(value: String): String =
 
 internal fun isValidPairingCode(value: String): Boolean = pairingCodePattern.matches(value)
 
-internal fun parsePairingQr(rawValue: String?, trustedApiUrl: String? = null): String? {
+internal fun parsePairingQr(rawValue: String?, trustedApiUrl: String? = null, trustedWebUrl: String? = null): String? {
     if (rawValue == null) return null
     val normalized = rawValue.trim().uppercase()
     if (isValidPairingCode(normalized)) return normalized
@@ -325,11 +325,15 @@ internal fun parsePairingQr(rawValue: String?, trustedApiUrl: String? = null): S
         ?.let { return it }
 
     val link = runCatching { java.net.URI(rawValue.trim()) }.getOrNull() ?: return null
-    val trustedHost = trustedApiUrl?.let { runCatching { java.net.URI(it).host }.getOrNull() }
+    val trustedOrigins = listOfNotNull(trustedApiUrl, trustedWebUrl).mapNotNull { runCatching { java.net.URI(it) }.getOrNull() }
+    val trustedLink = trustedOrigins.any { origin ->
+        link.scheme.equals(origin.scheme, ignoreCase = true) &&
+            link.host.equals(origin.host, ignoreCase = true) &&
+            link.port == origin.port &&
+            (link.scheme.equals("https", ignoreCase = true) || BuildConfig.DEBUG)
+    }
     if (
-        !link.scheme.equals("https", ignoreCase = true) ||
-        trustedHost == null ||
-        !link.host.equals(trustedHost, ignoreCase = true) ||
+        !trustedLink ||
         // ADR 0067 added a direct browser setup link alongside the original generic
         // pairing link; the code is the same bearer secret either way, so Android must
         // accept both paths the web app is willing to hand a scanner (app-navigation.ts's

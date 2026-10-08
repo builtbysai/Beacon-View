@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -20,12 +21,15 @@ import androidx.compose.material.icons.outlined.Cameraswitch
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -468,6 +472,7 @@ internal fun MonitorCameraGrid(
     cameras: List<BeaconApi.MonitorCamera>,
     onView: (BeaconApi.MonitorCamera) -> Unit,
     onSettings: ((BeaconApi.MonitorCamera) -> Unit)? = null,
+    onRemoveFavorite: ((BeaconApi.MonitorCamera) -> Unit)? = null,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val columns = monitorColumnCount(maxWidth.value)
@@ -481,6 +486,7 @@ internal fun MonitorCameraGrid(
                             camera = camera,
                             onView = { onView(camera) },
                             onSettings = onSettings?.let { settings -> { settings(camera) } },
+                            onRemoveFavorite = onRemoveFavorite?.let { remove -> { remove(camera) } },
                             modifier = Modifier.width(tileWidth),
                         )
                     }
@@ -580,9 +586,11 @@ private fun MonitorCameraCard(
     camera: BeaconApi.MonitorCamera,
     onView: () -> Unit,
     onSettings: (() -> Unit)?,
+    onRemoveFavorite: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val available = camera.online && !camera.privacyMode
+    var menuOpen by remember { mutableStateOf(false) }
     Column(
         modifier =
             modifier
@@ -609,33 +617,56 @@ private fun MonitorCameraCard(
             modifier =
                 Modifier.fillMaxWidth()
                     .aspectRatio(16f / 9f)
-                    .background(Color(0xFF172437)),
+                    .background(if (camera.viewerCount > 0) Color(0xFF172437) else MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 if (camera.privacyMode) Icons.Outlined.Lock else Icons.Outlined.Videocam,
                 null,
-                tint = Color(0xFF7FA3C9),
-                modifier = Modifier.size(42.dp),
+                tint = if (camera.viewerCount > 0) Color(0xFFDCE5EF) else MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(38.dp),
             )
-            BeaconStatusPill(
-                when {
-                    camera.privacyMode -> "PRIVACY ON"
-                    camera.viewerCount > 0 -> "LIVE"
-                    camera.online -> "READY"
-                    else -> "OFFLINE"
-                },
-                when {
-                    camera.privacyMode -> Color(0xFFA78BFA)
-                    camera.viewerCount > 0 -> Color(0xFFF87171)
-                    camera.online -> Color(0xFF34D399)
-                    else -> Color(0xFF8291AB)
-                },
-                Modifier.align(Alignment.TopStart).padding(10.dp),
-            )
+            val statusColor = when {
+                camera.privacyMode -> MaterialTheme.colorScheme.onSurfaceVariant
+                camera.viewerCount > 0 -> BeaconOnline
+                camera.online -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.outline
+            }
+            Surface(modifier = Modifier.align(Alignment.TopStart).padding(10.dp), shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp) {
+                Row(modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Box(Modifier.size(6.dp).background(statusColor, CircleShape))
+                    Text(when {
+                        camera.privacyMode -> "PRIVACY ON"
+                        camera.viewerCount > 0 -> "LIVE"
+                        camera.online -> "READY"
+                        else -> "OFFLINE"
+                    }, color = statusColor, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold)
+                }
+            }
+            if (onSettings != null) {
+                Box(modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)) {
+                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp) {
+                        IconButton(onClick = { menuOpen = true }) {
+                            Icon(Icons.Outlined.MoreVert, "Options for ${camera.deviceName}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(text = { Text("Open live view") }, enabled = available,
+                            onClick = { menuOpen = false; onView() })
+                        DropdownMenuItem(text = { Text("Camera settings") },
+                            onClick = { menuOpen = false; onSettings() })
+                        if (camera.needsPairing) DropdownMenuItem(text = { Text("Reconnect camera") },
+                            onClick = { menuOpen = false; onSettings() })
+                        if (onRemoveFavorite != null) DropdownMenuItem(text = { Text("Remove from Favorites") },
+                            onClick = { menuOpen = false; onRemoveFavorite() })
+                    }
+                }
+            }
             if (camera.viewerCount > 0) {
                 Surface(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+                    modifier = Modifier.align(Alignment.BottomStart).padding(10.dp),
                     shape = RoundedCornerShape(999.dp),
                     color = Color.Black.copy(alpha = 0.65f),
                 ) {
@@ -657,20 +688,28 @@ private fun MonitorCameraCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(camera.deviceName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-                if (onSettings != null) {
-                    IconButton(onClick = onSettings) {
-                        Icon(Icons.Outlined.Settings, "Settings for ${camera.deviceName}", modifier = Modifier.size(20.dp))
-                    }
-                }
             }
-            Text(camera.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (!available) {
-                Text(
-                    if (camera.privacyMode) "Open settings to turn privacy mode off." else "Waiting for camera to reconnect.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 5.dp),
-                )
+            Text("${if (camera.platform == "android") "Android device" else "Browser"} · ${camera.name}", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                val needsAttention = !available && !camera.privacyMode
+                Box(Modifier.size(6.dp).background(when {
+                    needsAttention -> BeaconWarning
+                    camera.privacyMode -> MaterialTheme.colorScheme.outline
+                    else -> BeaconOnline
+                }, CircleShape))
+                Text(when {
+                    camera.privacyMode -> "Privacy on"
+                    available -> "Ready to view"
+                    camera.needsPairing -> "Needs pairing"
+                    else -> "Waiting for camera to reconnect."
+                }, style = MaterialTheme.typography.bodySmall,
+                    color = if (needsAttention) BeaconWarning else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f).padding(start = 6.dp))
+                Text(if (available) "Open live ›" else "Review ›", color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable(onClick = if (available) onView else (onSettings ?: onView)))
             }
         }
     }

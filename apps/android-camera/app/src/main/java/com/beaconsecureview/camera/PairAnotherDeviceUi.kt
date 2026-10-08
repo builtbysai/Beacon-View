@@ -3,15 +3,19 @@ package com.beaconsecureview.camera
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Smartphone
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -43,76 +47,75 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Mirrors the PWA's AddCameraPage.tsx: choosing how a device joins Beacon
- * is a real, two-option decision ("Pair another device" vs "Use this
- * device"), not something Android should skip straight past. Android had
- * no "pair another device" path at all before this -- "Add camera" always
- * self-paired the current phone, the `onUseBrowser` equivalent. */
+/** Mirrors the PWA's full AddCameraPage rather than presenting the choice as a modal. */
 @Composable
-internal fun BeaconAddCameraChoiceDialog(
+internal fun BeaconAddCameraChoicePage(
     onDismiss: () -> Unit,
     onPairAnotherDevice: () -> Unit,
     onUseThisDevice: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add a device") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Md)) {
-                Text(
-                    "Choose how this device will join Beacon. Start with a dedicated Android device, or turn the device you're using now into a temporary camera.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Surface(
-                    onClick = onPairAnotherDevice,
-                    shape = RoundedCornerShape(BeaconRadii.Lg),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    color = MaterialTheme.colorScheme.surface,
-                ) {
-                    Column(modifier = Modifier.padding(BeaconSpacing.Md)) {
-                        Text(
-                            "RECOMMENDED",
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                            Icon(Icons.Outlined.Phone, null, tint = MaterialTheme.colorScheme.primary)
-                            Text("Pair another device", fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
-                        }
-                        Text(
-                            "Connect an Android phone or tablet running Beacon. Designed for ongoing monitoring.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        TextButton(onClick = onDismiss) {
+            Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, modifier = Modifier.size(18.dp))
+            Text("Back to Home", modifier = Modifier.padding(start = 6.dp), fontWeight = FontWeight.Bold)
+        }
+        Text("Add a device", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+        Text(
+            "Choose how this device will join Beacon. Start with a dedicated Android device, or turn the device you're using now into a temporary camera.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Surface(
+            shape = RoundedCornerShape(BeaconRadii.Lg),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 1.dp,
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                    Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.Phone, null, tint = MaterialTheme.colorScheme.primary)
                     }
+                    Text("RECOMMENDED", color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 }
-                Surface(
-                    onClick = onUseThisDevice,
-                    shape = RoundedCornerShape(BeaconRadii.Lg),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    color = MaterialTheme.colorScheme.surface,
-                ) {
-                    Column(modifier = Modifier.padding(BeaconSpacing.Md)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Smartphone, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("Use this device", fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
-                        }
-                        Text(
-                            "Use a camera available on the device you're using right now. Best for temporary monitoring.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
+                Text("Pair another device", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                Text("Connect an Android phone or tablet running Beacon. Designed for ongoing monitoring.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("More device types can be added here as Beacon expands.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Button(onClick = onPairAnotherDevice, modifier = Modifier.fillMaxWidth().height(42.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSurface,
+                        contentColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(8.dp)) {
+                    Text("Pair a device", fontWeight = FontWeight.Bold)
+                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, modifier = Modifier.padding(start = 6.dp).size(18.dp))
                 }
-                BeaconTrustLine("Only connect or use devices you own or are authorized to access.")
             }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
+        }
+        Surface(
+            shape = RoundedCornerShape(BeaconRadii.Lg),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 1.dp,
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.Smartphone, null, tint = MaterialTheme.colorScheme.primary)
+                }
+                Text("Use this device", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                Text("Use a camera available on the device you're using right now. Best for temporary monitoring.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("No separate device required.", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(onClick = onUseThisDevice, modifier = Modifier.fillMaxWidth().height(42.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
+                    Text("Use this device", fontWeight = FontWeight.Bold)
+                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, modifier = Modifier.padding(start = 6.dp).size(18.dp))
+                }
+            }
+        }
+        BeaconTrustLine("Only connect or use devices you own or are authorized to access.")
+    }
 }
 
 /** Renders a scannable QR bitmap for [content] using ZXing's encoder
@@ -164,7 +167,8 @@ internal fun BeaconPairAnotherDeviceDialog(
 
     LaunchedEffect(Unit) { createCode() }
 
-    val setupLink = code?.let { "${BuildConfig.BEACON_API_URL.trimEnd('/')}/pair?code=$it" }
+    val setupLink = code?.let { "${BuildConfig.BEACON_WEB_URL.trimEnd('/')}/pair?code=$it" }
+    val browserCameraLink = code?.let { "${BuildConfig.BEACON_WEB_URL.trimEnd('/')}/camera-mode/setup?code=$it" }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -192,6 +196,17 @@ internal fun BeaconPairAnotherDeviceDialog(
                         Text("Expires in 10 minutes", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                         OutlinedButton(onClick = { clipboard.setText(AnnotatedString(setupLink)); copied = true }) {
                             Text(if (copied) "Copied" else "Copy setup link")
+                        }
+                        if (browserCameraLink != null) {
+                            OutlinedButton(onClick = { clipboard.setText(AnnotatedString(browserCameraLink)) }) {
+                                Text("Copy browser camera link")
+                            }
+                            Text(
+                                "Send the browser camera link to a device you own. It opens Camera Mode without signing in; the one-time code pairs it to your account.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall,
+                                textAlign = TextAlign.Center,
+                            )
                         }
                     }
                 }

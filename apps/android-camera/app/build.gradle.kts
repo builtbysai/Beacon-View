@@ -96,6 +96,15 @@ android {
                 "beaconApiUrl must use http:// or https://"
             }
             buildConfigField("String", "BEACON_API_URL", "\"$beaconApiUrl\"")
+            val beaconWebUrl =
+                providers.gradleProperty("beaconWebUrl")
+                    .orElse(providers.environmentVariable("BEACON_WEB_URL"))
+                    .orElse("http://10.0.2.2:5173")
+                    .get()
+            require(beaconWebUrl.startsWith("http://") || beaconWebUrl.startsWith("https://")) {
+                "beaconWebUrl must use http:// or https://"
+            }
+            buildConfigField("String", "BEACON_WEB_URL", "\"$beaconWebUrl\"")
             buildConfigField("boolean", "SMART_DETECTION_ENABLED", "$smartDetectionEnabled")
         }
         release {
@@ -108,6 +117,13 @@ android {
                 "Release Beacon API URL must use https://"
             }
             buildConfigField("String", "BEACON_API_URL", "\"$beaconApiUrl\"")
+            val beaconWebUrl =
+                providers.gradleProperty("beaconReleaseWebUrl")
+                    .orElse(providers.environmentVariable("BEACON_RELEASE_WEB_URL"))
+                    .orElse(beaconApiUrl)
+                    .get()
+            require(beaconWebUrl.startsWith("https://")) { "Release Beacon web URL must use https://" }
+            buildConfigField("String", "BEACON_WEB_URL", "\"$beaconWebUrl\"")
             buildConfigField("boolean", "SMART_DETECTION_ENABLED", "$smartDetectionEnabled")
         }
     }

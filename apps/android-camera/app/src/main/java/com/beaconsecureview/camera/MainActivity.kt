@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        inboundPairingCode = parsePairingQr(intent?.dataString, BuildConfig.BEACON_API_URL)
+        inboundPairingCode = parsePairingQr(intent?.dataString, BuildConfig.BEACON_API_URL, BuildConfig.BEACON_WEB_URL)
         inboundGoogleAuthCode = parseMobileGoogleAuthLink(intent?.dataString, BuildConfig.BEACON_API_URL)
         val preferences = getSharedPreferences("beacon_installation", MODE_PRIVATE)
         val installationId =
@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        inboundPairingCode = parsePairingQr(intent.dataString, BuildConfig.BEACON_API_URL)
+        inboundPairingCode = parsePairingQr(intent.dataString, BuildConfig.BEACON_API_URL, BuildConfig.BEACON_WEB_URL)
         inboundGoogleAuthCode = parseMobileGoogleAuthLink(intent.dataString, BuildConfig.BEACON_API_URL)
     }
 
@@ -405,7 +405,7 @@ private fun BeaconCameraApp(
                             GmsBarcodeScanning.getClient(context, options)
                                 .startScan()
                                 .addOnSuccessListener { barcode ->
-                                    val scanned = parsePairingQr(barcode.rawValue, BuildConfig.BEACON_API_URL)
+                                    val scanned = parsePairingQr(barcode.rawValue, BuildConfig.BEACON_API_URL, BuildConfig.BEACON_WEB_URL)
                                     if (scanned == null) {
                                         message =
                                             "That is not a Beacon setup link. In Beacon web, choose Add camera and scan its QR code."
