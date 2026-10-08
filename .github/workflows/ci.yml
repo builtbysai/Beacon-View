@@ -136,9 +136,12 @@ jobs:
       - name: Verify the hosted Android SDK
         run: test -f "$ANDROID_HOME/platforms/android-35/android.jar"
       - name: Test, lint, and compile Android without release signing
-        run: >-
-          bash apps/android-camera/gradlew -p apps/android-camera --no-daemon
-          testDebugUnitTest lintDebug assembleDebug assembleRelease
+        # Two invocations, so debug lint and the release build's lint never
+        # analyze the large Compose screens at the same time (that ran the
+        # runner out of memory). Same checks, run one after the other.
+        run: |
+          bash apps/android-camera/gradlew -p apps/android-camera --no-daemon testDebugUnitTest lintDebug
+          bash apps/android-camera/gradlew -p apps/android-camera --no-daemon assembleDebug assembleRelease
 
   secrets:
     runs-on: ubuntu-24.04
