@@ -4,7 +4,10 @@ import type { IconName } from './Icon';
 
 import { AccessHistory } from './AccessHistory';
 import { Avatar } from './Avatar';
+import { AudioSettings } from './AudioSettings';
 import { BrowserSessions } from './BrowserSessions';
+import { DesktopComputerSettings } from './DesktopComputerSettings';
+import { desktopSupportsAutostart } from './desktop-shell';
 import { EmailVerification } from './EmailVerification';
 import { GoogleDriveSettings } from './GoogleDriveSettings';
 import { HouseholdSharingSettings } from './HouseholdSharingSettings';
@@ -38,6 +41,8 @@ type SettingsPageProps = {
 
 type SettingsSection =
   | 'household'
+  | 'computer'
+  | 'audio'
   | 'notifications'
   | 'access'
   | 'data'
@@ -54,6 +59,8 @@ const legacySectionAliases: Record<string, string> = {
 const sectionInfo: Record<SettingsSection, { label: string; icon: IconName }> =
   {
     household: { label: 'Household', icon: 'home' },
+    computer: { label: 'This computer', icon: 'browser' },
+    audio: { label: 'Audio', icon: 'speaker' },
     notifications: { label: 'Notifications', icon: 'alert' },
     access: { label: 'People & access', icon: 'users' },
     data: { label: 'Data & storage', icon: 'cloud' },
@@ -85,9 +92,12 @@ export function SettingsPage({
   onUserChanged,
 }: SettingsPageProps) {
   const manager = household.role === 'owner' || household.role === 'admin';
+  const [desktopApp] = useState(desktopSupportsAutostart);
   const sections: SettingsSection[] = useMemo(
     () => [
       'household',
+      ...(desktopApp ? (['computer'] as const) : []),
+      'audio',
       ...(manager ? (['notifications'] as const) : []),
       'access',
       'data',
@@ -95,7 +105,7 @@ export function SettingsPage({
       'account',
       'privacy',
     ],
-    [manager],
+    [desktopApp, manager],
   );
 
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -221,6 +231,34 @@ export function SettingsPage({
               memberCount={manager ? memberCount : null}
               cameraCount={cameras.length}
             />
+          </section>
+
+          {desktopApp && (
+            <section
+              id="computer"
+              className="settings-section"
+              ref={(element) => {
+                sectionRefs.current.computer = element;
+              }}
+            >
+              <SectionHead title="This computer">
+                How the Beacon desktop app runs on this computer.
+              </SectionHead>
+              <DesktopComputerSettings />
+            </section>
+          )}
+
+          <section
+            id="audio"
+            className="settings-section"
+            ref={(element) => {
+              sectionRefs.current.audio = element;
+            }}
+          >
+            <SectionHead title="Audio">
+              Choose the microphone you use to talk through cameras.
+            </SectionHead>
+            <AudioSettings />
           </section>
 
           {manager && (

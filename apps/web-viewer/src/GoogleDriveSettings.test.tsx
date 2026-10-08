@@ -92,7 +92,7 @@ describe('GoogleDriveSettings', () => {
     render(<GoogleDriveSettings />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Google Drive could not be connected',
+      'Google Drive couldn’t be connected',
     );
     expect(window.location.search).toBe('?section=storage');
   });

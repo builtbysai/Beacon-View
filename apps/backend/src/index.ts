@@ -53,7 +53,12 @@ try {
   await app.listen({ host: config.HOST, port: config.PORT });
   stopRetentionJob = startMotionRetentionJob(store, app.log);
   stopAuditRetentionJob = startAuditRetentionJob(store, app.log);
-  stopNotificationJob = startNotificationJob(store, config, app.log);
+  stopNotificationJob = startNotificationJob(
+    store,
+    config,
+    app.log,
+    (sessionId, message) => householdEvents.sendToSession(sessionId, message),
+  );
   stopPresenceActivityJob = startPresenceActivityJob(
     store,
     app.log,

@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+import {
+  PKCE_CHALLENGE_PATTERN,
+  PKCE_VERIFIER_PATTERN,
+} from './desktop-google-handoff.js';
 import { MOTION_RETENTION_DAYS } from './store.js';
 
 export const credentialsSchema = z.object({
@@ -29,6 +33,9 @@ export const browserDeviceSchema = z.object({
 });
 export const cameraParameterSchema = z.object({ cameraId: z.string().uuid() });
 export const deviceParameterSchema = z.object({ deviceId: z.string().uuid() });
+export const motionEventParameterSchema = z.object({
+  motionEventId: z.string().uuid(),
+});
 export const updateDeviceSchema = z
   .object({
     enabled: z.boolean().optional(),
@@ -89,10 +96,23 @@ export const googleCallbackSchema = z.object({
   code: z.string().min(1).max(4_096),
   state: z.string().min(1).max(512),
 });
-export const googleStartSchema = z.object({
-  platform: z.literal('android').optional(),
-  intent: z.literal('addPassword').optional(),
-});
+export const googleStartSchema = z
+  .object({
+    platform: z.enum(['android', 'desktop']).optional(),
+    intent: z.literal('addPassword').optional(),
+    // PKCE S256 challenge; required for (and only accepted from) desktop.
+    challenge: z.string().regex(PKCE_CHALLENGE_PATTERN).optional(),
+  })
+  .refine(
+    (start) =>
+      (start.platform === 'desktop') === (start.challenge !== undefined),
+  );
 export const mobileGoogleExchangeSchema = z.object({
   code: z.string().min(32).max(512),
 });
+export const desktopGoogleExchangeSchema = z
+  .object({
+    code: z.string().min(32).max(512),
+    verifier: z.string().regex(PKCE_VERIFIER_PATTERN),
+  })
+  .strict();

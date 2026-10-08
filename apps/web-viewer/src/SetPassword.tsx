@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
-import { ApiError, request } from './api';
+import { request } from './api';
+import { friendlyError } from './friendly-errors';
 import { SettingsFieldRow, SettingsField, SettingsRow } from './SettingsUI';
 
 export function SetPassword({ onSet }: { onSet: () => void }) {
@@ -42,7 +43,7 @@ export function SetPassword({ onSet }: { onSet: () => void }) {
       onSet();
     } catch (caught) {
       setError(
-        caught instanceof ApiError ? caught.message : 'Unable to set password',
+        friendlyError(caught, 'The password couldn’t be set. Try again.'),
       );
     } finally {
       setBusy(false);

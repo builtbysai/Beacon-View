@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, request } from './api';
+import { friendlyError } from './friendly-errors';
 import {
+  captureFrameAsJpeg,
   ClipRecorder,
   DriveUploadError,
   encryptClip,
@@ -18,12 +20,12 @@ export interface ClipRecorderState {
   status: ClipRecorderStatus;
   elapsedMs: number;
   error: string;
+  /** The server's reason for a failure, e.g. `drive_reconnect_required`. */
+  errorCode?: string | undefined;
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof ApiError || error instanceof Error
-    ? error.message
-    : fallback;
+function errorCode(error: unknown): string | undefined {
+  return error instanceof ApiError ? error.code : undefined;
 }
 
 async function reportRecordingFailure(
@@ -40,6 +42,45 @@ async function reportRecordingFailure(
     // Recovery sweeps eventually release the recording if this best-effort
     // report cannot reach Beacon.
     return false;
+  }
+}
+
+/** Best-effort thumbnail for a clip that just started recording -- never
+ * awaited by the caller, never reported as a recording failure, and never
+ * retried. See ADR 0078. */
+async function uploadThumbnail(
+  recordingId: string,
+  stream: MediaStream,
+): Promise<void> {
+  try {
+    const frame = await captureFrameAsJpeg(stream);
+    const encrypted = await encryptClip(frame);
+    const session = await request<{ uploadUrl: string }>(
+      `/api/recordings/${recordingId}/thumbnail-upload-session`,
+      {
+        body: JSON.stringify({
+          byteSize: encrypted.blob.size,
+          checksumSha256: await sha256Hex(encrypted.blob),
+          mimeType: 'image/jpeg',
+          encryption: {
+            dataKey: encrypted.dataKey,
+            iv: encrypted.iv,
+            version: 1,
+          },
+        }),
+        method: 'POST',
+      },
+    );
+    const providerFileId = await uploadClipToDrive(
+      session.uploadUrl,
+      encrypted.blob,
+    );
+    await request(`/api/recordings/${recordingId}/thumbnail-complete`, {
+      body: JSON.stringify({ providerFileId }),
+      method: 'POST',
+    });
+  } catch {
+    // A clip without a thumbnail is still a complete, usable clip.
   }
 }
 
@@ -64,11 +105,19 @@ export function useClipRecorder(cameraId: string): {
   state: ClipRecorderState;
   start: (stream: MediaStream) => void;
   stop: () => void;
+  /** Ends a recording in progress without uploading it -- for a capture
+   * that can no longer be trusted (the source stream itself ended: a
+   * dropped connection, a revoked permission, the camera closing) rather
+   * than a normal stop. Reports `capture_failed` and surfaces `message` as
+   * the failure reason instead of silently discarding the attempt. */
+  abort: (message: string) => void;
   /** Clears a finished ('available' or 'failed') state back to 'idle' so
    * the control returns to "Record a short clip" -- a no-op while a
    * recording is actually in progress. */
   reset: () => void;
   retry: () => void;
+  /** A finished clip is held here, waiting for a successful upload. */
+  hasPendingUpload: boolean;
   supported: boolean;
 } {
   const [state, setState] = useState<ClipRecorderState>({
@@ -82,12 +131,26 @@ export function useClipRecorder(cameraId: string): {
   const autoStopRef = useRef<number | null>(null);
   const pendingRef = useRef<PendingUpload | null>(null);
   const attemptingRef = useRef(false);
+  // The recording's own video track, watched for an unexpected 'ended'
+  // event (permission revoked, camera closed by the OS, connection torn
+  // down) -- see abort() below. Paired handler so it can be detached
+  // without accidentally removing a listener meant for a later recording.
+  const trackWatchRef = useRef<{
+    track: MediaStreamTrack;
+    onEnded: () => void;
+  } | null>(null);
 
   const clearTimers = useCallback(() => {
     if (tickRef.current !== null) window.clearInterval(tickRef.current);
     if (autoStopRef.current !== null) window.clearTimeout(autoStopRef.current);
     tickRef.current = null;
     autoStopRef.current = null;
+  }, []);
+
+  const detachTrackWatch = useCallback(() => {
+    const watch = trackWatchRef.current;
+    if (watch) watch.track.removeEventListener('ended', watch.onEnded);
+    trackWatchRef.current = null;
   }, []);
 
   const attemptUpload = useCallback(async (pending: PendingUpload) => {
@@ -147,7 +210,11 @@ export function useClipRecorder(cameraId: string): {
         pending.restartSession = true;
       setState({
         elapsedMs: 0,
-        error: errorMessage(error, 'Recording could not be uploaded.'),
+        error: friendlyError(
+          error,
+          'The clip couldn’t be uploaded. Try again.',
+        ),
+        errorCode: errorCode(error),
         status: 'failed',
       });
     } finally {
@@ -155,11 +222,33 @@ export function useClipRecorder(cameraId: string): {
     }
   }, []);
 
+  /** Ends a recording whose source can no longer be trusted -- the stream
+   * itself ended, not a normal stop. Discards rather than uploads: a clip
+   * finalized from a torn-down stream would just be broken. Always
+   * surfaces `message` as the failure reason instead of failing quietly. */
+  const abort = useCallback(
+    (message: string) => {
+      const recorder = recorderRef.current;
+      const recordingId = recordingIdRef.current;
+      if (!recorder) return;
+      clearTimers();
+      detachTrackWatch();
+      recorder.discard();
+      recorderRef.current = null;
+      recordingIdRef.current = null;
+      if (recordingId)
+        void reportRecordingFailure(recordingId, 'capture_failed');
+      setState({ elapsedMs: 0, error: message, status: 'failed' });
+    },
+    [clearTimers, detachTrackWatch],
+  );
+
   const stop = useCallback(() => {
     const recorder = recorderRef.current;
     const recordingId = recordingIdRef.current;
     if (!recorder || !recordingId) return;
     clearTimers();
+    detachTrackWatch();
     setState((current) => ({ ...current, status: 'uploading' }));
     void (async () => {
       try {
@@ -181,7 +270,11 @@ export function useClipRecorder(cameraId: string): {
         await reportRecordingFailure(recordingId, 'upload_failed');
         setState({
           elapsedMs: 0,
-          error: errorMessage(error, 'Recording could not be prepared.'),
+          error: friendlyError(
+            error,
+            'The clip couldn’t be prepared for upload. Try recording again.',
+          ),
+          errorCode: errorCode(error),
           status: 'failed',
         });
       } finally {
@@ -204,9 +297,22 @@ export function useClipRecorder(cameraId: string): {
             { body: JSON.stringify({ cameraId }), method: 'POST' },
           );
           recordingIdRef.current = created.recording.id;
+          void uploadThumbnail(created.recording.id, stream);
           const recorder = new ClipRecorder(stream, mimeType);
           recorderRef.current = recorder;
           recorder.start();
+          const track =
+            typeof stream.getVideoTracks === 'function'
+              ? stream.getVideoTracks()[0]
+              : undefined;
+          if (track && typeof track.addEventListener === 'function') {
+            const onEnded = () =>
+              abort(
+                'Recording stopped because the camera stream ended unexpectedly.',
+              );
+            track.addEventListener('ended', onEnded);
+            trackWatchRef.current = { onEnded, track };
+          }
           setState({ elapsedMs: 0, error: '', status: 'recording' });
           const startedAt = Date.now();
           tickRef.current = window.setInterval(() => {
@@ -221,17 +327,19 @@ export function useClipRecorder(cameraId: string): {
           const recordingId = recordingIdRef.current;
           if (recordingId)
             await reportRecordingFailure(recordingId, 'capture_failed');
+          detachTrackWatch();
           recorderRef.current = null;
           recordingIdRef.current = null;
           setState({
             elapsedMs: 0,
-            error: errorMessage(error, 'Recording could not be started.'),
+            error: friendlyError(error, 'Recording couldn’t start. Try again.'),
+            errorCode: errorCode(error),
             status: 'failed',
           });
         }
       })();
     },
-    [cameraId, state.status, stop],
+    [abort, cameraId, detachTrackWatch, state.status, stop],
   );
 
   const reset = useCallback(() => {
@@ -256,15 +364,18 @@ export function useClipRecorder(cameraId: string): {
   useEffect(
     () => () => {
       clearTimers();
+      detachTrackWatch();
       recorderRef.current?.discard();
       const pending = pendingRef.current;
       if (pending && !attemptingRef.current)
         void reportRecordingFailure(pending.recordingId, 'abandoned');
     },
-    [clearTimers],
+    [clearTimers, detachTrackWatch],
   );
 
   return {
+    abort,
+    hasPendingUpload: pendingRef.current !== null,
     reset,
     retry,
     start,

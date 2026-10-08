@@ -1,7 +1,10 @@
 import type { FastifyBaseLogger } from 'fastify';
 
 import type { AppConfig } from './config.js';
-import { NotificationSender } from './notification-delivery.js';
+import {
+  type DesktopAlertTransport,
+  NotificationSender,
+} from './notification-delivery.js';
 import type {
   NotificationDelivery,
   NotificationDeliveryOutcome,
@@ -28,6 +31,7 @@ export async function runNotificationSweep(
   let delivered = 0;
   let failedPermanent = 0;
   let failedRetryable = 0;
+  let expired = 0;
   const byChannel: Record<string, number> = {};
   const byCategory: Record<string, number> = {};
   for (const delivery of deliveries) {
@@ -42,6 +46,9 @@ export async function runNotificationSweep(
         delivery.subscriptionId,
         now,
       );
+    } else if (outcome.expired) {
+      expired += 1;
+      await store.markNotificationExpired(delivery.id, now);
     } else {
       if (outcome.permanent) failedPermanent += 1;
       else failedRetryable += 1;
@@ -61,6 +68,7 @@ export async function runNotificationSweep(
         byChannel,
         delivered,
         deliveryCount: deliveries.length,
+        expired,
         failedPermanent,
         failedRetryable,
       },
@@ -72,10 +80,11 @@ export function startNotificationJob(
   store: MilestoneStore,
   config: AppConfig,
   logger: FastifyBaseLogger,
+  desktopTransport?: DesktopAlertTransport,
   intervalMs = 30_000,
 ): () => void {
   if (!store.notificationsConfigured()) return () => undefined;
-  const sender = new NotificationSender(config);
+  const sender = new NotificationSender(config, desktopTransport);
   let running = false;
   const run = async () => {
     if (running) return;

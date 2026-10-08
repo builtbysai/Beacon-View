@@ -16,6 +16,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# CI never launches Electron (the desktop unit tests are Electron-free), so
+# skip its ~100 MB runtime download on every install.
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
 jobs:
   # A docs-only or single-app change doesn't need the whole matrix: android
   # and database are this workflow's two most expensive jobs (a full Gradle

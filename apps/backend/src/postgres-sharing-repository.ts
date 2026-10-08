@@ -534,6 +534,7 @@ export class PostgresSharingRepository {
               d.name AS "deviceName", d.platform,
               cs.display_name AS name, cs.source_key AS "sourceKey",
               cs.facing, cs.enabled, d.privacy_mode AS "privacyMode",
+              cs.use_case AS "useCase",
               cs.capabilities,
               COALESCE(cs.last_seen_at, d.last_seen_at) AS "lastSeenAt",
               COALESCE(dc.revoked_at, d.revoked_at) AS "credentialRevokedAt",

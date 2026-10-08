@@ -1,7 +1,10 @@
 import './App.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ApiError, request } from './api';
+import { ApiError, request, SESSION_ENDED_EVENT } from './api';
+import { friendlyError } from './friendly-errors';
+import { useDriveRecording } from './drive-recording';
+import { ErrorNotice } from './ErrorNotice';
 import { nextPairingState } from './lifecycle';
 import { cameraStatus } from './camera-status';
 import type { PairingLifecycle } from './lifecycle';
@@ -14,19 +17,25 @@ import { ReauthenticationDialog } from './ReauthenticationDialog';
 import { BrowserCameraMode } from './BrowserCameraMode';
 import { MotionEventList } from './MotionEventList';
 import { RecordingLibrary } from './RecordingLibrary';
+import { EventsViewSwitch, type EventsView } from './EventsViewSwitch';
 import { AuthScreen } from './AuthScreen';
 import { SplashScreen } from './SplashScreen';
 import { CameraBrowser } from './CameraBrowser';
 import { ContactPage } from './ContactPage';
 import { Diagnostics } from './Diagnostics';
 import { GuestViewPage } from './GuestViewPage';
+import { SharedRecordingPage } from './SharedRecordingPage';
 import { Brand, Icon } from './Icon';
 import { Sidebar, SidebarProvider, SidebarTrigger } from './Sidebar';
 import { PendingDeviceRow } from './PendingDeviceRow';
 import { AddCameraPage } from './AddCameraPage';
+import { ComputerCameraSetupDialog } from './ComputerCameraSetupDialog';
+import { takePendingUseCase } from './pending-use-case';
+import { type DesktopAlert, desktopBridge } from './desktop-shell';
 import { PairingDialog } from './PairingDialog';
 import { SettingsPage } from './SettingsPage';
 import {
+  DesktopAuthReturnPage,
   MobileAuthReturnPage,
   PairLinkPage,
   PublicTrustPage,
@@ -80,6 +89,12 @@ export function App() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [authBusy, setAuthBusy] = useState(false);
   const [error, setError] = useState('');
+  // Beacon couldn't be reached while opening (not the same as signed out).
+  const [startupError, setStartupError] = useState('');
+  // The camera list failed to load: say so (with Retry) instead of showing
+  // "Add your first device" as if there were none.
+  const [camerasError, setCamerasError] = useState('');
+  const [startupAttempt, setStartupAttempt] = useState(0);
   const [pendingConfirmBusy, setPendingConfirmBusy] = useState(false);
   const [reauthenticationOpen, setReauthenticationOpen] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<{
@@ -100,6 +115,7 @@ export function App() {
   const [pairingBusy, setPairingBusy] = useState(false);
   const [pairingState, setPairingState] = useState<PairingLifecycle>('pending');
   const [browserCameraActive, setBrowserCameraActive] = useState(false);
+  const [computerSetupOpen, setComputerSetupOpen] = useState(false);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(
     deviceSettingsIdFromPath,
@@ -110,8 +126,12 @@ export function App() {
   const [activityNotice, setActivityNotice] = useState('');
   const [motionEventRevision, setMotionEventRevision] = useState(0);
   const [motionClearRevision, setMotionClearRevision] = useState(0);
+  const [eventsView, setEventsView] = useState<EventsView>('activity');
+  const [focusRecordingId, setFocusRecordingId] = useState<string | null>(null);
+  const [focusMotionEventId, setFocusMotionEventId] = useState<string | null>(
+    null,
+  );
   const [membershipRevision, setMembershipRevision] = useState(0);
-  const [driveRecordingReady, setDriveRecordingReady] = useState(false);
   const [capabilities, setCapabilities] = useState<BackendCapabilities | null>(
     null,
   );
@@ -148,15 +168,18 @@ export function App() {
 
   const navigate = useCallback((next: Page, search?: string) => {
     pushRoute(`${pagePaths[next]}${search ?? ''}`);
+    setError('');
     setPage(next);
     setSelectedDeviceId(null);
     setSelectedCamera(null);
     setBrowserCameraActive(false);
     setSettingsSection(new URLSearchParams(search).get('section'));
+    if (next === 'events') setEventsView('activity');
   }, []);
 
   useEffect(() => {
     const onPopState = () => {
+      setError('');
       const settingsId = deviceSettingsIdFromPath();
       const overlayState = window.history.state as {
         cameraSettingsBackgroundPage?: Page;
@@ -197,6 +220,15 @@ export function App() {
     if (message) setError(message);
   }, []);
 
+  const signedIn = user !== null;
+  useEffect(() => {
+    if (!signedIn) return;
+    const ended = () =>
+      clearLocalSession('Your session ended. Sign in again to continue.');
+    window.addEventListener(SESSION_ENDED_EVENT, ended);
+    return () => window.removeEventListener(SESSION_ENDED_EVENT, ended);
+  }, [clearLocalSession, signedIn]);
+
   const loadCameras = useCallback(async () => {
     const [cameraResult, deviceResult] = await Promise.all([
       request<{ cameras: Camera[] }>('/api/cameras'),
@@ -204,6 +236,7 @@ export function App() {
     ]);
     setCameras(cameraResult.cameras);
     setDevices(deviceResult.devices);
+    setCamerasError('');
     const cameraMatch = window.location.pathname.match(/^\/cameras\/([^/]+)$/);
     if (cameraMatch) {
       setSelectedCamera((current) => {
@@ -245,23 +278,63 @@ export function App() {
       window.location.pathname === '/trust' ||
       window.location.pathname === '/pair' ||
       window.location.pathname === '/auth/mobile' ||
+      window.location.pathname === '/auth/desktop/complete' ||
       window.location.pathname === '/account/verify-email' ||
       window.location.pathname === '/account/reset-password' ||
-      window.location.pathname.startsWith('/g/')
+      window.location.pathname.startsWith('/g/') ||
+      window.location.pathname.startsWith('/shared/')
     )
       return;
     void request<{ household: HouseholdSession; user: User }>('/api/auth/me')
       .then(async (result) => {
-        await loadCameras();
+        // Signed in: a camera list that fails to load is reported in the
+        // workspace, never shown as being signed out.
+        await loadCameras().then(
+          () => setCamerasError(''),
+          (caught: unknown) =>
+            setCamerasError(
+              `Your cameras couldn’t be loaded. ${friendlyError(caught, 'Try again.')}`,
+            ),
+        );
+        setStartupError('');
         setUser(result.user);
         setHousehold(result.household ?? { id: '', role: 'owner' });
       })
-      .catch(() => {
+      .catch((caught: unknown) => {
         setUser(null);
         setHousehold(null);
+        // Only "not signed in" leads to the sign-in screen; an outage or a
+        // dropped connection gets an explanation and a retry instead.
+        if (!(caught instanceof ApiError && caught.status === 401))
+          setStartupError(
+            friendlyError(caught, 'Beacon couldn’t be opened. Try again.'),
+          );
       })
       .finally(() => setLoading(false));
+  }, [loadCameras, startupAttempt]);
+
+  const retryCameras = useCallback(() => {
+    void loadCameras().then(
+      () => setCamerasError(''),
+      (caught: unknown) =>
+        setCamerasError(
+          `Your cameras still couldn’t be loaded. ${friendlyError(caught, 'Try again.')}`,
+        ),
+    );
   }, [loadCameras]);
+
+  const retryStartup = useCallback(() => {
+    setStartupError('');
+    setLoading(true);
+    setStartupAttempt((attempt) => attempt + 1);
+  }, []);
+
+  // Coming back online retries a start that failed for lack of a network.
+  useEffect(() => {
+    if (!startupError) return;
+    window.addEventListener('online', retryStartup);
+    return () => window.removeEventListener('online', retryStartup);
+  }, [retryStartup, startupError]);
 
   useEffect(() => {
     if (loading || capabilities || (user && page !== 'settings')) return;
@@ -301,29 +374,14 @@ export function App() {
     };
   }, [user !== null]);
 
-  // Only the household owner can request recordings, and only the live
-  // viewer (where the record control actually appears) needs to know
-  // whether Drive is ready to accept one -- fetched just for that view
-  // rather than globally, so it drives whether LiveVideo shows a working
-  // record button or a way to connect Drive instead of a dead-end error
-  // after tapping record.
-  useEffect(() => {
-    if (!selectedCamera || household?.role !== 'owner') {
-      setDriveRecordingReady(false);
-      return;
-    }
-    let cancelled = false;
-    void request<{ recordingsConnected: boolean }>('/api/drive/status')
-      .then((result) => {
-        if (!cancelled) setDriveRecordingReady(result.recordingsConnected);
-      })
-      .catch(() => {
-        if (!cancelled) setDriveRecordingReady(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedCamera, household?.role]);
+  // Only the household owner records. Drive readiness is tracked while a
+  // record control can be on screen (a live view or Camera Mode), so it
+  // shows a working record button, or "Connect/Reconnect Google Drive"
+  // that fixes things in place -- never a dead-end error after recording.
+  const drive = useDriveRecording(
+    household?.role === 'owner' &&
+      (selectedCamera !== null || browserCameraActive),
+  );
 
   // Applies a /join link's stashed token once a session exists -- either
   // immediately (already signed in) or right after this same load's sign-in/
@@ -365,9 +423,10 @@ export function App() {
       })
       .catch((caught) => {
         setActivityNotice(
-          caught instanceof ApiError
-            ? caught.message
-            : 'That invitation could not be accepted.',
+          friendlyError(
+            caught,
+            'That invitation couldn’t be accepted. Ask for a new one.',
+          ),
         );
         window.setTimeout(() => setActivityNotice(''), 6_000);
       });
@@ -375,26 +434,59 @@ export function App() {
 
   const handleHouseholdEvent = useCallback(
     (message: HouseholdEvent) => {
+      if (message.type === 'notification') {
+        // Only the desktop app subscribes to this channel; it validates the
+        // alert again before showing an OS notification.
+        desktopBridge()?.showAlert?.({
+          category: message.category as DesktopAlert['category'],
+          eventId: message.eventId ?? '',
+          route: message.route as DesktopAlert['route'],
+        });
+        return;
+      }
       if (
         message.type === 'camera-paired' ||
         message.type === 'camera-presence-changed' ||
         message.type === 'device-credential-revoked' ||
         message.type === 'device-management-changed'
       ) {
-        void loadCameras().then(() => {
-          if (message.type === 'camera-paired' && message.cameraId) {
-            setActivityNotice('A new camera is connected and ready to use.');
-            window.setTimeout(() => setActivityNotice(''), 6_000);
-            setPairingState((state) => nextPairingState(state, 'completed'));
-            setHighlightedCameraId(message.cameraId);
-            window.setTimeout(() => setHighlightedCameraId(null), 5_000);
-            window.setTimeout(() => {
-              setPairingOpen(false);
-              setPairingCode('');
-              navigate('cameras');
-            }, 900);
-          }
-        });
+        // A computer set up from "Set up a computer" gets the use case the
+        // owner picked there (ADR 0084).
+        const pendingUseCase =
+          message.type === 'camera-paired' && message.cameraId
+            ? takePendingUseCase()
+            : null;
+        const applied =
+          pendingUseCase && pendingUseCase !== 'general' && message.cameraId
+            ? request(
+                `/api/cameras/${encodeURIComponent(message.cameraId)}/use-case`,
+                {
+                  body: JSON.stringify({ useCase: pendingUseCase }),
+                  method: 'PUT',
+                },
+              ).catch(() => undefined)
+            : Promise.resolve();
+        void applied
+          .then(loadCameras)
+          .then(() => {
+            if (message.type === 'camera-paired' && message.cameraId) {
+              setActivityNotice('A new camera is connected and ready to use.');
+              window.setTimeout(() => setActivityNotice(''), 6_000);
+              setPairingState((state) => nextPairingState(state, 'completed'));
+              setHighlightedCameraId(message.cameraId);
+              window.setTimeout(() => setHighlightedCameraId(null), 5_000);
+              window.setTimeout(() => {
+                setPairingOpen(false);
+                setPairingCode('');
+                navigate('cameras');
+              }, 900);
+            }
+          })
+          .catch(() =>
+            setError(
+              'A camera changed, but the list couldn’t refresh. Reload to see it.',
+            ),
+          );
       }
       if (
         message.type === 'motion-event-created' ||
@@ -424,7 +516,8 @@ export function App() {
     [clearLocalSession],
   );
   const handleRefreshNeeded = useCallback(() => {
-    void loadCameras();
+    // A background refresh; the next event or focus refreshes again.
+    void loadCameras().catch(() => undefined);
     setMotionEventRevision((revision) => revision + 1);
     setMembershipRevision((revision) => revision + 1);
     void request<{ household: HouseholdSession; user: User }>('/api/auth/me')
@@ -475,11 +568,14 @@ export function App() {
       }
     } catch (caught) {
       setError(
-        caught instanceof Error && caught.message === 'googleAccountExists'
+        caught instanceof ApiError && caught.code === 'google_account_exists'
           ? "This email already has a Google account. Use “Continue with Google” above, then add a password from Settings once you're signed in."
-          : caught instanceof Error
-            ? caught.message
-            : 'Request failed',
+          : friendlyError(
+              caught,
+              mode === 'login'
+                ? 'Sign-in didn’t work. Try again.'
+                : 'Your account couldn’t be created. Try again.',
+            ),
       );
     } finally {
       setAuthBusy(false);
@@ -539,7 +635,9 @@ export function App() {
       setPairingCode(result.code);
       setPairingState((state) => nextPairingState(state, 'code-created'));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Request failed');
+      setError(
+        friendlyError(caught, 'A pairing code couldn’t be created. Try again.'),
+      );
     } finally {
       setPairingBusy(false);
     }
@@ -563,7 +661,7 @@ export function App() {
       });
       await loadCameras();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Rename failed');
+      setError(friendlyError(caught, 'The name couldn’t be saved. Try again.'));
     }
   }
 
@@ -577,7 +675,7 @@ export function App() {
       });
       await loadCameras();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Rename failed');
+      setError(friendlyError(caught, 'The name couldn’t be saved. Try again.'));
     }
   }
 
@@ -606,7 +704,7 @@ export function App() {
       await loadCameras();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Could not switch camera.',
+        friendlyError(caught, 'The camera couldn’t be switched. Try again.'),
       );
     }
   }
@@ -641,9 +739,7 @@ export function App() {
       await loadCameras();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'The camera could not be removed.',
+        friendlyError(caught, 'The camera couldn’t be removed. Try again.'),
       );
     }
   }
@@ -686,9 +782,7 @@ export function App() {
       await loadCameras();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'The device could not be removed.',
+        friendlyError(caught, 'The device couldn’t be removed. Try again.'),
       );
     }
   }
@@ -700,9 +794,10 @@ export function App() {
       await loadCameras();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'This camera could not be removed from your view.',
+        friendlyError(
+          caught,
+          'This camera could not be removed from your view.',
+        ),
       );
     }
   }
@@ -770,9 +865,7 @@ export function App() {
         return;
       }
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Your account could not be deleted.',
+        friendlyError(caught, 'Your account couldn’t be deleted. Try again.'),
       );
     }
   }
@@ -787,9 +880,10 @@ export function App() {
       await loadCameras();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Privacy mode could not be changed.',
+        friendlyError(
+          caught,
+          'The camera couldn’t be paused or resumed. Try again.',
+        ),
       );
     }
   }
@@ -838,6 +932,8 @@ export function App() {
   }
 
   if (window.location.pathname.startsWith('/g/')) return <GuestViewPage />;
+  if (window.location.pathname.startsWith('/shared/'))
+    return <SharedRecordingPage />;
   if (window.location.pathname === '/camera-mode/setup')
     return (
       <BrowserCameraMode
@@ -846,6 +942,8 @@ export function App() {
       />
     );
   if (window.location.pathname === '/pair') return <PairLinkPage />;
+  if (window.location.pathname === '/auth/desktop/complete')
+    return <DesktopAuthReturnPage />;
   if (window.location.pathname === '/auth/mobile')
     return <MobileAuthReturnPage />;
   if (window.location.pathname === '/account/verify-email')
@@ -874,6 +972,17 @@ export function App() {
       <main className="shell loading-shell">
         <Brand />
         <p role="status">Opening your workspace…</p>
+      </main>
+    );
+
+  if (startupError)
+    return (
+      <main className="shell loading-shell startup-error">
+        <Brand />
+        <p role="alert">{startupError}</p>
+        <button className="primary" onClick={retryStartup} type="button">
+          Try again
+        </button>
       </main>
     );
 
@@ -981,10 +1090,7 @@ export function App() {
           siblingCameras={siblings}
           onDevice={() => openCameraSettings(selectedCamera.deviceId)}
           canRecord={household?.role === 'owner'}
-          recordingReady={driveRecordingReady}
-          onConnectDriveForRecording={() =>
-            navigate('settings', '?section=storage')
-          }
+          drive={drive}
           canFlip={selectedCamera.canFlip ?? true}
           canPause={selectedCamera.canPause ?? true}
         />
@@ -1079,9 +1185,10 @@ export function App() {
 
           <div className={`page-content-inner page-body ${pageWidthClass}`}>
             {error && (
-              <p role="alert" style={{ color: 'var(--status-error)' }}>
-                {error}
-              </p>
+              <ErrorNotice message={error} onDismiss={() => setError('')} />
+            )}
+            {camerasError && (page === 'dashboard' || page === 'cameras') && (
+              <ErrorNotice message={camerasError} onRetry={retryCameras} />
             )}
             {activityNotice && (
               <p className="activity-toast" role="status">
@@ -1092,6 +1199,7 @@ export function App() {
 
             {page === 'dashboard' &&
               cameras.length === 0 &&
+              !camerasError &&
               (household?.role === 'owner' || household?.role === 'admin' ? (
                 <section className="dash-empty">
                   <h1>Add your first device</h1>
@@ -1409,7 +1517,9 @@ export function App() {
                 <CameraBrowser cameras={hostCameras} key={user.id}>
                   {(items) =>
                     items.length === 0 && pendingDevices.length === 0 ? (
-                      <p className="empty">No cameras yet.</p>
+                      camerasError ? null : (
+                        <p className="empty">No cameras yet.</p>
+                      )
                     ) : (
                       <div className="camera-tile-grid">
                         {items.map((camera) => (
@@ -1453,20 +1563,40 @@ export function App() {
             )}
             {page === 'events' && (
               <>
-                {household?.role === 'owner' && <RecordingLibrary />}
-                <MotionEventList
-                  filterStorageKey={`beacon_motion_filters_${user.id}`}
-                  includeHouseholdActivity={
-                    household?.role === 'owner' || household?.role === 'admin'
-                  }
-                  refreshRevision={motionEventRevision}
-                  clearRevision={motionClearRevision}
-                  cameras={cameras}
-                  onCamera={(id) => {
-                    const camera = cameras.find((item) => item.id === id);
-                    if (camera) openCamera(camera);
-                  }}
-                />
+                <EventsViewSwitch value={eventsView} onChange={setEventsView} />
+                {eventsView === 'clips' ? (
+                  <RecordingLibrary
+                    cameras={cameras}
+                    canDelete={household?.role === 'owner'}
+                    canShare={household?.role === 'owner'}
+                    focusRecordingId={focusRecordingId}
+                    onFocusHandled={() => setFocusRecordingId(null)}
+                    onOpenEvent={(motionEventId) => {
+                      setFocusMotionEventId(motionEventId);
+                      setEventsView('activity');
+                    }}
+                  />
+                ) : (
+                  <MotionEventList
+                    filterStorageKey={`beacon_motion_filters_${user.id}`}
+                    includeHouseholdActivity={
+                      household?.role === 'owner' || household?.role === 'admin'
+                    }
+                    refreshRevision={motionEventRevision}
+                    clearRevision={motionClearRevision}
+                    cameras={cameras}
+                    onCamera={(id) => {
+                      const camera = cameras.find((item) => item.id === id);
+                      if (camera) openCamera(camera);
+                    }}
+                    onViewClip={(recordingId: string) => {
+                      setFocusRecordingId(recordingId);
+                      setEventsView('clips');
+                    }}
+                    focusMotionEventId={focusMotionEventId}
+                    onFocusHandled={() => setFocusMotionEventId(null)}
+                  />
+                )}
               </>
             )}
             {page === 'diagnostics' && <Diagnostics />}
@@ -1517,11 +1647,18 @@ export function App() {
                   <AddCameraPage
                     onBack={() => navigate('dashboard')}
                     onPairAndroid={() => openPairing()}
+                    onSetUpComputer={() => setComputerSetupOpen(true)}
                     onUseBrowser={() => setBrowserCameraActive(true)}
                   />
+                  {computerSetupOpen && (
+                    <ComputerCameraSetupDialog
+                      onDismiss={() => setComputerSetupOpen(false)}
+                    />
+                  )}
                   {browserCameraActive && (
                     <BrowserCameraMode
                       canRecord={household?.role === 'owner'}
+                      drive={drive}
                       onBack={() => setBrowserCameraActive(false)}
                     />
                   )}
@@ -1536,7 +1673,11 @@ export function App() {
             error={error}
             state={pairingState}
             reconnecting={reconnectDeviceId.current !== null}
-            onCopyError={() => setError('Could not copy the setup link.')}
+            onCopyError={() =>
+              setError(
+                'Couldn’t copy the setup link. Select it and copy it manually.',
+              )
+            }
             onDismiss={cancelPairing}
             onRetry={() => void createPairingCode()}
           />

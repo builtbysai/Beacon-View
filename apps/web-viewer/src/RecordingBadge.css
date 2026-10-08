@@ -1,0 +1,88 @@
+.video-badges-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: var(--space-1);
+}
+.video-badges-row .video-live-badge {
+  margin-bottom: 0;
+}
+
+.recording-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+}
+.recording-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.6);
+  flex: 0 0 auto;
+}
+.recording-badge-timer {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.recording-badge.is-recording {
+  color: #ffd7d2;
+  background-color: rgba(220, 38, 38, 0.28);
+}
+.recording-badge.is-recording .recording-badge-dot {
+  background: var(--status-error);
+  animation: recording-dot-pulse 1.8s ease-in-out infinite;
+}
+
+.recording-badge.is-uploading .recording-badge-dot {
+  background: #7dd3fc;
+}
+
+.recording-badge.is-available {
+  color: #b8f5cf;
+  background-color: rgba(16, 185, 129, 0.22);
+}
+.recording-badge.is-available .recording-badge-dot {
+  background: #34d399;
+}
+
+.recording-badge.is-failed {
+  color: #ffd7d2;
+  background-color: rgba(220, 38, 38, 0.28);
+}
+.recording-badge.is-failed .recording-badge-dot {
+  background: var(--status-error);
+}
+
+@keyframes recording-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording-badge.is-recording .recording-badge-dot {
+    animation: none;
+  }
+}
+
+/* Clip held while Google Drive is reconnected (ADR 0086): not a failure. */
+.recording-badge.is-waiting {
+  color: #fde68a;
+  background-color: rgba(180, 83, 9, 0.32);
+}
+.recording-badge.is-waiting .recording-badge-dot {
+  background: #fbbf24;
+}

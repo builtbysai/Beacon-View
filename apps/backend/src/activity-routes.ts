@@ -1,10 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 
+import { z } from 'zod';
+
+import { cameraUseCaseSchema, motionPresetFor } from './camera-use-case.js';
 import { isCameraOnline } from './camera-presentation.js';
 import type { HouseholdEventHub } from './household-events.js';
 import {
   cameraParameterSchema,
   deviceParameterSchema,
+  motionEventParameterSchema,
   motionRetentionSchema,
 } from './http-schemas.js';
 import {
@@ -17,6 +21,7 @@ import { unauthorized, type SessionAuth } from './session-auth.js';
 import type { SignalingHub } from './signaling.js';
 import type { MilestoneStore } from './store.js';
 import {
+  DEFAULT_TIMELINE_EVENT_TYPES,
   HOUSEHOLD_ACTIVITY_EVENT_TYPES,
   type HouseholdActivityEventType,
 } from './store-contract.js';
@@ -27,6 +32,10 @@ interface ActivityRouteDependencies {
   signaling: SignalingHub;
   store: MilestoneStore;
 }
+
+const cameraUseCaseBodySchema = z
+  .object({ useCase: cameraUseCaseSchema })
+  .strict();
 
 export function registerActivityRoutes(
   app: FastifyInstance,
@@ -158,9 +167,12 @@ export function registerActivityRoutes(
     const page = await store.listHouseholdActivity(session.householdId, {
       ...(limit !== undefined ? { limit } : {}),
       ...(offset !== undefined ? { offset } : {}),
-      ...(requestedTypes
-        ? { eventTypes: requestedTypes as HouseholdActivityEventType[] }
-        : {}),
+      // An explicit ?eventType= is honored as-is (including a recording
+      // lifecycle type, if ever requested deliberately). With no filter, the
+      // timeline defaults to excluding recording lifecycle noise -- a clip
+      // shows up attached to the event that caused it, not as its own row.
+      eventTypes: (requestedTypes ??
+        DEFAULT_TIMELINE_EVENT_TYPES) as HouseholdActivityEventType[],
       ...(camera?.success ? { cameraSourceId: camera.data.cameraId } : {}),
       ...(since ? { since } : {}),
     });
@@ -251,6 +263,31 @@ export function registerActivityRoutes(
     return { settings: result };
   });
 
+  app.put('/api/cameras/:cameraId/use-case', async (request, reply) => {
+    const session = await authenticateHouseholdAdminStateChange(request, reply);
+    if (!session) return;
+    const parameters = cameraParameterSchema.safeParse(request.params);
+    const body = cameraUseCaseBodySchema.safeParse(request.body);
+    if (!parameters.success || !body.success)
+      return reply.code(400).send({ error: 'Invalid camera use' });
+    const result = await store.setCameraUseCase(
+      session.householdId,
+      parameters.data.cameraId,
+      body.data.useCase,
+      motionPresetFor(body.data.useCase),
+    );
+    if (!result) return reply.code(404).send({ error: 'Camera unavailable' });
+    await store.audit({
+      eventType: 'camera_use_case_changed',
+      householdId: session.householdId,
+      userId: session.userId,
+      success: true,
+      ipAddress: request.ip,
+      metadata: { cameraId: parameters.data.cameraId, useCase: result.useCase },
+    });
+    return result;
+  });
+
   app.get('/api/device/motion-settings', async (request, reply) => {
     const token = request.headers.authorization?.startsWith('Bearer ')
       ? request.headers.authorization.slice('Bearer '.length)
@@ -301,7 +338,44 @@ export function registerActivityRoutes(
         deviceName: event.deviceName,
         confidence: Number(event.confidence.toFixed(4)),
         occurredAt: event.occurredAt.toISOString(),
+        recordingId: event.recordingId,
+        recordingStatus: event.recordingStatus,
       })),
+    };
+  });
+
+  app.get('/api/motion-events/:motionEventId', async (request, reply) => {
+    const session = await authenticate(request, reply);
+    if (!session) return;
+    const parameters = motionEventParameterSchema.safeParse(request.params);
+    if (!parameters.success)
+      return reply.code(404).send({ error: 'Motion event unavailable' });
+    const allowedCameraIds =
+      session.role === 'owner' || session.role === 'admin'
+        ? undefined
+        : (
+            await store.listAccessibleCameras(
+              session.householdId,
+              session.userId,
+              session.role,
+            )
+          ).map((camera) => camera.publicCameraId);
+    const event = await store.getMotionEventById(
+      session.householdId,
+      parameters.data.motionEventId,
+      allowedCameraIds,
+    );
+    if (!event)
+      return reply.code(404).send({ error: 'Motion event unavailable' });
+    return {
+      id: event.id,
+      cameraId: event.publicCameraId,
+      cameraName: event.cameraName,
+      deviceName: event.deviceName,
+      confidence: Number(event.confidence.toFixed(4)),
+      occurredAt: event.occurredAt.toISOString(),
+      recordingId: event.recordingId,
+      recordingStatus: event.recordingStatus,
     };
   });
 

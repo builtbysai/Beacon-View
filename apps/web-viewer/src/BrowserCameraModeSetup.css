@@ -151,7 +151,9 @@
   color: var(--text-primary);
 }
 
-.local-field input,
+/* Text fields only: choices inside a field group (e.g. camera power) keep
+   their native size. */
+.local-field input:not([type='checkbox'], [type='radio']),
 .local-field select {
   width: 100%;
   min-width: 0;
@@ -166,7 +168,7 @@
   outline: none;
 }
 
-.local-field input:focus,
+.local-field input:not([type='checkbox'], [type='radio']):focus,
 .local-field select:focus {
   border-color: var(--accent-base);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-base) 12%, transparent);
@@ -274,4 +276,92 @@
   .local-actions .btn {
     width: 100%;
   }
+}
+
+/* Camera power (ADR 0083): standby keeps the lens off until a viewer
+   arrives. */
+.camera-power {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.camera-power legend {
+  margin-bottom: 4px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.camera-power b {
+  font-weight: 600;
+}
+.camera-power .local-check {
+  margin-bottom: 0;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.broadcast-standby {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: #cbd5e1;
+  background: #080f1c;
+}
+.broadcast-standby svg {
+  width: 40px;
+  height: 40px;
+  opacity: 0.7;
+}
+.broadcast-standby strong {
+  color: #f8fafc;
+  font-size: 18px;
+}
+.broadcast-standby span {
+  max-width: 360px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.camera-power-microphone {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+.camera-power-microphone select {
+  min-width: 0;
+}
+
+/* Talk is audible at the camera, so it is always announced there. */
+.broadcast-talking {
+  position: absolute;
+  bottom: 96px;
+  left: 50%;
+  z-index: 6;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: #04111f;
+  background: #7dd3fc;
+  font-size: 14px;
+  font-weight: 600;
+  transform: translateX(-50%);
+}
+.broadcast-talking svg {
+  width: 16px;
+  height: 16px;
 }

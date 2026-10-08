@@ -24,6 +24,7 @@ describe('live video presentation', () => {
       'Allow microphone access to talk.',
     );
     expect(talkStatusText('speaking')).toBe('Speaking · microphone on');
-    expect(talkStatusText('unavailable')).toBe('Talk unavailable.');
+    expect(talkStatusText('unavailable')).toMatch(/isn’t available right now/);
+    expect(talkStatusText('mic_blocked')).toMatch(/allow microphone access/i);
   });
 });

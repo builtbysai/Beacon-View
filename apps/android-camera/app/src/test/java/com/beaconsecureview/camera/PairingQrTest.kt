@@ -61,14 +61,14 @@ class PairingQrTest {
     fun acceptsOnlyTrustedGoogleMobileReturnLinks() {
         val code = "A".repeat(40)
         assertEquals(
-            code,
+            MobileGoogleAuthResult(code = code),
             parseMobileGoogleAuthLink(
                 "https://beacon.builtbysai.com/auth/mobile#code=$code",
                 "https://beacon.builtbysai.com",
             ),
         )
         assertEquals(
-            code,
+            MobileGoogleAuthResult(code = code),
             parseMobileGoogleAuthLink(
                 "beaconsecureview://auth/mobile?code=$code",
                 "https://beacon.builtbysai.com",
@@ -83,6 +83,30 @@ class PairingQrTest {
         assertNull(
             parseMobileGoogleAuthLink(
                 "beaconsecureview://other/mobile?code=$code",
+                "https://beacon.builtbysai.com",
+            ),
+        )
+    }
+
+    @Test
+    fun surfacesGoogleSignInFailureAndLinkRequiredStatuses() {
+        assertEquals(
+            MobileGoogleAuthResult(status = "failed"),
+            parseMobileGoogleAuthLink(
+                "https://beacon.builtbysai.com/auth/mobile#status=failed",
+                "https://beacon.builtbysai.com",
+            ),
+        )
+        assertEquals(
+            MobileGoogleAuthResult(status = "linkRequired"),
+            parseMobileGoogleAuthLink(
+                "https://beacon.builtbysai.com/auth/mobile#status=linkRequired",
+                "https://beacon.builtbysai.com",
+            ),
+        )
+        assertNull(
+            parseMobileGoogleAuthLink(
+                "https://beacon.builtbysai.com/auth/mobile#status=bogus",
                 "https://beacon.builtbysai.com",
             ),
         )

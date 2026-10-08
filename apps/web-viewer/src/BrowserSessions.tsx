@@ -42,7 +42,8 @@ export function BrowserSessions({
         if (active) setSessions(result.sessions);
       })
       .catch(() => {
-        if (active) setError('Signed-in devices could not be loaded.');
+        if (active)
+          setError('Signed-in devices couldn’t be loaded. Try again.');
       });
     return () => {
       active = false;

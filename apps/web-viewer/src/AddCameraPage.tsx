@@ -4,12 +4,14 @@ import './AddCameraPage.css';
 type AddCameraPageProps = {
   onBack: () => void;
   onPairAndroid: () => void;
+  onSetUpComputer: () => void;
   onUseBrowser: () => void;
 };
 
 export function AddCameraPage({
   onBack,
   onPairAndroid,
+  onSetUpComputer,
   onUseBrowser,
 }: AddCameraPageProps) {
   return (
@@ -43,6 +45,23 @@ export function AddCameraPage({
           </div>
           <button className="btn primary" onClick={onPairAndroid}>
             Pair a device &rarr;
+          </button>
+        </article>
+
+        <article className="add-device-choice">
+          <div className="add-device-ico">
+            <Icon name="download" />
+          </div>
+          <h2>Set up another computer</h2>
+          <p>
+            Turn a spare Windows, Mac, or Linux computer into a camera that runs
+            in the background and wakes when you view it.
+          </p>
+          <div className="add-device-meta">
+            One download that sets itself up.
+          </div>
+          <button className="btn secondary" onClick={onSetUpComputer}>
+            Set up a computer &rarr;
           </button>
         </article>
 

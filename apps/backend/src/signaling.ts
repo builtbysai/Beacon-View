@@ -310,6 +310,18 @@ export class SignalingHub {
     return true;
   }
 
+  /** Sends a server-authorized recording request directly to the camera
+   * device. Viewer sockets cannot originate this message; callers must first
+   * pass the recording route's owner, Drive, camera-access, and online checks. */
+  requestRecording(publicCameraId: string, recordingId: string): boolean {
+    const device = [...this.#devices.values()].find(
+      (candidate) => candidate.publicCameraId === publicCameraId,
+    );
+    if (!device) return false;
+    this.#send(device.socket, { recordingId, type: 'recording-request' });
+    return device.socket.readyState === device.socket.OPEN;
+  }
+
   #listen(socket: WebSocket, role: PeerRole): void {
     socket.on('message', (data) => {
       if (typeof data !== 'string' && !Buffer.isBuffer(data)) return;

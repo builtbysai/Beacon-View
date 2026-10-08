@@ -89,9 +89,11 @@ not considered complete.
       `requested` → `uploading` directly — noted as a real but harmless
       naming/observability gap, not fixed this pass.)
 - [x] Start with explicit user-triggered or motion-triggered short clips; no
-      hidden or continuous recording. User-triggered capture ships on both
-      web (viewer and browser-camera modes) and Android; motion-triggered
-      capture is server-authoritative (a new per-camera `recordOnMotion`
+      hidden or continuous recording. User-triggered capture ships on web
+      (viewer and browser-camera modes); Android currently captures only
+      server-authorized motion-triggered clips and still needs a manual control
+      and visible indicator. Motion-triggered capture is server-authoritative
+      (a new per-camera `recordOnMotion`
       setting gates whether the motion-event response hands the device a
       `recordingId` to act on) and ships on both platforms. September 16,
       commit `314ff37` — see
@@ -131,15 +133,72 @@ not considered complete.
 
 ### 6. UI/UX pass (after core)
 
-- Rework settings, sidebar, recording controls/library, notification states,
-  household management, and recovery guidance against the finished contracts.
-- Add accessibility, responsive, loading, empty, error, and reconnect states.
+- [x] **Recording controls/library** — September 26-27 batch. The Activity feed
+      is now split from a dedicated Clips library, with a clip attached to the
+      event that caused it (`recordings.trigger_motion_event_id`) instead of
+      showing recording-lifecycle transitions as their own timeline rows.
+      Clips gained keyset pagination, per-camera-grant read access (previously
+      owner-only), time-limited external share links (ADR 0077), and
+      client-captured encrypted thumbnails for browser-recorded clips (ADR
+      0078, Android capture still open). The manual-record control's
+      previously inert `data-tooltip` state indicator was replaced with a
+      persistent, accessible `RecordingBadge`, and an in-progress recording
+      now aborts intentionally (visible failure, not a silent one) if its
+      source stream drops or ends unexpectedly (ADR 0079).
+- [ ] Rework settings, sidebar, notification states, household management, and
+      recovery guidance against the finished contracts. Not started.
+- [ ] Add accessibility, responsive, loading, empty, error, and reconnect
+      states. Done for the Clips/Activity surfaces above; the rest of the app
+      still needs the systematic audit in [responsive-audit.md](responsive-audit.md).
+- [x] **Android/web feature-and-design parity audit** — owner-requested
+      September 27 and completed September 27. See
+      [android-web-parity-audit.md](android-web-parity-audit.md) for the full
+      screen-by-screen and design-token comparison. Headline: color tokens
+      already match (Android's palette was deliberately copied from the
+      web's); the real design gap is an untokenized Android typography/
+      spacing scale, and the real feature gaps at audit time were a missing Clips library,
+      motion settings panel, manual-recording control/indicator, and household/
+      sharing management on Android — none of which are styling issues.
+      The owner approved sequential continuation September 27 and explicitly
+      selected PWA-identical mobile navigation. Android now uses the same modal
+      sidebar grouping (Home/Cameras/Events/Settings), with Activity and Clips
+      inside Events, plus the shared Inter/type/spacing/radius system and the
+      PWA-style native sign-in/password-recovery/registration surfaces. The
+      mobile registration route reuses the browser registration security
+      policy and returns a revocable bearer session. Deployed registration
+      acceptance and the order of later sharing work remain open. The native
+      camera-settings screen also now implements the existing owner/admin motion
+      settings contract (source, detection, sensitivity, record-on-motion,
+      cooldown, and quiet hours). Automated gates and the physical empty state
+      pass; a live settings save/apply acceptance remains open because the
+      current Pixel household returned no editable motion rows.
+      Manual 15-second recording is also implemented locally through a
+      server-owned camera command after the existing owner/storage/access/online
+      checks. It reuses the camera's encrypted upload pipeline and exposes visible
+      viewer, camera-screen, and foreground-notification state. Deployment and a
+      real Drive-backed Android capture remain open.
+- [~] **Android Clips library** — first U7 implementation slice started
+  September 27 on `codex/android-clips-library`: grant-filtered listing,
+  paginated loading, integrity-checked local decryption/playback, and
+  owner-only deletion use the existing backend contracts. Automated Android
+  unit/lint/debug-build gates pass. Physical playback, external sharing,
+  thumbnail display/capture, download/export, and final owner UX review are
+  still open, so this is not complete.
 
 ### 7. Release gate (last)
 
 - Privacy/trust/legal copy, Google OAuth verification, email-domain operations,
   support/retention disclosures, SBOM/CI/signing/staged rollout, and final
   security review.
+- [ ] **MFA/passkeys** — owner-approved September 27 (roadmap N5): add where
+      applicable and on devices that support it. Proposed shape: WebAuthn
+      (passkey) registration/login for the web app as the primary path, since
+      it needs no new server-side OTP delivery channel; Android via Credential
+      Manager passkeys where the device supports it, falling back to the
+      existing password flow everywhere else. Not started -- no MFA/passkey
+      code exists yet on either platform. Needs a design decision on whether a
+      passkey can be the _only_ credential on an account (recovery story if
+      the authenticator is lost) before implementation.
 
 ## Explicit scope boundaries
 
@@ -147,3 +206,13 @@ Beacon will not claim end-to-end encryption unless the implemented key model and
 threat model support that claim. Cloud recording is opt-in, visible to the camera
 user, short-clip based, and disabled while privacy mode is active. Google Drive
 is a user-owned cloud processor and recordings consume the user's quota.
+
+## Camera use-case profiles — research and proposal
+
+The owner is considering purpose-built camera profiles (e.g. doorbell: dormant
+until motion/button; car camera; baby monitor/nursery; the current always-on
+profile) rather than one undifferentiated camera behavior. See
+[camera-use-case-profiles.md](camera-use-case-profiles.md) for the research and
+a proposed incremental implementation plan. No implementation has started; this
+is a research deliverable awaiting owner direction on which profile (if any) to
+build first.

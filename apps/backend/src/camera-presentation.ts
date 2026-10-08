@@ -73,6 +73,7 @@ export function presentCamera(
     privacyMode: camera.privacyMode,
     sourceKey: camera.sourceKey,
     streaming: status.viewerCount > 0,
+    useCase: camera.useCase,
     viewerCount: status.viewerCount,
   } as const;
 }

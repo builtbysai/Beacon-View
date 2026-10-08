@@ -48,6 +48,8 @@ interface CameraSignalingListener {
 
     fun onTalkState(connectionId: String, active: Boolean)
 
+    fun onRecordingRequested(recordingId: String)
+
     fun onAuthorizationLost()
 }
 
@@ -388,6 +390,10 @@ class CameraSignalingClient(
                         message.getString("connectionId"),
                         message.getBoolean("active"),
                     )
+                }
+            "recording-request" ->
+                handler.post {
+                    listener.onRecordingRequested(message.getString("recordingId"))
                 }
         }
     }

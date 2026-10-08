@@ -10,7 +10,10 @@ const THIRTY_DAYS = 30 * DAY;
 const CSRF_COOKIE = 'beacon_csrf';
 
 export function unauthorized(reply: FastifyReply): FastifyReply {
-  return reply.code(401).send({ error: 'Authentication required' });
+  // The code lets the app tell a lapsed session from, say, a wrong password.
+  return reply
+    .code(401)
+    .send({ code: 'session_required', error: 'Authentication required' });
 }
 
 export function createSessionAuth(config: AppConfig, store: MilestoneStore) {

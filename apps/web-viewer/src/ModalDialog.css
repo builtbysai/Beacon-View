@@ -38,7 +38,8 @@
 .confirm-modal,
 .live-camera-settings,
 .favorites-editor,
-.security-activity-dialog {
+.security-activity-dialog,
+.share-clip-modal {
   box-sizing: border-box;
   background-color: var(--bg-base);
   border: 1px solid var(--border-default);

@@ -8,6 +8,8 @@ import { registerAuthenticationRoutes } from './authentication-routes.js';
 import { registerCameraManagementRoutes } from './camera-management-routes.js';
 import type { AppConfig } from './config.js';
 import { registerDeviceRuntimeRoutes } from './device-runtime-routes.js';
+import { DriveHealth } from './drive-connection-health.js';
+import { registerErrorHandling } from './error-handling.js';
 import { registerDriveRoutes } from './drive-routes.js';
 import { registerEnrollmentRoutes } from './enrollment-routes.js';
 import { registerGuestRoutes } from './guest-routes.js';
@@ -66,6 +68,7 @@ export function buildApp(
     },
     requestIdHeader: 'x-request-id',
   });
+  registerErrorHandling(app);
   const store = suppliedStore ?? createPostgresStore(config);
   const sessionAuth = createSessionAuth(config, store);
   const limiter = new RateLimiter();
@@ -135,10 +138,14 @@ export function buildApp(
     limiter,
     store,
   });
-  registerDriveRoutes(app, { auth: sessionAuth, config, store });
+  // One Drive health tracker shared by status and recording routes, so a
+  // token confirmed by either is trusted by both (ADR 0086).
+  const driveHealth = new DriveHealth(store, config);
+  registerDriveRoutes(app, { auth: sessionAuth, config, driveHealth, store });
   registerRecordingRoutes(app, {
     auth: sessionAuth,
     config,
+    driveHealth,
     limiter,
     signaling,
     store,

@@ -122,26 +122,149 @@ internal fun reconciledCameraId(
     return activeSource?.id ?: refreshedSelection?.id
 }
 
-internal fun homeHeadline(cameras: List<BeaconApi.MonitorCamera>): String =
+/** Mirrors the PWA's App.tsx `greeting` exactly (time-of-day, no card --
+ * the web renders this as a plain h2, not a hero panel). */
+internal fun homeGreeting(hour: Int = java.time.LocalTime.now().hour): String =
     when {
-        cameras.isEmpty() -> "Set up your first camera"
-        cameras.any { !it.online || it.privacyMode } -> "A camera needs your attention"
-        cameras.any { it.viewerCount > 0 } -> "Your cameras are being viewed"
-        else -> "Your home is within reach"
+        hour < 5 || hour >= 18 -> "Good evening"
+        hour < 12 -> "Good morning"
+        else -> "Good afternoon"
     }
 
-internal fun homeSupportingText(cameras: List<BeaconApi.MonitorCamera>): String =
-    when {
-        cameras.isEmpty() -> "Pair a spare Android phone or tablet to begin."
-        cameras.any { !it.online || it.privacyMode } -> "Review what needs attention."
-        else -> "Every camera is ready when you need it."
+/** Mirrors the PWA's `subtitle` computation exactly: ready-count phrasing,
+ * then an optional privacy-on mention appended only when nothing needs
+ * attention (matching the web's own precedence -- attention takes priority
+ * over mentioning privacy mode). */
+internal fun homeSubtitle(hostCameras: List<BeaconApi.MonitorCamera>): String {
+    val readyCount = hostCameras.count { it.online && !it.privacyMode }
+    val total = hostCameras.size
+    val cameraWord = if (total == 1) "camera" else "cameras"
+    val verb = if (total == 1) "is" else "are"
+    var subtitle = "$readyCount of $total $cameraWord $verb ready to view."
+    val attentionCount = hostCameras.count { !it.privacyMode && !it.online }
+    val privacyCount = hostCameras.count { it.privacyMode }
+    if (attentionCount == 0 && privacyCount > 0) {
+        val hasHave = if (privacyCount == 1) "has" else "have"
+        subtitle += " $privacyCount $hasHave privacy on."
+    }
+    return subtitle
+}
+
+/** Cameras needing attention: offline and not deliberately in privacy mode --
+ * mirrors the PWA's `attentionCameras` filter exactly. */
+internal fun homeAttentionCameras(hostCameras: List<BeaconApi.MonitorCamera>): List<BeaconApi.MonitorCamera> =
+    hostCameras.filter { !it.privacyMode && !it.online }
+
+/** Mirrors the PWA's attentionTitle/attentionDesc for the 0/1/many cases.
+ * The web additionally distinguishes "needs pairing" from "offline" and a
+ * local-browser-camera case for 1 and lists every name for 2-4; Android has
+ * no equivalent state to tell those apart yet, so this covers the single-
+ * and multi-camera cases with the same general phrasing rather than
+ * guessing at a distinction it can't actually verify. */
+internal fun homeAttentionTitle(attentionCameras: List<BeaconApi.MonitorCamera>): String =
+    if (attentionCameras.size == 1) {
+        "${attentionCameras[0].deviceName} needs attention"
+    } else {
+        "${attentionCameras.size} cameras need attention"
     }
 
-internal fun monitorVisibleCameras(
-    cameras: List<BeaconApi.MonitorCamera>,
+internal fun homeAttentionDescription(attentionCameras: List<BeaconApi.MonitorCamera>): String =
+    if (attentionCameras.size == 1) {
+        "Camera is offline. Reconnect it to restore live viewing."
+    } else {
+        "Multiple cameras are offline or need to be reconnected."
+    }
+
+/** Mirrors the PWA's favorites fallback: the first four host cameras when
+ * nothing has been explicitly favorited yet. */
+internal fun homeFavoriteCameras(
+    hostCameras: List<BeaconApi.MonitorCamera>,
     favoriteCameraIds: Set<String>,
-    favoritesOnly: Boolean,
 ): List<BeaconApi.MonitorCamera> =
-    cameras.filter { !favoritesOnly || it.id in favoriteCameraIds }
+    if (favoriteCameraIds.isEmpty()) hostCameras.take(4) else hostCameras.filter { it.id in favoriteCameraIds }
+
+/** Mirrors the PWA's `CameraBrowser` filter pills exactly (availability
+ * filter with live counts), applied on top of the free-text search. */
+internal enum class CameraCatalogFilter(val label: String) {
+    All("All cameras"),
+    Ready("Ready to view"),
+    Privacy("Privacy on"),
+    Attention("Need attention"),
+}
+
+internal fun cameraCatalogMatchesFilter(
+    camera: BeaconApi.MonitorCamera,
+    filter: CameraCatalogFilter,
+): Boolean =
+    when (filter) {
+        CameraCatalogFilter.All -> true
+        CameraCatalogFilter.Ready -> camera.online && !camera.privacyMode
+        CameraCatalogFilter.Privacy -> camera.privacyMode
+        CameraCatalogFilter.Attention -> !camera.online && !camera.privacyMode
+    }
+
+/** Mirrors the PWA's search box: matches against both the camera name and
+ * its device name, case-insensitively. */
+internal fun cameraCatalogSearchMatches(camera: BeaconApi.MonitorCamera, query: String): Boolean =
+    "${camera.name} ${camera.deviceName}"
+        .lowercase(Locale.getDefault())
+        .contains(query.trim().lowercase(Locale.getDefault()))
+
+internal fun cameraCatalogVisible(
+    cameras: List<BeaconApi.MonitorCamera>,
+    filter: CameraCatalogFilter,
+    query: String,
+): List<BeaconApi.MonitorCamera> =
+    cameras.filter { cameraCatalogMatchesFilter(it, filter) && cameraCatalogSearchMatches(it, query) }
+
+/** Mirrors the PWA's `resultsMessage` computation exactly. */
+internal fun cameraCatalogResultsMessage(query: String, visibleCount: Int, totalCount: Int): String {
+    val trimmed = query.trim()
+    return if (trimmed.isNotEmpty()) {
+        val word = if (visibleCount == 1) "camera matches" else "cameras match"
+        "$visibleCount $word “$trimmed”."
+    } else {
+        "$visibleCount of $totalCount cameras shown"
+    }
+}
 
 internal fun shouldRunNativeViewer(lifecycleStarted: Boolean): Boolean = lifecycleStarted
+
+internal data class LiveOverlay(val title: String, val detail: String)
+
+/** Mirrors the PWA's `liveOverlay` (live-video-presentation.ts): a single
+ * title+detail pair shown over the video instead of separate, sometimes-
+ * inconsistent title/detail lines. Privacy takes precedence over the
+ * connection state, same as the PWA's own status precedence. Android's
+ * `StreamingState` doesn't distinguish the PWA's finer-grained failure
+ * reasons (ICE failed, signaling unavailable, timed out, camera deleted) --
+ * those all collapse into Offline/Failed here, which is what the underlying
+ * viewer session already reports. */
+internal fun liveOverlay(
+    state: StreamingState,
+    privacyMode: Boolean,
+    reconnectAttempt: Int,
+): LiveOverlay? {
+    if (privacyMode) {
+        return LiveOverlay(
+            "Privacy is on",
+            "Live viewing is blocked. Turn privacy off when you are ready to resume.",
+        )
+    }
+    return when (state) {
+        StreamingState.Connected, StreamingState.Ready -> null
+        StreamingState.Connecting ->
+            LiveOverlay("Connecting to camera", "Waiting for the secure live stream.")
+        StreamingState.Reconnecting ->
+            LiveOverlay(
+                "Connection interrupted",
+                "Beacon is retrying" + (if (reconnectAttempt > 0) " · attempt $reconnectAttempt" else "") + ".",
+            )
+        StreamingState.Offline ->
+            LiveOverlay("Camera offline", "Beacon will reconnect automatically.")
+        StreamingState.Failed ->
+            LiveOverlay("Unable to connect", "Beacon will keep trying.")
+        StreamingState.PermissionRequired ->
+            LiveOverlay("Camera permission required", "Camera permission is required on the camera device.")
+    }
+}

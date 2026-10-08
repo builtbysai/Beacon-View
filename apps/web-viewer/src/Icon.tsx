@@ -164,6 +164,12 @@ const shapes = {
       <path d="M9 3H4v5m11-5h5v5M4 16v5h5m11-5v5h-5" />
     </>
   ),
+  pip: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <rect x="12" y="11" width="7" height="6" rx="1" fill="currentColor" />
+    </>
+  ),
   minimize: (
     <>
       <path d="M4 9h5V4M15 4v5h5M20 15h-5v5M9 20v-5H4" />
@@ -243,6 +249,26 @@ const shapes = {
     <>
       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 3v12m0 0-4-4m4 4 4-4" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+    </>
+  ),
+  share: (
+    <>
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="m8.6 10.5 6.8-3.9M8.6 13.5l6.8 3.9" />
+    </>
+  ),
+  film: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 9h18M3 15h18M8 4v16M16 4v16" />
     </>
   ),
 } satisfies Record<string, ReactNode>;

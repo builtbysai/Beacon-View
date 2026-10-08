@@ -12,8 +12,15 @@ import type {
   RecordingDeletionClaim,
   RecordingRecord,
 } from './recording-types.js';
+import type { CameraUseCase, MotionPreset } from './camera-use-case.js';
 import type { RecordingUploadClaim } from './recording-types.js';
 import type { RecordingPlaybackClaim } from './recording-types.js';
+import type {
+  RecordingShareLinkPlaybackClaim,
+  RecordingShareLinkStatus,
+  RecordingThumbnailPlaybackClaim,
+  RecordingThumbnailUploadClaim,
+} from './recording-types.js';
 
 export interface UserRecord {
   id: string;
@@ -119,6 +126,7 @@ export interface CameraRecord {
   enabled: boolean;
   privacyMode: boolean;
   name: string;
+  useCase: CameraUseCase;
   lastSeenAt: Date | null;
   credentialRevokedAt: Date | null;
   capabilities: Record<string, boolean | number | string>;
@@ -264,6 +272,8 @@ export const HOUSEHOLD_ACTIVITY_EVENT_TYPES = [
   'recording_deleted',
   'recording_available',
   'recording_failed',
+  'recording_share_link_created',
+  'recording_share_link_revoked',
   'live_view_started',
   'live_view_rejected',
   'privacy_disabled',
@@ -278,6 +288,25 @@ export const HOUSEHOLD_ACTIVITY_EVENT_TYPES = [
 
 export type HouseholdActivityEventType =
   (typeof HOUSEHOLD_ACTIVITY_EVENT_TYPES)[number];
+
+// Recording lifecycle transitions (requested -> uploading -> available/failed)
+// are internal state, not something that "happened" from a household's point
+// of view -- the resulting clip attaches to the activity event that caused
+// the recording instead (see recordings.trigger_motion_event_id). These stay
+// valid, queryable audit-event types (an explicit ?eventType= request can
+// still ask for them), they are just excluded from the *default* timeline a
+// caller gets when it asks for "everything".
+const RECORDING_LIFECYCLE_EVENT_TYPES = new Set<HouseholdActivityEventType>([
+  'recording_requested',
+  'recording_deleted',
+  'recording_available',
+  'recording_failed',
+]);
+
+export const DEFAULT_TIMELINE_EVENT_TYPES =
+  HOUSEHOLD_ACTIVITY_EVENT_TYPES.filter(
+    (eventType) => !RECORDING_LIFECYCLE_EVENT_TYPES.has(eventType),
+  );
 
 export interface HouseholdActivityRecord {
   id: string;
@@ -314,6 +343,10 @@ export interface MotionEventRecord {
   confidence: number;
   occurredAt: Date;
   cursorTimestamp: string;
+  /** Null when no clip was ever requested for this event (recording was off,
+   * Drive wasn't connected, or another recording was already in flight). */
+  recordingId: string | null;
+  recordingStatus: string | null;
 }
 
 export interface MotionEventOptions {
@@ -351,12 +384,71 @@ export interface MilestoneStore {
   listRecordings(
     householdId: string,
     cameraSourceIds: string[],
+    options?: { limit?: number; before?: { time: string; id: string } },
   ): Promise<RecordingRecord[]>;
   getRecordingPlaybackClaim(
     householdId: string,
+    recordingId: string,
+    cameraSourceIds: string[],
+  ): Promise<RecordingPlaybackClaim | null>;
+  createRecordingShareLink(input: {
+    recordingId: string;
+    householdId: string;
+    createdByUserId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<RecordingShareLinkStatus | null>;
+  getActiveRecordingShareLink(
+    householdId: string,
+    recordingId: string,
+  ): Promise<RecordingShareLinkStatus | null>;
+  revokeRecordingShareLink(
+    householdId: string,
+    linkId: string,
+  ): Promise<boolean>;
+  getRecordingShareLinkPlaybackClaim(
+    tokenHash: string,
+  ): Promise<RecordingShareLinkPlaybackClaim | null>;
+  touchRecordingShareLinkAccess(linkId: string): Promise<void>;
+  beginOwnerThumbnailUpload(input: {
+    byteSize: number;
+    checksumSha256: string;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
+    householdId: string;
+    mimeType: 'image/jpeg' | 'image/webp';
+    recordingId: string;
+    userId: string;
+  }): Promise<RecordingThumbnailUploadClaim | null>;
+  beginThumbnailUploadByCredential(input: {
+    byteSize: number;
+    checksumSha256: string;
+    credentialHash: string;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
+    mimeType: 'image/jpeg' | 'image/webp';
+    recordingId: string;
+  }): Promise<RecordingThumbnailUploadClaim | null>;
+  getThumbnailUploadClaim(
     userId: string,
     recordingId: string,
-  ): Promise<RecordingPlaybackClaim | null>;
+  ): Promise<RecordingThumbnailUploadClaim | null>;
+  getThumbnailUploadClaimByCredential(
+    credentialHash: string,
+    recordingId: string,
+  ): Promise<RecordingThumbnailUploadClaim | null>;
+  completeThumbnailUpload(input: {
+    recordingId: string;
+    providerFileId: string;
+    userId: string;
+  }): Promise<boolean>;
+  getThumbnailPlaybackClaim(
+    householdId: string,
+    recordingId: string,
+    cameraSourceIds: string[],
+  ): Promise<RecordingThumbnailPlaybackClaim | null>;
   deleteRecording(householdId: string, recordingId: string): Promise<boolean>;
   beginAvailableRecordingDeletion(
     householdId: string,
@@ -426,6 +518,10 @@ export interface MilestoneStore {
     userId: string;
   }): Promise<void>;
   removeGoogleDriveConnection(userId: string): Promise<boolean>;
+  /** Marks the connection as no longer accepted by Google (ADR 0086);
+   * true only on the first call. Expired connections read as absent. */
+  markGoogleDriveConnectionExpired(userId: string): Promise<boolean>;
+  googleDriveConnectionExpired(userId: string): Promise<boolean>;
   notificationsConfigured(): boolean;
   recordSecurityEvent(input: {
     userId: string;
@@ -469,6 +565,7 @@ export interface MilestoneStore {
     permanent: boolean,
     retryAfterMs?: number,
   ): Promise<void>;
+  markNotificationExpired(id: string, now: Date): Promise<void>;
   isReady(): Promise<boolean>;
   listMotionSettings(
     householdId: string,
@@ -479,6 +576,14 @@ export interface MilestoneStore {
     publicCameraId: string,
     settings: MotionSettings,
   ): Promise<CameraMotionSettings | null>;
+  /** Sets a camera's use case and, for motion-capable (Android) cameras,
+   * applies its motion preset in the same statement (ADR 0084). */
+  setCameraUseCase(
+    householdId: string,
+    publicCameraId: string,
+    useCase: CameraUseCase,
+    preset: MotionPreset | null,
+  ): Promise<{ motionPresetApplied: boolean; useCase: CameraUseCase } | null>;
   close(): Promise<void>;
   createAccount(
     email: string,
@@ -654,6 +759,11 @@ export interface MilestoneStore {
     householdId: string,
     options?: MotionEventOptions,
   ): Promise<MotionEventRecord[]>;
+  getMotionEventById(
+    householdId: string,
+    motionEventId: string,
+    allowedCameraIds?: string[],
+  ): Promise<MotionEventRecord | null>;
   getMotionRetention(
     householdId: string,
   ): Promise<MotionRetentionRecord | null>;
@@ -674,6 +784,7 @@ export interface MilestoneStore {
     cameraSourceId: string;
     ownerId: string;
     recordOnMotion: boolean;
+    motionEventId: string | null;
   } | null>;
   /** Best-effort: starts a recording for a motion-triggered camera, when the
    * household owner has Drive's recording scope connected and this camera
@@ -683,6 +794,7 @@ export interface MilestoneStore {
   createMotionTriggeredRecording(input: {
     cameraSourceId: string;
     householdId: string;
+    motionEventId: string;
     ownerId: string;
   }): Promise<{ recordingId: string } | null>;
   createPairingCode(

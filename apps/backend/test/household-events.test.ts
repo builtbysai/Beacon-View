@@ -94,4 +94,27 @@ describe('HouseholdEventHub', () => {
     expect(first.closeCode).toBe(4001);
     hub.close();
   });
+
+  it('sends desktop alerts only to the subscribing session', () => {
+    const hub = new HouseholdEventHub();
+    const desktop = new MockSocket();
+    const otherSession = new MockSocket();
+    hub.subscribe('household-a', 'session-a', desktop as unknown as WebSocket);
+    hub.subscribe(
+      'household-a',
+      'session-b',
+      otherSession as unknown as WebSocket,
+    );
+    const alert = {
+      category: 'motion',
+      eventId: 'event-1',
+      route: '/activity',
+      type: 'notification' as const,
+    };
+    expect(hub.sendToSession('session-a', alert)).toBe(1);
+    expect(desktop.sent).toContainEqual(alert);
+    expect(otherSession.sent).not.toContainEqual(alert);
+    desktop.close();
+    expect(hub.sendToSession('session-a', alert)).toBe(0);
+  });
 });

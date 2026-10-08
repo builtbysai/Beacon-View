@@ -17,41 +17,91 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Cameraswitch
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
+/** Mirrors the PWA's CameraSettings.tsx structurally: a device health
+ * summary, an attention/guidance notice when something needs it, the
+ * camera-source list, a privacy toggle, device information, and a danger
+ * section -- rather than the invented "device status card" the previous
+ * version of this screen showed. Owns its own rename/remove/reconnect
+ * network calls (matching this session's other Settings-adjacent panels)
+ * so [onChanged] is the only thing the caller needs to react to. */
 @Composable
 internal fun MonitorDeviceSettings(
+    api: BeaconApi,
+    sessionToken: String,
+    device: BeaconApi.Device?,
     sources: List<BeaconApi.MonitorCamera>,
+    canManageSettings: Boolean,
     busy: Boolean,
     onBack: () -> Unit,
     onView: (BeaconApi.MonitorCamera) -> Unit,
     onActivate: (BeaconApi.MonitorCamera) -> Unit,
     onPrivacyChange: (Boolean) -> Unit,
+    onAuthorizationLost: () -> Unit,
+    onChanged: () -> Unit,
+    motionContent: @Composable () -> Unit = {},
 ) {
-    val device = sources.first()
-    val activeSource = sources.firstOrNull { it.available } ?: device
+    val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
+    val activeSource = sources.firstOrNull { it.available } ?: sources.first()
     val online = sources.any { it.online }
     val privacyMode = sources.any { it.privacyMode }
+    val viewers = sources.sumOf { it.viewerCount }
+
+    var renamingDevice by remember(device?.id) { mutableStateOf(false) }
+    var renameDeviceText by remember(device?.id) { mutableStateOf(device?.name.orEmpty()) }
+    var renameBusy by remember { mutableStateOf(false) }
+    var renamingCameraId by remember { mutableStateOf<String?>(null) }
+    var renameCameraText by remember { mutableStateOf("") }
+    var actionError by remember { mutableStateOf("") }
+    var reconnectOpen by remember { mutableStateOf(false) }
+    var reconnectCode by remember { mutableStateOf<String?>(null) }
+    var reconnectBusy by remember { mutableStateOf(false) }
+    var reconnectCopied by remember { mutableStateOf(false) }
+    var removeConfirmOpen by remember { mutableStateOf(false) }
+    var removeBusy by remember { mutableStateOf(false) }
+    var deleteCameraTarget by remember { mutableStateOf<BeaconApi.MonitorCamera?>(null) }
+    var deleteCameraBusy by remember { mutableStateOf(false) }
+    var detailsExpanded by remember { mutableStateOf(false) }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onBack) {
@@ -59,42 +109,76 @@ internal fun MonitorDeviceSettings(
         }
         BeaconWordmark(compact = true)
     }
-    BeaconPageHeader(
-        eyebrow = "Camera settings",
-        title = device.deviceName,
-        supportingText = "Manage this device and choose which camera is active.",
-    )
+
+    if (device == null) {
+        Text("Loading device…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+        Column {
+            Text(
+                deviceKindLabel(device.platform, device.deviceType).uppercase(),
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(device.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+        }
+        if (canManageSettings) {
+            IconButton(onClick = { renameDeviceText = device.name; renamingDevice = true }) {
+                Icon(Icons.Outlined.Edit, "Rename this camera")
+            }
+        }
+    }
+    if (actionError.isNotBlank()) Text(actionError, color = MaterialTheme.colorScheme.error)
+
     BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-        Text("DEVICE STATUS", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        Text(
-            when {
-                privacyMode -> "Privacy mode is on"
-                online -> "Ready to view"
-                else -> "Camera is offline"
-            },
-            modifier = Modifier.padding(top = 7.dp),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            "${sources.size} camera ${if (sources.size == 1) "source" else "sources"} · ${sources.sumOf { it.viewerCount }} watching",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Button(
-            enabled = online && !privacyMode && !busy,
-            onClick = { onView(activeSource) },
-            modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
-        ) {
-            Icon(Icons.Outlined.Videocam, null, modifier = Modifier.size(18.dp))
-            Text("Open live view", modifier = Modifier.padding(start = 7.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column {
+                Text("Connection", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    deviceConnectionLabel(device),
+                    fontWeight = FontWeight.Bold,
+                    color = if (deviceIsHealthy(device)) BeaconOnline else MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Column {
+                Text("Last seen", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Text(relativeLastSeen(device.lastSeenAt), fontWeight = FontWeight.Bold)
+            }
+            Column {
+                Text("Viewers", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Text(viewers.toString(), fontWeight = FontWeight.Bold)
+            }
         }
     }
 
-    Text("Camera source", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-    Text(
-        "Switching here also switches the camera device, so both sides stay in sync.",
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    val notice = deviceAttentionNotice(device, sources.size, canReconnect = canManageSettings)
+    if (notice != null) {
+        BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+            Text(notice.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(notice.summary, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+            if (notice.showReconnect) {
+                OutlinedButton(onClick = { reconnectOpen = true; reconnectCode = null; reconnectCopied = false }, modifier = Modifier.padding(top = 10.dp)) {
+                    Text("Reconnect")
+                }
+            }
+            TextButton(onClick = { detailsExpanded = !detailsExpanded }, modifier = Modifier.padding(top = 4.dp)) {
+                Text(notice.detailsLabel)
+            }
+            if (detailsExpanded) {
+                Column(modifier = Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    notice.steps.forEachIndexed { index, step ->
+                        Text("${index + 1}. $step", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+    }
+
+    Text(if (sources.size > 1) "Cameras" else "Camera", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+    Text("Live view and source information.", color = MaterialTheme.colorScheme.onSurfaceVariant)
     sources.forEach { source ->
         val active = source.id == activeSource.id
         BeaconPanel(modifier = Modifier.fillMaxWidth()) {
@@ -109,12 +193,12 @@ internal fun MonitorDeviceSettings(
                         null,
                         tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Column(modifier = Modifier.padding(start = 12.dp)) {
-                        Text(source.name, fontWeight = FontWeight.Bold)
+                    Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
+                        Text(source.name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
                             when (source.facing.lowercase()) {
-                                "front" -> "Front camera"
-                                "back", "rear" -> "Rear camera"
+                                "front" -> "Front source"
+                                "back", "rear" -> "Rear source"
                                 else -> "Camera source"
                             },
                             style = MaterialTheme.typography.bodySmall,
@@ -122,36 +206,261 @@ internal fun MonitorDeviceSettings(
                         )
                     }
                 }
-                if (active) {
-                    BeaconStatusPill("ACTIVE", BeaconOnline)
-                } else {
-                    OutlinedButton(
-                        enabled = online && !privacyMode && !busy,
-                        onClick = { onActivate(source) },
-                    ) { Text("Use") }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (active) BeaconStatusPill("ACTIVE", BeaconOnline) else OutlinedButton(enabled = online && !privacyMode && !busy, onClick = { onActivate(source) }) { Text("Use") }
+                    if (canManageSettings) {
+                        IconButton(onClick = { renamingCameraId = source.id; renameCameraText = source.name }) {
+                            Icon(Icons.Outlined.Edit, "Rename ${source.name}", modifier = Modifier.size(20.dp))
+                        }
+                        IconButton(onClick = { deleteCameraTarget = source }) {
+                            Icon(Icons.Outlined.Delete, "Remove ${source.name}", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                        }
+                    }
                 }
+            }
+            Button(
+                enabled = source.available && !busy,
+                onClick = { onView(source) },
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+            ) {
+                Icon(Icons.Outlined.Videocam, null, modifier = Modifier.size(18.dp))
+                Text("View live", modifier = Modifier.padding(start = 7.dp))
             }
         }
     }
 
-    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-        Text("Privacy mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text(
-            if (privacyMode) "Capture is stopped on this device." else "Stop camera and microphone capture immediately.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        OutlinedButton(
-            enabled = (online || privacyMode) && !busy,
-            onClick = { onPrivacyChange(!privacyMode) },
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-        ) {
-            Icon(Icons.Outlined.Lock, null, modifier = Modifier.size(18.dp))
+    if (device.platform == "android") {
+        BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Privacy", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Pause capture from every camera on this phone.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(
+                    checked = privacyMode,
+                    enabled = (online || privacyMode) && !busy,
+                    modifier = Modifier.semantics { contentDescription = "Privacy: pause capture from every camera on this phone" },
+                    onCheckedChange = { onPrivacyChange(!privacyMode) },
+                )
+            }
             Text(
-                if (busy) "Updating…" else if (privacyMode) "Resume" else "Pause",
-                modifier = Modifier.padding(start = 7.dp),
+                "Local privacy is the fastest way to stop camera and microphone capture.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 8.dp),
             )
         }
-        BeaconTrustLine("Camera and microphone use always stays visible on the camera device.")
+    }
+
+    motionContent()
+
+    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+        Text("Device information", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            BeaconFactRow("Device", deviceKindLabel(device.platform, device.deviceType))
+            BeaconFactRow(
+                "Power",
+                if (device.platform != "android") {
+                    "Not applicable"
+                } else if (device.batteryPercent == null) {
+                    "Not reported"
+                } else {
+                    "${device.batteryPercent}%${if (device.batteryCharging) " · charging" else ""}"
+                },
+            )
+            if (device.platform == "android") {
+                BeaconFactRow("Health updated", relativeLastSeen(device.healthReportedAt))
+            }
+            BeaconFactRow("Capabilities", capabilitySummary(device.capabilities))
+            BeaconFactRow("Software version", device.softwareVersion ?: "Not reported")
+            BeaconFactRow("Access", if (device.revoked) "Revoked" else if (device.enabled) "Active" else "Disabled")
+        }
+    }
+
+    if (device.canRemove) {
+        BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+            Text("Remove camera", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+            Text(
+                "Disconnects every source paired to this camera. You can pair the device again later.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(
+                onClick = { removeConfirmOpen = true },
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) { Text("Remove camera") }
+        }
+    }
+
+    Text(
+        "Device changes apply immediately. Motion settings save separately.",
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodySmall,
+    )
+
+    if (renamingDevice) {
+        AlertDialog(
+            onDismissRequest = { if (!renameBusy) renamingDevice = false },
+            title = { Text("Rename this camera") },
+            text = {
+                OutlinedTextField(
+                    value = renameDeviceText,
+                    onValueChange = { renameDeviceText = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            dismissButton = { TextButton(enabled = !renameBusy, onClick = { renamingDevice = false }) { Text("Cancel") } },
+            confirmButton = {
+                Button(
+                    enabled = renameDeviceText.isNotBlank() && !renameBusy,
+                    onClick = {
+                        renameBusy = true
+                        actionError = ""
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) { runCatching { api.renameDevice(sessionToken, device.id, renameDeviceText.trim()) } }
+                            result.onSuccess {
+                                renamingDevice = false
+                                onChanged()
+                            }.onFailure {
+                                if (it is AuthorizationLostException) onAuthorizationLost() else actionError = it.userFacingMessage("This device could not be renamed")
+                            }
+                            renameBusy = false
+                        }
+                    },
+                ) { Text(if (renameBusy) "Saving…" else "Save") }
+            },
+        )
+    }
+
+    renamingCameraId?.let { cameraId ->
+        AlertDialog(
+            onDismissRequest = { renamingCameraId = null },
+            title = { Text("Rename this camera source") },
+            text = {
+                OutlinedTextField(
+                    value = renameCameraText,
+                    onValueChange = { renameCameraText = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            dismissButton = { TextButton(onClick = { renamingCameraId = null }) { Text("Cancel") } },
+            confirmButton = {
+                Button(
+                    enabled = renameCameraText.isNotBlank(),
+                    onClick = {
+                        val name = renameCameraText.trim()
+                        renamingCameraId = null
+                        actionError = ""
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) { runCatching { api.renameCameraSource(sessionToken, cameraId, name) } }
+                            result.onSuccess { onChanged() }.onFailure {
+                                if (it is AuthorizationLostException) onAuthorizationLost() else actionError = it.userFacingMessage("This camera could not be renamed")
+                            }
+                        }
+                    },
+                ) { Text("Save") }
+            },
+        )
+    }
+
+    deleteCameraTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { if (!deleteCameraBusy) deleteCameraTarget = null },
+            title = { Text("Remove this camera source?") },
+            text = { Text("This disconnects ${target.name} only. Other sources on this device are unaffected.") },
+            dismissButton = { TextButton(enabled = !deleteCameraBusy, onClick = { deleteCameraTarget = null }) { Text("Cancel") } },
+            confirmButton = {
+                Button(
+                    enabled = !deleteCameraBusy,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    onClick = {
+                        deleteCameraBusy = true
+                        actionError = ""
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) { runCatching { api.removeCameraSource(sessionToken, target.id) } }
+                            result.onSuccess {
+                                deleteCameraTarget = null
+                                onChanged()
+                            }.onFailure {
+                                if (it is AuthorizationLostException) onAuthorizationLost() else actionError = it.userFacingMessage("This camera could not be removed")
+                            }
+                            deleteCameraBusy = false
+                        }
+                    },
+                ) { Text(if (deleteCameraBusy) "Removing…" else "Remove") }
+            },
+        )
+    }
+
+    if (removeConfirmOpen) {
+        AlertDialog(
+            onDismissRequest = { if (!removeBusy) removeConfirmOpen = false },
+            title = { Text("Remove this camera?") },
+            text = { Text("Disconnects every source paired to this camera. You can pair the device again later.") },
+            dismissButton = { TextButton(enabled = !removeBusy, onClick = { removeConfirmOpen = false }) { Text("Cancel") } },
+            confirmButton = {
+                Button(
+                    enabled = !removeBusy,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    onClick = {
+                        removeBusy = true
+                        actionError = ""
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) { runCatching { api.removeDevice(sessionToken, device.id) } }
+                            result.onSuccess {
+                                removeConfirmOpen = false
+                                onBack()
+                                onChanged()
+                            }.onFailure {
+                                if (it is AuthorizationLostException) onAuthorizationLost() else actionError = it.userFacingMessage("This camera could not be removed")
+                            }
+                            removeBusy = false
+                        }
+                    },
+                ) { Text(if (removeBusy) "Removing…" else "Remove camera") }
+            },
+        )
+    }
+
+    if (reconnectOpen) {
+        AlertDialog(
+            onDismissRequest = { reconnectOpen = false },
+            title = { Text("Reconnect this camera") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Sm)) {
+                    val code = reconnectCode
+                    if (code == null) {
+                        Text("Create a one-time code, then open Beacon on the camera phone and enter it to reconnect without losing its settings.")
+                    } else {
+                        Text("Enter this code on the camera phone within 10 minutes:")
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(code, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { clipboard.setText(AnnotatedString(code)); reconnectCopied = true }) { Text(if (reconnectCopied) "Copied" else "Copy") }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (reconnectCode == null) {
+                    Button(
+                        enabled = !reconnectBusy,
+                        onClick = {
+                            reconnectBusy = true
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) { runCatching { api.reconnectDevicePairingCode(sessionToken, device.id) } }
+                                result.onSuccess { reconnectCode = it }.onFailure {
+                                    if (it is AuthorizationLostException) onAuthorizationLost() else actionError = it.userFacingMessage("A new pairing code could not be created")
+                                }
+                                reconnectBusy = false
+                            }
+                        },
+                    ) { Text(if (reconnectBusy) "Creating…" else "Create code") }
+                }
+            },
+            dismissButton = { TextButton(onClick = { reconnectOpen = false }) { Text(if (reconnectCode == null) "Cancel" else "Done") } },
+        )
     }
 }
 @Composable
@@ -159,8 +468,6 @@ internal fun MonitorCameraGrid(
     cameras: List<BeaconApi.MonitorCamera>,
     onView: (BeaconApi.MonitorCamera) -> Unit,
     onSettings: ((BeaconApi.MonitorCamera) -> Unit)? = null,
-    reordering: Boolean = false,
-    onMove: (BeaconApi.MonitorCamera, Int) -> Unit = { _, _ -> },
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val columns = monitorColumnCount(maxWidth.value)
@@ -169,17 +476,11 @@ internal fun MonitorCameraGrid(
         Column(verticalArrangement = Arrangement.spacedBy(gap)) {
             cameras.chunked(columns).forEach { rowCameras ->
                 Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    rowCameras.forEachIndexed { index, camera ->
-                        val absoluteIndex = cameras.indexOf(camera)
+                    rowCameras.forEach { camera ->
                         MonitorCameraCard(
                             camera = camera,
                             onView = { onView(camera) },
                             onSettings = onSettings?.let { settings -> { settings(camera) } },
-                            reordering = reordering,
-                            canMoveEarlier = absoluteIndex > 0,
-                            canMoveLater = absoluteIndex < cameras.lastIndex,
-                            onMoveEarlier = { onMove(camera, -1) },
-                            onMoveLater = { onMove(camera, 1) },
                             modifier = Modifier.width(tileWidth),
                         )
                     }
@@ -234,30 +535,6 @@ internal fun AccessEventRow(
 }
 
 @Composable
-internal fun MotionEventRow(event: BeaconApi.MotionEvent) {
-    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Motion detected", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(event.deviceName, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(event.cameraName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            BeaconStatusPill("${(event.confidence * 100).toInt()}%", BeaconWarning)
-        }
-        Text(
-            friendlyAccessTime(event.occurredAt),
-            modifier = Modifier.padding(top = 10.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
 internal fun MotionEventPreviewRow(event: BeaconApi.MotionEvent) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
@@ -303,20 +580,15 @@ private fun MonitorCameraCard(
     camera: BeaconApi.MonitorCamera,
     onView: () -> Unit,
     onSettings: (() -> Unit)?,
-    reordering: Boolean,
-    canMoveEarlier: Boolean,
-    canMoveLater: Boolean,
-    onMoveEarlier: () -> Unit,
-    onMoveLater: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val available = camera.online && !camera.privacyMode
     Column(
         modifier =
             modifier
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
-                .clip(RoundedCornerShape(14.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(BeaconRadii.Lg))
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(BeaconRadii.Lg))
+                .clip(RoundedCornerShape(BeaconRadii.Lg))
                 .clickable(
                     enabled = available,
                     onClickLabel = "View ${camera.name} live",
@@ -386,7 +658,7 @@ private fun MonitorCameraCard(
             ) {
                 Text(camera.deviceName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
                 if (onSettings != null) {
-                    IconButton(onClick = onSettings, modifier = Modifier.size(36.dp)) {
+                    IconButton(onClick = onSettings) {
                         Icon(Icons.Outlined.Settings, "Settings for ${camera.deviceName}", modifier = Modifier.size(20.dp))
                     }
                 }
@@ -400,20 +672,6 @@ private fun MonitorCameraCard(
                     modifier = Modifier.padding(top = 5.dp),
                 )
             }
-        if (reordering) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    enabled = canMoveEarlier,
-                    onClick = onMoveEarlier,
-                    modifier = Modifier.weight(1f),
-                ) { Text("Earlier") }
-                OutlinedButton(
-                    enabled = canMoveLater,
-                    onClick = onMoveLater,
-                    modifier = Modifier.weight(1f),
-                ) { Text("Later") }
-            }
-        }
         }
     }
 }

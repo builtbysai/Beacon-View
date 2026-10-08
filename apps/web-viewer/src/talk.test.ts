@@ -143,8 +143,42 @@ describe('connection-scoped Talk', () => {
     expect(unavailable.onState).toHaveBeenLastCalledWith('unavailable');
     const denied = setup();
     await denied.session.start();
-    expect(denied.onState).toHaveBeenLastCalledWith('unavailable');
+    expect(denied.onState).toHaveBeenLastCalledWith('mic_blocked');
     expect(denied.send).not.toHaveBeenCalled();
+  });
+
+  it('tells a missing or busy microphone apart from a blocked one', async () => {
+    vi.stubGlobal('navigator', {
+      mediaDevices: {
+        getUserMedia: vi
+          .fn()
+          .mockRejectedValue(
+            new DOMException(
+              'Could not start audio source',
+              'NotReadableError',
+            ),
+          ),
+      },
+    });
+    const busyMic = setup();
+    await busyMic.session.start();
+    expect(busyMic.onState).toHaveBeenLastCalledWith('mic_failed');
+  });
+
+  it('says when this viewer may not talk through the camera', async () => {
+    const { stream } = microphone();
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia: vi.fn().mockResolvedValue(stream) },
+    });
+    const { session, onState } = setup();
+    await session.start();
+    session.receive({
+      active: false,
+      connectionId: 'connection-a',
+      reason: 'not_allowed',
+    });
+    expect(onState).toHaveBeenLastCalledWith('not_allowed');
+    session.dispose();
   });
 
   it('stops capture if track attachment fails', async () => {

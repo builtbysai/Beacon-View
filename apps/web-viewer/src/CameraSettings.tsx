@@ -7,6 +7,7 @@ import { capabilitySummary, relativeLastSeen } from './device-presentation';
 import type { Camera, Device } from './domain';
 import { Icon } from './Icon';
 import { InlineRename } from './InlineRename';
+import { CameraUseCasePanel } from './CameraUseCasePanel';
 import { MotionSettingsPanel } from './MotionSettingsPanel';
 import { deviceKindLabel } from './naming';
 import './CameraSettingsSheet.css';
@@ -44,6 +45,9 @@ export function CameraSettings({
   onReconnect?: (device: Device) => void;
   canManageSettings: boolean;
 }) {
+  // Bumped when a use-case preset changes motion settings, so the motion
+  // panel reloads what the server now has.
+  const [motionRevision, setMotionRevision] = useState(0);
   const [renamingDevice, setRenamingDevice] = useState(false);
 
   if (!device) {
@@ -331,10 +335,21 @@ export function CameraSettings({
           </section>
         )}
 
+        {canManageSettings && !device.revoked && cameras.length > 0 && (
+          <CameraUseCasePanel
+            cameras={cameras}
+            onApplied={() => setMotionRevision((value) => value + 1)}
+          />
+        )}
+
         {device.platform === 'android' &&
           canManageSettings &&
           !device.revoked && (
-            <MotionSettingsPanel deviceId={device.id} cameras={cameras} />
+            <MotionSettingsPanel
+              key={motionRevision}
+              deviceId={device.id}
+              cameras={cameras}
+            />
           )}
 
         <section className="camera-settings-group">

@@ -185,6 +185,19 @@ Local PostgreSQL, Coturn, and their deliberately weak example credentials are
 loopback-only. Never reuse those credentials outside an isolated developer
 machine.
 
+## Desktop app
+
+`apps/desktop` is the Electron desktop app (ADR 0082). `pnpm install` downloads the
+Electron runtime. To run it against your local web viewer:
+
+```bash
+BEACON_DESKTOP_ORIGIN=http://127.0.0.1:5173 pnpm --filter @beacon/desktop dev
+```
+
+The real-Electron smoke test is `node scripts/Test-BeaconDesktop.mjs`. It runs against a
+fixture-only local viewer. Packaging, signing, and environment variables are in
+[apps/desktop/README.md](../apps/desktop/README.md).
+
 ## Web viewport regression audit
 
 Run the local, fixture-only browser audit documented in [responsive-audit.md](responsive-audit.md)

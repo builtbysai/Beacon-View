@@ -4,6 +4,10 @@ import type {
   RecordingDeletionClaim,
   RecordingPlaybackClaim,
   RecordingRecord,
+  RecordingShareLinkPlaybackClaim,
+  RecordingShareLinkStatus,
+  RecordingThumbnailPlaybackClaim,
+  RecordingThumbnailUploadClaim,
   RecordingUploadClaim,
 } from './recording-types.js';
 
@@ -14,11 +18,12 @@ export class PostgresRecordingRepository {
     cameraSourceId: string;
     householdId: string;
     userId: string;
+    triggerMotionEventId?: string;
   }): Promise<RecordingRecord | null> {
     const result = await this.pool.query<RecordingRecord>(
       `WITH inserted AS (
-         INSERT INTO recordings (household_id, camera_source_id, created_by_user_id)
-         SELECT $1, cs.id, $3
+         INSERT INTO recordings (household_id, camera_source_id, created_by_user_id, trigger_motion_event_id)
+         SELECT $1, cs.id, $3, $4
          FROM camera_sources cs JOIN cameras d ON d.id=cs.device_id
          WHERE cs.id=$2 AND d.household_id=$1 AND cs.enabled=true
            AND cs.removed_at IS NULL AND d.enabled=true
@@ -30,10 +35,18 @@ export class PostgresRecordingRepository {
               r.created_by_user_id AS "createdByUserId", r.status,
               r.duration_ms AS "durationMs", r.byte_size AS "byteSize",
               r.expires_at AS "expiresAt", r.created_at AS "createdAt",
-              r.updated_at AS "updatedAt"
+              r.updated_at AS "updatedAt",
+              r.trigger_motion_event_id AS "triggerMotionEventId",
+              to_char(r.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorTimestamp",
+              (r.thumbnail_provider_file_id IS NOT NULL) AS "hasThumbnail"
        FROM inserted r JOIN camera_sources cs ON cs.id=r.camera_source_id
        JOIN cameras d ON d.id=cs.device_id`,
-      [input.householdId, input.cameraSourceId, input.userId],
+      [
+        input.householdId,
+        input.cameraSourceId,
+        input.userId,
+        input.triggerMotionEventId ?? null,
+      ],
     );
     return result.rows[0] ?? null;
   }
@@ -41,6 +54,7 @@ export class PostgresRecordingRepository {
   async listForCameraSources(
     householdId: string,
     cameraSourceIds: string[],
+    options: { limit?: number; before?: { time: string; id: string } } = {},
   ): Promise<RecordingRecord[]> {
     if (cameraSourceIds.length === 0) return [];
     const result = await this.pool.query<RecordingRecord>(
@@ -49,22 +63,38 @@ export class PostgresRecordingRepository {
               r.created_by_user_id AS "createdByUserId", r.status,
               r.duration_ms AS "durationMs", r.byte_size AS "byteSize",
               r.expires_at AS "expiresAt", r.created_at AS "createdAt",
-              r.updated_at AS "updatedAt"
+              r.updated_at AS "updatedAt",
+              r.trigger_motion_event_id AS "triggerMotionEventId",
+              to_char(r.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorTimestamp",
+              (r.thumbnail_provider_file_id IS NOT NULL) AS "hasThumbnail"
        FROM recordings r JOIN camera_sources cs ON cs.id=r.camera_source_id
        JOIN cameras d ON d.id=cs.device_id
        WHERE r.household_id=$1 AND r.camera_source_id=ANY($2::uuid[])
          AND r.deleted_at IS NULL
-       ORDER BY r.created_at DESC, r.id DESC LIMIT 200`,
-      [householdId, cameraSourceIds],
+         AND ($4::timestamptz IS NULL OR (r.created_at, r.id) < ($4, $5::uuid))
+       ORDER BY r.created_at DESC, r.id DESC LIMIT $3`,
+      [
+        householdId,
+        cameraSourceIds,
+        options.limit ?? 50,
+        options.before?.time ?? null,
+        options.before?.id ?? null,
+      ],
     );
     return result.rows;
   }
 
+  /** Playback is scoped to the same cameras the requester can otherwise
+   * see (owner/admin get all; a viewer/guest needs a grant on that
+   * specific camera) -- not to whoever happened to request the recording.
+   * `cameraSourceIds` is the caller's already-computed accessible set (see
+   * listAccessibleCameras), so this never re-derives household ACLs. */
   async getPlaybackClaim(
     householdId: string,
-    userId: string,
     recordingId: string,
+    cameraSourceIds: string[],
   ): Promise<RecordingPlaybackClaim | null> {
+    if (cameraSourceIds.length === 0) return null;
     const result = await this.pool.query<RecordingPlaybackClaim>(
       `SELECT provider_file_id AS "providerFileId", byte_size AS "byteSize",
               checksum_sha256 AS "checksumSha256", mime_type AS "mimeType",
@@ -73,7 +103,7 @@ export class PostgresRecordingRepository {
               encryption_data_key_iv AS "encryptionDataKeyIv",
               created_by_user_id AS "userId"
        FROM recordings
-       WHERE id=$3 AND household_id=$1 AND created_by_user_id=$2
+       WHERE id=$2 AND household_id=$1 AND camera_source_id=ANY($3::uuid[])
          AND status='available' AND deleted_at IS NULL
          AND encryption_version=1 AND provider_file_id IS NOT NULL
          AND byte_size IS NOT NULL AND checksum_sha256 IS NOT NULL
@@ -81,7 +111,7 @@ export class PostgresRecordingRepository {
          AND encryption_iv IS NOT NULL
          AND encryption_data_key_ciphertext IS NOT NULL
          AND encryption_data_key_iv IS NOT NULL`,
-      [householdId, userId, recordingId],
+      [householdId, recordingId, cameraSourceIds],
     );
     return result.rows[0] ?? null;
   }
@@ -315,5 +345,288 @@ export class PostgresRecordingRepository {
       [input.userId, input.recordingId, input.providerFileId],
     );
     return (result.rowCount ?? 0) === 1;
+  }
+
+  /** At most one active link per recording: revokes any existing one first,
+   * in the same transaction as creating the new one, so a recording is
+   * never briefly reachable by two tokens at once. Only an available,
+   * non-deleted recording in this household can be shared. */
+  async createShareLink(input: {
+    recordingId: string;
+    householdId: string;
+    createdByUserId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<RecordingShareLinkStatus | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const recording = await client.query(
+        `SELECT id FROM recordings
+         WHERE id=$1 AND household_id=$2 AND status='available'
+           AND deleted_at IS NULL
+         FOR UPDATE`,
+        [input.recordingId, input.householdId],
+      );
+      if (recording.rowCount !== 1) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      await client.query(
+        `UPDATE recording_share_links SET revoked_at=now(), updated_at=now()
+         WHERE recording_id=$1 AND revoked_at IS NULL AND expires_at > now()`,
+        [input.recordingId],
+      );
+      const inserted = await client.query<{
+        id: string;
+        expiresAt: Date;
+      }>(
+        `INSERT INTO recording_share_links
+           (recording_id, household_id, token_hash, created_by_user_id, expires_at)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, expires_at AS "expiresAt"`,
+        [
+          input.recordingId,
+          input.householdId,
+          input.tokenHash,
+          input.createdByUserId,
+          input.expiresAt,
+        ],
+      );
+      await client.query('COMMIT');
+      return inserted.rows[0] ?? null;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getActiveShareLink(
+    householdId: string,
+    recordingId: string,
+  ): Promise<RecordingShareLinkStatus | null> {
+    const result = await this.pool.query<RecordingShareLinkStatus>(
+      `SELECT id, expires_at AS "expiresAt"
+       FROM recording_share_links
+       WHERE recording_id=$2 AND household_id=$1
+         AND revoked_at IS NULL AND expires_at > now()
+       ORDER BY created_at DESC LIMIT 1`,
+      [householdId, recordingId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async revokeShareLink(householdId: string, linkId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE recording_share_links SET revoked_at=now(), updated_at=now()
+       WHERE id=$2 AND household_id=$1 AND revoked_at IS NULL`,
+      [householdId, linkId],
+    );
+    return (result.rowCount ?? 0) === 1;
+  }
+
+  /** Resolves a share token straight to a playback claim in one query, so
+   * the link's validity and the recording's playback readiness are checked
+   * against the same snapshot. Returns null for an unknown, expired,
+   * revoked, or no-longer-available-clip token -- deliberately the same
+   * outcome for all of those, so a guess can't distinguish them. */
+  async getShareLinkPlaybackClaim(
+    tokenHash: string,
+  ): Promise<RecordingShareLinkPlaybackClaim | null> {
+    const result = await this.pool.query<RecordingShareLinkPlaybackClaim>(
+      `SELECT l.id AS "shareLinkId", l.expires_at AS "expiresAt",
+              l.revoked_at AS "revokedAt", r.id AS "recordingId",
+              r.provider_file_id AS "providerFileId", r.byte_size AS "byteSize",
+              r.checksum_sha256 AS "checksumSha256", r.mime_type AS "mimeType",
+              r.encryption_iv AS "encryptionIv",
+              r.encryption_data_key_ciphertext AS "encryptionDataKeyCiphertext",
+              r.encryption_data_key_iv AS "encryptionDataKeyIv",
+              r.created_by_user_id AS "userId"
+       FROM recording_share_links l
+       JOIN recordings r ON r.id = l.recording_id
+       WHERE l.token_hash=$1 AND l.revoked_at IS NULL AND l.expires_at > now()
+         AND r.status='available' AND r.deleted_at IS NULL
+         AND r.encryption_version=1 AND r.provider_file_id IS NOT NULL
+         AND r.byte_size IS NOT NULL AND r.checksum_sha256 IS NOT NULL
+         AND r.mime_type IN ('video/mp4', 'video/webm')
+         AND r.encryption_iv IS NOT NULL
+         AND r.encryption_data_key_ciphertext IS NOT NULL
+         AND r.encryption_data_key_iv IS NOT NULL`,
+      [tokenHash],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async touchShareLinkAccess(linkId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE recording_share_links SET last_accessed_at=now()
+       WHERE id=$1`,
+      [linkId],
+    );
+  }
+
+  // Thumbnails (ADR 0078): a small, independently encrypted image, uploaded
+  // once and never replaced once it lands -- first-write-wins, so a stray
+  // retry can never orphan an already-uploaded Drive file.
+
+  async beginOwnerThumbnailUpload(input: {
+    byteSize: number;
+    checksumSha256: string;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
+    householdId: string;
+    mimeType: 'image/jpeg' | 'image/webp';
+    recordingId: string;
+    userId: string;
+  }): Promise<RecordingThumbnailUploadClaim | null> {
+    const result = await this.pool.query<RecordingThumbnailUploadClaim>(
+      `UPDATE recordings SET thumbnail_byte_size=$4,
+              thumbnail_checksum_sha256=$5, thumbnail_mime_type=$6,
+              thumbnail_encryption_iv=$7,
+              thumbnail_encryption_data_key_ciphertext=$8,
+              thumbnail_encryption_data_key_iv=$9, updated_at=now()
+       WHERE id=$3 AND household_id=$1 AND created_by_user_id=$2
+         AND deleted_at IS NULL AND thumbnail_provider_file_id IS NULL
+       RETURNING id AS "recordingId", created_by_user_id AS "userId",
+                 thumbnail_byte_size AS "byteSize",
+                 thumbnail_mime_type AS "mimeType"`,
+      [
+        input.householdId,
+        input.userId,
+        input.recordingId,
+        input.byteSize,
+        input.checksumSha256,
+        input.mimeType,
+        input.encryptionIv,
+        input.encryptionDataKeyCiphertext,
+        input.encryptionDataKeyIv,
+      ],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async beginThumbnailUploadByCredential(input: {
+    byteSize: number;
+    checksumSha256: string;
+    credentialHash: string;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
+    mimeType: 'image/jpeg' | 'image/webp';
+    recordingId: string;
+  }): Promise<RecordingThumbnailUploadClaim | null> {
+    const result = await this.pool.query<RecordingThumbnailUploadClaim>(
+      `UPDATE recordings r
+       SET thumbnail_byte_size=$3, thumbnail_checksum_sha256=$4,
+           thumbnail_mime_type=$5, thumbnail_encryption_iv=$6,
+           thumbnail_encryption_data_key_ciphertext=$7,
+           thumbnail_encryption_data_key_iv=$8, updated_at=now()
+       FROM camera_sources cs, cameras d, device_credentials dc
+       WHERE r.id=$2 AND r.camera_source_id=cs.id AND cs.device_id=d.id
+         AND dc.camera_id=d.id AND dc.credential_hash=$1
+         AND dc.revoked_at IS NULL AND d.revoked_at IS NULL
+         AND d.enabled=true AND d.privacy_mode=false AND cs.enabled=true
+         AND cs.removed_at IS NULL AND r.deleted_at IS NULL
+         AND r.thumbnail_provider_file_id IS NULL
+       RETURNING r.id AS "recordingId", r.created_by_user_id AS "userId",
+                 r.thumbnail_byte_size AS "byteSize",
+                 r.thumbnail_mime_type AS "mimeType"`,
+      [
+        input.credentialHash,
+        input.recordingId,
+        input.byteSize,
+        input.checksumSha256,
+        input.mimeType,
+        input.encryptionIv,
+        input.encryptionDataKeyCiphertext,
+        input.encryptionDataKeyIv,
+      ],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async getThumbnailUploadClaim(
+    userId: string,
+    recordingId: string,
+  ): Promise<RecordingThumbnailUploadClaim | null> {
+    const result = await this.pool.query<RecordingThumbnailUploadClaim>(
+      `SELECT id AS "recordingId", created_by_user_id AS "userId",
+              thumbnail_byte_size AS "byteSize",
+              thumbnail_mime_type AS "mimeType"
+       FROM recordings WHERE id=$2 AND created_by_user_id=$1
+         AND deleted_at IS NULL AND thumbnail_provider_file_id IS NULL
+         AND thumbnail_byte_size IS NOT NULL
+         AND thumbnail_mime_type IS NOT NULL`,
+      [userId, recordingId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async getThumbnailUploadClaimByCredential(
+    credentialHash: string,
+    recordingId: string,
+  ): Promise<RecordingThumbnailUploadClaim | null> {
+    const result = await this.pool.query<RecordingThumbnailUploadClaim>(
+      `SELECT r.id AS "recordingId", r.created_by_user_id AS "userId",
+              r.thumbnail_byte_size AS "byteSize",
+              r.thumbnail_mime_type AS "mimeType"
+       FROM recordings r
+       JOIN camera_sources cs ON cs.id = r.camera_source_id
+       JOIN cameras d ON d.id = cs.device_id
+       JOIN device_credentials dc ON dc.camera_id = d.id
+       WHERE r.id = $2 AND dc.credential_hash = $1 AND dc.revoked_at IS NULL
+         AND r.deleted_at IS NULL AND r.thumbnail_provider_file_id IS NULL
+         AND r.thumbnail_byte_size IS NOT NULL
+         AND r.thumbnail_mime_type IS NOT NULL`,
+      [credentialHash, recordingId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async completeThumbnailUpload(input: {
+    recordingId: string;
+    providerFileId: string;
+    userId: string;
+  }): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE recordings SET thumbnail_provider_file_id=$3, updated_at=now()
+       WHERE id=$2 AND created_by_user_id=$1
+         AND deleted_at IS NULL AND thumbnail_provider_file_id IS NULL
+         AND thumbnail_byte_size IS NOT NULL`,
+      [input.userId, input.recordingId, input.providerFileId],
+    );
+    return (result.rowCount ?? 0) === 1;
+  }
+
+  async getThumbnailPlaybackClaim(
+    householdId: string,
+    recordingId: string,
+    cameraSourceIds: string[],
+  ): Promise<RecordingThumbnailPlaybackClaim | null> {
+    if (cameraSourceIds.length === 0) return null;
+    const result = await this.pool.query<RecordingThumbnailPlaybackClaim>(
+      `SELECT thumbnail_provider_file_id AS "providerFileId",
+              thumbnail_byte_size AS "byteSize",
+              thumbnail_checksum_sha256 AS "checksumSha256",
+              thumbnail_mime_type AS "mimeType",
+              thumbnail_encryption_iv AS "encryptionIv",
+              thumbnail_encryption_data_key_ciphertext AS "encryptionDataKeyCiphertext",
+              thumbnail_encryption_data_key_iv AS "encryptionDataKeyIv",
+              created_by_user_id AS "userId"
+       FROM recordings
+       WHERE id=$2 AND household_id=$1 AND camera_source_id=ANY($3::uuid[])
+         AND deleted_at IS NULL AND thumbnail_provider_file_id IS NOT NULL
+         AND thumbnail_byte_size IS NOT NULL
+         AND thumbnail_checksum_sha256 IS NOT NULL
+         AND thumbnail_mime_type IN ('image/jpeg', 'image/webp')
+         AND thumbnail_encryption_iv IS NOT NULL
+         AND thumbnail_encryption_data_key_ciphertext IS NOT NULL
+         AND thumbnail_encryption_data_key_iv IS NOT NULL`,
+      [householdId, recordingId, cameraSourceIds],
+    );
+    return result.rows[0] ?? null;
   }
 }
