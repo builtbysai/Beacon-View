@@ -16,6 +16,7 @@ import {
 } from './live-video-quality';
 import { RecordingBadge } from './RecordingBadge';
 import { useClipRecorder } from './useClipRecorder';
+import { usePictureInPicture } from './picture-in-picture';
 import {
   DRIVE_READY,
   type DriveRecording,
@@ -161,6 +162,14 @@ export function LiveVideo({
   const previousBytes = useRef<PreviousInboundBytes | null>(null);
   const stageRef = useRef<HTMLElement>(null);
   const fullscreenButton = useRef<HTMLButtonElement>(null);
+  // Keep watching in a floating window while using other apps or tabs. Only
+  // the full live view floats (and floats on its own when you leave), never
+  // the small tiles on Home.
+  const pip = usePictureInPicture(videoRef, {
+    auto: !compact,
+    enabled: !compact && enabled,
+    title: camera.name,
+  });
   const [fullscreen, setFullscreen] = useState(false);
   const [controlError, setControlError] = useState('');
   const [switching, setSwitching] = useState(false);
@@ -213,6 +222,10 @@ export function LiveVideo({
     if (clip.state.error && !isDriveProblem(clip.state.errorCode))
       setControlError(clip.state.error);
   }, [clip.state.error, clip.state.errorCode]);
+
+  useEffect(() => {
+    if (pip.error) setControlError(pip.error);
+  }, [pip.error]);
 
   // Clears a finished clip's status back to the plain "Record a short
   // clip" control a few seconds after it lands, the same pause the old
@@ -837,6 +850,25 @@ export function LiveVideo({
                 drive={drive}
                 onStart={startRecording}
               />
+            )}
+            {pip.supported && (
+              <button
+                aria-pressed={pip.active}
+                className="video-control"
+                disabled={!videoReady}
+                onClick={pip.toggle}
+                title={
+                  pip.active
+                    ? 'Back to this page'
+                    : 'Keep watching in a floating window'
+                }
+                type="button"
+              >
+                <Icon name="pip" />
+                <span className="visually-hidden">
+                  {pip.active ? 'Close floating window' : 'Picture in picture'}
+                </span>
+              </button>
             )}
             <button
               className="video-control"

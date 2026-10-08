@@ -29,6 +29,7 @@ import {
   validResumePath,
 } from './camera-setup.js';
 import { BeaconAutoUpdater } from './auto-updater.js';
+import { FloatingVideo } from './floating-video.js';
 import { APP_ID, resolveAppOrigin } from './config.js';
 import { DEEP_LINK_SCHEME, type DesktopAuthLink } from './deep-link.js';
 import {
@@ -76,6 +77,7 @@ const recentAlerts = new RecentAlerts();
 let mainWindow: BrowserWindow | null = null;
 let tray: BeaconTray | null = null;
 let updater: BeaconAutoUpdater | null = null;
+const floatingVideo = new FloatingVideo();
 let quitting = false;
 let cameraActivity: CameraActivity = 'off';
 let cameraBlocker: number | null = null;
@@ -430,7 +432,11 @@ function createWindow(): BrowserWindow {
     // Closing hides to the tray; Quit Beacon (tray) really exits.
     event.preventDefault();
     window.hide();
-    updater?.consider();
+    // A camera being watched keeps playing in a floating window (ADR 0088);
+    // an update waits until that's settled.
+    void floatingVideo
+      .float(window.webContents)
+      .then(() => updater?.consider());
     if (cameraActivity !== 'off') {
       notifyCameraInBackground();
     } else if (!preferences.trayHintShown) {
@@ -442,6 +448,10 @@ function createWindow(): BrowserWindow {
       savePreferences();
     }
   });
+  window.on('minimize', () => void floatingVideo.float(window.webContents));
+  // Back in the window: return a video the shell floated to the page.
+  window.on('show', () => void floatingVideo.dock(window.webContents));
+  window.on('restore', () => void floatingVideo.dock(window.webContents));
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = null;
   });
@@ -624,7 +634,8 @@ if (!app.requestSingleInstanceLock()) {
       },
       moment: () => ({
         cameraActivity,
-        windowVisible: Boolean(mainWindow?.isVisible()),
+        windowVisible:
+          Boolean(mainWindow?.isVisible()) || floatingVideo.watching,
       }),
       offer: (offer) => tray?.setUpdate(offer),
       openDownloadPage: () => openExternal(appUrl('/#download')),

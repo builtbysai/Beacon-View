@@ -183,7 +183,13 @@ October 7 desktop 0.3: owner-reported audio and recording failures fixed:
   - Camera, microphone, and Talk failures name their cause.
   - Errors are dismissible and clear on navigation.
   - A failed camera list offers Retry instead of looking empty.
-  - The desktop app reconnects to Camera Mode after an outage. Code signing is not required while the
+  - The desktop app reconnects to Camera Mode after an outage.
+- ADR 0088 adds picture-in-picture on web, desktop, and Android:
+  - Live video keeps playing in a floating window when you leave the app,
+    tab, or window.
+  - It floats automatically while a camera plays, and there is a PiP button
+    in the live view.
+  - On Android, rotating no longer restarts the stream. Code signing is not required while the
     deployment is self-hosted.
     Model selection, a default-off feature flag, and device evidence remain open, and IP
     cameras/other clients still require their own design milestone per ADR 0067 and the table

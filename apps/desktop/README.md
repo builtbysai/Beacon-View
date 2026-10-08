@@ -35,6 +35,13 @@ PWA. Beacon keeps running in the system tray when the window is closed.
 - **Offline page.** A local page appears when Beacon can't be reached on first
   launch, and it reconnects automatically.
 
+## Picture-in-picture
+
+While you watch a camera, minimizing Beacon or closing it to the tray keeps
+the camera playing in a floating window. Reopening Beacon puts the video
+back. The picture-in-picture button in the live view floats it on demand
+(ADR 0088).
+
 ## Not supported yet
 
 - **iOS.** Deferred (see ADR 0082). Install the PWA from Safari instead.
