@@ -27,21 +27,21 @@ jobs:
       # Never pick up a stray signing identity on the runner.
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           version: 11.9.0
           run_install: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22.14.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @beacon/desktop test
       - run: pnpm --filter @beacon/desktop package:${{ matrix.target }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: beacon-desktop-${{ matrix.target }}
           path: |
