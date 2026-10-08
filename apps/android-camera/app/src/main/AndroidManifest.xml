@@ -34,9 +34,15 @@
         <meta-data
             android:name="firebase_messaging_installation_id_enabled"
             android:value="true" />
+        <!-- Picture-in-picture (ADR 0088): the live view floats when you leave
+             the app. The activity handles size and orientation changes itself,
+             so floating (or rotating) never restarts it and drops the stream;
+             the UI is Compose and the camera runs in its own service. -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:exported="true"
+            android:supportsPictureInPicture="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

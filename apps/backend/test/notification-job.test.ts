@@ -100,6 +100,7 @@ describe('runNotificationSweep', () => {
       byChannel: { fcm: 2, web_push: 2 },
       delivered: 2,
       deliveryCount: 4,
+      expired: 0,
       failedPermanent: 1,
       failedRetryable: 1,
     });
@@ -125,5 +126,33 @@ describe('runNotificationSweep', () => {
     );
 
     expect(info).not.toHaveBeenCalled();
+  });
+
+  it('ends an expired desktop alert without treating it as a failure', async () => {
+    const markExpired = vi.fn(() => Promise.resolve());
+    const markFailed = vi.fn(() => Promise.resolve());
+    const store = {
+      claimNotificationDeliveries: () =>
+        Promise.resolve([delivery({ channel: 'desktop', id: 'd1' })]),
+      markNotificationExpired: markExpired,
+      markNotificationFailed: markFailed,
+      scanNotificationPresence: () => Promise.resolve(),
+    } as unknown as MilestoneStore;
+    const sender = {
+      send: () =>
+        Promise.resolve({ expired: true, permanent: false, success: false }),
+    };
+    const info = vi.fn();
+    const now = new Date('2026-10-07T12:00:00Z');
+    await runNotificationSweep(
+      store,
+      sender,
+      { info } as unknown as FastifyBaseLogger,
+      now,
+      120,
+    );
+    expect(markExpired).toHaveBeenCalledWith('d1', now);
+    expect(markFailed).not.toHaveBeenCalled();
+    expect(info.mock.calls[0]?.[0]).toMatchObject({ expired: 1 });
   });
 });

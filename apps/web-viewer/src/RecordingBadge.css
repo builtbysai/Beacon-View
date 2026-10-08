@@ -77,3 +77,12 @@
     animation: none;
   }
 }
+
+/* Clip held while Google Drive is reconnected (ADR 0086): not a failure. */
+.recording-badge.is-waiting {
+  color: #fde68a;
+  background-color: rgba(180, 83, 9, 0.32);
+}
+.recording-badge.is-waiting .recording-badge-dot {
+  background: #fbbf24;
+}

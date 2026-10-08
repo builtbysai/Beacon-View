@@ -1,0 +1,140 @@
+/* One-click computer camera setup (ADR 0083); matches .pair-modal. */
+.computer-setup {
+  width: min(600px, calc(100vw - 32px));
+  max-height: min(800px, calc(100dvh - 32px));
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg-surface);
+  border-radius: 16px;
+  padding: 24px;
+}
+.computer-setup-head {
+  margin-bottom: 18px;
+}
+.computer-setup-head h2 {
+  margin: 3px 0 5px;
+  color: var(--text-primary);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+.computer-setup-head p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.computer-setup-eyebrow {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.computer-setup-error {
+  color: var(--status-error);
+  font-size: 13px;
+}
+.computer-setup-uses {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.computer-setup-use {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.computer-setup-use.is-selected {
+  border-color: var(--accent, #2563eb);
+  box-shadow: 0 0 0 1px var(--accent, #2563eb);
+}
+.computer-setup-use input {
+  margin-top: 3px;
+}
+.computer-setup-use > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.computer-setup-use b {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.computer-setup-use span span {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.computer-setup-code {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  margin: 0 0 16px;
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  overflow-wrap: anywhere;
+}
+.computer-setup-code span {
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.computer-setup-option {
+  display: grid;
+  gap: 8px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border-default);
+}
+.computer-setup-option h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+.computer-setup-option .local-hint {
+  margin: 0;
+}
+.computer-setup-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.computer-setup-option .btn {
+  justify-content: center;
+}
+.computer-setup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+.computer-setup-expired {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.computer-setup-option .btn {
+  gap: 8px;
+}
+.computer-setup-option .btn svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}

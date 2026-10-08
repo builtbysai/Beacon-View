@@ -1,7 +1,10 @@
 packages:
   - apps/backend
+  - apps/desktop
   - apps/web-viewer
   - packages/*
 
 allowBuilds:
+  electron: true
+  electron-winstaller: false
   esbuild: true

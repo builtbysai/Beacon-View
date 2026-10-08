@@ -10,3 +10,6 @@ docs/product-build-brief.md
 
 # Drizzle generated snapshots
 apps/backend/drizzle/meta/*_snapshot.json
+
+# Inline script is pinned by a CSP hash (see apps/desktop/test/local-files.test.ts)
+apps/desktop/static/offline.html

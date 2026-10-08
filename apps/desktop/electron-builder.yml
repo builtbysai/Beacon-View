@@ -1,0 +1,93 @@
+# Packaging for the Beacon desktop app (ADR 0082). Builds are unsigned until
+# the owner provisions Windows code-signing and Apple Developer ID
+# credentials; see apps/desktop/README.md.
+appId: com.builtbysai.beacon
+productName: Beacon
+# Installed folder and Linux package name; the workspace name
+# (@beacon/desktop) would otherwise become "@beacondesktop".
+extraMetadata:
+  name: beacon
+copyright: Copyright © 2026 Beacon SecureView
+
+# Automatic updates (ADR 0085): each build writes latest*.yml next to its
+# installers; publishing them to /downloads/ on the Beacon server is the
+# release. Never change appId or productName: they name the user-data folder
+# that holds sessions and camera credentials, so changing either would sign
+# everyone out and unpair desktop cameras after an update.
+publish:
+  provider: generic
+  url: https://beacon.builtbysai.com/downloads/
+
+directories:
+  buildResources: resources
+  output: release
+
+files:
+  - package.json
+  - dist/**
+  - static/**
+  - assets/**
+
+protocols:
+  - name: Beacon sign-in
+    schemes:
+      - beaconsecureview
+
+# One-click camera setup files (ADR 0083).
+fileAssociations:
+  - ext: beaconcamera
+    name: Beacon camera setup
+    description: Beacon camera setup
+    mimeType: application/x-beacon-camera-setup
+    role: Viewer
+
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+
+win:
+  icon: resources/icon.png
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+
+nsis:
+  include: resources/installer.nsh
+  oneClick: true
+  perMachine: false
+  runAfterFinish: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Beacon
+  artifactName: Beacon-Setup-${version}-${arch}.${ext}
+
+mac:
+  icon: resources/icon.png
+  category: public.app-category.utilities
+  hardenedRuntime: true
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  extendInfo:
+    NSCameraUsageDescription: Beacon uses the camera only while you turn on Camera Mode.
+    NSMicrophoneUsageDescription: Beacon uses the microphone only while you use Talk.
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  artifactName: Beacon-${version}-${arch}.${ext}
+
+linux:
+  icon: resources/icon.png
+  category: Utility
+  maintainer: Beacon SecureView
+  synopsis: Turn any device into a secure camera and watch it live
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  artifactName: Beacon-${version}-${arch}.${ext}

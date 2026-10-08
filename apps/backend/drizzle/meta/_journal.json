@@ -218,6 +218,27 @@
       "when": 1790640000000,
       "tag": "0030_recording_thumbnails",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790726400000,
+      "tag": "0031_desktop_notification_channel",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790812800000,
+      "tag": "0032_camera_use_case",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790899200000,
+      "tag": "0033_google_drive_connection_expiry",
+      "breakpoints": true
     }
   ]
 }

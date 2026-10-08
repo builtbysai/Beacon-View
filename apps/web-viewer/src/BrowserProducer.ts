@@ -19,7 +19,14 @@ type ProducerMessage =
     }
   | { code: string; connectionId?: string; type: 'peer-left' | 'error' }
   | { cameraId: string; type: 'switch-source' }
+  | { active: boolean; connectionId: string; type: 'talk-state' }
   | { type: 'device-ready' };
+
+/** A ready stream (always-on camera), or a function that turns the camera on
+ * when the first viewer arrives (standby camera). The function is called for
+ * every new viewer, so it must return the already-open stream if there is
+ * one. */
+export type StreamSource = MediaStream | (() => Promise<MediaStream>);
 
 function producerUrl(cameraId: string): string {
   const url = new URL('/api/signaling', window.location.href);
@@ -31,6 +38,10 @@ function producerUrl(cameraId: string): string {
 
 export class BrowserProducer {
   readonly #peers = new Map<string, RTCPeerConnection>();
+  /** Talk audio from each viewer, muted until the server grants that viewer
+   * the single talk floor (ADR 0015). */
+  readonly #talkAudio = new Map<string, HTMLAudioElement>();
+  readonly #talking = new Set<string>();
   #socket: WebSocket | null = null;
   #stopped = true;
   #retry = 0;
@@ -39,7 +50,7 @@ export class BrowserProducer {
 
   constructor(
     private readonly cameraId: string,
-    private readonly stream: MediaStream,
+    private readonly source: StreamSource,
     private readonly onState: (
       state: ProducerState,
       viewerCount: number,
@@ -47,6 +58,10 @@ export class BrowserProducer {
     ) => void,
     private readonly onSourceSwitch: (cameraId: string) => void = () =>
       undefined,
+    private readonly onWakeError: (error: unknown) => void = () => undefined,
+    /** Someone is (or stopped) talking through this camera. Camera Mode
+     * shows it, so incoming audio is never silent to the person here. */
+    private readonly onTalking: (talking: boolean) => void = () => undefined,
   ) {}
 
   start(): void {
@@ -63,6 +78,7 @@ export class BrowserProducer {
     for (const [connectionId, peer] of this.#peers) {
       this.#send({ connectionId, type: 'disconnect' });
       peer.close();
+      this.#dropTalk(connectionId);
     }
     this.#peers.clear();
     this.#socket?.close(1000, 'Camera mode stopped');
@@ -109,19 +125,46 @@ export class BrowserProducer {
 
   async #handle(message: ProducerMessage): Promise<void> {
     if (message.type === 'viewer-ready') {
+      const generation = this.#generation;
+      let stream: MediaStream;
+      try {
+        stream =
+          typeof this.source === 'function' ? await this.source() : this.source;
+      } catch (error) {
+        // The camera could not turn on (busy, unplugged, or permission
+        // revoked). End just this viewer's attempt; the camera stays
+        // connected and on standby for the next one.
+        this.#send({ connectionId: message.connectionId, type: 'disconnect' });
+        this.onWakeError(error);
+        return;
+      }
+      // Turning the camera on takes a moment; the socket may have closed or
+      // reconnected meanwhile, which makes this connection ID stale.
+      if (this.#stopped || generation !== this.#generation) return;
       const peer = new RTCPeerConnection({
         iceServers: message.iceServers,
         iceTransportPolicy: message.iceTransportPolicy,
       });
       this.#peers.set(message.connectionId, peer);
-      for (const track of this.stream.getVideoTracks()) {
-        peer.addTrack(track, this.stream);
+      for (const track of stream.getVideoTracks()) {
+        peer.addTrack(track, stream);
       }
-      if (message.canListen) {
-        for (const track of this.stream.getAudioTracks()) {
-          peer.addTrack(track, this.stream);
-        }
-      }
+      // Always negotiate one audio section so the viewer can Talk. It carries
+      // this camera's sound only when the camera shares it and the viewer
+      // may Listen; otherwise it only receives.
+      const audioTrack = message.canListen
+        ? stream.getAudioTracks()[0]
+        : undefined;
+      if (audioTrack)
+        peer.addTransceiver(audioTrack, {
+          direction: 'sendrecv',
+          streams: [stream],
+        });
+      else peer.addTransceiver('audio', { direction: 'recvonly' });
+      peer.ontrack = (event) => {
+        if (event.track.kind === 'audio')
+          this.#playTalk(message.connectionId, event.track);
+      };
       peer.onicecandidate = (event) => {
         if (!event.candidate) return;
         this.#send({
@@ -172,12 +215,50 @@ export class BrowserProducer {
     }
     if (message.type === 'switch-source') {
       this.onSourceSwitch(message.cameraId);
+      return;
     }
+    if (message.type === 'talk-state') {
+      this.#setTalking(message.connectionId, message.active);
+    }
+  }
+
+  #playTalk(connectionId: string, track: MediaStreamTrack): void {
+    this.#talkAudio.get(connectionId)?.remove();
+    const audio = document.createElement('audio');
+    audio.autoplay = true;
+    audio.muted = !this.#talking.has(connectionId);
+    audio.srcObject = new MediaStream([track]);
+    this.#talkAudio.set(connectionId, audio);
+    void Promise.resolve(audio.play()).catch(() => undefined);
+  }
+
+  #setTalking(connectionId: string, active: boolean): void {
+    const wasTalking = this.#talking.size > 0;
+    if (active) this.#talking.add(connectionId);
+    else this.#talking.delete(connectionId);
+    const audio = this.#talkAudio.get(connectionId);
+    if (audio) {
+      audio.muted = !active;
+      if (active) void Promise.resolve(audio.play()).catch(() => undefined);
+    }
+    if (wasTalking !== this.#talking.size > 0)
+      this.onTalking(this.#talking.size > 0);
+  }
+
+  #dropTalk(connectionId: string): void {
+    this.#setTalking(connectionId, false);
+    const audio = this.#talkAudio.get(connectionId);
+    if (audio) {
+      audio.muted = true;
+      audio.srcObject = null;
+    }
+    this.#talkAudio.delete(connectionId);
   }
 
   #closePeer(connectionId: string): void {
     this.#peers.get(connectionId)?.close();
     this.#peers.delete(connectionId);
+    this.#dropTalk(connectionId);
     this.onState(
       this.#peers.size > 0 ? 'streaming' : 'waiting',
       this.#peers.size,
@@ -195,7 +276,10 @@ export class BrowserProducer {
       socket.onerror = null;
       socket.close();
     }
-    for (const peer of this.#peers.values()) peer.close();
+    for (const [connectionId, peer] of this.#peers) {
+      peer.close();
+      this.#dropTalk(connectionId);
+    }
     this.#peers.clear();
     const attempt = this.#retry++;
     const delay = Math.min(1_000 * 2 ** Math.min(attempt, 4), 16_000);

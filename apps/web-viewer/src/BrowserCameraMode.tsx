@@ -1,16 +1,37 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { ApiError, request } from './api';
+import { friendlyError, mediaErrorMessage } from './friendly-errors';
 import { BrowserProducer } from './BrowserProducer';
 import { Brand, Icon } from './Icon';
 import { ModalDialog } from './ModalDialog';
 import { PairingCodeScanner } from './PairingCodeScanner';
 import './BrowserCameraModeSetup.css';
 import { browserOsLabel, friendlyDeviceLabel } from './naming';
-import { formatClipTimer } from './recording-capture';
 import { RecordingBadge } from './RecordingBadge';
 import { useClipRecorder } from './useClipRecorder';
+import {
+  DRIVE_READY,
+  type DriveRecording,
+  isDriveProblem,
+} from './drive-recording';
+import { DriveReconnectNotice, RecordClipControl } from './RecordClipControl';
 import { rememberLocalBrowserDevice } from './browser-camera-local';
+import {
+  cameraActivity,
+  type CameraPower,
+  loadCameraPower,
+  loadMicrophoneDevice,
+  loadMicrophoneEnabled,
+  microphoneConstraints,
+  readAutoStartRequest,
+  saveCameraPower,
+  saveMicrophoneDevice,
+  saveMicrophoneEnabled,
+  STANDBY_RELEASE_DELAY_MS,
+} from './camera-power';
+import { desktopBridge, reportDesktopCameraActivity } from './desktop-shell';
+import { randomUuid } from './random-id';
 
 interface RegisteredSource {
   id: string;
@@ -65,20 +86,38 @@ function rememberDeviceName(name: string): void {
 /** The four states a viewer of the broadcast stage's own status line needs
  * to tell apart at a glance, per the concise-state list this screen is
  * built around: ready, actively watched, reconnecting, or stopped. */
-function broadcastStatusLabel(state: string, viewerCount: number): string {
+function broadcastStatusLabel(
+  state: string,
+  viewerCount: number,
+  standby: boolean,
+): string {
   if (state === 'streaming') {
     return viewerCount === 1 ? '1 watching' : `${viewerCount} watching`;
   }
   if (state === 'reconnecting') return 'Reconnecting…';
   if (state === 'error') return 'Offline';
-  return 'Camera Mode ready';
+  return standby ? 'Standby · camera off' : 'Camera Mode ready';
+}
+
+/** The path the desktop app reopens at startup to resume this camera. */
+function resumePath(
+  standalone: boolean,
+  power: CameraPower,
+  microphone: boolean,
+): string {
+  const params = new URLSearchParams({
+    autostart: '1',
+    mic: microphone ? '1' : '0',
+    power,
+  });
+  return `${standalone ? '/camera-mode/setup' : '/camera-mode'}?${params.toString()}`;
 }
 
 function installationId(): string {
   try {
     const existing = localStorage.getItem(INSTALLATION_KEY);
     if (existing) return existing;
-    const created = crypto.randomUUID();
+    const created = randomUuid();
     localStorage.setItem(INSTALLATION_KEY, created);
     return created;
   } catch {
@@ -89,6 +128,7 @@ function installationId(): string {
 export function BrowserCameraMode({
   onBack,
   canRecord = false,
+  drive = DRIVE_READY,
   standalone = false,
 }: {
   onBack: () => void;
@@ -96,6 +136,8 @@ export function BrowserCameraMode({
   /** Only the household owner can request recordings (see POST
    * /api/recordings) -- matches the same live-viewer gate in LiveVideo. */
   canRecord?: boolean;
+  /** Whether recordings can be saved, and how to connect Drive. */
+  drive?: DriveRecording;
 }) {
   const previewRef = useRef<HTMLVideoElement>(null);
   const producerRef = useRef<BrowserProducer | null>(null);
@@ -118,6 +160,29 @@ export function BrowserCameraMode({
   const wakeLockEnabledRef = useRef(wakeLockEnabled);
   wakeLockEnabledRef.current = wakeLockEnabled;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Read once: the URL is cleaned up after the first render.
+  const [autoStart] = useState(() =>
+    readAutoStartRequest(window.location.search),
+  );
+  const autoStartPending = useRef(autoStart !== null);
+  const [power, setPower] = useState<CameraPower>(
+    () => autoStart?.power ?? loadCameraPower(),
+  );
+  const powerRef = useRef(power);
+  powerRef.current = power;
+  const [microphone, setMicrophone] = useState(
+    () => autoStart?.microphone ?? loadMicrophoneEnabled(),
+  );
+  const microphoneRef = useRef(microphone);
+  microphoneRef.current = microphone;
+  const [streamOpen, setStreamOpen] = useState(false);
+  const [talking, setTalking] = useState(false);
+  const [microphones, setMicrophones] = useState<VideoInput[]>([]);
+  const [microphoneId, setMicrophoneId] = useState(loadMicrophoneDevice);
+  const microphoneIdRef = useRef(microphoneId);
+  microphoneIdRef.current = microphoneId;
+  const pendingStream = useRef<Promise<MediaStream> | null>(null);
+  const releaseTimer = useRef<number | null>(null);
   const [pairingCode, setPairingCode] = useState(
     () =>
       new URLSearchParams(window.location.search).get('code')?.toUpperCase() ??
@@ -154,9 +219,14 @@ export function BrowserCameraMode({
     return () => {
       startGeneration.current += 1;
       document.removeEventListener('visibilitychange', visibility);
+      if (releaseTimer.current !== null)
+        window.clearTimeout(releaseTimer.current);
       producerRef.current?.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
       void wakeLockRef.current?.release();
+      // Leaving Camera Mode in-app ends it; a reload or quitting the app
+      // never runs this, so the desktop app still resumes after a restart.
+      desktopBridge()?.setCameraResume?.(null);
     };
   }, []);
 
@@ -166,10 +236,177 @@ export function BrowserCameraMode({
     }
   }, [backgrounded, wakeLockEnabled]);
 
+  // The desktop app keeps running in the tray with its window hidden; it
+  // shows whether this camera is live or on standby there.
+  const activity = cameraActivity(activeCameraId !== null, streamOpen);
+  useEffect(() => {
+    if (activity === 'off') return;
+    reportDesktopCameraActivity(activity);
+    return () => reportDesktopCameraActivity('off');
+  }, [activity]);
+
+  // While Camera Mode runs inside the desktop app, the app reopens it after
+  // the computer restarts. Stopping Camera Mode (or leaving it) clears that.
+  const registered = activeCameraId !== null;
+  useEffect(() => {
+    if (!registered) return;
+    desktopBridge()?.setCameraResume?.(
+      resumePath(standalone, power, microphone),
+    );
+  }, [registered, standalone, power, microphone]);
+
+  // Auto-start: run both setup steps without clicks once cameras are found.
+  useEffect(() => {
+    if (!autoStartPending.current) return;
+    if (inputs.length === 0) {
+      void discover();
+      return;
+    }
+    autoStartPending.current = false;
+    // registerAndStart reads this render's state; it only needs to run once
+    // the camera list exists.
+    void registerAndStart();
+  }, [inputs]);
+
+  function cancelRelease() {
+    if (releaseTimer.current === null) return;
+    window.clearTimeout(releaseTimer.current);
+    releaseTimer.current = null;
+  }
+
+  function releaseStream() {
+    cancelRelease();
+    pendingStream.current = null;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (previewRef.current) previewRef.current.srcObject = null;
+    setStreamOpen(false);
+  }
+
+  async function openCamera(deviceId: string): Promise<MediaStream> {
+    const video = {
+      deviceId: { exact: deviceId },
+      frameRate: { ideal: 24, max: 30 },
+      height: { ideal: 720, max: 1080 },
+      width: { ideal: 1280, max: 1920 },
+    };
+    const chosenMicrophone = microphoneIdRef.current;
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: microphoneRef.current
+          ? microphoneConstraints(chosenMicrophone)
+          : false,
+        video,
+      });
+    } catch (error) {
+      // The chosen microphone was unplugged: fall back to the default one
+      // rather than failing the whole camera.
+      if (
+        microphoneRef.current &&
+        chosenMicrophone &&
+        error instanceof DOMException &&
+        (error.name === 'OverconstrainedError' ||
+          error.name === 'NotFoundError')
+      )
+        return navigator.mediaDevices.getUserMedia({ audio: true, video });
+      throw error;
+    }
+  }
+
+  /** Lists microphones. Their names need microphone permission, which is
+   * asked for only once sound is turned on. */
+  async function refreshMicrophones() {
+    try {
+      const probe = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+      probe.getTracks().forEach((track) => track.stop());
+      const devices = (await navigator.mediaDevices.enumerateDevices())
+        .filter((device) => device.kind === 'audioinput')
+        .map((device, index) => ({
+          deviceId: device.deviceId,
+          label: device.label
+            ? friendlyDeviceLabel(device.label)
+            : 'Microphone ' + String(index + 1),
+        }));
+      setMicrophones(devices);
+      if (
+        microphoneIdRef.current &&
+        !devices.some((device) => device.deviceId === microphoneIdRef.current)
+      )
+        setMicrophoneId('');
+    } catch (error) {
+      setMicrophones([]);
+      setError(
+        `This camera can’t share sound. ${mediaErrorMessage(error, 'microphone')}`,
+      );
+    }
+  }
+
+  function changeMicrophone(enabled: boolean) {
+    setMicrophone(enabled);
+    if (enabled) void refreshMicrophones();
+  }
+
+  function chooseMicrophone(deviceId: string) {
+    setMicrophoneId(deviceId);
+    saveMicrophoneDevice(deviceId);
+  }
+
+  function installStream(stream: MediaStream) {
+    for (const track of stream.getVideoTracks()) track.contentHint = 'motion';
+    streamRef.current = stream;
+    if (previewRef.current) previewRef.current.srcObject = stream;
+    setStreamOpen(true);
+  }
+
+  /** Opens (or reuses) the camera for `deviceId` when a standby camera
+   * wakes. Concurrent viewers share one getUserMedia call. */
+  function acquireStream(deviceId: string): Promise<MediaStream> {
+    cancelRelease();
+    if (streamRef.current) return Promise.resolve(streamRef.current);
+    if (pendingStream.current) return pendingStream.current;
+    const generation = startGeneration.current;
+    const pending = openCamera(deviceId)
+      .then((stream) => {
+        if (generation !== startGeneration.current) {
+          stream.getTracks().forEach((track) => track.stop());
+          throw new Error('Camera Mode changed while the camera was starting');
+        }
+        installStream(stream);
+        return stream;
+      })
+      .finally(() => {
+        if (pendingStream.current === pending) pendingStream.current = null;
+      });
+    pendingStream.current = pending;
+    return pending;
+  }
+
+  /** In standby, turn the camera off once nobody has watched for a while. */
+  function scheduleStandbyRelease(viewers: number) {
+    if (powerRef.current !== 'standby' || viewers > 0) {
+      cancelRelease();
+      return;
+    }
+    if (!streamRef.current || releaseTimer.current !== null) return;
+    releaseTimer.current = window.setTimeout(() => {
+      releaseTimer.current = null;
+      if (clipBusyRef.current) {
+        scheduleStandbyRelease(0);
+        return;
+      }
+      releaseStream();
+    }, STANDBY_RELEASE_DELAY_MS);
+  }
+
   async function discover() {
     setError('');
     if (!window.isSecureContext || !navigator.mediaDevices) {
-      setError('Browser Camera Mode requires a trusted HTTPS connection.');
+      setError(
+        'Camera Mode needs a secure connection. Open Beacon from its https:// address.',
+      );
       return;
     }
     try {
@@ -187,6 +424,7 @@ export function BrowserCameraMode({
             : `Camera ${index + 1}`,
         }));
       setInputs(devices);
+      if (microphoneRef.current) void refreshMicrophones();
       setSourceNames(
         Object.fromEntries(
           devices.map((device) => [device.deviceId, device.label]),
@@ -194,11 +432,7 @@ export function BrowserCameraMode({
       );
       setSelectedKey((current) => current || devices[0]?.deviceId || '');
     } catch (caught) {
-      setError(
-        caught instanceof DOMException && caught.name === 'NotAllowedError'
-          ? 'Camera permission was denied. Allow access to use Camera Mode.'
-          : 'No usable camera was found.',
-      );
+      setError(mediaErrorMessage(caught, 'camera'));
     }
   }
 
@@ -263,39 +497,38 @@ export function BrowserCameraMode({
         (source) => source.sourceKey === `browser:${selected.deviceId}`,
       );
       if (!camera) throw new Error('Camera registration was incomplete');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          deviceId: { exact: selected.deviceId },
-          frameRate: { ideal: 24, max: 30 },
-          height: { ideal: 720, max: 1080 },
-          width: { ideal: 1280, max: 1920 },
-        },
-      });
+      const deviceId = selected.deviceId;
+      // Always-on opens the new camera before releasing the current one, so
+      // a failed switch leaves the working camera running. Standby opens
+      // nothing until a viewer arrives.
+      const fresh = power === 'always' ? await openCamera(deviceId) : null;
       if (generation !== startGeneration.current) {
-        stream.getTracks().forEach((track) => track.stop());
+        fresh?.getTracks().forEach((track) => track.stop());
         return;
       }
       producerRef.current?.stop();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      for (const track of stream.getVideoTracks()) track.contentHint = 'motion';
-      streamRef.current = stream;
-      activeSourceKey.current = selected.deviceId;
-      setSelectedKey(selected.deviceId);
+      releaseStream();
+      if (fresh) installStream(fresh);
+      saveCameraPower(power);
+      saveMicrophoneEnabled(microphone);
+      activeSourceKey.current = deviceId;
+      setSelectedKey(deviceId);
       setActiveCameraId(camera.id);
-      if (previewRef.current) previewRef.current.srcObject = stream;
       producerRef.current = new BrowserProducer(
         camera.id,
-        stream,
+        fresh ?? (() => acquireStream(deviceId)),
         (next, viewers, retries) => {
           if (next === 'error') {
             stop();
-            setError('Camera access was denied or revoked.');
+            setError(
+              'Beacon lost access to the camera. Allow camera access in your browser’s site settings, then start the camera again.',
+            );
             return;
           }
           setState(next);
           setViewerCount(viewers);
           setRetryCount(retries);
+          scheduleStandbyRelease(viewers);
         },
         (cameraId) => {
           const source = result.cameras.find((item) => item.id === cameraId);
@@ -304,6 +537,14 @@ export function BrowserCameraMode({
           setSelectedKey(nextKey);
           void registerAndStart(nextKey);
         },
+        (wakeError) =>
+          setError(
+            `Someone tried to view this camera, but it couldn’t turn on. ${mediaErrorMessage(
+              wakeError,
+              microphoneRef.current ? 'camera and microphone' : 'camera',
+            )}`,
+          ),
+        setTalking,
       );
       producerRef.current.start();
       if (wakeLockEnabled) await acquireWakeLock();
@@ -314,9 +555,12 @@ export function BrowserCameraMode({
       setError(
         standalone && caught instanceof ApiError && caught.status === 401
           ? 'Enter a fresh pairing code from a signed-in Beacon account.'
-          : caught instanceof Error
-            ? caught.message
-            : 'Unable to start camera',
+          : caught instanceof DOMException
+            ? mediaErrorMessage(
+                caught,
+                microphoneRef.current ? 'camera and microphone' : 'camera',
+              )
+            : friendlyError(caught, 'The camera couldn’t start. Try again.'),
       );
     }
   }
@@ -325,11 +569,10 @@ export function BrowserCameraMode({
     startGeneration.current += 1;
     producerRef.current?.stop();
     producerRef.current = null;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
+    releaseStream();
     activeSourceKey.current = null;
     setActiveCameraId(null);
-    if (previewRef.current) previewRef.current.srcObject = null;
+    desktopBridge()?.setCameraResume?.(null);
     setState('offline');
     setViewerCount(0);
     void wakeLockRef.current?.release();
@@ -337,10 +580,28 @@ export function BrowserCameraMode({
   }
 
   function startRecording() {
-    if (!streamRef.current) return;
     setError('');
-    clip.start(streamRef.current);
+    if (streamRef.current) {
+      clip.start(streamRef.current);
+      return;
+    }
+    // A standby camera turns on for the recording and goes back to standby
+    // once it ends and nobody is watching.
+    const deviceId = activeSourceKey.current;
+    if (!deviceId) return;
+    void acquireStream(deviceId).then(
+      (stream) => clip.start(stream),
+      (error: unknown) =>
+        setError(
+          `The camera couldn’t turn on to record. ${mediaErrorMessage(error, 'camera')}`,
+        ),
+    );
   }
+
+  useEffect(() => {
+    if (!clipBusy) scheduleStandbyRelease(viewerCount);
+    // Only re-evaluate when a recording finishes.
+  }, [clipBusy]);
 
   // Clears a finished clip's status back to the plain record control a few
   // seconds after it lands, matching the live viewer's own record button.
@@ -350,9 +611,11 @@ export function BrowserCameraMode({
     return () => window.clearTimeout(timer);
   }, [clip.reset, clip.state.status]);
 
+  // A Drive problem has its own notice with a fix; others show here.
   useEffect(() => {
-    if (clip.state.error) setError(clip.state.error);
-  }, [clip.state.error]);
+    if (clip.state.error && !isDriveProblem(clip.state.errorCode))
+      setError(clip.state.error);
+  }, [clip.state.error, clip.state.errorCode]);
 
   async function acquireWakeLock() {
     const manager = (
@@ -398,6 +661,21 @@ export function BrowserCameraMode({
           playsInline
           muted
         />
+        {talking && (
+          <p className="broadcast-talking" role="status">
+            <Icon name="speaker" /> Someone is talking through this camera
+          </p>
+        )}
+        {activity === 'standby' && (
+          <div className="broadcast-standby" role="status">
+            <Icon name="camera" />
+            <strong>Camera is off</strong>
+            <span>
+              It turns on by itself when someone opens the live view, and turns
+              off again after they leave.
+            </span>
+          </div>
+        )}
         <div className="broadcast-top">
           <div className="video-badges-row">
             <span
@@ -405,56 +683,18 @@ export function BrowserCameraMode({
               role="status"
             >
               <span aria-hidden="true" className="broadcast-live-dot" />
-              {broadcastStatusLabel(state, viewerCount)}
+              {broadcastStatusLabel(state, viewerCount, activity === 'standby')}
             </span>
             <RecordingBadge state={clip.state} />
           </div>
           <div className="broadcast-top-actions">
-            {canRecord && clip.supported && activeCameraId && (
-              <button
-                aria-pressed={clip.state.status === 'recording'}
-                className={`broadcast-icon-button${
-                  clip.state.status === 'recording' ? ' is-active' : ''
-                }`}
-                title={
-                  clip.state.status === 'recording'
-                    ? 'Tap to stop recording'
-                    : clip.state.status === 'failed'
-                      ? 'Retry encrypted upload'
-                      : 'Record a short clip'
-                }
-                disabled={
-                  clip.state.status === 'starting' ||
-                  clip.state.status === 'uploading' ||
-                  clip.state.status === 'available'
-                }
-                onClick={
-                  clip.state.status === 'recording'
-                    ? clip.stop
-                    : clip.state.status === 'failed'
-                      ? () => {
-                          setError('');
-                          clip.retry();
-                        }
-                      : startRecording
-                }
-                type="button"
-              >
-                <Icon name="record" />
-                <span className="visually-hidden">
-                  {clip.state.status === 'starting'
-                    ? 'Starting recording…'
-                    : clip.state.status === 'recording'
-                      ? `Recording, ${formatClipTimer(clip.state.elapsedMs)} elapsed. Tap to stop.`
-                      : clip.state.status === 'uploading'
-                        ? 'Uploading recording'
-                        : clip.state.status === 'available'
-                          ? 'Recording saved'
-                          : clip.state.status === 'failed'
-                            ? 'Retry encrypted recording upload'
-                            : 'Record a short clip'}
-                </span>
-              </button>
+            {canRecord && activeCameraId && (
+              <RecordClipControl
+                className="broadcast-icon-button"
+                clip={clip}
+                drive={drive}
+                onStart={startRecording}
+              />
             )}
             <button
               aria-expanded={settingsOpen}
@@ -472,8 +712,10 @@ export function BrowserCameraMode({
             <span className="broadcast-eyebrow">THIS DEVICE IS A CAMERA</span>
             <strong>{deviceName}</strong>
             <span>
-              {viewerCount === 1 ? '1 viewer' : `${viewerCount} viewers`} · Keep
-              this tab open
+              {viewerCount === 1 ? '1 viewer' : `${viewerCount} viewers`} ·{' '}
+              {desktopBridge()
+                ? 'Runs in the background'
+                : 'Keep this tab open'}
             </span>
           </div>
           <div className="broadcast-controls">
@@ -505,6 +747,13 @@ export function BrowserCameraMode({
             </button>
           </div>
         </div>
+        {canRecord && activeCameraId && (
+          <DriveReconnectNotice
+            className="on-broadcast"
+            clip={clip}
+            drive={drive}
+          />
+        )}
         {backgrounded && (
           <p className="broadcast-warning" role="status">
             This tab is backgrounded. Capture or networking may be throttled.
@@ -582,6 +831,17 @@ export function BrowserCameraMode({
                 }
               />
             </div>
+            <CameraPowerFields
+              idPrefix="active"
+              disabled={clipBusy}
+              microphone={microphone}
+              power={power}
+              microphoneId={microphoneId}
+              microphones={microphones}
+              onMicrophoneChange={changeMicrophone}
+              onMicrophoneSelect={chooseMicrophone}
+              onPowerChange={setPower}
+            />
             {wakeLockSupported() && (
               <label className="local-check full">
                 <input
@@ -769,6 +1029,17 @@ export function BrowserCameraMode({
               />
               <div className="local-hint">You can rename it later.</div>
             </div>
+            <CameraPowerFields
+              idPrefix="setup"
+              disabled={clipBusy}
+              microphone={microphone}
+              power={power}
+              microphoneId={microphoneId}
+              microphones={microphones}
+              onMicrophoneChange={changeMicrophone}
+              onMicrophoneSelect={chooseMicrophone}
+              onPowerChange={setPower}
+            />
             {wakeLockSupported() && (
               <label className="local-check full">
                 <input
@@ -837,5 +1108,79 @@ export function BrowserCameraMode({
     <ModalDialog labelledBy="localTitle" onDismiss={onBack}>
       {setup}
     </ModalDialog>
+  );
+}
+
+function CameraPowerFields({
+  disabled,
+  idPrefix,
+  microphone,
+  microphoneId,
+  microphones,
+  onMicrophoneChange,
+  onMicrophoneSelect,
+  onPowerChange,
+  power,
+}: {
+  disabled: boolean;
+  idPrefix: string;
+  microphone: boolean;
+  microphoneId: string;
+  microphones: { deviceId: string; label: string }[];
+  onMicrophoneChange: (enabled: boolean) => void;
+  onMicrophoneSelect: (deviceId: string) => void;
+  onPowerChange: (power: CameraPower) => void;
+  power: CameraPower;
+}) {
+  return (
+    <fieldset className="local-field full camera-power" disabled={disabled}>
+      <legend>When nobody is watching</legend>
+      <label className="local-check">
+        <input
+          checked={power === 'always'}
+          name={`${idPrefix}CameraPower`}
+          onChange={() => onPowerChange('always')}
+          type="radio"
+        />
+        <span>
+          <b>Keep the camera on</b> — viewers see video instantly
+        </span>
+      </label>
+      <label className="local-check">
+        <input
+          checked={power === 'standby'}
+          name={`${idPrefix}CameraPower`}
+          onChange={() => onPowerChange('standby')}
+          type="radio"
+        />
+        <span>
+          <b>Standby</b> — camera stays off until someone opens the live view
+        </span>
+      </label>
+      <label className="local-check">
+        <input
+          checked={microphone}
+          onChange={(event) => onMicrophoneChange(event.target.checked)}
+          type="checkbox"
+        />
+        <span>Include sound so viewers can listen</span>
+      </label>
+      {microphone && microphones.length > 1 && (
+        <label className="camera-power-microphone">
+          <span>Microphone</span>
+          <select
+            onChange={(event) => onMicrophoneSelect(event.target.value)}
+            value={microphoneId}
+          >
+            <option value="">System default</option>
+            {microphones.map((device) => (
+              <option key={device.deviceId} value={device.deviceId}>
+                {device.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </fieldset>
   );
 }

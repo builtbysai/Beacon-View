@@ -1,17 +1,16 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Readable } from 'node:stream';
-import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
 import {
   deleteDriveRecordingFile,
   downloadDriveRecordingFile,
-  GOOGLE_DRIVE_RECORDING_SCOPE,
+  GoogleDriveRequestError,
   initiateDriveRecordingUpload,
-  refreshDriveAccessToken,
   verifyDriveRecordingFile,
 } from './google-drive-client.js';
+import { type DriveHealth, driveProblem } from './drive-connection-health.js';
 import {
   parseRecordingHistoryQuery,
   recordingHistoryCursor,
@@ -24,7 +23,12 @@ import { unauthorized, type SessionAuth } from './session-auth.js';
 import type { SignalingHub } from './signaling.js';
 import type { MilestoneStore } from './store.js';
 
-const createSchema = z.object({ cameraId: z.string().uuid() }).strict();
+const createSchema = z
+  .object({
+    cameraId: z.string().uuid(),
+    captureMode: z.enum(['viewer', 'camera']).optional(),
+  })
+  .strict();
 const parametersSchema = z.object({ recordingId: z.string().uuid() });
 const shareLinkCreateSchema = z
   .object({ expiresInHours: z.number().int().min(1).max(72) })
@@ -106,34 +110,17 @@ export function registerRecordingRoutes(
     auth: SessionAuth;
     config: AppConfig;
     limiter: RateLimiter;
+    driveHealth: DriveHealth;
     signaling: SignalingHub;
     store: MilestoneStore;
   },
 ): void {
-  const { auth, config, limiter, signaling, store } = dependencies;
+  const { auth, config, driveHealth, limiter, signaling, store } = dependencies;
   const recordingKeyCipher = config.RECORDING_ENCRYPTION_KEY
     ? new RecordingKeyCipher(config.RECORDING_ENCRYPTION_KEY)
     : null;
-  const recordingAccessToken = async (userId: string): Promise<string> => {
-    if (!config.GOOGLE_OAUTH_CLIENT_ID)
-      throw new Error('Google Drive is unavailable');
-    const [refreshToken, drive] = await Promise.all([
-      store.getGoogleDriveRefreshToken(userId),
-      store.getGoogleDriveConnection(userId),
-    ]);
-    if (
-      !refreshToken ||
-      !drive ||
-      !drive.scopes.split(/\s+/u).includes(GOOGLE_DRIVE_RECORDING_SCOPE)
-    )
-      throw new Error('Recording storage is unavailable');
-    const client = new OAuth2Client(
-      config.GOOGLE_OAUTH_CLIENT_ID,
-      config.GOOGLE_OAUTH_CLIENT_SECRET,
-      config.GOOGLE_OAUTH_REDIRECT_URI,
-    );
-    return refreshDriveAccessToken(client, refreshToken);
-  };
+  const recordingAccessToken = (userId: string): Promise<string> =>
+    driveHealth.recordingAccessToken(userId);
 
   app.get('/api/recordings', async (request, reply) => {
     const session = await auth.authenticate(request, reply);
@@ -186,6 +173,9 @@ export function registerRecordingRoutes(
       providerFileId: string;
     },
     recordingId: string,
+    /** Who is watching: the signed-in user, or null for a share link. Only
+     * the Drive's owner can reconnect it, so only they are asked to. */
+    viewerUserId: string | null,
   ) => {
     if (!recordingKeyCipher)
       return reply
@@ -234,6 +224,19 @@ export function registerRecordingRoutes(
         },
         'recording playback failed',
       );
+      const problem = driveProblem(error);
+      if (problem)
+        return reply.code(409).send(
+          viewerUserId === claim.userId
+            ? problem
+            : {
+                code: 'recording_storage_unavailable',
+                error:
+                  viewerUserId === null
+                    ? 'This clip can’t be played right now. Ask the person who shared it.'
+                    : 'This clip is stored in the household owner’s Google Drive, which is disconnected. Ask the owner to reconnect it.',
+              },
+        );
       return reply
         .code(503)
         .send({ error: 'Recording playback is temporarily unavailable' });
@@ -267,6 +270,7 @@ export function registerRecordingRoutes(
       reply,
       claim,
       parameters.data.recordingId,
+      session.userId,
     );
   });
 
@@ -394,7 +398,13 @@ export function registerRecordingRoutes(
     const claim = await store.getRecordingShareLinkPlaybackClaim(tokenHash);
     if (!claim) return reply.code(404).send({ error: 'Link unavailable' });
     void store.touchRecordingShareLinkAccess(claim.shareLinkId);
-    return relayRecordingPlayback(request, reply, claim, claim.recordingId);
+    return relayRecordingPlayback(
+      request,
+      reply,
+      claim,
+      claim.recordingId,
+      null,
+    );
   });
 
   app.post('/api/recordings', async (request, reply) => {
@@ -409,14 +419,21 @@ export function registerRecordingRoutes(
     const body = createSchema.safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ error: 'Invalid recording request' });
-    const drive = await store.getGoogleDriveConnection(session.userId);
-    if (
-      !drive ||
-      !drive.scopes.split(/\s+/u).includes(GOOGLE_DRIVE_RECORDING_SCOPE)
-    )
-      return reply
-        .code(409)
-        .send({ error: 'Connect Google Drive for recordings first' });
+    // Confirm Drive accepts uploads before anyone records a clip, so an
+    // expired connection asks for a reconnect now, not after recording.
+    const driveIssue = await driveHealth.problem(
+      session.userId,
+      session.householdId,
+      'recordings',
+    );
+    if (driveIssue)
+      return reply.code(409).send({
+        code: driveIssue,
+        // Android clients (BeaconApi.startRecording) match this exact text
+        // to show "connect Drive in Settings"; apps that read `code` word
+        // it themselves. Keep it until Android switches to the code.
+        error: 'Connect Google Drive for recordings first',
+      });
     const camera = await store.findAccessibleCamera(
       session.householdId,
       session.userId,
@@ -433,6 +450,17 @@ export function registerRecordingRoutes(
     });
     if (!recording)
       return reply.code(409).send({ error: 'Camera is unavailable' });
+    if (
+      body.data.captureMode === 'camera' &&
+      !signaling.requestRecording(camera.publicCameraId, recording.id)
+    ) {
+      await store.markOwnerRecordingFailed(
+        session.householdId,
+        session.userId,
+        recording.id,
+      );
+      return reply.code(409).send({ error: 'Camera is offline' });
+    }
     await store.audit({
       eventType: 'recording_requested',
       householdId: session.householdId,
@@ -482,6 +510,8 @@ export function registerRecordingRoutes(
           },
           'recording deletion failed',
         );
+        const problem = driveProblem(error);
+        if (problem) return reply.code(409).send(problem);
         return reply
           .code(503)
           .send({ error: 'Recording could not be deleted from Google Drive' });
@@ -557,10 +587,16 @@ export function registerRecordingRoutes(
         app.log.warn(
           {
             errorName: error instanceof Error ? error.name : 'UnknownError',
+            providerStatus:
+              error instanceof GoogleDriveRequestError
+                ? error.status
+                : undefined,
             recordingId: claim.recordingId,
           },
           'recording upload session failed',
         );
+        const problem = driveProblem(error);
+        if (problem) return reply.code(409).send(problem);
         return reply
           .code(503)
           .send({ error: 'Recording upload is temporarily unavailable' });
@@ -617,6 +653,8 @@ export function registerRecordingRoutes(
         },
         'recording completion verification failed',
       );
+      const problem = driveProblem(error);
+      if (problem) return reply.code(409).send(problem);
       return reply
         .code(409)
         .send({ error: 'Uploaded recording could not be verified' });
@@ -716,6 +754,8 @@ export function registerRecordingRoutes(
         },
         'thumbnail completion verification failed',
       );
+      const problem = driveProblem(error);
+      if (problem) return reply.code(409).send(problem);
       return reply
         .code(409)
         .send({ error: 'Uploaded thumbnail could not be verified' });
@@ -778,6 +818,8 @@ export function registerRecordingRoutes(
           },
           'thumbnail upload session failed',
         );
+        const problem = driveProblem(error);
+        if (problem) return reply.code(409).send(problem);
         return reply
           .code(503)
           .send({ error: 'Thumbnail upload is temporarily unavailable' });
@@ -832,6 +874,7 @@ export function registerRecordingRoutes(
       reply,
       claim,
       parameters.data.recordingId,
+      session.userId,
     );
   });
 
@@ -943,6 +986,8 @@ export function registerRecordingRoutes(
           },
           'device recording upload session failed',
         );
+        const problem = driveProblem(error);
+        if (problem) return reply.code(409).send(problem);
         return reply
           .code(503)
           .send({ error: 'Recording upload is temporarily unavailable' });
@@ -1003,6 +1048,8 @@ export function registerRecordingRoutes(
           },
           'device thumbnail upload session failed',
         );
+        const problem = driveProblem(error);
+        if (problem) return reply.code(409).send(problem);
         return reply
           .code(503)
           .send({ error: 'Thumbnail upload is temporarily unavailable' });

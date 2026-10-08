@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { request } from './api';
+import { friendlyError } from './friendly-errors';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Icon } from './Icon';
 import { downloadBlob } from './browser-download';
@@ -150,7 +151,7 @@ export function RecordingLibrary({
       );
       setCursor(result.nextCursor ?? null);
     } catch {
-      setError('Could not load recordings. Try again.');
+      setError('Your clips couldn’t be loaded. Try again.');
       setRecordings((current) => current ?? []);
     } finally {
       if (append) setLoadingMore(false);
@@ -188,9 +189,7 @@ export function RecordingLibrary({
     } catch (caught) {
       if (!controller.signal.aborted)
         setError(
-          caught instanceof Error
-            ? caught.message
-            : 'Recording could not be played.',
+          friendlyError(caught, 'The clip couldn’t be played. Try again.'),
         );
     } finally {
       if (abortRef.current === controller) {
@@ -212,9 +211,7 @@ export function RecordingLibrary({
       );
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Recording could not be downloaded.',
+        friendlyError(caught, 'The clip couldn’t be downloaded. Try again.'),
       );
     } finally {
       setBusyId(null);
@@ -233,9 +230,7 @@ export function RecordingLibrary({
       if (playback?.id === recording.id) closePlayback();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Recording could not be removed.',
+        friendlyError(caught, 'The clip couldn’t be deleted. Try again.'),
       );
     } finally {
       setBusyId(null);

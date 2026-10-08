@@ -1,3 +1,4 @@
+import { isDriveProblem } from './drive-recording';
 import { formatClipTimer } from './recording-capture';
 import type { ClipRecorderState } from './useClipRecorder';
 import './RecordingBadge.css';
@@ -10,6 +11,9 @@ import './RecordingBadge.css';
  * recording-indicator redesign. */
 export function RecordingBadge({ state }: { state: ClipRecorderState }) {
   if (state.status === 'idle') return null;
+  // Drive refused the upload: the clip is held, not lost (ADR 0086).
+  const waitingForDrive =
+    state.status === 'failed' && isDriveProblem(state.errorCode);
 
   const label =
     state.status === 'starting'
@@ -20,11 +24,13 @@ export function RecordingBadge({ state }: { state: ClipRecorderState }) {
           ? 'Uploading…'
           : state.status === 'available'
             ? 'Clip saved'
-            : 'Recording failed';
+            : waitingForDrive
+              ? 'Waiting for Drive'
+              : 'Recording failed';
 
   return (
     <div
-      className={`recording-badge is-${state.status}`}
+      className={`recording-badge is-${waitingForDrive ? 'waiting' : state.status}`}
       role="status"
       aria-live="polite"
     >

@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { request } from './api';
+import { friendlyError } from './friendly-errors';
+import { desktopSupportsAlerts, isDesktopShell } from './desktop-shell';
 import { useSettingsAutosave } from './SettingsAutosave';
 import { SettingsRow } from './SettingsUI';
 import { Switch } from './Switch';
+import { randomUuid } from './random-id';
 import './NotificationSettings.css';
 
 interface Preference {
@@ -30,7 +33,7 @@ function installationId(): string {
   const key = 'beacon.notification.installation.v1';
   const existing = localStorage.getItem(key);
   if (existing) return existing;
-  const created = crypto.randomUUID();
+  const created = randomUuid();
   localStorage.setItem(key, created);
   return created;
 }
@@ -52,14 +55,34 @@ export async function disableWebNotifications(): Promise<void> {
   localStorage.removeItem('beacon.notification.subscription.v1');
 }
 
+const DESKTOP_SUBSCRIPTION_KEY = 'beacon.notification.desktop-subscription.v1';
+
+function storedDesktopSubscription(): string | null {
+  try {
+    return localStorage.getItem(DESKTOP_SUBSCRIPTION_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export function NotificationSettings({
-  webPushAvailable = true,
+  webPushAvailable: serverWebPushAvailable = true,
 }: {
   webPushAvailable?: boolean;
 }) {
+  // Electron has no push service, so the desktop app cannot hold a Web Push
+  // subscription even though the API objects exist (ADR 0082). Newer desktop
+  // apps receive the same alerts over their own realtime connection instead
+  // (ADR 0083); older ones honestly report alerts as unavailable.
+  const desktopShell = isDesktopShell();
+  const desktopAlerts = desktopSupportsAlerts();
+  const webPushAvailable = serverWebPushAvailable && !desktopShell;
+  const channelAvailable = desktopAlerts || webPushAvailable;
   const { run } = useSettingsAutosave();
   const [preferences, setPreferences] = useState<Preference[] | null>(null);
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState(
+    () => desktopAlerts && storedDesktopSubscription() !== null,
+  );
   const [channelBusy, setChannelBusy] = useState(false);
   const [channelError, setChannelError] = useState('');
   const [preferencesError, setPreferencesError] = useState(false);
@@ -88,21 +111,52 @@ export function NotificationSettings({
 
   useEffect(() => {
     loadPreferences();
-    if ('serviceWorker' in navigator) {
+    if (!desktopShell && 'serviceWorker' in navigator) {
       void navigator.serviceWorker
         .getRegistration('/')
         .then(async (registration) => {
           setEnabled(
             Boolean(await registration?.pushManager.getSubscription()),
           );
-        });
+        })
+        .catch(() => setEnabled(false));
     }
   }, []);
+
+  async function enableDesktopAlerts() {
+    const result = await request<{ id: string }>(
+      '/api/notification-subscriptions',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          channel: 'desktop',
+          deviceLabel: 'Beacon desktop app',
+          installationId: installationId(),
+        }),
+      },
+    );
+    localStorage.setItem(DESKTOP_SUBSCRIPTION_KEY, result.id);
+  }
+
+  async function disableDesktopAlerts() {
+    const id = storedDesktopSubscription();
+    if (id)
+      await request(
+        `/api/notification-subscriptions/${encodeURIComponent(id)}`,
+        { method: 'DELETE' },
+      ).catch(() => undefined);
+    localStorage.removeItem(DESKTOP_SUBSCRIPTION_KEY);
+  }
 
   async function enableChannel() {
     setChannelBusy(true);
     setChannelError('');
     try {
+      if (desktopAlerts) {
+        await enableDesktopAlerts();
+        setEnabled(true);
+        return;
+      }
       if (!('serviceWorker' in navigator) || !('PushManager' in window))
         throw new Error('This browser does not support notifications.');
       if ((await Notification.requestPermission()) !== 'granted')
@@ -138,9 +192,7 @@ export function NotificationSettings({
       setEnabled(true);
     } catch (error) {
       setChannelError(
-        error instanceof Error
-          ? error.message
-          : 'Notifications could not be enabled.',
+        friendlyError(error, 'Notifications couldn’t be turned on. Try again.'),
       );
     } finally {
       setChannelBusy(false);
@@ -151,7 +203,8 @@ export function NotificationSettings({
     setChannelBusy(true);
     setChannelError('');
     try {
-      await disableWebNotifications();
+      if (desktopAlerts) await disableDesktopAlerts();
+      else await disableWebNotifications();
       setEnabled(false);
     } finally {
       setChannelBusy(false);
@@ -240,31 +293,37 @@ export function NotificationSettings({
   return (
     <div className="notification-settings">
       <SettingsRow
-        title="Browser notifications"
-        description="Receive private Beacon alerts on this browser."
+        title={desktopShell ? 'Desktop alerts' : 'Browser notifications'}
+        description={
+          desktopAlerts
+            ? 'Show private Beacon alerts on this computer, even while the window is closed.'
+            : desktopShell
+              ? 'Update the Beacon desktop app to receive alerts here, or turn them on in Chrome, Edge, or the Android app.'
+              : 'Receive private Beacon alerts on this browser.'
+        }
       >
         <div className="notification-channel-action">
           <span
             className={
               enabled
                 ? 'pill pill-on'
-                : webPushAvailable
+                : channelAvailable
                   ? 'pill'
                   : 'pill pill-warn'
             }
           >
-            {enabled ? 'On' : webPushAvailable ? 'Off' : 'Unavailable'}
+            {enabled ? 'On' : channelAvailable ? 'Off' : 'Unavailable'}
           </span>
           <button
             className="secondary"
-            disabled={channelBusy || !webPushAvailable}
+            disabled={channelBusy || !channelAvailable}
             onClick={() => void (enabled ? disableChannel() : enableChannel())}
           >
             {channelBusy
               ? 'Updating…'
               : enabled
                 ? 'Turn off'
-                : webPushAvailable
+                : channelAvailable
                   ? 'Turn on'
                   : 'Unavailable'}
           </button>

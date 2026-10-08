@@ -210,23 +210,6 @@ class StreamingStateTest {
     }
 
     @Test
-    fun favoritesFilterWithoutChangingSavedCameraOrder() {
-        val kitchen = BeaconApi.MonitorCamera("kitchen", "Kitchen", "Pixel", true, false, 0)
-        val garage = BeaconApi.MonitorCamera("garage", "Garage", "Tablet", true, false, 0)
-        val cameras = listOf(kitchen, garage)
-
-        assertEquals(
-            listOf("kitchen", "garage"),
-            monitorVisibleCameras(cameras, setOf("garage"), favoritesOnly = false).map { it.id },
-        )
-        assertEquals(
-            listOf("garage"),
-            monitorVisibleCameras(cameras, setOf("garage"), favoritesOnly = true).map { it.id },
-        )
-        assertEquals(2, cameras.size)
-    }
-
-    @Test
     fun savedCameraOrderPrunesRemovedCamerasAndAppendsNewOnes() {
         assertEquals(
             listOf("garage", "kitchen", "yard"),
@@ -238,30 +221,82 @@ class StreamingStateTest {
     }
 
     @Test
-    fun cameraOrderingMovesOnlyWithinAvailableBounds() {
-        val original = listOf("kitchen", "garage", "yard")
-        assertEquals(listOf("garage", "kitchen", "yard"), movedCameraId(original, "garage", -1))
-        assertEquals(listOf("kitchen", "yard", "garage"), movedCameraId(original, "garage", 1))
+    fun cameraCatalogFilterMatchesReadyPrivacyAndAttentionExclusively() {
+        val ready = BeaconApi.MonitorCamera("ready", "Kitchen", "Pixel", true, false, 0)
+        val privacy = BeaconApi.MonitorCamera("privacy", "Garage", "Tablet", true, true, 0)
+        val offline = BeaconApi.MonitorCamera("offline", "Yard", "Phone", false, false, 0)
+        val cameras = listOf(ready, privacy, offline)
+
         assertEquals(
-            listOf("kitchen", "garage"),
-            movedCameraId(listOf("kitchen", "garage"), "kitchen", -1),
+            listOf("ready", "privacy", "offline"),
+            cameraCatalogVisible(cameras, CameraCatalogFilter.All, "").map { it.id },
+        )
+        assertEquals(listOf("ready"), cameraCatalogVisible(cameras, CameraCatalogFilter.Ready, "").map { it.id })
+        assertEquals(listOf("privacy"), cameraCatalogVisible(cameras, CameraCatalogFilter.Privacy, "").map { it.id })
+        assertEquals(listOf("offline"), cameraCatalogVisible(cameras, CameraCatalogFilter.Attention, "").map { it.id })
+    }
+
+    @Test
+    fun cameraCatalogSearchMatchesNameOrDeviceNameCaseInsensitively() {
+        val kitchen = BeaconApi.MonitorCamera("kitchen", "Front door", "Kitchen Pixel", true, false, 0)
+        val garage = BeaconApi.MonitorCamera("garage", "Driveway", "Garage Tablet", true, false, 0)
+        val cameras = listOf(kitchen, garage)
+
+        assertEquals(
+            listOf("kitchen"),
+            cameraCatalogVisible(cameras, CameraCatalogFilter.All, "kitchen").map { it.id },
+        )
+        assertEquals(
+            listOf("garage"),
+            cameraCatalogVisible(cameras, CameraCatalogFilter.All, "DRIVEWAY").map { it.id },
+        )
+        assertEquals(2, cameras.size)
+    }
+
+    @Test
+    fun liveOverlayPrioritizesPrivacyOverConnectionState() {
+        assertEquals(
+            LiveOverlay(
+                "Privacy is on",
+                "Live viewing is blocked. Turn privacy off when you are ready to resume.",
+            ),
+            liveOverlay(StreamingState.Connected, privacyMode = true, reconnectAttempt = 0),
         )
     }
 
     @Test
-    fun viewerStatusExplainsAutomaticRecovery() {
+    fun liveOverlayIsNullOnlyWhenConnectedOrReadyWithoutPrivacy() {
+        assertEquals(null, liveOverlay(StreamingState.Connected, privacyMode = false, reconnectAttempt = 0))
+        assertEquals(null, liveOverlay(StreamingState.Ready, privacyMode = false, reconnectAttempt = 0))
+    }
+
+    @Test
+    fun liveOverlayReportsReconnectAttemptOnlyWhenNonZero() {
         assertEquals(
-            "Camera offline. Beacon will reconnect automatically.",
-            viewerStatusText(StreamingState.Offline, reconnectAttempt = 2),
+            LiveOverlay("Connection interrupted", "Beacon is retrying."),
+            liveOverlay(StreamingState.Reconnecting, privacyMode = false, reconnectAttempt = 0),
         )
         assertEquals(
-            "Connection interrupted. Reconnecting…",
-            viewerStatusText(StreamingState.Reconnecting, reconnectAttempt = 1),
+            LiveOverlay("Connection interrupted", "Beacon is retrying · attempt 3."),
+            liveOverlay(StreamingState.Reconnecting, privacyMode = false, reconnectAttempt = 3),
         )
     }
 
     @Test
-    fun cameraRuntimeLabelPrioritizesPrivacyAndActiveViewing() {
+    fun cameraCatalogResultsMessageReportsSearchMatchOrPlainCount() {
+        assertEquals("2 of 3 cameras shown", cameraCatalogResultsMessage("", 2, 3))
+        assertEquals(
+            "1 camera matches “kitchen”.",
+            cameraCatalogResultsMessage("kitchen", 1, 3),
+        )
+        assertEquals(
+            "2 cameras match “cam”.",
+            cameraCatalogResultsMessage("cam", 2, 3),
+        )
+    }
+
+    @Test
+    fun cameraRuntimeLabelPrioritizesPrivacyRecordingAndActiveViewing() {
         assertEquals(
             "PRIVACY ON",
             cameraRuntimeLabel(
@@ -269,6 +304,16 @@ class StreamingStateTest {
                     device = DeviceLifecycle.Streaming,
                     activeViewers = 2,
                     privacyMode = true,
+                ),
+            ),
+        )
+        assertEquals(
+            "RECORDING",
+            cameraRuntimeLabel(
+                CameraRuntimeState(
+                    device = DeviceLifecycle.Streaming,
+                    activeViewers = 1,
+                    recordingActive = true,
                 ),
             ),
         )
@@ -289,20 +334,53 @@ class StreamingStateTest {
     }
 
     @Test
-    fun monitorHomeCopyHighlightsEmptyHealthyAndAttentionStates() {
-        assertEquals("Set up your first camera", homeHeadline(emptyList()))
-        assertEquals(
-            "Pair a spare Android phone or tablet to begin.",
-            homeSupportingText(emptyList()),
+    fun homeGreetingMatchesTimeOfDay() {
+        assertEquals("Good morning", homeGreeting(hour = 8))
+        assertEquals("Good afternoon", homeGreeting(hour = 14))
+        assertEquals("Good evening", homeGreeting(hour = 20))
+        assertEquals("Good evening", homeGreeting(hour = 2))
+    }
+
+    @Test
+    fun homeSubtitleReportsReadyCountAndPrivacyOnlyWhenNothingNeedsAttention() {
+        val allReady = listOf(
+            BeaconApi.MonitorCamera("one", "Kitchen", "Pixel", true, false, 0),
+            BeaconApi.MonitorCamera("two", "Yard", "Pixel", true, false, 0),
         )
+        assertEquals("2 of 2 cameras are ready to view.", homeSubtitle(allReady))
 
-        val healthy = listOf(BeaconApi.MonitorCamera("one", "Kitchen", "Pixel", true, false, 0))
-        assertEquals("Your home is within reach", homeHeadline(healthy))
-        assertEquals("Every camera is ready when you need it.", homeSupportingText(healthy))
+        val onePrivacy = listOf(
+            BeaconApi.MonitorCamera("one", "Kitchen", "Pixel", true, false, 0),
+            BeaconApi.MonitorCamera("two", "Yard", "Pixel", true, true, 0),
+        )
+        assertEquals("1 of 2 cameras are ready to view. 1 has privacy on.", homeSubtitle(onePrivacy))
 
-        val privacy = listOf(BeaconApi.MonitorCamera("one", "Kitchen", "Pixel", true, true, 0))
-        assertEquals("A camera needs your attention", homeHeadline(privacy))
-        assertEquals("Review what needs attention.", homeSupportingText(privacy))
+        // Attention (offline, non-privacy) cameras take precedence over mentioning privacy mode.
+        val offlineAndPrivacy = listOf(
+            BeaconApi.MonitorCamera("one", "Kitchen", "Pixel", false, false, 0),
+            BeaconApi.MonitorCamera("two", "Yard", "Pixel", true, true, 0),
+        )
+        assertEquals("0 of 2 cameras are ready to view.", homeSubtitle(offlineAndPrivacy))
+    }
+
+    @Test
+    fun homeAttentionCamerasExcludesPrivacyModeAndOnlineCameras() {
+        val cameras = listOf(
+            BeaconApi.MonitorCamera("one", "Kitchen", "Pixel", false, false, 0),
+            BeaconApi.MonitorCamera("two", "Yard", "Pixel", true, true, 0),
+            BeaconApi.MonitorCamera("three", "Garage", "Pixel", true, false, 0),
+        )
+        val attention = homeAttentionCameras(cameras)
+        assertEquals(listOf("Kitchen"), attention.map { it.name })
+        assertEquals("Pixel needs attention", homeAttentionTitle(attention))
+        assertEquals("Camera is offline. Reconnect it to restore live viewing.", homeAttentionDescription(attention))
+    }
+
+    @Test
+    fun homeFavoriteCamerasFallsBackToFirstFourWhenNoneChosen() {
+        val cameras = (1..5).map { BeaconApi.MonitorCamera("id$it", "Cam $it", "Pixel", true, false, 0) }
+        assertEquals(listOf("id1", "id2", "id3", "id4"), homeFavoriteCameras(cameras, emptySet()).map { it.id })
+        assertEquals(listOf("id5"), homeFavoriteCameras(cameras, setOf("id5")).map { it.id })
     }
 
     @Test

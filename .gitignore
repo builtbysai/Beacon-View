@@ -35,3 +35,6 @@ pnpm-debug.log*
 # Generated local development state and public CA exports
 .beacon-dev/
 artifacts/dev-ca/
+
+# Desktop app installers and unpacked builds
+apps/desktop/release/

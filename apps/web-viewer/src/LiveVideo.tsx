@@ -14,9 +14,16 @@ import {
   type PreviousInboundBytes,
   type StreamQuality,
 } from './live-video-quality';
-import { formatClipTimer } from './recording-capture';
 import { RecordingBadge } from './RecordingBadge';
 import { useClipRecorder } from './useClipRecorder';
+import { usePictureInPicture } from './picture-in-picture';
+import {
+  DRIVE_READY,
+  type DriveRecording,
+  isDriveProblem,
+} from './drive-recording';
+import { DriveReconnectNotice, RecordClipControl } from './RecordClipControl';
+import { randomUuid } from './random-id';
 
 import {
   type ConnectionFailure,
@@ -29,6 +36,8 @@ import './LiveVideo.css';
 interface Camera {
   id: string;
   name: string;
+  /** A baby monitor opens with sound (ADR 0084). */
+  useCase?: string;
 }
 
 interface ReadyMessage {
@@ -88,8 +97,7 @@ export function LiveVideo({
   onRename,
   onDelete,
   canRecord = false,
-  recordingReady = true,
-  onConnectDriveForRecording,
+  drive = DRIVE_READY,
   canFlip = true,
   canPause = true,
 }: {
@@ -113,8 +121,8 @@ export function LiveVideo({
   /** Whether Google Drive is connected with the recording scope granted.
    * When it isn't, the record control becomes a link to go connect it
    * instead of a button that always fails with a 409 once pressed. */
-  recordingReady?: boolean;
-  onConnectDriveForRecording?: () => void;
+  /** Whether recordings can be saved, and how to connect Drive. */
+  drive?: DriveRecording;
   /** Whether this camera's grant allows switching between its sibling
    * sources. Hidden, not disabled, when it doesn't -- same as Listen/Talk. */
   canFlip?: boolean;
@@ -131,7 +139,7 @@ export function LiveVideo({
   // automatic reconnects (so access-history can group them), regenerated
   // when the viewer deliberately starts a fresh attempt (mount, switching
   // cameras, or clicking Reconnect).
-  const viewerSessionId = useRef(crypto.randomUUID());
+  const viewerSessionId = useRef(randomUuid());
   const previousCameraId = useRef<string | null>(null);
   const retryCount = useRef(0);
   const retryTimer = useRef<number | null>(null);
@@ -140,6 +148,10 @@ export function LiveVideo({
   const [retryDisplay, setRetryDisplay] = useState(0);
   const [quality, setQuality] = useState<StreamQuality | null>(null);
   const [listening, setListening] = useState(false);
+  // Whether the camera actually sends sound on this connection (null until
+  // negotiated). A camera always offers an audio section for Talk, but only
+  // sends its own sound when it shares it.
+  const [cameraSound, setCameraSound] = useState<boolean | null>(null);
   const [permissions, setPermissions] = useState({
     canListen: true,
     canTalk: true,
@@ -150,6 +162,14 @@ export function LiveVideo({
   const previousBytes = useRef<PreviousInboundBytes | null>(null);
   const stageRef = useRef<HTMLElement>(null);
   const fullscreenButton = useRef<HTMLButtonElement>(null);
+  // Keep watching in a floating window while using other apps or tabs. Only
+  // the full live view floats (and floats on its own when you leave), never
+  // the small tiles on Home.
+  const pip = usePictureInPicture(videoRef, {
+    auto: !compact,
+    enabled: !compact && enabled,
+    title: camera.name,
+  });
   const [fullscreen, setFullscreen] = useState(false);
   const [controlError, setControlError] = useState('');
   const [switching, setSwitching] = useState(false);
@@ -190,16 +210,22 @@ export function LiveVideo({
     const isMediaStream =
       typeof MediaStream !== 'undefined' && stream instanceof MediaStream;
     if (!isMediaStream) {
-      setControlError('Recording is not available yet -- still connecting.');
+      setControlError('Wait for the video to connect, then record.');
       return;
     }
     setControlError('');
     clip.start(stream);
   }, [clip]);
 
+  // A Drive problem has its own notice with a fix; others show here.
   useEffect(() => {
-    if (clip.state.error) setControlError(clip.state.error);
-  }, [clip.state.error]);
+    if (clip.state.error && !isDriveProblem(clip.state.errorCode))
+      setControlError(clip.state.error);
+  }, [clip.state.error, clip.state.errorCode]);
+
+  useEffect(() => {
+    if (pip.error) setControlError(pip.error);
+  }, [pip.error]);
 
   // Clears a finished clip's status back to the plain "Record a short
   // clip" control a few seconds after it lands, the same pause the old
@@ -246,15 +272,57 @@ export function LiveVideo({
     setRetryDisplay(0);
     generation.current.cancel();
     if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
-    viewerSessionId.current = crypto.randomUUID();
+    viewerSessionId.current = randomUuid();
     setStatus('connecting');
     setAttempt((value) => value + 1);
   }, []);
+
+  function setAudio(next: boolean) {
+    const current = ++playbackGeneration.current;
+    setControlError('');
+    setListening(next);
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    video.muted = !next;
+    if (next)
+      void Promise.resolve(video.play()).catch(() => {
+        if (current !== playbackGeneration.current) return;
+        video.muted = true;
+        setListening(false);
+        setControlError(
+          'Sound could not start. Choose Listen to try again, and check your browser sound settings.',
+        );
+      });
+  }
+
+  // A baby monitor opens with sound (ADR 0084). If the browser's autoplay
+  // policy refuses, video keeps playing muted and the person taps Listen.
+  const autoListened = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !videoReady ||
+      cameraSound !== true ||
+      camera.useCase !== 'baby' ||
+      !permissions.canListen ||
+      autoListened.current === camera.id
+    )
+      return;
+    autoListened.current = camera.id;
+    setAudio(true);
+    // setAudio only touches refs and setters; rerun only when these change.
+  }, [
+    videoReady,
+    cameraSound,
+    camera.id,
+    camera.useCase,
+    permissions.canListen,
+  ]);
 
   useEffect(() => {
     setQuality(null);
     setVideoReady(false);
     setListening(false);
+    setCameraSound(null);
     setPermissions({ canListen: true, canTalk: true });
     if (!enabled || privacyMode) {
       setStatus(privacyMode ? 'privacy on' : 'stream unavailable');
@@ -264,7 +332,7 @@ export function LiveVideo({
       current === 'reconnecting' ? current : 'connecting',
     );
     if (previousCameraId.current !== camera.id) {
-      viewerSessionId.current = crypto.randomUUID();
+      viewerSessionId.current = randomUuid();
       previousCameraId.current = camera.id;
     }
     const currentGeneration = generation.current.next();
@@ -469,6 +537,16 @@ export function LiveVideo({
         }
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
+        setCameraSound(
+          peer
+            .getTransceivers()
+            .some(
+              (transceiver) =>
+                transceiver.receiver.track.kind === 'audio' &&
+                (transceiver.currentDirection === 'recvonly' ||
+                  transceiver.currentDirection === 'sendrecv'),
+            ),
+        );
         if (!active || !generation.current.isCurrent(currentGeneration)) return;
         socket.send(
           JSON.stringify({
@@ -672,26 +750,15 @@ export function LiveVideo({
               <button
                 aria-pressed={listening}
                 className="video-control"
-                title={listening ? 'Mute camera audio' : 'Listen to camera'}
-                onClick={() => {
-                  const next = !listening;
-                  const current = ++playbackGeneration.current;
-                  setControlError('');
-                  setListening(next);
-                  if (videoRef.current) {
-                    const video = videoRef.current;
-                    video.muted = !next;
-                    if (next)
-                      void Promise.resolve(video.play()).catch(() => {
-                        if (current !== playbackGeneration.current) return;
-                        video.muted = true;
-                        setListening(false);
-                        setControlError(
-                          'Sound could not start. Choose Listen to try again, and check your browser sound settings.',
-                        );
-                      });
-                  }
-                }}
+                disabled={cameraSound === false}
+                title={
+                  cameraSound === false
+                    ? 'This camera isn’t sharing sound. Turn on “Include sound” on that camera.'
+                    : listening
+                      ? 'Mute camera audio'
+                      : 'Listen to camera'
+                }
+                onClick={() => setAudio(!listening)}
                 type="button"
               >
                 <Icon name={listening ? 'speaker' : 'speakerOff'} />
@@ -775,64 +842,31 @@ export function LiveVideo({
                 </span>
               </button>
             )}
-            {canRecord && !recordingReady && (
-              <button
+            {canRecord && (
+              <RecordClipControl
                 className="video-control"
-                title="Connect Google Drive to record"
-                onClick={onConnectDriveForRecording}
-                type="button"
-              >
-                <Icon name="record" />
-                <span className="visually-hidden">
-                  Connect Google Drive to record
-                </span>
-              </button>
+                clip={clip}
+                disabled={privacyMode || status !== 'connected'}
+                drive={drive}
+                onStart={startRecording}
+              />
             )}
-            {canRecord && recordingReady && clip.supported && (
+            {pip.supported && (
               <button
-                aria-pressed={clip.state.status === 'recording'}
-                className={`video-control${
-                  clip.state.status === 'recording' ? ' is-active' : ''
-                }`}
+                aria-pressed={pip.active}
+                className="video-control"
+                disabled={!videoReady}
+                onClick={pip.toggle}
                 title={
-                  clip.state.status === 'recording'
-                    ? 'Tap to stop recording'
-                    : clip.state.status === 'failed'
-                      ? 'Retry encrypted upload'
-                      : 'Record a short clip'
-                }
-                disabled={
-                  privacyMode ||
-                  status !== 'connected' ||
-                  clip.state.status === 'starting' ||
-                  clip.state.status === 'uploading' ||
-                  clip.state.status === 'available'
-                }
-                onClick={
-                  clip.state.status === 'recording'
-                    ? clip.stop
-                    : clip.state.status === 'failed'
-                      ? () => {
-                          setControlError('');
-                          clip.retry();
-                        }
-                      : startRecording
+                  pip.active
+                    ? 'Back to this page'
+                    : 'Keep watching in a floating window'
                 }
                 type="button"
               >
-                <Icon name="record" />
+                <Icon name="pip" />
                 <span className="visually-hidden">
-                  {clip.state.status === 'starting'
-                    ? 'Starting recording…'
-                    : clip.state.status === 'recording'
-                      ? `Recording, ${formatClipTimer(clip.state.elapsedMs)} elapsed. Tap to stop.`
-                      : clip.state.status === 'uploading'
-                        ? 'Uploading recording'
-                        : clip.state.status === 'available'
-                          ? 'Recording saved'
-                          : clip.state.status === 'failed'
-                            ? 'Retry encrypted recording upload'
-                            : 'Record a short clip'}
+                  {pip.active ? 'Close floating window' : 'Picture in picture'}
                 </span>
               </button>
             )}
@@ -942,6 +976,9 @@ export function LiveVideo({
       <p className="visually-hidden" role="status">
         Connection: {status}
       </p>
+      {!compact && canRecord && (
+        <DriveReconnectNotice className="on-video" clip={clip} drive={drive} />
+      )}
       {!compact && (controlError || talkState !== 'idle') && (
         <div className="live-footer">
           {controlError && (

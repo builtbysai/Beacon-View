@@ -431,6 +431,17 @@ export class PostgresNotificationRepository {
     );
   }
 
+  /** Ends a delivery whose alert went stale while its device was offline.
+   * Unlike a permanent failure, the subscription itself stays active. */
+  async markExpired(id: string, now: Date): Promise<void> {
+    await this.pool.query(
+      `UPDATE notification_outbox SET attempt_count=attempt_count+1,
+         claimed_until=NULL, terminal_at=$2
+       WHERE id=$1 AND delivered_at IS NULL AND terminal_at IS NULL`,
+      [id, now],
+    );
+  }
+
   async markFailed(
     id: string,
     subscriptionId: string,

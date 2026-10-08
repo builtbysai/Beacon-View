@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 
-import { request } from './api';
+import { ApiError, request } from './api';
+import { friendlyError } from './friendly-errors';
 import { SettingsCard, SettingsRow } from './SettingsUI';
 
 interface DriveStatus {
   connected: boolean;
   configured: boolean;
   recordingsConnected: boolean;
+  /** Google stopped accepting the connection (expired or revoked). */
+  expired?: boolean;
   providerEmail: string | null;
   updatedAt: string | null;
 }
@@ -27,7 +30,7 @@ export function GoogleDriveSettings() {
         'Google Drive permission was not granted. Try again when ready.',
       );
     } else if (result === 'failed') {
-      setError('Google Drive could not be connected. Please try again.');
+      setError('Google Drive couldn’t be connected. Try again.');
     }
     if (result) {
       parameters.delete('drive');
@@ -46,9 +49,10 @@ export function GoogleDriveSettings() {
       setStatus(await request<DriveStatus>('/api/drive/status'));
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Unable to load Drive status',
+        friendlyError(
+          caught,
+          'Google Drive status couldn’t be loaded. Try again.',
+        ),
       );
     }
   }
@@ -66,8 +70,10 @@ export function GoogleDriveSettings() {
       setMessage('Google Drive connection verified.');
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Drive verification failed',
+        friendlyError(caught, 'Google Drive couldn’t be checked. Try again.'),
       );
+      // Verification can discover the connection expired; show that state.
+      if (caught instanceof ApiError && caught.code) void load(false);
     } finally {
       setBusy(false);
     }
@@ -81,13 +87,22 @@ export function GoogleDriveSettings() {
       await request('/api/drive/connection', { method: 'DELETE' });
       setStatus((current) =>
         current
-          ? { ...current, connected: false, providerEmail: null }
+          ? {
+              ...current,
+              connected: false,
+              expired: false,
+              providerEmail: null,
+              recordingsConnected: false,
+            }
           : current,
       );
       setMessage('Google Drive disconnected.');
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Unable to disconnect Drive',
+        friendlyError(
+          caught,
+          'Google Drive couldn’t be disconnected. Try again.',
+        ),
       );
     } finally {
       setBusy(false);
@@ -116,19 +131,23 @@ export function GoogleDriveSettings() {
             ? status.providerEmail
               ? `Connected as ${status.providerEmail}.`
               : 'Connected.'
-            : 'Store Beacon app data and optional recordings in your Drive.'
+            : status.expired
+              ? 'Your Google Drive connection expired, so recordings can’t be saved. Reconnect to continue.'
+              : 'Store Beacon app data and optional recordings in your Drive.'
         }
       >
         {status.connected ? (
           <span className="pill pill-on">Connected</span>
         ) : status.configured ? (
           <>
-            <span className="pill">Not connected</span>
+            <span className={status.expired ? 'pill pill-warn' : 'pill'}>
+              {status.expired ? 'Expired' : 'Not connected'}
+            </span>
             <a
               className="secondary button-link"
               href="/api/drive/connect?purpose=recordings"
             >
-              Connect
+              {status.expired ? 'Reconnect' : 'Connect'}
             </a>
           </>
         ) : (
