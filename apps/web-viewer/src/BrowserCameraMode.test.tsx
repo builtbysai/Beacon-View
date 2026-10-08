@@ -425,7 +425,7 @@ describe('BrowserCameraMode', () => {
       await screen.findByRole('button', { name: 'Start camera' }),
     ).toBeVisible();
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Camera access was denied or revoked.',
+      /lost access to the camera/i,
     );
   });
 
@@ -926,7 +926,9 @@ describe('BrowserCameraMode standby (wake on view)', () => {
     connectionState = 'new';
     onconnectionstatechange: (() => void) | null = null;
     onicecandidate: (() => void) | null = null;
+    ontrack: (() => void) | null = null;
     addTrack() {}
+    addTransceiver() {}
     close() {}
     createOffer() {
       return Promise.resolve({ sdp: 'offer', type: 'offer' as const });
@@ -1082,9 +1084,7 @@ describe('BrowserCameraMode standby (wake on view)', () => {
       new DOMException('busy', 'NotReadableError'),
     );
     viewerArrives('viewer-one');
-    expect(
-      await screen.findByText(/camera could not turn on for a viewer/),
-    ).toBeVisible();
+    expect(await screen.findByText(/couldn’t turn on/)).toBeVisible();
     expect(screen.getByText('Standby · camera off')).toBeVisible();
   });
 });

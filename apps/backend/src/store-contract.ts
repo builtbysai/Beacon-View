@@ -518,6 +518,10 @@ export interface MilestoneStore {
     userId: string;
   }): Promise<void>;
   removeGoogleDriveConnection(userId: string): Promise<boolean>;
+  /** Marks the connection as no longer accepted by Google (ADR 0086);
+   * true only on the first call. Expired connections read as absent. */
+  markGoogleDriveConnectionExpired(userId: string): Promise<boolean>;
+  googleDriveConnectionExpired(userId: string): Promise<boolean>;
   notificationsConfigured(): boolean;
   recordSecurityEvent(input: {
     userId: string;

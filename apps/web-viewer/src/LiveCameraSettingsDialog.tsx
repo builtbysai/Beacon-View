@@ -6,6 +6,7 @@ import type { Camera, Device } from './domain';
 import { Icon } from './Icon';
 import { InlineRename } from './InlineRename';
 import { ModalDialog } from './ModalDialog';
+import { friendlyError } from './friendly-errors';
 
 export function LiveCameraSettingsDialog({
   camera,
@@ -36,9 +37,7 @@ export function LiveCameraSettingsDialog({
       await action();
     } catch (caught) {
       setControlError(
-        caught instanceof Error
-          ? caught.message
-          : 'The change could not be saved.',
+        friendlyError(caught, 'The change couldn’t be saved. Try again.'),
       );
     } finally {
       setBusy(false);

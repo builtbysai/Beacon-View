@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { request } from './api';
+import { friendlyError } from './friendly-errors';
 import { downloadBlob } from './browser-download';
 import {
   CAMERA_USE_CASES,
@@ -94,7 +95,10 @@ export function ComputerCameraSetupDialog({
       setPairing(result);
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Could not create a setup.',
+        friendlyError(
+          caught,
+          'The camera setup couldn’t be created. Try again.',
+        ),
       );
     } finally {
       setBusy(false);
@@ -263,7 +267,11 @@ export function ComputerCameraSetupDialog({
                     void navigator.clipboard
                       ?.writeText(browserLink)
                       .then(() => setCopied(true))
-                      .catch(() => setError('Could not copy the link.'));
+                      .catch(() =>
+                        setError(
+                          'Couldn’t copy the link. Select it and copy it manually.',
+                        ),
+                      );
                   }}
                   type="button"
                 >

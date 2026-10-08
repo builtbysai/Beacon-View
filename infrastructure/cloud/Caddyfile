@@ -21,9 +21,11 @@
 	# app shell, and the manifest is always revalidated.
 	handle /downloads/* {
 		root * /srv
-		@manifest path /downloads/manifest.json
+		# The manifest and the update feeds (latest*.yml, ADR 0085) always
+		# revalidate so a release is seen at once.
+		@manifest path /downloads/manifest.json /downloads/*.yml
 		header @manifest Cache-Control "no-cache"
-		@installers not path /downloads/manifest.json
+		@installers not path /downloads/manifest.json /downloads/*.yml
 		header @installers Cache-Control "public, max-age=3600"
 		header X-Content-Type-Options "nosniff"
 		file_server

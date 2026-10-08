@@ -566,7 +566,7 @@
 .local-actions .btn {
   min-height: 38px;
 }
-.local-field input,
+.local-field input:not([type='checkbox'], [type='radio']),
 .local-field select {
   min-height: 40px;
   border-radius: 9px;
@@ -683,4 +683,74 @@
   .video-control {
     transition: none !important;
   }
+}
+
+/* Recovery page after an unexpected error (AppErrorBoundary). */
+.error-boundary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+/* Standard error notice (ErrorNotice, ADR 0087): icon, message, actions. */
+.error-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--status-error) 35%, transparent);
+  border-radius: 12px;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--status-error) 9%, var(--bg-surface));
+  font-size: 14px;
+  line-height: 1.45;
+}
+.error-notice > svg {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--status-error);
+}
+.error-notice p {
+  margin: 0;
+}
+.error-notice-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.error-notice-dismiss {
+  width: 32px;
+  height: 32px;
+  margin: -6px -6px -6px 0;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text-muted);
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.error-notice-dismiss:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+/* On narrow screens a Retry button moves under the message. */
+@media (max-width: 520px) {
+  .error-notice:has(.secondary) .error-notice-actions {
+    grid-column: 2 / -1;
+    justify-content: flex-end;
+  }
+}
+
+/* "Can't reach Beacon" while opening. */
+.startup-error {
+  gap: 16px;
+}
+.startup-error p {
+  max-width: 360px;
+  margin: 0;
 }

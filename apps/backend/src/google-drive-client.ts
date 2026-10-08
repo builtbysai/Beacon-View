@@ -6,6 +6,27 @@ export const GOOGLE_DRIVE_RECORDING_SCOPE =
   'https://www.googleapis.com/auth/drive.file';
 const GOOGLE_REQUEST_TIMEOUT_MS = 10_000;
 
+/** Google rejected the stored refresh token: it expired (an OAuth app whose
+ * consent screen is still in "Testing" issues tokens that expire after 7
+ * days), was revoked, or the account password changed. Only a new consent
+ * fixes it, so callers drop the connection and ask the owner to reconnect. */
+export class DriveReconnectRequiredError extends Error {
+  constructor() {
+    super('Google Drive needs to be reconnected');
+    this.name = 'DriveReconnectRequiredError';
+  }
+}
+
+export function isInvalidGrant(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const data = (error as { response?: { data?: { error?: unknown } } }).response
+    ?.data;
+  return (
+    data?.error === 'invalid_grant' ||
+    (error instanceof Error && /\binvalid_grant\b/u.test(error.message))
+  );
+}
+
 export class GoogleDriveRequestError extends Error {
   constructor(
     readonly operation:
@@ -203,9 +224,14 @@ export async function refreshDriveAccessToken(
   refreshToken: string,
 ): Promise<string> {
   client.setCredentials({ refresh_token: refreshToken });
-  const token = await client.getAccessToken();
-  if (!token.token) throw new Error('Google Drive access token unavailable');
-  return token.token;
+  try {
+    const token = await client.getAccessToken();
+    if (!token.token) throw new Error('Google Drive access token unavailable');
+    return token.token;
+  } catch (error) {
+    if (isInvalidGrant(error)) throw new DriveReconnectRequiredError();
+    throw error;
+  }
 }
 
 export async function revokeDriveRefreshToken(

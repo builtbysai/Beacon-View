@@ -9,6 +9,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LiveVideo } from './LiveVideo';
+import { DRIVE_READY } from './drive-recording';
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
@@ -525,14 +526,19 @@ describe('LiveVideo', () => {
       await Promise.resolve();
     });
 
+    // Nothing was kept to upload, so the control offers a fresh recording
+    // rather than a retry that could do nothing.
     await waitFor(() =>
-      expect(
-        screen.getByRole('button', {
-          name: 'Retry encrypted recording upload',
-        }),
-      ).toBeInTheDocument(),
+      expect(screen.getByRole('alert')).toHaveTextContent(/connection.*lost/i),
     );
-    expect(screen.getByRole('alert')).toHaveTextContent(/connection.*lost/i);
+    expect(
+      screen.getByRole('button', { name: 'Record a short clip' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Retry encrypted recording upload',
+      }),
+    ).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/recordings/rec-2/fail',
       expect.objectContaining({
@@ -547,14 +553,15 @@ describe('LiveVideo', () => {
   });
 
   it('offers to connect Google Drive instead of a dead-end error when recording is not ready', () => {
+    FakeMediaRecorder.supportedTypes = new Set(['video/webm']);
     vi.stubGlobal('WebSocket', FakeWebSocket);
-    const onConnectDriveForRecording = vi.fn();
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    const connect = vi.fn();
     render(
       <LiveVideo
         camera={{ id: 'camera', name: 'Kitchen' }}
         canRecord
-        recordingReady={false}
-        onConnectDriveForRecording={onConnectDriveForRecording}
+        drive={{ ...DRIVE_READY, connect, state: 'not_connected' }}
       />,
     );
     expect(
@@ -564,7 +571,23 @@ describe('LiveVideo', () => {
       name: 'Connect Google Drive to record',
     });
     fireEvent.click(connectButton);
-    expect(onConnectDriveForRecording).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks to reconnect, not connect, when Google stopped accepting Drive', () => {
+    FakeMediaRecorder.supportedTypes = new Set(['video/webm']);
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    render(
+      <LiveVideo
+        camera={{ id: 'camera', name: 'Kitchen' }}
+        canRecord
+        drive={{ ...DRIVE_READY, state: 'expired' }}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Reconnect Google Drive to record' }),
+    ).toBeInTheDocument();
   });
 
   it('hides flip and pause when the grant excludes them, even with siblings and onPrivacy present', () => {

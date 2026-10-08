@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 
-import { ApiError, request } from './api';
+import { request } from './api';
+import { friendlyError } from './friendly-errors';
 import { ModalDialog } from './ModalDialog';
 
 export function ReauthenticationDialog({
@@ -29,9 +30,10 @@ export function ReauthenticationDialog({
       onConfirmed();
     } catch (caught) {
       setError(
-        caught instanceof ApiError
-          ? caught.message
-          : 'We could not confirm your password. Try again.',
+        friendlyError(
+          caught,
+          'Your password couldn’t be confirmed. Try again.',
+        ),
       );
     } finally {
       setBusy(false);

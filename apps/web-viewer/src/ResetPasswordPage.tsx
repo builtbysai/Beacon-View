@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { ApiError, request } from './api';
+import { request } from './api';
+import { friendlyError } from './friendly-errors';
 import { Brand } from './Icon';
 
 export function ResetPasswordPage() {
@@ -15,7 +16,9 @@ export function ResetPasswordPage() {
     const password = (data.get('password') as string | null) ?? '';
     const confirmation = (data.get('confirmation') as string | null) ?? '';
     if (password !== confirmation) {
-      setError('Those passwords do not match.');
+      setError(
+        'The passwords don’t match. Type the same password in both fields.',
+      );
       return;
     }
     setBusy(true);
@@ -28,9 +31,7 @@ export function ResetPasswordPage() {
       setDone(true);
     } catch (thrown) {
       setError(
-        thrown instanceof ApiError
-          ? thrown.message
-          : 'The password could not be reset. Try again.',
+        friendlyError(thrown, 'The password couldn’t be reset. Try again.'),
       );
     } finally {
       setBusy(false);

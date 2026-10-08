@@ -53,16 +53,19 @@ describe('desktop preferences', () => {
     const file = path.join(directory, 'prefs.json');
     expect(readPreferences(file)).toEqual({
       cameraResumePath: null,
+      relaunchHidden: false,
       trayHintShown: false,
     });
     writeFileSync(file, '{not json');
     expect(readPreferences(file)).toEqual({
       cameraResumePath: null,
+      relaunchHidden: false,
       trayHintShown: false,
     });
     writeFileSync(file, JSON.stringify({ trayHintShown: 'yes' }));
     expect(readPreferences(file)).toEqual({
       cameraResumePath: null,
+      relaunchHidden: false,
       trayHintShown: false,
     });
   });
@@ -71,6 +74,7 @@ describe('desktop preferences', () => {
     const file = path.join(temporaryDirectory(), 'nested', 'prefs.json');
     const saved = {
       cameraResumePath: '/camera-mode/setup?autostart=1&power=standby',
+      relaunchHidden: false,
       trayHintShown: true,
     };
     writePreferences(file, saved);
@@ -83,11 +87,13 @@ describe('desktop preferences', () => {
       file,
       JSON.stringify({
         cameraResumePath: '//evil.example/x',
+        relaunchHidden: false,
         trayHintShown: true,
       }),
     );
     expect(readPreferences(file)).toEqual({
       cameraResumePath: null,
+      relaunchHidden: false,
       trayHintShown: true,
     });
   });

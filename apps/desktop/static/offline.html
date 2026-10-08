@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-RT/1ZvtTDujQnJkT+1z/agVTuwQuTmoj2MDI/aULjyQ='">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-t3X6x4Ubqlu3yn0FyKI3tzFILvniq1YZXvPB71rJnFA='">
 <title>Beacon</title>
 <style>
   :root { color-scheme: dark; }
@@ -27,7 +27,9 @@
   const origin = new URLSearchParams(location.search).get('origin') ?? '';
   if (!/^https?:\/\/[^/]+$/.test(origin)) return;
   const retry = document.getElementById('retry');
-  retry.href = `${origin}/`;
+  // Back to the page that failed (e.g. Camera Mode), never off-site.
+const back = new URLSearchParams(location.search).get('return') ?? '';
+retry.href = back.startsWith(`${origin}/`) ? back : `${origin}/`;
   const reconnect = () => location.assign(retry.href);
   addEventListener('online', reconnect);
   setInterval(() => {

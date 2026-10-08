@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { request } from './api';
+import { friendlyError } from './friendly-errors';
 import type { HouseholdRole } from './domain';
 
 interface HouseholdAccess {
@@ -47,9 +48,10 @@ export function HouseholdSwitcher({
       .catch((caught) => {
         if (active)
           setError(
-            caught instanceof Error
-              ? caught.message
-              : 'Unable to load households',
+            friendlyError(
+              caught,
+              'Your households couldn’t be loaded. Try again.',
+            ),
           );
       });
     return () => {
@@ -96,9 +98,10 @@ export function HouseholdSwitcher({
                   .catch((caught) => {
                     setBusy(false);
                     setError(
-                      caught instanceof Error
-                        ? caught.message
-                        : 'Unable to switch households',
+                      friendlyError(
+                        caught,
+                        'The household couldn’t be switched. Try again.',
+                      ),
                     );
                   });
               }}

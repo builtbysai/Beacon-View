@@ -154,11 +154,46 @@ following:
 - Phase 1 camera use cases (Security, Baby monitor, Door camera)
 
 The same batch repaired the responsive audit and made `migrate-verify`
-check every migration statement. Code signing is not required while the
-deployment is self-hosted.
-Model selection, a default-off feature flag, and device evidence remain open, and IP
-cameras/other clients still require their own design milestone per ADR 0067 and the table
-below.
+check every migration statement.
+
+October 7 desktop 0.3: owner-reported audio and recording failures fixed:
+
+- Computer cameras now always negotiate an audio section, so Talk works, and
+  they play Talk audio only while that viewer holds the talk floor, with an
+  on-screen notice.
+- Viewers see Listen disabled when a camera shares no sound.
+- Microphones can be chosen, both for a computer camera and for Talk.
+- An expired Google Drive connection (Testing-mode OAuth tokens last 7
+  days) is detected, removed, and shown as "Reconnect" instead of a generic
+  upload failure.
+- Recording from a standby camera wakes it.
+- ADR 0085 adds automatic desktop updates that keep sessions and paired
+  cameras.
+- ADR 0086 adds the in-place Google Drive reconnect flow and consistent
+  error handling:
+  - Drive is checked before a recording starts.
+  - A clip that hits an expired Drive is kept and uploads after reconnect.
+  - Server errors no longer leak internals.
+  - Start-up tells "offline" from "signed out".
+  - A lapsed session returns to sign-in with a reason.
+  - An error boundary replaces blank-page crashes.
+- ADR 0087 makes error messages user-friendly:
+  - Every server error is translated into plain words with a next step
+    (enforced by a test).
+  - Camera, microphone, and Talk failures name their cause.
+  - Errors are dismissible and clear on navigation.
+  - A failed camera list offers Retry instead of looking empty.
+  - The desktop app reconnects to Camera Mode after an outage.
+- ADR 0088 adds picture-in-picture on web, desktop, and Android:
+  - Live video keeps playing in a floating window when you leave the app,
+    tab, or window.
+  - It floats automatically while a camera plays, and there is a PiP button
+    in the live view.
+  - On Android, rotating no longer restarts the stream. Code signing is not required while the
+    deployment is self-hosted.
+    Model selection, a default-off feature flag, and device evidence remain open, and IP
+    cameras/other clients still require their own design milestone per ADR 0067 and the table
+    below.
 
 Notification Transport v1 is implemented through its Chrome Web Push baseline; native
 FCM and the remaining physical acceptance matrix remain external evidence gates. On

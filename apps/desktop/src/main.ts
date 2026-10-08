@@ -28,6 +28,8 @@ import {
   cameraSetupPath,
   validResumePath,
 } from './camera-setup.js';
+import { BeaconAutoUpdater } from './auto-updater.js';
+import { FloatingVideo } from './floating-video.js';
 import { APP_ID, resolveAppOrigin } from './config.js';
 import { DEEP_LINK_SCHEME, type DesktopAuthLink } from './deep-link.js';
 import {
@@ -74,6 +76,8 @@ const recentAlerts = new RecentAlerts();
 
 let mainWindow: BrowserWindow | null = null;
 let tray: BeaconTray | null = null;
+let updater: BeaconAutoUpdater | null = null;
+const floatingVideo = new FloatingVideo();
 let quitting = false;
 let cameraActivity: CameraActivity = 'off';
 let cameraBlocker: number | null = null;
@@ -165,6 +169,7 @@ function setCameraActivity(next: CameraActivity): void {
   } else if (cameraBlocker === null) {
     cameraBlocker = powerSaveBlocker.start('prevent-app-suspension');
   }
+  updater?.consider();
   // Capture that starts while the window is hidden is announced, so the
   // person at this computer always knows when the camera turns on.
   if (next === 'live' && mainWindow && !mainWindow.isVisible())
@@ -323,10 +328,17 @@ function act(decision: NavigationDecision): void {
 
 // --- Window -----------------------------------------------------------------
 
-function showOfflinePage(window: BrowserWindow): void {
+/** Shows the offline page, which reconnects to `returnUrl` (the page that
+ * failed), so a computer camera comes back in Camera Mode, not on Home. */
+function showOfflinePage(window: BrowserWindow, returnUrl: string): void {
   void window
     .loadFile(path.join(appRoot, 'static', 'offline.html'), {
-      query: { origin: appOrigin },
+      query: {
+        origin: appOrigin,
+        return: isAppUrl(returnUrl, appOrigin)
+          ? returnUrl
+          : appUrl(startPath()),
+      },
     })
     .catch(() => undefined);
 }
@@ -393,7 +405,7 @@ function createWindow(): BrowserWindow {
         errorCode !== ERR_ABORTED &&
         isAppUrl(validatedUrl, appOrigin)
       )
-        showOfflinePage(window);
+        showOfflinePage(window, validatedUrl);
     },
   );
   contents.on('render-process-gone', () => {
@@ -420,6 +432,11 @@ function createWindow(): BrowserWindow {
     // Closing hides to the tray; Quit Beacon (tray) really exits.
     event.preventDefault();
     window.hide();
+    // A camera being watched keeps playing in a floating window (ADR 0088);
+    // an update waits until that's settled.
+    void floatingVideo
+      .float(window.webContents)
+      .then(() => updater?.consider());
     if (cameraActivity !== 'off') {
       notifyCameraInBackground();
     } else if (!preferences.trayHintShown) {
@@ -431,6 +448,10 @@ function createWindow(): BrowserWindow {
       savePreferences();
     }
   });
+  window.on('minimize', () => void floatingVideo.float(window.webContents));
+  // Back in the window: return a video the shell floated to the page.
+  window.on('show', () => void floatingVideo.dock(window.webContents));
+  window.on('restore', () => void floatingVideo.dock(window.webContents));
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = null;
   });
@@ -598,8 +619,28 @@ if (!app.requestSingleInstanceLock()) {
       open: () => showWindow(),
       quit: () => void quitFromTray(),
       reload: () => showWindow().webContents.reload(),
+      version: app.getVersion(),
     });
     const window = createWindow();
+    const afterUpdate = preferences.relaunchHidden;
+    if (afterUpdate) {
+      preferences.relaunchHidden = false;
+      savePreferences();
+    }
+    updater = new BeaconAutoUpdater({
+      beforeQuietRestart: () => {
+        preferences.relaunchHidden = true;
+        savePreferences();
+      },
+      moment: () => ({
+        cameraActivity,
+        windowVisible:
+          Boolean(mainWindow?.isVisible()) || floatingVideo.watching,
+      }),
+      offer: (offer) => tray?.setUpdate(offer),
+      openDownloadPage: () => openExternal(appUrl('/#download')),
+    });
+    updater.start();
     const installerSetup = takePendingInstallerSetup(app.getPath('userData'));
     const inputs = [
       findLaunchInput(process.argv, appOrigin),
@@ -611,7 +652,7 @@ if (!app.requestSingleInstanceLock()) {
     let handled = false;
     for (const input of inputs) handled = handleLaunchInput(input) || handled;
     // A login-item launch stays in the tray (a camera resumes there).
-    if (!handled && !launchedInBackground(process.argv))
+    if (!handled && !afterUpdate && !launchedInBackground(process.argv))
       window.once('ready-to-show', () => window.show());
   });
 }

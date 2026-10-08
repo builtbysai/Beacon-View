@@ -51,6 +51,23 @@ export function saveMicrophoneEnabled(enabled: boolean): void {
   write(MICROPHONE_KEY, String(enabled));
 }
 
+const MICROPHONE_DEVICE_KEY = 'beacon_browser_camera_microphone_device';
+
+/** The chosen microphone's device ID, or '' for the system default. */
+export function loadMicrophoneDevice(): string {
+  return read(MICROPHONE_DEVICE_KEY) ?? '';
+}
+
+export function saveMicrophoneDevice(deviceId: string): void {
+  write(MICROPHONE_DEVICE_KEY, deviceId);
+}
+
+export function microphoneConstraints(
+  deviceId: string,
+): MediaTrackConstraints | true {
+  return deviceId ? { deviceId: { exact: deviceId } } : true;
+}
+
 export function cameraActivity(
   registered: boolean,
   streamOpen: boolean,

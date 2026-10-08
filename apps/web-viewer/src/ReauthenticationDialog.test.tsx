@@ -56,7 +56,7 @@ it('keeps the dialog open and shows an incorrect-password response', async () =>
   fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Incorrect password',
+    'That password isn’t right',
   );
   expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
 });

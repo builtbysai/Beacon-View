@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.MicOff
+import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Button
@@ -99,6 +100,11 @@ internal fun AndroidLiveView(
     val renderer = remember(camera.id, viewerGeneration) { SurfaceViewRenderer(context) }
     var state by remember(camera.id) { mutableStateOf(StreamingState.Connecting) }
     val othersWatching = otherViewerCount(camera.viewerCount, state == StreamingState.Connected)
+    // Picture-in-picture (ADR 0088): leaving the app floats a playing camera.
+    val activity = remember(context) { context.findComponentActivity() }
+    val canFloat = remember(context) { activity != null && pictureInPictureSupported(context) }
+    val inPictureInPicture = rememberInPictureInPicture(activity)
+    LivePictureInPictureEffect(activity, playing = state == StreamingState.Connected)
 
     DisposableEffect(lifecycleOwner) {
         val observer =
@@ -237,6 +243,27 @@ internal fun AndroidLiveView(
     }
 
     BackHandler(enabled = fullscreen) { fullscreen = false }
+
+    // In the floating window: the video alone, no controls.
+    if (inPictureInPicture) {
+        Box(
+            modifier =
+                Modifier.fillMaxSize()
+                    .background(Color.Black)
+                    .semantics { contentDescription = "Live video from ${camera.name}" },
+        ) {
+            key(camera.id, viewerGeneration) {
+                AndroidView(
+                    factory = {
+                        (renderer.parent as? ViewGroup)?.removeView(renderer)
+                        renderer
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        return
+    }
 
     if (fullscreen) {
         Box(
@@ -446,6 +473,21 @@ internal fun AndroidLiveView(
                         elapsedSeconds = recordingElapsedSeconds,
                         onClick = ::requestRecording,
                     )
+                }
+                if (canFloat) {
+                    Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
+                        IconButton(
+                            enabled = state == StreamingState.Connected,
+                            onClick = {
+                                if (activity == null || !enterLivePictureInPicture(activity)) {
+                                    recordingError =
+                                        "Picture-in-picture is turned off for Beacon. Turn it on in Android Settings → Apps → Beacon."
+                                }
+                            },
+                        ) {
+                            Icon(Icons.Outlined.PictureInPictureAlt, "Picture in picture", tint = Color.White)
+                        }
+                    }
                 }
                 Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
                     IconButton(enabled = state == StreamingState.Connected, onClick = { fullscreen = true }) {

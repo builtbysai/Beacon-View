@@ -141,6 +141,34 @@ Android, backend, PostgreSQL, and TURN are separate trust zones.
 - Camera use cases change only existing motion settings, and never enable
   continuous recording.
 
+## Desktop automatic updates (ADR 0085)
+
+- Updates come only from `https://<origin>/downloads/` over HTTPS, and
+  each installer must match the SHA-512 in its `latest*.yml`. Downgrades
+  and prereleases are refused.
+- **Residual risk:** builds are unsigned. Anyone who can write to the
+  server's downloads folder can ship native code to every desktop. The
+  folder is deploy-user owned and mounted read-only into the web container.
+  A Windows certificate (`publisherName`) and Apple notarization close this
+  gap.
+- Updates install only when the window is hidden and the camera isn't
+  live. They never change capture indicators, and they keep sessions and
+  camera credentials (user data is never deleted).
+
+## Error responses and Drive expiry (ADR 0086)
+
+- Unexpected server errors are logged in full but answered with a generic
+  message, a code, and a request ID. Internal messages (SQL, paths,
+  provider details) never reach clients.
+- A Drive refresh token Google rejects (`invalid_grant`) is marked expired
+  at once and never used again. Transient provider failures never expire a
+  connection.
+- The Drive connect popup reports back with a same-origin `postMessage`;
+  the opener ignores messages from any other origin.
+- Only the Drive's owner is asked to reconnect it. Other members and
+  share-link guests are not told about the owner's account state beyond
+  "unavailable".
+
 ## Residual risk and deferrals
 
 Production secret management, CA lifecycle, TURN abuse controls and capacity,

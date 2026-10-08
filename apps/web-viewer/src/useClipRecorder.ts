@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, request } from './api';
+import { friendlyError } from './friendly-errors';
 import {
   captureFrameAsJpeg,
   ClipRecorder,
@@ -19,12 +20,12 @@ export interface ClipRecorderState {
   status: ClipRecorderStatus;
   elapsedMs: number;
   error: string;
+  /** The server's reason for a failure, e.g. `drive_reconnect_required`. */
+  errorCode?: string | undefined;
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof ApiError || error instanceof Error
-    ? error.message
-    : fallback;
+function errorCode(error: unknown): string | undefined {
+  return error instanceof ApiError ? error.code : undefined;
 }
 
 async function reportRecordingFailure(
@@ -115,6 +116,8 @@ export function useClipRecorder(cameraId: string): {
    * recording is actually in progress. */
   reset: () => void;
   retry: () => void;
+  /** A finished clip is held here, waiting for a successful upload. */
+  hasPendingUpload: boolean;
   supported: boolean;
 } {
   const [state, setState] = useState<ClipRecorderState>({
@@ -207,7 +210,11 @@ export function useClipRecorder(cameraId: string): {
         pending.restartSession = true;
       setState({
         elapsedMs: 0,
-        error: errorMessage(error, 'Recording could not be uploaded.'),
+        error: friendlyError(
+          error,
+          'The clip couldn’t be uploaded. Try again.',
+        ),
+        errorCode: errorCode(error),
         status: 'failed',
       });
     } finally {
@@ -263,7 +270,11 @@ export function useClipRecorder(cameraId: string): {
         await reportRecordingFailure(recordingId, 'upload_failed');
         setState({
           elapsedMs: 0,
-          error: errorMessage(error, 'Recording could not be prepared.'),
+          error: friendlyError(
+            error,
+            'The clip couldn’t be prepared for upload. Try recording again.',
+          ),
+          errorCode: errorCode(error),
           status: 'failed',
         });
       } finally {
@@ -321,7 +332,8 @@ export function useClipRecorder(cameraId: string): {
           recordingIdRef.current = null;
           setState({
             elapsedMs: 0,
-            error: errorMessage(error, 'Recording could not be started.'),
+            error: friendlyError(error, 'Recording couldn’t start. Try again.'),
+            errorCode: errorCode(error),
             status: 'failed',
           });
         }
@@ -363,6 +375,7 @@ export function useClipRecorder(cameraId: string): {
 
   return {
     abort,
+    hasPendingUpload: pendingRef.current !== null,
     reset,
     retry,
     start,

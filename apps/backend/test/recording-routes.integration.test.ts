@@ -233,7 +233,9 @@ describe.skipIf(!app || !store)('recording routes', () => {
       url: '/api/recordings',
     });
     expect(attempt.statusCode).toBe(409);
+    // The text stays what Android clients match on; the code is new.
     expect(attempt.json()).toEqual({
+      code: 'drive_not_connected',
       error: 'Connect Google Drive for recordings first',
     });
   });
@@ -432,6 +434,144 @@ describe.skipIf(!app || !store)('recording routes', () => {
 
     grantedDevice.close();
     notGrantedDevice.close();
+  });
+
+  it('asks the owner to reconnect Drive when Google rejects its token, instead of a vague failure', async () => {
+    const owner = await registerAndSignIn(
+      'expired-drive@example.com',
+      '10.2.0.31',
+    );
+    const camera = await pairCamera(owner, 'Porch');
+    await connectDrive(owner.userId);
+    const device = connectDevice(camera.cameraId, camera.credential);
+    await nextMessage(device);
+    const created = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { cameraId: camera.cameraId },
+      url: '/api/recordings',
+    });
+    const recordingId = created.json<{ recording: { id: string } }>().recording
+      .id;
+    vi.mocked(drive.refreshDriveAccessToken).mockRejectedValueOnce(
+      new drive.DriveReconnectRequiredError(),
+    );
+    const session = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: {
+        byteSize: 1_048_576,
+        checksumSha256: 'a'.repeat(64),
+        durationMs: 15_000,
+        mimeType: 'video/webm',
+        encryption,
+      },
+      url: `/api/recordings/${recordingId}/upload-session`,
+    });
+    expect(session.statusCode).toBe(409);
+    expect(session.json()).toMatchObject({ code: 'drive_reconnect_required' });
+    // The dead connection no longer counts, and stays marked as expired so
+    // the app keeps saying "Reconnect" rather than "Connect".
+    expect(await store!.getGoogleDriveConnection(owner.userId)).toBeNull();
+    for (let check = 0; check < 2; check += 1) {
+      const status = await app!.inject({
+        headers: { cookie: owner.cookie },
+        method: 'GET',
+        url: '/api/drive/status',
+      });
+      expect(status.json()).toMatchObject({
+        connected: false,
+        expired: true,
+        recordingsConnected: false,
+      });
+    }
+    device.close();
+  });
+
+  it('checks Drive before a recording starts, so nobody records a clip that cannot be saved', async () => {
+    const owner = await registerAndSignIn(
+      'preflight-drive@example.com',
+      '10.2.0.33',
+    );
+    const camera = await pairCamera(owner, 'Hall');
+    await connectDrive(owner.userId);
+    const device = connectDevice(camera.cameraId, camera.credential);
+    await nextMessage(device);
+    vi.mocked(drive.refreshDriveAccessToken).mockRejectedValueOnce(
+      new drive.DriveReconnectRequiredError(),
+    );
+    const blocked = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { cameraId: camera.cameraId },
+      url: '/api/recordings',
+    });
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json()).toMatchObject({ code: 'drive_reconnect_required' });
+
+    // Reconnecting clears the expiry and recording works again.
+    await connectDrive(owner.userId);
+    const status = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: '/api/drive/status',
+    });
+    expect(status.json()).toMatchObject({
+      connected: true,
+      expired: false,
+      recordingsConnected: true,
+    });
+    const started = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { cameraId: camera.cameraId },
+      url: '/api/recordings',
+    });
+    expect(started.statusCode).toBe(202);
+    device.close();
+  });
+
+  it('tells an owner who never connected Drive to connect it', async () => {
+    const owner = await registerAndSignIn(
+      'never-drive@example.com',
+      '10.2.0.34',
+    );
+    const camera = await pairCamera(owner, 'Garage');
+    const attempt = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: { cameraId: camera.cameraId },
+      url: '/api/recordings',
+    });
+    expect(attempt.statusCode).toBe(409);
+    expect(attempt.json()).toMatchObject({ code: 'drive_not_connected' });
+  });
+
+  it('notices an expired Drive connection from the status check, before any recording', async () => {
+    const owner = await registerAndSignIn(
+      'status-drive@example.com',
+      '10.2.0.32',
+    );
+    await connectDrive(owner.userId);
+    vi.mocked(drive.refreshDriveAccessToken).mockRejectedValueOnce(
+      new drive.DriveReconnectRequiredError(),
+    );
+    const status = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: '/api/drive/status',
+    });
+    expect(status.json()).toMatchObject({
+      connected: false,
+      expired: true,
+      recordingsConnected: false,
+    });
+    const audit = await store!.pool.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM audit_events
+       WHERE event_type = 'google_drive_connection_expired' AND user_id = $1`,
+      [owner.userId],
+    );
+    expect(audit.rows[0]!.count).toBe(1);
   });
 
   it('refuses to start a recording while the camera is offline', async () => {

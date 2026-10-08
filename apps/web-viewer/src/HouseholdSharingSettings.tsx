@@ -7,6 +7,7 @@ import {
 } from 'react';
 
 import { request } from './api';
+import { friendlyError } from './friendly-errors';
 import { Avatar } from './Avatar';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Icon } from './Icon';
@@ -118,7 +119,10 @@ export function HouseholdSharingSettings({
   useEffect(() => {
     void load().catch((caught) =>
       setError(
-        caught instanceof Error ? caught.message : 'Unable to load sharing',
+        friendlyError(
+          caught,
+          'Sharing settings couldn’t be loaded. Try again.',
+        ),
       ),
     );
     // refreshRevision is never read in the body -- it's here purely as a
@@ -214,9 +218,7 @@ export function HouseholdSharingSettings({
       await load();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Unable to resend invitation',
+        friendlyError(caught, 'The invitation couldn’t be resent. Try again.'),
       );
     } finally {
       setBusy(false);
@@ -234,9 +236,10 @@ export function HouseholdSharingSettings({
       await load();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Unable to revoke invitation',
+        friendlyError(
+          caught,
+          'The invitation couldn’t be cancelled. Try again.',
+        ),
       );
     } finally {
       setBusy(false);
@@ -254,9 +257,7 @@ export function HouseholdSharingSettings({
       setConfirmRevoke(null);
       await load();
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : 'Unable to revoke access',
-      );
+      setError(friendlyError(caught, 'Access couldn’t be revoked. Try again.'));
     } finally {
       setBusy(false);
     }
@@ -274,7 +275,7 @@ export function HouseholdSharingSettings({
       await load();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Unable to remove member',
+        friendlyError(caught, 'That person couldn’t be removed. Try again.'),
       );
     } finally {
       setBusy(false);
@@ -292,9 +293,10 @@ export function HouseholdSharingSettings({
       await load();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Unable to revoke guest link',
+        friendlyError(
+          caught,
+          'The guest link couldn’t be turned off. Try again.',
+        ),
       );
     } finally {
       setBusy(false);
@@ -593,9 +595,10 @@ function JoinHouseholdDialog({
       await onJoin(code.trim());
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Unable to accept invitation',
+        friendlyError(
+          caught,
+          'That invitation couldn’t be accepted. Ask for a new one.',
+        ),
       );
       setBusy(false);
     }
@@ -776,7 +779,7 @@ function InvitePersonDialog({
       }
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Unable to send invitation',
+        friendlyError(caught, 'The invitation couldn’t be sent. Try again.'),
       );
     } finally {
       setBusy(false);
@@ -1148,9 +1151,7 @@ function ManageMemberDialog({
       onDismiss();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Unable to save camera access',
+        friendlyError(caught, 'Camera access couldn’t be saved. Try again.'),
       );
     } finally {
       setSaving(false);

@@ -164,6 +164,12 @@ const shapes = {
       <path d="M9 3H4v5m11-5h5v5M4 16v5h5m11-5v5h-5" />
     </>
   ),
+  pip: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <rect x="12" y="11" width="7" height="6" rx="1" fill="currentColor" />
+    </>
+  ),
   minimize: (
     <>
       <path d="M4 9h5V4M15 4v5h5M20 15h-5v5M9 20v-5H4" />

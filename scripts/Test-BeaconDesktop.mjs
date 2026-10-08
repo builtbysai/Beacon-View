@@ -327,6 +327,65 @@ try {
     await page.waitForLoadState('load');
   });
 
+  await check(
+    'floats a watched camera when the window closes to the tray, and docks it on return',
+    async () => {
+      // A playing "live view" video, marked the way the page marks it.
+      await page.evaluate(async () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 320;
+        canvas.height = 180;
+        const context = canvas.getContext('2d');
+        let frame = 0;
+        setInterval(() => {
+          context.fillStyle = frame++ % 2 ? '#0ea5e9' : '#071b31';
+          context.fillRect(0, 0, 320, 180);
+        }, 50);
+        const video = document.createElement('video');
+        video.id = 'smoke-live';
+        video.muted = true;
+        video.setAttribute('autopictureinpicture', '');
+        video.srcObject = canvas.captureStream(20);
+        document.body.append(video);
+        await video.play();
+      });
+      await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0].close(),
+      );
+      await page.waitForFunction(
+        () => document.pictureInPictureElement?.id === 'smoke-live',
+        null,
+        { timeout: 10_000 },
+      );
+      await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0].show(),
+      );
+      await page.waitForFunction(
+        () => !document.pictureInPictureElement,
+        null,
+        { timeout: 10_000 },
+      );
+      await page.evaluate(() =>
+        document.getElementById('smoke-live')?.remove(),
+      );
+    },
+  );
+
+  await check(
+    'an outage reconnects to the page that failed, not Home',
+    async () => {
+      const failing = `${base}/camera-mode/setup?autostart=1`;
+      const offline = (route) => route.abort('internetdisconnected');
+      await app.context().route('**/camera-mode/setup**', offline);
+      await page.goto(failing).catch(() => undefined);
+      await page.waitForURL(/offline.html/);
+      const retry = await page.getByRole('link', { name: 'Try again' });
+      assert.equal(await retry.getAttribute('href'), failing);
+      await app.context().unroute('**/camera-mode/setup**', offline);
+      await page.goto(`${base}/`);
+    },
+  );
+
   await check('closing the window hides Beacon to the tray', async () => {
     const state = await app.evaluate(({ BrowserWindow }) => {
       const [window] = BrowserWindow.getAllWindows();
