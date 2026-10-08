@@ -28,6 +28,14 @@ class PairingQrTest {
                 "https://beacon.builtbysai.com",
             ),
         )
+        assertEquals(
+            "ABCD234567",
+            parsePairingQr(
+                "http://10.0.2.2:5173/pair?code=ABCD234567",
+                "http://10.0.2.2:3000",
+                "http://10.0.2.2:5173",
+            ),
+        )
     }
 
     @Test
@@ -40,6 +48,7 @@ class PairingQrTest {
             ),
         )
         assertNull(parsePairingQr("beacon://pair?code=too-short"))
+        assertNull(parsePairingQr("http://10.0.2.2:9999/pair?code=ABCD234567", "http://10.0.2.2:3000", "http://10.0.2.2:5173"))
         assertNull(parsePairingQr(null))
         assertNull(
             parsePairingQr(

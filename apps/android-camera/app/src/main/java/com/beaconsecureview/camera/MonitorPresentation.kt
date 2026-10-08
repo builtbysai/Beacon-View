@@ -155,12 +155,7 @@ internal fun homeSubtitle(hostCameras: List<BeaconApi.MonitorCamera>): String {
 internal fun homeAttentionCameras(hostCameras: List<BeaconApi.MonitorCamera>): List<BeaconApi.MonitorCamera> =
     hostCameras.filter { !it.privacyMode && !it.online }
 
-/** Mirrors the PWA's attentionTitle/attentionDesc for the 0/1/many cases.
- * The web additionally distinguishes "needs pairing" from "offline" and a
- * local-browser-camera case for 1 and lists every name for 2-4; Android has
- * no equivalent state to tell those apart yet, so this covers the single-
- * and multi-camera cases with the same general phrasing rather than
- * guessing at a distinction it can't actually verify. */
+/** Mirrors the PWA's attention title and description, including revoked credentials. */
 internal fun homeAttentionTitle(attentionCameras: List<BeaconApi.MonitorCamera>): String =
     if (attentionCameras.size == 1) {
         "${attentionCameras[0].deviceName} needs attention"
@@ -170,7 +165,8 @@ internal fun homeAttentionTitle(attentionCameras: List<BeaconApi.MonitorCamera>)
 
 internal fun homeAttentionDescription(attentionCameras: List<BeaconApi.MonitorCamera>): String =
     if (attentionCameras.size == 1) {
-        "Camera is offline. Reconnect it to restore live viewing."
+        if (attentionCameras[0].needsPairing) "Camera needs to be paired."
+        else "Camera is offline. Reconnect it to restore live viewing."
     } else {
         "Multiple cameras are offline or need to be reconnected."
     }
@@ -180,8 +176,10 @@ internal fun homeAttentionDescription(attentionCameras: List<BeaconApi.MonitorCa
 internal fun homeFavoriteCameras(
     hostCameras: List<BeaconApi.MonitorCamera>,
     favoriteCameraIds: Set<String>,
+    hasSavedFavorites: Boolean = false,
 ): List<BeaconApi.MonitorCamera> =
-    if (favoriteCameraIds.isEmpty()) hostCameras.take(4) else hostCameras.filter { it.id in favoriteCameraIds }
+    if (!hasSavedFavorites && favoriteCameraIds.isEmpty()) hostCameras.take(4)
+    else hostCameras.filter { it.id in favoriteCameraIds }
 
 /** Mirrors the PWA's `CameraBrowser` filter pills exactly (availability
  * filter with live counts), applied on top of the free-text search. */

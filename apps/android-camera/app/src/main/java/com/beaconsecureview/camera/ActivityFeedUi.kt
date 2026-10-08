@@ -1,6 +1,7 @@
 package com.beaconsecureview.camera
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,17 +9,21 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Timeline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -34,7 +39,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -176,19 +183,9 @@ internal fun BeaconActivityFeed(
     val hasMore = motionCursor != null || householdOffset < householdTotal
 
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top,
-        ) {
-            Text(
-                "A chronological feed of events detected by your devices. What appears here depends on each device's capabilities.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = { showLearn = !showLearn }) {
-                Icon(Icons.Outlined.Info, null, modifier = Modifier.size(16.dp))
-                Text("How detection works", modifier = Modifier.padding(start = 4.dp))
+                Icon(Icons.Outlined.Info, "How detection works", modifier = Modifier.size(20.dp))
             }
         }
         if (showLearn) {
@@ -224,7 +221,8 @@ internal fun BeaconActivityFeed(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val cameraLabel = cameras.find { it.id == cameraFilter }?.deviceName ?: "All devices"
             Box(modifier = Modifier.weight(1f)) {
-                OutlinedButton(onClick = { cameraMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { cameraMenuOpen = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
                     Text(cameraLabel, maxLines = 1)
                 }
                 DropdownMenu(expanded = cameraMenuOpen, onDismissRequest = { cameraMenuOpen = false }) {
@@ -239,7 +237,8 @@ internal fun BeaconActivityFeed(
             }
             Box(modifier = Modifier.weight(1f)) {
                 val timeLabel = when (timeFilterDays) { 1 -> "Last 24 hours"; 7 -> "Last 7 days"; else -> "All time" }
-                OutlinedButton(onClick = { timeMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { timeMenuOpen = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
                     Text(timeLabel, maxLines = 1)
                 }
                 DropdownMenu(expanded = timeMenuOpen, onDismissRequest = { timeMenuOpen = false }) {
@@ -257,8 +256,8 @@ internal fun BeaconActivityFeed(
                     onClick = { kindFilter = kind },
                     label = { Text("${kind.label} ${kindCounts[kind] ?: 0}") },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedContainerColor = Color(0xFF111827),
+                        selectedLabelColor = Color.White,
                     ),
                 )
             }
@@ -274,7 +273,8 @@ internal fun BeaconActivityFeed(
                 fontWeight = FontWeight.Bold,
             )
             Box {
-                TextButton(onClick = { sortMenuOpen = true }) { Text("Sort: ${sortOrder.label}") }
+                OutlinedButton(onClick = { sortMenuOpen = true }, shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) { Text(sortOrder.label) }
                 DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
                     ActivitySortOrder.entries.forEach { order ->
                         DropdownMenuItem(text = { Text(order.label) }, onClick = { sortOrder = order; sortMenuOpen = false })
@@ -293,15 +293,29 @@ internal fun BeaconActivityFeed(
         if (!loaded) {
             Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else if (visibleEvents.isEmpty()) {
-            BeaconPanel(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 260.dp)
+                    .beaconDashedBorder(MaterialTheme.colorScheme.outlineVariant, 14.dp)
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    Icons.Outlined.Timeline,
+                    null,
+                    modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50)).padding(12.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(
                     if (cameras.isEmpty()) "No activity yet." else "No matching activity",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 12.dp),
                 )
                 Text(
                     if (cameras.isEmpty()) "Activity will appear here after you connect a camera." else "No activity matches these filters.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
                 )
             }
         }
@@ -475,4 +489,3 @@ private fun BeaconActivityDetailDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("Back to activity") } },
     )
 }
-

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,10 +23,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Timeline
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +38,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -84,7 +90,8 @@ internal fun BeaconEventsViewSwitch(
 }
 
 @Composable
-internal fun BeaconMonitorTopBar(onOpenNavigation: () -> Unit) {
+internal fun BeaconMonitorTopBar(onOpenNavigation: () -> Unit, onAddCamera: (() -> Unit)?) {
+    val compactAction = LocalConfiguration.current.screenWidthDp < 360
     Column {
         Surface(color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f)) {
             Row(
@@ -98,7 +105,26 @@ internal fun BeaconMonitorTopBar(onOpenNavigation: () -> Unit) {
                 IconButton(onClick = onOpenNavigation) {
                     Icon(Icons.Outlined.Menu, "Open menu")
                 }
-                BeaconWordmark(compact = true)
+                Icon(Icons.Outlined.Videocam, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                Text(
+                    "Beacon",
+                    modifier = Modifier.padding(start = BeaconSpacing.Xs).weight(1f),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (onAddCamera != null) {
+                    Button(
+                        onClick = onAddCamera,
+                        modifier = Modifier.heightIn(min = 40.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.surface),
+                        shape = RoundedCornerShape(BeaconRadii.Md),
+                    ) {
+                        Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
+                        Text(if (compactAction) "Add" else "Add camera", modifier = Modifier.padding(start = BeaconSpacing.Xs), fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -212,7 +238,7 @@ private fun BeaconSidebarContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            BeaconWordmark()
+            BeaconWordmark(compact = true)
             if (onCloseButtonClick != null) {
                 IconButton(onClick = onCloseButtonClick) { Icon(Icons.Outlined.Close, "Close menu") }
             }
@@ -225,8 +251,8 @@ private fun BeaconSidebarContent(
             listOf(
                 Triple(MonitorPage.Home, "Home", Icons.Outlined.Home),
                 Triple(MonitorPage.Cameras, "Cameras", Icons.Outlined.Videocam),
-                Triple(MonitorPage.Events, "Activity", Icons.Outlined.History),
-                Triple(MonitorPage.Settings, "Settings", Icons.Outlined.Settings),
+                Triple(MonitorPage.Events, "Activity", Icons.Outlined.Timeline),
+                Triple(MonitorPage.Settings, "Settings", Icons.Outlined.Tune),
             ).forEach { (page, label, icon) ->
                 BeaconSidebarButton(
                     label = label,

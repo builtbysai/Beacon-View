@@ -10,6 +10,12 @@ class CameraFavoritesStore(context: Context) {
     fun read(userId: String): Set<String> =
         preferences.getStringSet(key(userId), emptySet())?.toSet() ?: emptySet()
 
+    fun hasSaved(userId: String): Boolean = preferences.contains(key(userId))
+
+    fun replace(userId: String, cameraIds: Set<String>) {
+        preferences.edit().putStringSet(key(userId), cameraIds).apply()
+    }
+
     fun toggle(userId: String, cameraId: String): Set<String> {
         val updated = toggledFavoriteIds(read(userId), cameraId)
         preferences.edit().putStringSet(key(userId), updated).apply()

@@ -76,6 +76,15 @@ shared or production database.
 The emulator uses `http://10.0.2.2:3000`. Cleartext is allowed only for that
 emulator host; other cleartext destinations remain blocked. Browser ICE uses
 `127.0.0.1`, while emulator ICE uses the host alias `10.0.2.2`.
+For side-by-side emulator testing, open the viewer at `http://10.0.2.2:5173`
+and set the ignored local `apps/backend/.env` value
+`WEB_ORIGIN=http://10.0.2.2:5173`, then restart the backend. The origin must
+match exactly or browser state changes, including pairing, fail CSRF checks.
+The Android debug build uses that viewer URL for pairing and browser-camera
+links; override it with `-PbeaconWebUrl=` or `BEACON_WEB_URL` when needed.
+Release builds default the pairing-link origin to the HTTPS API origin; set
+`-PbeaconReleaseWebUrl=` or `BEACON_RELEASE_WEB_URL` when the viewer has a
+separate HTTPS origin.
 
 ```sh
 apps\android-camera\gradlew.bat -p apps/android-camera :app:assembleDebug

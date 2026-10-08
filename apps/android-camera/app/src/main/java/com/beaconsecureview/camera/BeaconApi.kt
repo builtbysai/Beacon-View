@@ -16,6 +16,13 @@ class AuthorizationLostException : IllegalStateException()
 class PairingException(message: String) : IllegalStateException(message)
 
 class BeaconApi(private val baseUrl: String) {
+    fun googleSignInAvailable(): Boolean {
+        val connection = connection("/api/capabilities", "GET")
+        val body = responseBody(connection)
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) return true
+        return JSONObject(body).optJSONObject("auth")?.optBoolean("google", true) ?: true
+    }
+
     data class AccountSession(
         val token: String,
         val userId: String,
@@ -97,6 +104,9 @@ class BeaconApi(private val baseUrl: String) {
         val deviceId: String = id,
         val facing: String = "unknown",
         val available: Boolean = online,
+        val platform: String = "android",
+        val credentialRevoked: Boolean = false,
+        val needsPairing: Boolean = false,
     )
 
     data class AccessEvent(
@@ -435,6 +445,8 @@ class BeaconApi(private val baseUrl: String) {
                     deviceId = it.getString("deviceId"),
                     facing = it.optString("facing", "unknown"),
                     available = it.optString("availability") == "available",
+                    platform = it.optString("platform", "android"),
+                    credentialRevoked = it.optBoolean("credentialRevoked", false),
                 )
             }
         }

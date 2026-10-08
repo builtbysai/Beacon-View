@@ -169,8 +169,9 @@ depend on earlier ones:
    shared tokens" is the wrong mental model for the remaining screens; "read
    the component's actual CSS and match it" is the one that found and fixed
    Home's real problem (see below) instead of a cosmetic one. Home, Cameras
-   catalog, the live viewer, and sign-in/register/forgot-password are done;
-   the Trust/Contact pages are next.
+   catalog, the live viewer, and sign-in/register/forgot-password are done.
+   Trust and Contact intentionally open in the browser under the current
+   Android parity requirement.
 
    **Home already surfaced something bigger than styling**: it wasn't
    approximately right, it was structurally wrong. The screen rendered a
@@ -208,6 +209,16 @@ depend on earlier ones:
   traversal-order pass (interrupted by an emulator display glitch,
   unrelated to the code change), rotation/split-screen/tablet-foldable, and
   the web side's cross-browser assistive-technology checks entirely.
+
+## September 28 two-emulator acceptance pass
+
+- Chrome on `emulator-5554` showed the local web viewer at `http://10.0.2.2:5173`; the native debug app ran on `emulator-5556`. Both used the same local account and backend during the comparison. The local HTTP viewer stayed in a Chrome tab because that origin is not installable. After an emulator restart, the local tab returned to sign-in. The production HTTPS viewer was then added to the emulator home screen through Chrome's **Install app** prompt; its Beacon icon launches a standalone window. That production installation is signed out and was not the account-backed comparison environment.
+- Compared sign-in, empty and populated Home, Cameras, Add device and pairing, Activity, Clips, Household settings, and camera mode. The Android app now uses the same page structure, empty states, section navigation, household summary, and card controls. The Android camera streamed its virtual room to the web viewer through the local backend.
+- The web viewer previously rendered blank on this HTTP origin because `crypto.randomUUID` was unavailable. The secure-random fallback now permits the live route to render and connect. Pairing through the emulator web origin required the ignored local backend `WEB_ORIGIN` to match `http://10.0.2.2:5173`; CSRF checks remain active.
+- Contact and Trust remain browser destinations by design. Google Drive is not configured on the local backend, so cloud recording and Clips playback could not be end-to-end checked. With only one camera-capable emulator, the native live viewer could not be exercised against an independent active camera. Browser camera mode on this HTTP origin also lacks a secure context for camera capture.
+- The debug and release APKs were built locally. GitHub Actions were not used. A web-only manual release deployed the five reviewed UUID fallback source files to the VM. The old web source files were archived under `/opt/beacon/releases/web-u7-parity-20260928-pre.tar.gz` and the prior image was tagged `beacon-secureview-cloud-web:pre-u7-parity-20260928`. The new image's four `/srv` artifact hashes matched the local tested build, as did all four publicly fetched assets after rollout. HTTPS `/health` and `/ready` returned OK, signed-out `/api/auth/me` returned 401, and the backend, PostgreSQL, and coturn container IDs remained unchanged. The VM's `DEPLOYED_COMMIT` remains the branch's base commit (`aa6182d`), so the marker does not describe this web-only source update.
+- A read-only configuration check found all four Google OAuth/Drive variables present with nonempty values in the VM's root-owned production environment file. `/api/capabilities` reported Google Drive and recordings enabled. This confirms configuration presence and runtime capability, not successful Google OAuth or an actual recording upload.
+- A follow-up 320dp/landscape check found that an initial camera-list network failure could display the normal empty-household message, with the error below the tall empty card. Android now shows a connection error and Retry action in place of that empty state until a camera list succeeds. The phone header uses a shorter Add label below 360dp so its action stays visible beside the Beacon wordmark.
 
 ## Incidental finding (not part of this audit's scope)
 
