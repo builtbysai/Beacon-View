@@ -91,6 +91,84 @@ Android, backend, PostgreSQL, and TURN are separate trust zones.
   the replacement.
 - Diagnostics expose only public identifiers and sanitized connection state.
 
+## Desktop app controls (ADR 0082)
+
+- The Electron window renders only the canonical Beacon origin. A single tested
+  navigation policy sends other web links to the system browser and blocks
+  every other scheme. Off-origin subframe navigation and `<webview>` are refused.
+- Renderers are sandboxed and context-isolated with no Node integration. The
+  preload exposes one frozen `beaconDesktop` object (capture state only), and
+  the main process accepts it only from the Beacon origin's main frame.
+- Web permissions are limited to camera/microphone, clipboard write, and
+  fullscreen for the Beacon origin. Everything else is denied, and macOS adds
+  TCC prompts.
+- Packaged builds fuse off `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS`, and
+  `--inspect`. They enable cookie encryption at rest, ASAR integrity, and
+  ASAR-only loading.
+- Google sign-in runs in the system browser. Its deep-link handoff code is
+  single-use, expires after 10 minutes, and is bound to an RFC 7636 S256
+  challenge whose verifier never leaves the app, so another app that claims
+  `beaconsecureview://` cannot redeem an intercepted code. Any redemption
+  attempt consumes the code. The exchange requires a JSON body plus
+  `x-beacon-desktop: 1`, so cross-site forms cannot cause login CSRF.
+- Camera Mode in a hidden window stays visible through a tray live indicator,
+  a notification, and a quit confirmation.
+- Residual risks:
+  - Builds are unsigned and have no auto-update channel, so Electron/Chromium
+    security fixes reach users only when they reinstall.
+  - Handoff codes live in process memory.
+  - A compromised Beacon origin would control the window exactly as it would
+    control a browser tab.
+
+## Desktop 0.2 controls (ADRs 0083 and 0084)
+
+- Standby cameras open the camera only for an authorized viewer's signaling
+  session, and the desktop tray, a notification, and the power lock make
+  every wake visible.
+- Desktop alerts reuse the outbox, preferences, and quiet hours. Each is
+  delivered only to the subscribing session's authenticated realtime
+  connection, carries the same generic payload as push, and expires instead
+  of revoking anything when the app is offline.
+- One-click setup carries only the existing single-use, 10-minute pairing
+  code:
+  - setup files must name the app's own origin
+  - the installer's recorded file name is read once, ignored after 30
+    minutes, and deleted
+  - the pairing page strips the code from the address bar
+  - a resume path is accepted only for Camera Mode paths without a code
+- The desktop sign-in completion page receives the code in the URL fragment,
+  so it is never sent to the server, and removes it from history.
+- Camera use cases change only existing motion settings, and never enable
+  continuous recording.
+
+## Desktop automatic updates (ADR 0085)
+
+- Updates come only from `https://<origin>/downloads/` over HTTPS, and
+  each installer must match the SHA-512 in its `latest*.yml`. Downgrades
+  and prereleases are refused.
+- **Residual risk:** builds are unsigned. Anyone who can write to the
+  server's downloads folder can ship native code to every desktop. The
+  folder is deploy-user owned and mounted read-only into the web container.
+  A Windows certificate (`publisherName`) and Apple notarization close this
+  gap.
+- Updates install only when the window is hidden and the camera isn't
+  live. They never change capture indicators, and they keep sessions and
+  camera credentials (user data is never deleted).
+
+## Error responses and Drive expiry (ADR 0086)
+
+- Unexpected server errors are logged in full but answered with a generic
+  message, a code, and a request ID. Internal messages (SQL, paths,
+  provider details) never reach clients.
+- A Drive refresh token Google rejects (`invalid_grant`) is marked expired
+  at once and never used again. Transient provider failures never expire a
+  connection.
+- The Drive connect popup reports back with a same-origin `postMessage`;
+  the opener ignores messages from any other origin.
+- Only the Drive's owner is asked to reconnect it. Other members and
+  share-link guests are not told about the owner's account state beyond
+  "unavailable".
+
 ## Residual risk and deferrals
 
 Production secret management, CA lifecycle, TURN abuse controls and capacity,

@@ -37,7 +37,7 @@ it('rejects a mismatched confirmation before ever calling the API', () => {
     target: { value: 'different password' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Update password' }));
-  expect(screen.getByRole('alert')).toHaveTextContent('do not match');
+  expect(screen.getByRole('alert')).toHaveTextContent('don’t match');
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
@@ -94,6 +94,6 @@ it('surfaces the server error for an expired or reused token', async () => {
   });
   fireEvent.click(screen.getByRole('button', { name: 'Update password' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Invalid or expired reset link',
+    'That reset link has expired. Request a new one.',
   );
 });

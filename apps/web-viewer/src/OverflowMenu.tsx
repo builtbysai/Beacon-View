@@ -17,35 +17,40 @@ export function OverflowMenu({
   children: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState<{ top?: number; bottom?: number; left?: number; right?: number } | null>(null);
-  
+  const [position, setPosition] = useState<{
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+  } | null>(null);
+
   const anchorRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    
+
     const updatePosition = () => {
       if (!triggerRef.current || !menuRef.current) return;
       const rect = triggerRef.current.getBoundingClientRect();
       const menuRect = menuRef.current.getBoundingClientRect();
-      
+
       const spaceBelow = window.innerHeight - rect.bottom;
       const spaceAbove = rect.top;
-      
+
       let top: number | undefined = undefined;
       let bottom: number | undefined = undefined;
-      
+
       if (spaceBelow >= menuRect.height + 8 || spaceBelow > spaceAbove) {
         top = rect.bottom + 8;
       } else {
         bottom = window.innerHeight - rect.top + 8;
       }
-      
+
       const right = window.innerWidth - rect.right;
-      
-      const pos: any = { right };
+
+      const pos: { top?: number; bottom?: number; right: number } = { right };
       if (top !== undefined) pos.top = top;
       if (bottom !== undefined) pos.bottom = bottom;
       setPosition(pos);
@@ -57,7 +62,10 @@ export function OverflowMenu({
 
     const dismissOutside = (event: PointerEvent) => {
       if (!(event.target instanceof Node)) return;
-      if (!triggerRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) {
+      if (
+        !triggerRef.current?.contains(event.target) &&
+        !menuRef.current?.contains(event.target)
+      ) {
         setOpen(false);
       }
     };
@@ -85,21 +93,31 @@ export function OverflowMenu({
       >
         <Icon name="more" />
       </button>
-      {open && createPortal(
-        <div 
-          className={menuClassName} 
-          role="menu" 
-          ref={menuRef}
-          style={{
-            position: 'fixed',
-            zIndex: 1000,
-            ...((position ? { top: position.top ?? 'auto', bottom: position.bottom ?? 'auto', right: position.right ?? 'auto' } : { visibility: 'hidden', top: 0, left: 0 }))
-          }}
-        >
-          {children(() => setOpen(false))}
-        </div>,
-        document.body
-      )}
+      {open &&
+        createPortal(
+          <div
+            className={menuClassName}
+            role="menu"
+            ref={menuRef}
+            style={{
+              position: 'fixed',
+              zIndex: 1000,
+              ...(position
+                ? {
+                    top: position.top ?? 'auto',
+                    bottom: position.bottom ?? 'auto',
+                    right: position.right ?? 'auto',
+                  }
+                : { visibility: 'hidden', top: 0, left: 0 }),
+            }}
+          >
+            {children(() => {
+              setOpen(false);
+              triggerRef.current?.focus({ preventScroll: true });
+            })}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

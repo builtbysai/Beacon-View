@@ -52,6 +52,7 @@ services:
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY: ${GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY:-}
+      RECORDING_ENCRYPTION_KEY: ${RECORDING_ENCRYPTION_KEY:-}
       CONTACT_EMAIL_TO: ${CONTACT_EMAIL_TO:-}
       LOG_LEVEL: info
       NOTIFICATION_ENCRYPTION_KEY: ${NOTIFICATION_ENCRYPTION_KEY:-}
@@ -70,6 +71,20 @@ services:
       WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
       WEB_PUSH_VAPID_SUBJECT: ${WEB_PUSH_VAPID_SUBJECT:-}
       WEB_ORIGIN: https://${BEACON_DOMAIN}
+    restart: 'no'
+    logging: *bounded-logs
+
+  migrate-verify:
+    build:
+      context: ../..
+      dockerfile: infrastructure/cloud/Dockerfile.backend
+    entrypoint: []
+    working_dir: /app/apps/backend
+    command: ['node', 'scripts/verify-migration-schema.mjs']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: *backend-environment
     restart: 'no'
     logging: *bounded-logs
 
@@ -140,6 +155,8 @@ services:
     volumes:
       - caddy-data:/data
       - caddy-config:/config
+      # Published desktop installers (ADR 0083); see apps/desktop/README.md.
+      - /opt/beacon/downloads:/srv/downloads:ro
 
 volumes:
   caddy-config:

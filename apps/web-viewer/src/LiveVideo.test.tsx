@@ -4,10 +4,12 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LiveVideo } from './LiveVideo';
+import { DRIVE_READY } from './drive-recording';
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
@@ -427,16 +429,17 @@ describe('LiveVideo', () => {
 
     // Stop: the same button now finishes the capture and drives it through
     // upload-session, the direct-to-Drive PUT, and complete.
-    await act(async () => {
+    act(() => {
       fireEvent.click(activeButton);
       const recorder = FakeMediaRecorder.instances[0]!;
       recorder.stop();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
     });
 
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Recording saved' }),
+      ).toBeDisabled(),
+    );
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/recordings/rec-1/upload-session',
       expect.objectContaining({ method: 'POST' }),
@@ -452,21 +455,113 @@ describe('LiveVideo', () => {
         method: 'POST',
       }),
     );
-    expect(
-      screen.getByRole('button', { name: 'Recording saved' }),
-    ).toBeDisabled();
     unmount();
   });
 
-  it('offers to connect Google Drive instead of a dead-end error when recording is not ready', () => {
+  it('aborts an in-progress recording instead of uploading a broken clip when the connection drops', async () => {
+    FakeWebSocket.instances = [];
+    FakePeer.instances = [];
+    FakeMediaRecorder.instances = [];
+    FakeMediaRecorder.supportedTypes = new Set(['video/webm']);
     vi.stubGlobal('WebSocket', FakeWebSocket);
-    const onConnectDriveForRecording = vi.fn();
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    vi.stubGlobal('MediaStream', FakeMediaStream);
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    const fetchMock = vi.fn<
+      (input: string | URL, init?: RequestInit) => Promise<Response>
+    >((input, init) => {
+      const url = String(input);
+      if (url === '/api/recordings' && init?.method === 'POST')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ recording: { id: 'rec-2', status: 'requested' } }),
+            { status: 202 },
+          ),
+        );
+      if (url === '/api/recordings/rec-2/fail')
+        return Promise.resolve(new Response(null, { status: 204 }));
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} canRecord />);
+    const socket = FakeWebSocket.instances[0]!;
+    await act(async () => {
+      socket.message({
+        type: 'ready',
+        connectionId: 'connection-a',
+        iceServers: [],
+        iceTransportPolicy: 'all',
+      });
+      await Promise.resolve();
+    });
+    const peer = FakePeer.instances[0]!;
+    await act(async () => {
+      peer.connectionState = 'connected';
+      peer.onconnectionstatechange?.();
+      peer.ontrack?.({
+        receiver: {},
+        streams: [new FakeMediaStream()],
+      } as unknown as RTCTrackEvent);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Record a short clip' }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button', { name: /Recording,/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    // The connection drops mid-recording -- ICE failure, no retry grace
+    // period, unlike a brief 'disconnected' blip.
+    await act(async () => {
+      peer.connectionState = 'failed';
+      peer.onconnectionstatechange?.();
+      await Promise.resolve();
+    });
+
+    // Nothing was kept to upload, so the control offers a fresh recording
+    // rather than a retry that could do nothing.
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/connection.*lost/i),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Record a short clip' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Retry encrypted recording upload',
+      }),
+    ).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/recordings/rec-2/fail',
+      expect.objectContaining({
+        body: JSON.stringify({ reason: 'capture_failed' }),
+        method: 'POST',
+      }),
+    );
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/recordings/rec-2/upload-session',
+      expect.anything(),
+    );
+  });
+
+  it('offers to connect Google Drive instead of a dead-end error when recording is not ready', () => {
+    FakeMediaRecorder.supportedTypes = new Set(['video/webm']);
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    const connect = vi.fn();
     render(
       <LiveVideo
         camera={{ id: 'camera', name: 'Kitchen' }}
         canRecord
-        recordingReady={false}
-        onConnectDriveForRecording={onConnectDriveForRecording}
+        drive={{ ...DRIVE_READY, connect, state: 'not_connected' }}
       />,
     );
     expect(
@@ -476,7 +571,23 @@ describe('LiveVideo', () => {
       name: 'Connect Google Drive to record',
     });
     fireEvent.click(connectButton);
-    expect(onConnectDriveForRecording).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks to reconnect, not connect, when Google stopped accepting Drive', () => {
+    FakeMediaRecorder.supportedTypes = new Set(['video/webm']);
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    render(
+      <LiveVideo
+        camera={{ id: 'camera', name: 'Kitchen' }}
+        canRecord
+        drive={{ ...DRIVE_READY, state: 'expired' }}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Reconnect Google Drive to record' }),
+    ).toBeInTheDocument();
   });
 
   it('hides flip and pause when the grant excludes them, even with siblings and onPrivacy present', () => {
@@ -538,7 +649,7 @@ describe('LiveVideo', () => {
     // Now connected: the backend's count of 1 is just this session, so
     // "others watching" is 0 -- the badge should stay hidden, not show 1.
     expect(
-      screen.queryByRole('button', { name: /Stream info/ }),
+      screen.queryByRole('button', { name: /Stream details/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -567,8 +678,9 @@ describe('LiveVideo', () => {
       await Promise.resolve();
     });
 
-    const statsToggle = screen.getByRole('button', { name: /Stream info/ });
-    expect(statsToggle).toHaveAccessibleName('Stream info: 1 other viewer');
+    const statsToggle = screen.getByRole('button', { name: /Stream details/ });
+    expect(statsToggle).toHaveAccessibleName('Stream details: 1 other viewer');
+    expect(statsToggle).toHaveTextContent('1 other viewer');
     fireEvent.click(statsToggle);
     expect(screen.getByText('Watching now')).toBeVisible();
     expect(screen.getByText('You')).toBeVisible();

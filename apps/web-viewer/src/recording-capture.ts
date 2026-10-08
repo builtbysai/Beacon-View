@@ -1,9 +1,8 @@
-// Short-clip capture and direct-to-Drive upload, shared by the live viewer
-// (capturing the received WebRTC stream) and browser camera mode (capturing
-// its own local getUserMedia stream). Beacon never sees the media itself --
-// the browser records locally and PUTs straight to the Google Drive
-// resumable-upload session the backend hands back; only metadata (size,
-// duration, checksum, the resulting Drive file id) ever reaches the server.
+// Short-clip capture and encrypted direct-to-Drive upload, shared by the live
+// viewer (capturing the received WebRTC stream) and browser camera mode
+// (capturing its own local getUserMedia stream). Beacon never sees the media
+// itself: the browser encrypts locally and PUTs ciphertext to the Google Drive
+// resumable-upload session; only ciphertext metadata reaches the server.
 
 /** Well under the backend's 10-minute cap -- a manual clip auto-stops here
  * so a forgotten recording doesn't run indefinitely. */
@@ -21,8 +20,7 @@ const CANDIDATE_TYPES = [
 export function pickRecorderMimeType(): string | null {
   if (typeof MediaRecorder === 'undefined') return null;
   return (
-    CANDIDATE_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) ??
-    null
+    CANDIDATE_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) ?? null
   );
 }
 
@@ -41,10 +39,51 @@ export function formatClipTimer(elapsedMs: number): string {
 }
 
 export async function sha256Hex(blob: Blob): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
+}
+
+function base64url(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary)
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replaceAll('=', '');
+}
+
+export interface EncryptedClip {
+  blob: Blob;
+  dataKey: string;
+  iv: string;
+}
+
+/** Encrypts the completed media locally before the direct Drive upload. */
+export async function encryptClip(blob: Blob): Promise<EncryptedClip> {
+  const key = await crypto.subtle.generateKey(
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt'],
+  );
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  // A typed view is accepted by WebCrypto in browsers and avoids a cross-realm
+  // ArrayBuffer rejection when JSDOM's Blob is paired with Node WebCrypto.
+  const plaintext = new Uint8Array(await blob.arrayBuffer());
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    plaintext,
+  );
+  return {
+    blob: new Blob([ciphertext], { type: 'application/octet-stream' }),
+    dataKey: base64url(
+      new Uint8Array(await crypto.subtle.exportKey('raw', key)),
+    ),
+    iv: base64url(iv),
+  };
 }
 
 export class ClipRecorder {
@@ -117,8 +156,102 @@ export async function uploadClipToDrive(
     headers: { 'Content-Type': blob.type || 'application/octet-stream' },
     method: 'PUT',
   });
-  if (!response.ok) throw new Error('Upload to Google Drive failed');
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      error?: { errors?: Array<{ reason?: string }> };
+    } | null;
+    const reason = payload?.error?.errors?.[0]?.reason ?? '';
+    const kind =
+      response.status === 404 || response.status === 410
+        ? 'session_expired'
+        : reason === 'storageQuotaExceeded' || reason === 'quotaExceeded'
+          ? 'quota'
+          : response.status === 401 || response.status === 403
+            ? 'authorization'
+            : response.status === 429 || response.status >= 500
+              ? 'temporary'
+              : 'unknown';
+    throw new DriveUploadError(kind, response.status);
+  }
   const file = (await response.json()) as { id?: string };
   if (!file.id) throw new Error('Google Drive did not return a file id');
   return file.id;
+}
+
+/** Grabs a single frame from the stream about to be (or being) recorded, as
+ * a small JPEG -- the source thumbnail image, before it's encrypted the
+ * same way as the clip itself (see ADR 0078). Uses a temporary, never-
+ * attached <video> element rather than the visible one, so it works
+ * regardless of which visible player (live view or camera-mode preview) is
+ * driving the recording, and never disturbs it. Best-effort: any failure
+ * (unsupported browser, a track that never produces a frame in time)
+ * rejects and the caller simply skips the thumbnail. */
+export async function captureFrameAsJpeg(stream: MediaStream): Promise<Blob> {
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.srcObject = stream;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = window.setTimeout(
+        () => reject(new Error('Timed out waiting for a video frame')),
+        4_000,
+      );
+      video.addEventListener(
+        'loadeddata',
+        () => {
+          window.clearTimeout(timeout);
+          resolve();
+        },
+        { once: true },
+      );
+      video.addEventListener(
+        'error',
+        () => {
+          window.clearTimeout(timeout);
+          reject(new Error('Could not read the camera stream'));
+        },
+        { once: true },
+      );
+      void video.play().catch(() => undefined);
+    });
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    if (!width || !height) throw new Error('Camera stream has no frame yet');
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas is unavailable');
+    context.drawImage(video, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', 0.75),
+    );
+    if (!blob) throw new Error('Could not encode the thumbnail');
+    return blob;
+  } finally {
+    video.pause();
+    video.srcObject = null;
+  }
+}
+
+export class DriveUploadError extends Error {
+  constructor(
+    readonly kind:
+      'authorization' | 'quota' | 'session_expired' | 'temporary' | 'unknown',
+    readonly status: number,
+  ) {
+    super(
+      kind === 'quota'
+        ? 'Google Drive is out of storage. Free some space, then retry this upload.'
+        : kind === 'authorization'
+          ? 'Google Drive access expired. Reconnect Drive in Settings, then retry this upload.'
+          : kind === 'session_expired'
+            ? 'The Google Drive upload session expired. Retry this upload.'
+            : kind === 'temporary'
+              ? 'Google Drive is temporarily unavailable. Retry this upload.'
+              : 'Google Drive rejected the upload. Check Drive, then retry.',
+    );
+    this.name = 'DriveUploadError';
+  }
 }

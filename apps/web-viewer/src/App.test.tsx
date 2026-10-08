@@ -44,18 +44,101 @@ class TestSocket {
 }
 
 describe('App', () => {
+  it('offers a retry instead of “Add your first device” when cameras fail to load', async () => {
+    localStorage.setItem('beacon.splash.seen.v1', 'true');
+    let camerasFail = true;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((path: string) => {
+        const body =
+          path === '/api/auth/me'
+            ? {
+                household: { id: 'h', role: 'owner' },
+                user: { email: 'owner@example.com', id: 'u' },
+              }
+            : path === '/api/cameras'
+              ? camerasFail
+                ? {
+                    error:
+                      'Something went wrong on Beacon’s side. Try again in a moment.',
+                  }
+                : { cameras: [] }
+              : path === '/api/devices'
+                ? { devices: [] }
+                : {};
+        const failed = path === '/api/cameras' && camerasFail;
+        return Promise.resolve({
+          json: () => Promise.resolve(body),
+          ok: !failed,
+          status: failed ? 500 : 200,
+        });
+      }),
+    );
+    render(<App />);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /cameras couldn’t be loaded/i,
+    );
+    expect(screen.queryByText('Add your first device')).not.toBeInTheDocument();
+    camerasFail = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(
+      await screen.findByText('Add your first device'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('explains an unreachable Beacon instead of showing sign-in, and retries', async () => {
+    localStorage.setItem('beacon.splash.seen.v1', 'true');
+    const fetch = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            code: 'session_required',
+            error: 'Authentication required',
+          }),
+        ok: false,
+        status: 401,
+      });
+    vi.stubGlobal('fetch', fetch);
+    render(<App />);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /can’t reach beacon/i,
+    );
+    expect(
+      screen.queryByRole('button', { name: /sign in/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() =>
+      expect(screen.queryByText(/can’t reach beacon/i)).not.toBeInTheDocument(),
+    );
+  });
+
   it('shows the one-time splash before sign-in, then remembers it was seen', async () => {
     localStorage.removeItem('beacon.splash.seen.v1');
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
-        json: () => Promise.resolve({ error: 'Authentication required' }),
+        json: () =>
+          Promise.resolve({
+            code: 'session_required',
+            error: 'Authentication required',
+          }),
         ok: false,
+        status: 401,
       }),
     );
-    const view = render(<App />);
-
-    
+    render(<App />);
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: /Get started/ }))[0]!,
+    );
+    expect(localStorage.getItem('beacon.splash.seen.v1')).toBe('true');
+    expect(
+      await screen.findByRole('heading', {
+        name: 'See what matters, from wherever you are.',
+      }),
+    ).toBeVisible();
   });
 
   it('shows the public trust page without requiring a session', async () => {
@@ -298,11 +381,11 @@ describe('App', () => {
       failLogin({
         ok: false,
         status: 401,
-        json: () => Promise.resolve({ error: 'Invalid credentials' }),
+        json: () => Promise.resolve({ error: 'Invalid email or password' }),
       }),
     );
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Invalid credentials',
+      'That email and password don’t match',
     );
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
   });
@@ -347,9 +430,7 @@ describe('App', () => {
       name: 'View live: Hallway phone',
     });
     expect(open).toHaveAttribute('aria-disabled', 'true');
-    expect(
-      screen.getByRole('heading', { name: 'Favorites' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Favorites' })).toBeVisible();
     fireEvent.click(
       screen.getByRole('button', { name: 'Hallway phone options' }),
     );
@@ -500,6 +581,10 @@ describe('App', () => {
     render(<App />);
 
     await screen.findByText('Pixel');
+    fireEvent.click(screen.getByRole('button', { name: 'Cameras' }));
+    const catalog = screen.getByLabelText('Your cameras');
+    const search = screen.getByRole('searchbox', { name: 'Search cameras' });
+    fireEvent.change(search, { target: { value: 'Pixel' } });
     expect(
       screen.getByRole('button', { name: 'Pixel options' }),
     ).toBeInTheDocument();
@@ -509,22 +594,24 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pixel options' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Camera settings' }));
 
+    expect(screen.getByRole('dialog', { name: 'Pixel' })).toBeVisible();
+    expect(screen.getByLabelText('Your cameras')).toBe(catalog);
+    expect(screen.getByRole('searchbox', { name: 'Search cameras' })).toBe(
+      search,
+    );
+    expect(search).toHaveValue('Pixel');
+    expect(
+      screen.getByRole('button', { name: 'View live: Pixel' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Pixel' })).toBeInTheDocument();
-    expect(screen.getByText('Keep this camera ready')).toBeVisible();
     expect(
-      screen.getByText('Keep this camera ready').closest('details'),
-    ).not.toHaveAttribute('open');
-    expect(screen.getByText('Readiness tips')).toBeVisible();
-    expect(
-      screen.getByRole('button', { name: 'Back to cameras' }),
+      screen.getByRole('button', { name: 'Close camera settings' }),
     ).toBeVisible();
-    expect(
-      screen.getByRole('heading', { name: 'Device privacy' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Privacy' })).toBeVisible();
     const health = screen.getByLabelText('Device health');
-    expect(within(health).getByText('Watching now')).toBeVisible();
-    expect(within(health).getByText('2 viewers')).toBeVisible();
-    expect(within(health).getByText('82% · charging')).toBeVisible();
+    expect(within(health).getByText('Online')).toBeVisible();
+    expect(within(health).getByText('2')).toBeVisible();
+    expect(screen.getByText('82% · charging')).toBeVisible();
     expect(screen.getByText('Rear camera')).toBeVisible();
     expect(window.location.pathname).toBe('/cameras/device-1/settings');
     expect(
@@ -536,8 +623,7 @@ describe('App', () => {
     expect(
       screen.queryByRole('button', { name: 'Revoke device' }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('Advanced'));
-    expect(screen.getByText(/Capabilities:/)).toBeVisible();
+    expect(screen.getByText('Capabilities')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Remove camera' }));
     expect(
       await screen.findByRole('heading', { name: 'Remove Pixel?' }),
@@ -546,8 +632,34 @@ describe('App', () => {
     expect(
       screen.queryByRole('heading', { name: 'Remove Pixel?' }),
     ).not.toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(screen.getByRole('button', { name: 'Pause' })).toBeVisible();
+    expect(
+      fetchMock.mock.calls.some(([url, init]) => {
+        const options = init as RequestInit | undefined;
+        return url === '/api/devices/device-1' && options?.method === 'DELETE';
+      }),
+    ).toBe(false);
+    expect(
+      screen.getByRole('switch', { name: 'Device privacy' }),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close camera settings' }),
+    );
+    await waitFor(() => expect(window.location.pathname).toBe('/cameras'));
+    expect(screen.queryByRole('dialog', { name: 'Pixel' })).toBeNull();
+    expect(screen.getByLabelText('Your cameras')).toBe(catalog);
+    expect(search).toHaveValue('Pixel');
+    fireEvent.click(screen.getByRole('button', { name: 'View live: Pixel' }));
+    const liveView = screen.getByRole('main');
+    fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
+    expect(screen.getByRole('dialog', { name: 'Pixel' })).toBeVisible();
+    expect(screen.getByRole('main')).toBe(liveView);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close camera settings' }),
+    );
+    await waitFor(() =>
+      expect(window.location.pathname).toBe('/cameras/rear-camera'),
+    );
+    expect(screen.getByRole('main')).toBe(liveView);
   });
 
   it('renames and removes a camera from the Cameras grid', async () => {
@@ -699,6 +811,11 @@ describe('App', () => {
           status: 200,
         })
         .mockResolvedValueOnce({
+          json: () => Promise.resolve({ events: [], total: 0 }),
+          ok: true,
+          status: 200,
+        })
+        .mockResolvedValueOnce({
           json: () =>
             Promise.resolve({
               events: [
@@ -716,6 +833,11 @@ describe('App', () => {
           status: 200,
         })
         .mockResolvedValueOnce({
+          json: () => Promise.resolve({ events: [], total: 0 }),
+          ok: true,
+          status: 200,
+        })
+        .mockResolvedValueOnce({
           json: () => Promise.resolve({}),
           ok: true,
           status: 204,
@@ -724,15 +846,17 @@ describe('App', () => {
     render(<App />);
     await screen.findByText('Add your first device');
     fireEvent.click(screen.getByRole('button', { name: 'Activity' }));
-    
-    expect(await screen.findByText('Hallway phone', { selector: 'b' })).toBeVisible();
+
+    expect(
+      await screen.findByText('Hallway phone', { selector: 'b' }),
+    ).toBeVisible();
     fireEvent.click(screen.getByText('Hallway phone', { selector: 'b' }));
     expect(screen.getAllByText(/42%/)[0]).toBeVisible();
     expect(screen.getByText(/A motion event does not mean/i)).toBeVisible();
     // The household currently has no paired cameras (these events are
     // historical), so there is nothing to build a camera picker from.
-    
-    expect(screen.getByLabelText('Filter motion events by time')).toBeVisible();
+
+    expect(screen.getByLabelText('Filter activity by time')).toBeVisible();
     await act(async () => {
       TestSocket.instance?.emit({
         cameraId: 'camera-2',
@@ -741,12 +865,12 @@ describe('App', () => {
       await Promise.resolve();
     });
     expect(await screen.findByText('Kitchen phone')).toBeVisible();
-    
+
     expect(window.localStorage.getItem('beacon_motion_filters_1:time')).toBe(
       '24',
     );
     fireEvent.click(
-      screen.getByRole('button', { name: 'Clear activity history' }),
+      screen.getByRole('button', { name: 'Clear motion history' }),
     );
     fireEvent.click(
       await screen.findByRole('button', { name: 'Clear history' }),
@@ -768,37 +892,41 @@ describe('App', () => {
                   ? { devices: [] }
                   : url === '/api/drive/status'
                     ? { recordingsConnected: false }
-                    : url.startsWith('/api/motion-events')
-                      ? {
-                          events: [
-                            {
-                              cameraId: 'camera-1',
-                              cameraName: 'Rear camera',
-                              confidence: 0.5,
-                              deviceName: 'Hallway phone',
-                              id: 'event-1',
-                              occurredAt: new Date().toISOString(),
+                    : url === '/api/recordings'
+                      ? { recordings: [] }
+                      : url.startsWith('/api/motion-events')
+                        ? {
+                            events: [
+                              {
+                                cameraId: 'camera-1',
+                                cameraName: 'Rear camera',
+                                confidence: 0.5,
+                                deviceName: 'Hallway phone',
+                                id: 'event-1',
+                                occurredAt: new Date().toISOString(),
+                              },
+                            ],
+                            nextCursor: null,
+                          }
+                        : url.startsWith('/api/activity')
+                          ? { events: [], total: 0 }
+                          : {
+                              cameras: [
+                                {
+                                  credentialRevoked: false,
+                                  deviceId: 'phone-1',
+                                  deviceName: 'Hallway phone',
+                                  enabled: true,
+                                  id: 'camera-1',
+                                  lastSeenAt: null,
+                                  name: 'Rear camera',
+                                  online: true,
+                                  privacyMode: false,
+                                  streaming: false,
+                                  viewerCount: 0,
+                                },
+                              ],
                             },
-                          ],
-                          nextCursor: null,
-                        }
-                      : {
-                          cameras: [
-                            {
-                              credentialRevoked: false,
-                              deviceId: 'phone-1',
-                              deviceName: 'Hallway phone',
-                              enabled: true,
-                              id: 'camera-1',
-                              lastSeenAt: null,
-                              name: 'Rear camera',
-                              online: true,
-                              privacyMode: false,
-                              streaming: false,
-                              viewerCount: 0,
-                            },
-                          ],
-                        },
             ),
           ok: true,
           status: 200,
@@ -808,7 +936,9 @@ describe('App', () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Activity' }));
-    fireEvent.click(await screen.findByText('Hallway phone', { selector: 'b' }));
+    fireEvent.click(
+      await screen.findByText('Hallway phone', { selector: 'b' }),
+    );
     fireEvent.click(
       await screen.findByRole('button', {
         name: 'Open Hallway phone',
@@ -822,12 +952,13 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
 
     expect((await screen.findAllByText('Activity')).length).toBeGreaterThan(0);
-    
+
     expect(window.location.pathname).toBe('/events');
   });
 
   it('tracks the active Settings section in the URL so browser back steps between them', async () => {
     vi.stubGlobal('WebSocket', TestSocket);
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }));
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((url: string) =>
@@ -874,13 +1005,9 @@ describe('App', () => {
     expect(
       await screen.findByRole('heading', { name: 'Household' }),
     ).toBeVisible();
-    expect(window.location.pathname + window.location.search).toBe(
-      '/settings',
-    );
+    expect(window.location.pathname + window.location.search).toBe('/settings');
 
-    fireEvent.click(
-      screen.getByRole('link', { name: /^Account$/ }),
-    );
+    fireEvent.click(screen.getByRole('link', { name: /^Account$/ }));
     expect(window.location.pathname + window.location.search).toBe(
       '/settings?section=account',
     );
@@ -890,6 +1017,113 @@ describe('App', () => {
       expect(window.location.pathname + window.location.search).toBe(
         '/settings',
       ),
+    );
+  });
+
+  it('reauthenticates in place before retrying account deletion', async () => {
+    vi.stubGlobal('WebSocket', TestSocket);
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }));
+    let deletionAttempts = 0;
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        if (url === '/api/auth/me')
+          return Promise.resolve({
+            json: () =>
+              Promise.resolve({
+                user: { email: 'owner@example.com', id: '1' },
+              }),
+            ok: true,
+            status: 200,
+          });
+        if (url === '/api/cameras')
+          return Promise.resolve({
+            json: () => Promise.resolve({ cameras: [] }),
+            ok: true,
+            status: 200,
+          });
+        if (url === '/api/devices')
+          return Promise.resolve({
+            json: () => Promise.resolve({ devices: [] }),
+            ok: true,
+            status: 200,
+          });
+        if (url === '/api/account' && init?.method === 'DELETE') {
+          deletionAttempts += 1;
+          return Promise.resolve(
+            deletionAttempts === 1
+              ? {
+                  json: () =>
+                    Promise.resolve({ error: 'Recent sign-in required' }),
+                  ok: false,
+                  status: 403,
+                }
+              : {
+                  json: () => Promise.resolve(undefined),
+                  ok: true,
+                  status: 204,
+                },
+          );
+        }
+        if (url === '/api/account/reauth')
+          return Promise.resolve({
+            json: () => Promise.resolve(undefined),
+            ok: true,
+            status: 204,
+          });
+        const payload =
+          url === '/api/account/households'
+            ? { households: [] }
+            : url === '/api/household/sharing'
+              ? { invitations: [], members: [] }
+              : url === '/api/household/guest-links'
+                ? { guestLinks: [] }
+                : url === '/api/notification-preferences'
+                  ? { preferences: [] }
+                  : url === '/api/motion-retention'
+                    ? { days: 30 }
+                    : url === '/api/drive/status'
+                      ? {
+                          connected: false,
+                          configured: true,
+                          recordingsConnected: false,
+                        }
+                      : url === '/api/account/sessions'
+                        ? { sessions: [] }
+                        : url === '/api/access-history'
+                          ? { events: [] }
+                          : url.startsWith('/api/motion-events')
+                            ? { events: [], nextCursor: null }
+                            : { events: [], total: 0 };
+        return Promise.resolve({
+          json: () => Promise.resolve(payload),
+          ok: true,
+          status: 200,
+        });
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete account' }),
+    );
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: 'Delete account' }))[1]!,
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Confirm it’s you' }),
+    ).toBeVisible();
+
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'correct horse battery staple' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(deletionAttempts).toBe(2));
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/account/reauth',
+      expect.objectContaining({ method: 'POST' }),
     );
   });
 });

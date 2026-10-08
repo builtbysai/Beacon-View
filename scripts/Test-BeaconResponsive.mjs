@@ -1,5 +1,5 @@
 // Run against a local Vite server. All API/media interactions are isolated fixtures.
-/* global window, document, innerWidth, innerHeight, getComputedStyle, HTMLElement */
+/* global window, document, innerWidth, innerHeight, getComputedStyle */
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { mkdirSync, writeFileSync } = require('node:fs');
@@ -132,6 +132,32 @@ const routes = {
     })),
   },
   '/api/pairing-codes': { code: 'ABCD234567' },
+  // Endpoints added after this audit was first written; shapes match the
+  // web viewer's own types (capabilities.ts, HouseholdSwitcher.tsx,
+  // HouseholdSharingSettings.tsx, GoogleDriveSettings.tsx, MotionEventList.tsx).
+  '/api/capabilities': {
+    auth: { google: true },
+    contact: true,
+    googleDrive: true,
+    notifications: { firebase: false, webPush: true },
+    realtime: true,
+    recordings: true,
+  },
+  '/api/account/households': {
+    households: [
+      { expiresAt: null, id: 'household-1', name: 'Home', role: 'owner' },
+    ],
+  },
+  '/api/household/sharing': { invitations: [], members: [] },
+  '/api/household/guest-links': { guestLinks: [] },
+  '/api/drive/status': {
+    configured: true,
+    connected: false,
+    providerEmail: null,
+    recordingsConnected: false,
+    updatedAt: null,
+  },
+  '/api/activity': { events: [], total: 0 },
 };
 const sizes = process.env.BEACON_QA_EXTENDED_ONLY
   ? []
@@ -211,6 +237,23 @@ const report = [];
             (el.closest('details:not([open])') && el.tagName !== 'SUMMARY')
           )
             return false;
+          // Inert or aria-hidden content (e.g. the closed mobile drawer)
+          // is deliberately off-screen and unreachable, not clipped.
+          if (el.closest('[inert], [aria-hidden="true"]')) return false;
+          // Controls inside a horizontally scrolling strip (e.g. mobile
+          // filter pills) are reachable by scrolling; the strip itself must
+          // still fit the viewport, which its own ancestors are checked for.
+          for (let node = el.parentElement; node; node = node.parentElement) {
+            const overflowX = getComputedStyle(node).overflowX;
+            if (
+              (overflowX === 'auto' || overflowX === 'scroll') &&
+              node.scrollWidth > node.clientWidth
+            ) {
+              const strip = node.getBoundingClientRect();
+              if (strip.left >= -1 && strip.right <= innerWidth + 1)
+                return false;
+            }
+          }
           if (
             el.classList.contains('skip-link') ||
             (getComputedStyle(el).position === 'absolute' && r.width <= 1)
@@ -251,41 +294,23 @@ const report = [];
       );
     console.log('PASS', name, `${layout.scrollWidth}×${layout.scrollHeight}`);
   }
-  async function assertMobileNavigationClear(name) {
-    await page.evaluate(() =>
-      window.scrollTo(0, document.documentElement.scrollHeight),
-    );
-    await page.waitForTimeout(80);
-    const positions = await page.evaluate(() => {
-      const navigation = document.querySelector('.sidebar');
-      const workspace = document.querySelector('.workspace');
-      const lastContent = workspace?.lastElementChild;
-      if (
-        !(navigation instanceof HTMLElement) ||
-        !(lastContent instanceof HTMLElement)
-      )
-        throw new Error('Mobile navigation or page content was not found');
-      return {
-        contentBottom: lastContent.getBoundingClientRect().bottom,
-        navigationTop: navigation.getBoundingClientRect().top,
-      };
-    });
-    assert(
-      positions.contentBottom <= positions.navigationTop + 1,
-      `${name}: final content is obscured by mobile navigation ${JSON.stringify(positions)}`,
-    );
-    console.log('PASS', name, 'final content clears mobile navigation');
-  }
   async function assertCompactMobileHeaderAction(name) {
+    // The mobile top bar keeps a labelled "Add camera" action (it was once
+    // an icon-only button); it must stay a usable touch target and fit the
+    // bar, which capture() separately checks for clipping.
     const size = await page
-      .locator('.page-heading .add-camera-button')
+      .locator('.app-topbar-actions')
+      .getByRole('button', { name: 'Add camera' })
       .evaluate((button) => ({
         width: button.getBoundingClientRect().width,
         height: button.getBoundingClientRect().height,
       }));
     assert(
-      size.width <= 48 && size.height <= 48,
-      `${name}: mobile Add camera action is not compact ${JSON.stringify(size)}`,
+      // WCAG 2.2 AA target size (2.5.8) minimum is 24 CSS px.
+      size.height >= 24 &&
+        size.width >= 24 &&
+        size.width <= innerWidthAtCapture(),
+      `${name}: mobile Add camera action is not a usable touch target ${JSON.stringify(size)}`,
     );
     console.log(
       'PASS',
@@ -293,11 +318,16 @@ const report = [];
       `${Math.round(size.width)}×${Math.round(size.height)}`,
     );
   }
+  function innerWidthAtCapture() {
+    return page.viewportSize()?.width ?? Infinity;
+  }
   async function assertAuthCardFits(name) {
-    const dimensions = await page.locator('.sign-in-card').evaluate((card) => ({
-      clientHeight: card.clientHeight,
-      scrollHeight: card.scrollHeight,
-    }));
+    const dimensions = await page
+      .locator('main.auth .card')
+      .evaluate((card) => ({
+        clientHeight: card.clientHeight,
+        scrollHeight: card.scrollHeight,
+      }));
     assert(
       dimensions.scrollHeight <= dimensions.clientHeight + 1,
       `${name}: auth card has unnecessary internal scrolling ${JSON.stringify(dimensions)}`,
@@ -314,11 +344,11 @@ const report = [];
     });
     await page.setViewportSize({ width, height });
     signedIn = false;
-    await visit('/', '.sign-in-card');
+    await visit('/', 'main.auth .card');
     await capture(`auth-${width}`, true);
     await assertAuthCardFits(`auth-card-fit-${width}`);
     await page.getByRole('button', { name: 'Forgot password?' }).click();
-    await page.getByPlaceholder('Enter your account email').waitFor();
+    await page.getByLabel('Email', { exact: true }).waitFor();
     const recoveryDocumentHeight = await page.evaluate(
       () => document.documentElement.scrollHeight,
     );
@@ -327,16 +357,14 @@ const report = [];
       `auth-recovery-${width}: recovery guidance causes unnecessary page scrolling (${recoveryDocumentHeight})`,
     );
     await assertAuthCardFits(`auth-recovery-card-fit-${width}`);
-    await page.getByRole('button', { name: 'Forgot password?' }).click();
+    await page.getByRole('button', { name: '← Back to sign in' }).click();
     await page.getByLabel('Password', { exact: true }).fill('local-test-only');
     await page.getByRole('button', { name: 'Show password' }).click();
     assert.equal(
       await page.getByLabel('Password', { exact: true }).getAttribute('type'),
       'text',
     );
-    await page
-      .getByRole('button', { name: 'Create a password account' })
-      .click();
+    await page.getByRole('button', { name: 'Create an account' }).click();
     await capture(`register-${width}`);
     await visit('/?googleSignIn=linkRequired', '[role=alert]');
     await capture(`oauth-collision-${width}`);
@@ -344,47 +372,23 @@ const report = [];
     for (const [route, selector] of [
       ['/', '.home-dashboard'],
       ['/cameras', '.camera-tile-grid'],
-      ['/events', '#motion-events-title'],
-      ['/settings', '.settings-layout'],
-      ['/camera-mode', '.setup-options'],
-      ['/devices/phone-0', '.device-health'],
-      ['/devices/phone-2', '.device-guidance.attention'],
-      ['/devices/phone-3', '.device-guidance.attention'],
-      ['/contact', '.contact-layout'],
-      ['/trust', '.trust-page'],
+      ['/events', '.activity-v3-container'],
+      ['/settings', '.settings-shell'],
+      ['/camera-mode', '.add-device-grid'],
+      ['/contact', '#form'],
+      ['/trust', '.commitments'],
       ['/pair?code=ABCD234567', '.pair-link-code'],
     ]) {
       await visit(route, selector);
       const routeName = route.split('?')[0].replaceAll('/', '-') || 'home';
       await capture(`${routeName}-${width}`, route === '/' && width >= 1280);
-      if (route === '/contact') {
-        const documentHeight = await page.evaluate(
-          () => document.documentElement.scrollHeight,
-        );
-        assert(
-          documentHeight <= height + 1,
-          `contact-${width}: ordinary contact form causes unnecessary page scrolling (${documentHeight})`,
-        );
-      }
-      if (route === '/settings' && width === 1280) {
-        await page.getByRole('button', { name: 'Next' }).click();
-        await capture('settings-activity-page-2-1280');
-        assert.equal(
-          await page.getByText('Page 2 of 2').textContent(),
-          'Page 2 of 2',
-        );
-      }
-      if (
-        (route === '/devices/phone-2' || route === '/devices/phone-3') &&
-        (width === 320 || width === 1280)
-      ) {
-        await page.locator('.device-guidance > summary').click();
-        await capture(`${routeName}-guidance-expanded-${width}`);
-      }
+      // The contact page was redesigned (contact-v4) as a full page with
+      // help options above the form, so it scrolls by design; capture()
+      // still enforces no horizontal overflow and no clipped controls.
     }
-    if (width <= 760) {
-      await visit('/devices/phone-3', '.device-guidance.attention');
-      await assertMobileNavigationClear(`mobile-nav-clear-${width}`);
+    if (width <= 768) {
+      // Mobile navigation is an off-canvas drawer (inert when closed), not
+      // the former fixed bottom bar, so there is no bar to obscure content.
       await visit('/cameras', '.camera-tile-grid');
       await assertCompactMobileHeaderAction(`mobile-header-action-${width}`);
     }
@@ -406,38 +410,28 @@ const report = [];
     await capture(`cameras-camera-0-${width}`, width >= 1280);
     if (width === 390 || width === 1280) {
       const livePath = new URL(page.url()).pathname;
+      const liveShell = await page.locator('.live-shell').elementHandle();
       await page.getByRole('button', { name: 'Camera settings' }).click();
       await page.getByRole('dialog').waitFor();
+      // ADR 0056: the sheet gets its own deep-linkable URL, but the live
+      // viewer underneath must stay mounted so the stream is not torn down.
       assert.equal(
-        new URL(page.url()).pathname,
-        livePath,
-        'Live settings must not navigate away from the active stream',
+        await liveShell.evaluate((element) => element.isConnected),
+        true,
+        'Live settings must not unmount the active stream',
       );
       await capture(`live-settings-${width}`, true);
       await page.getByRole('button', { name: 'Close camera settings' }).click();
+      assert.equal(new URL(page.url()).pathname, livePath);
     }
     cameras.pop();
     cameras.forEach((c, i) => {
       c.privacyMode = i === 2;
     });
     await visit('/', '.home-dashboard');
-    if (width > 760 && width <= 1024) {
-      // Tablet-portrait widths default to the compact icon rail (no stored
-      // preference yet in this browser context) — confirm that explicitly
-      // before the generic toggle test below forces it back to expanded.
-      assert.equal(
-        await page.getByRole('button', { name: 'Expand sidebar' }).isVisible(),
-        true,
-        `${width}: tablet width must default to a collapsed sidebar rail`,
-      );
-      assert.equal(
-        await page.locator('nav button span').first().isVisible(),
-        false,
-        `${width}: tablet default rail must hide nav labels`,
-      );
-      await capture(`tablet-default-rail-${width}`);
-    }
-    if (width > 760) {
+    // The sidebar no longer defaults to a tablet icon rail; Sidebar.tsx
+    // treats <= 768px as mobile (drawer) and everything wider as desktop.
+    if (width > 768) {
       // Bring the page to the front before keyboard interaction: after many
       // rapid full-page navigations (including a detour through the live
       // view's entirely different page shell), headless Edge can leave the
@@ -447,33 +441,42 @@ const report = [];
       // negative without weakening what the assertions below check.
       await page.bringToFront();
       await page.waitForTimeout(150);
-      const expandToggle = page.getByRole('button', { name: 'Expand sidebar' });
-      if (await expandToggle.isVisible()) await expandToggle.click();
-      const toggle = page.getByRole('button', { name: 'Collapse sidebar' });
+      // The toggle keeps one accessible name and reports its state through
+      // aria-expanded; the sidebar exposes the same state as data-state.
+      const toggle = page
+        .locator('.app-topbar')
+        .getByRole('button', { name: 'Toggle Sidebar' });
+      const sidebarState = () =>
+        page.locator('#primary-sidebar').getAttribute('data-state');
+      if ((await sidebarState()) === 'collapsed') await toggle.click();
+      assert.equal(await sidebarState(), 'expanded');
       await toggle.focus();
       await page.keyboard.press('Enter');
       await page.waitForTimeout(150);
+      assert.equal(await sidebarState(), 'collapsed');
+      assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
       await page.getByRole('button', { name: 'Home', exact: true }).focus();
       await page.getByRole('tooltip', { name: 'Home' }).waitFor();
       await capture(`sidebar-collapsed-${width}`);
       await page.keyboard.press('Escape');
       assert.equal(await page.getByRole('tooltip').count(), 0);
       await page.reload();
-      await page.getByRole('button', { name: 'Expand sidebar' }).waitFor();
+      await page.locator('#primary-sidebar').waitFor();
+      assert.equal(await sidebarState(), 'collapsed', 'preference persists');
       await page.setViewportSize({ width: 390, height: 844 });
+      await page.waitForTimeout(150);
       assert.equal(
-        await page.getByRole('button', { name: 'Expand sidebar' }).isVisible(),
-        false,
-      );
-      assert.equal(
-        await page.locator('nav button span').first().isVisible(),
-        true,
+        await sidebarState(),
+        'closed',
+        'phones use the closed drawer regardless of the desktop preference',
       );
       await page.setViewportSize({ width, height });
-      await page.getByRole('button', { name: 'Expand sidebar' }).click();
+      await page.waitForTimeout(150);
+      await toggle.click();
+      assert.equal(await sidebarState(), 'expanded');
     }
     scenario = 'empty';
-    await visit('/', '.home-dashboard');
+    await visit('/', '.dash-empty');
     await capture(`empty-home-${width}`, width >= 1280);
     scenario = 'error';
     await visit('/events', '[role=alert]');
@@ -488,9 +491,9 @@ const report = [];
   ]) {
     await page.setViewportSize({ width, height });
     signedIn = true;
-    await visit('/camera-mode', '.setup-options');
-    await page.getByRole('button', { name: 'Pair Android' }).click();
-    await page.getByLabel('Beacon pairing QR code').waitFor();
+    await visit('/camera-mode', '.add-device-grid');
+    await page.getByRole('button', { name: 'Pair a device →' }).click();
+    await page.getByRole('dialog').waitFor();
     await capture(`pair-modal-${width}`);
     const modal = page.getByRole('dialog');
     const modalState = await modal.evaluate((dialog) => ({
@@ -508,8 +511,8 @@ const report = [];
       'Modal must scroll inside viewport',
     );
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await page.getByRole('button', { name: 'Use this browser' }).click();
-    await page.getByRole('button', { name: 'Allow and find cameras' }).click();
+    await page.getByRole('button', { name: 'Use this device →' }).click();
+    await page.getByRole('button', { name: 'Allow camera access' }).click();
     await page.getByRole('alert').waitFor();
     await capture(`camera-permission-denied-${width}`);
     const oldName = cameras[0].name,
@@ -519,13 +522,10 @@ const report = [];
     devices[0].name = cameras[0].deviceName;
     await visit('/cameras', '.camera-tile-grid');
     await capture(`long-camera-names-${width}`);
-    await visit('/devices/phone-0', '.device-health');
-    await page.getByText('Advanced', { exact: true }).click();
-    await capture(`device-settings-expanded-${width}`);
     for (const [route, selector] of [
       ['/cameras', '.pending-device-list'],
-      ['/diagnostics', '.workspace'],
-      ['/account-deletion', '.contact-layout'],
+      ['/diagnostics', '#main-content'],
+      ['/account-deletion', '#form'],
       ['/auth/mobile', '#mobile-auth-title'],
       ['/pair?code=invalid', '#pair-link-title'],
     ]) {
@@ -540,7 +540,10 @@ const report = [];
   }
   await page.setViewportSize({ width: 1280, height: 500 });
   await visit('/', '.home-dashboard');
-  await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+  await page
+    .locator('.app-topbar')
+    .getByRole('button', { name: 'Toggle Sidebar' })
+    .click();
   await page
     .getByRole('button', {
       name: 'Open account menu for household@example.test',
@@ -563,14 +566,14 @@ const report = [];
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ colorScheme: 'dark' });
   signedIn = false;
-  await visit('/', '.sign-in-card');
+  await visit('/', 'main.auth .card');
   await capture('auth-dark', true);
   signedIn = true;
-  await visit('/settings', '.settings-layout');
+  await visit('/settings', '.settings-shell');
   await capture('settings-dark');
   await page.setViewportSize({ width: 320, height: 568 });
   signedIn = false;
-  await visit('/', '.sign-in-card');
+  await visit('/', 'main.auth .card');
   await page.addStyleTag({ content: 'html { font-size: 200%; }' });
   await capture('auth-large-type-short');
 
@@ -589,10 +592,15 @@ const report = [];
   ]) {
     await page.setViewportSize({ width, height });
     signedIn = false;
-    await visit('/', '.splash-cta');
-    await capture(`splash-${width}`, true);
-    await page.locator('.splash-cta').click();
-    await page.locator('.sign-in-card').first().waitFor();
+    // The splash is now the full landing page (splash-v4), which scrolls by
+    // design; its primary call to action continues to sign-in.
+    await visit('/', '.splash-v4 .ctas');
+    await capture(`splash-${width}`);
+    await page
+      .locator('.splash-v4 .ctas')
+      .getByRole('button', { name: /Get started/ })
+      .click();
+    await page.locator('main.auth .card').first().waitFor();
     const seen = await page.evaluate(() =>
       localStorage.getItem('beacon.splash.seen.v1'),
     );

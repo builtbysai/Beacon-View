@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { request } from './api';
+import { friendlyError } from './friendly-errors';
 import type { HouseholdRole } from './domain';
 
 interface HouseholdAccess {
@@ -15,12 +16,14 @@ function roleLabel(role: HouseholdRole): string {
 }
 
 function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('') || 'H';
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('') || 'H'
+  );
 }
 
 export function HouseholdSwitcher({
@@ -45,9 +48,10 @@ export function HouseholdSwitcher({
       .catch((caught) => {
         if (active)
           setError(
-            caught instanceof Error
-              ? caught.message
-              : 'Unable to load households',
+            friendlyError(
+              caught,
+              'Your households couldn’t be loaded. Try again.',
+            ),
           );
       });
     return () => {
@@ -94,9 +98,10 @@ export function HouseholdSwitcher({
                   .catch((caught) => {
                     setBusy(false);
                     setError(
-                      caught instanceof Error
-                        ? caught.message
-                        : 'Unable to switch households',
+                      friendlyError(
+                        caught,
+                        'The household couldn’t be switched. Try again.',
+                      ),
                     );
                   });
               }}
@@ -115,7 +120,9 @@ export function HouseholdSwitcher({
         <div className="household-metric">
           <span>People</span>
           <strong>{memberCount ?? '—'}</strong>
-          <small>{memberCount === null ? 'Loading membership' : 'In this household'}</small>
+          <small>
+            {memberCount === null ? 'Loading membership' : 'In this household'}
+          </small>
         </div>
         <div className="household-metric">
           <span>Cameras</span>
@@ -125,7 +132,9 @@ export function HouseholdSwitcher({
         <div className="household-metric">
           <span>Your role</span>
           <strong>{role}</strong>
-          <small>{isOwner ? 'Full household access' : 'Based on your membership'}</small>
+          <small>
+            {isOwner ? 'Full household access' : 'Based on your membership'}
+          </small>
         </div>
       </div>
 

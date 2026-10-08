@@ -5,6 +5,7 @@ import { Icon } from './Icon';
 import './Diagnostics.css';
 
 interface DiagnosticSnapshot {
+  unavailable?: Array<'cameras' | 'devices'>;
   cameras: Array<{
     cameraId: string;
     captureState: string;
@@ -24,10 +25,31 @@ export function Diagnostics() {
   const [diagnostics, setDiagnostics] = useState<DiagnosticSnapshot | null>(
     null,
   );
+  const [error, setError] = useState(false);
+  const [requestRevision, setRequestRevision] = useState(0);
 
   useEffect(() => {
-    void request<DiagnosticSnapshot>('/api/diagnostics').then(setDiagnostics);
-  }, []);
+    let active = true;
+    void request<DiagnosticSnapshot>('/api/diagnostics')
+      .then((result) => {
+        if (active) setDiagnostics(result);
+      })
+      .catch(() => {
+        if (active) setError(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [requestRevision]);
+
+  function retry() {
+    setError(false);
+    setDiagnostics(null);
+    setRequestRevision((revision) => revision + 1);
+  }
+
+  const camerasUnavailable = diagnostics?.unavailable?.includes('cameras');
+  const devicesUnavailable = diagnostics?.unavailable?.includes('devices');
 
   return (
     <div className="view-body">
@@ -37,14 +59,33 @@ export function Diagnostics() {
           <p>System and device status for debugging.</p>
         </header>
 
-        {!diagnostics ? (
+        {error ? (
+          <p role="alert">
+            Diagnostics could not be loaded.{' '}
+            <button type="button" className="secondary" onClick={retry}>
+              Retry
+            </button>
+          </p>
+        ) : !diagnostics ? (
           <p>Loading sanitized connection diagnostics...</p>
         ) : (
           <>
+            {(camerasUnavailable || devicesUnavailable) && (
+              <p role="alert">
+                Some diagnostics could not be loaded.{' '}
+                <button type="button" className="secondary" onClick={retry}>
+                  Retry
+                </button>
+              </p>
+            )}
             <section className="diagnostic-section">
               <h3>Devices</h3>
               <ul className="diagnostic-list">
-                {diagnostics.devices.length === 0 ? (
+                {devicesUnavailable ? (
+                  <li className="text-muted">
+                    Device diagnostics unavailable.
+                  </li>
+                ) : diagnostics.devices.length === 0 ? (
                   <li className="text-muted">No devices connected.</li>
                 ) : (
                   diagnostics.devices.map((device) => (
@@ -61,7 +102,11 @@ export function Diagnostics() {
             <section className="diagnostic-section">
               <h3>Camera Sessions</h3>
               <ul className="diagnostic-list">
-                {diagnostics.cameras.length === 0 ? (
+                {camerasUnavailable ? (
+                  <li className="text-muted">
+                    Camera diagnostics unavailable.
+                  </li>
+                ) : diagnostics.cameras.length === 0 ? (
                   <li className="text-muted">No active camera sessions.</li>
                 ) : (
                   diagnostics.cameras.map((camera) => (
@@ -82,7 +127,10 @@ export function Diagnostics() {
 
         <div className="diagnostics-notice">
           <Icon name="shield" />
-          <p>Diagnostics use public identifiers and never include credentials, SDP, raw ICE candidates, or household IDs.</p>
+          <p>
+            Diagnostics use public identifiers and never include credentials,
+            SDP, raw ICE candidates, or household IDs.
+          </p>
         </div>
       </div>
     </div>

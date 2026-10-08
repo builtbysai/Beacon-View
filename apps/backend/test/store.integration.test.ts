@@ -207,6 +207,60 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
     await expect(redeem(randomUUID(), 'credential-three')).resolves.toBeNull();
   });
 
+  it('pairs a browser camera with scoped sources and rejects reuse of its code', async () => {
+    const owner = await store!.createAccount(
+      'browser-owner@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    const code = 'ABCDEFGH23';
+    await store!.createPairingCode(
+      owner.householdId,
+      hashSecret(code),
+      new Date(Date.now() + 60_000),
+    );
+    const credentialHash = hashSecret('browser-credential');
+    const input = {
+      codeHash: hashSecret(code),
+      credentialHash,
+      installationId: randomUUID(),
+      ipAddress: '127.0.0.1',
+      name: 'Hallway browser',
+      now: new Date(),
+      browserSources: [
+        {
+          sourceKey: 'browser:front',
+          name: 'Front lens',
+          facing: 'front' as const,
+        },
+        {
+          sourceKey: 'browser:rear',
+          name: 'Rear lens',
+          facing: 'rear' as const,
+        },
+      ],
+    };
+    const paired = await store!.redeemPairingCode(input);
+    expect(paired).toMatchObject({ name: 'Hallway browser' });
+    if (!paired || paired === 'device_registration_rate_limited')
+      throw new Error('Expected browser pairing to succeed');
+    const identity = await store!.findDeviceByCredential(credentialHash);
+    expect(identity).toMatchObject({
+      platform: 'browser',
+      installationId: input.installationId,
+    });
+    const cameras = (await store!.listCameras(owner.householdId)).filter(
+      (camera) => camera.publicDeviceId === paired?.publicDeviceId,
+    );
+    expect(cameras.map((camera) => camera.sourceKey).sort()).toEqual([
+      'browser:front',
+      'browser:rear',
+    ]);
+    await expect(
+      store!.redeemPairingCode({ ...input, installationId: randomUUID() }),
+    ).resolves.toBeNull();
+  });
+
   it('rejects expired and invalid pairing codes without creating cameras', async () => {
     const owner = await store!.createAccount(
       'owner@example.com',
@@ -405,6 +459,11 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
         sourceKey: 'legacy-default',
       },
     ]);
+    await expect(
+      store!.updateCamera(owner.householdId, paired.publicCameraId, {
+        name: 'My driveway camera',
+      }),
+    ).resolves.toBe(true);
 
     const synchronized = await store!.syncDeviceCameras(
       hashSecret(credential),
@@ -418,6 +477,92 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
     expect(synchronized?.every((camera) => camera.deviceId === paired.id)).toBe(
       true,
     );
+    const front = synchronized?.find(
+      (camera) => camera.sourceKey === 'android:1',
+    );
+    if (!front) throw new Error('Expected front source');
+    const addedAfterSync = await store!.listHouseholdActivity(
+      owner.householdId,
+      {
+        eventTypes: ['camera_source_added'],
+      },
+    );
+    expect(addedAfterSync.events).toMatchObject([
+      {
+        cameraSourceId: front.publicCameraId,
+        publicDeviceId: paired.publicDeviceId,
+        sourceName: 'Front',
+      },
+    ]);
+    await store!.audit({
+      cameraId: paired.id,
+      eventType: 'camera_updated',
+      householdId: owner.householdId,
+      success: true,
+      metadata: {
+        cameraId: front.publicCameraId,
+        cameraName: 'Front snapshot',
+      },
+    });
+    await store!.audit({
+      eventType: 'device_updated',
+      householdId: owner.householdId,
+      success: true,
+      metadata: {
+        deviceId: paired.publicDeviceId,
+        deviceName: 'Device snapshot',
+      },
+    });
+    const activity = await store!.listHouseholdActivity(owner.householdId, {
+      eventTypes: ['camera_updated', 'device_updated'],
+    });
+    expect(activity.events).toHaveLength(2);
+    expect(
+      activity.events.find((event) => event.eventType === 'camera_updated'),
+    ).toMatchObject({
+      householdId: owner.householdId,
+      publicDeviceId: paired.publicDeviceId,
+      cameraSourceId: front.publicCameraId,
+      deviceName: 'Pixel device',
+      sourceName: 'Front snapshot',
+    });
+    expect(
+      activity.events.find((event) => event.eventType === 'device_updated'),
+    ).toMatchObject({
+      publicDeviceId: paired.publicDeviceId,
+      cameraSourceId: null,
+      deviceName: 'Device snapshot',
+    });
+    const filteredActivity = await store!.listHouseholdActivity(
+      owner.householdId,
+      {
+        cameraSourceId: front.publicCameraId,
+        eventTypes: ['camera_updated', 'device_updated'],
+      },
+    );
+    expect(filteredActivity.total).toBe(1);
+    expect(filteredActivity.events[0]?.cameraSourceId).toBe(
+      front.publicCameraId,
+    );
+    expect(
+      synchronized?.find((camera) => camera.sourceKey === 'android:0')?.name,
+    ).toBe('My driveway camera');
+    await store!.syncDeviceCameras(
+      hashSecret(credential),
+      [{ facing: 'rear', name: 'Rear camera', sourceKey: 'android:0' }],
+      new Date(),
+    );
+    expect(
+      (
+        await store!.listHouseholdActivity(owner.householdId, {
+          eventTypes: ['camera_source_added'],
+        })
+      ).total,
+    ).toBe(1);
+    expect(await store!.listCameras(owner.householdId)).toMatchObject([
+      { name: 'My driveway camera', sourceKey: 'android:0' },
+      { sourceKey: 'android:1' },
+    ]);
     await expect(store!.listCameras(other.householdId)).resolves.toEqual([]);
 
     const installationId = randomUUID();
@@ -440,6 +585,13 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
       ],
     });
     expect(browser.cameras).toHaveLength(2);
+    expect(
+      (
+        await store!.listHouseholdActivity(owner.householdId, {
+          eventTypes: ['camera_source_added'],
+        })
+      ).total,
+    ).toBe(3);
     const browserCamera = browser.cameras[0]!;
     await expect(
       store!.updateCamera(other.householdId, browserCamera.publicCameraId, {
@@ -457,6 +609,48 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
     ).resolves.toBeNull();
     await store!.updateCamera(owner.householdId, browserCamera.publicCameraId, {
       enabled: true,
+    });
+    await store!.updateDevice(
+      owner.householdId,
+      browser.device.publicDeviceId,
+      {
+        name: 'My office camera',
+      },
+    );
+    const registeredAgain = await store!.registerBrowserDevice({
+      householdId: owner.householdId,
+      installationId,
+      name: 'Stale browser name',
+      now: new Date(),
+      sources: [
+        {
+          facing: 'front',
+          name: 'Stale webcam label',
+          sourceKey: 'browser:built-in',
+        },
+        {
+          facing: 'external',
+          name: 'USB webcam',
+          sourceKey: 'browser:usb',
+        },
+      ],
+    });
+    expect(registeredAgain.device.name).toBe('My office camera');
+    expect(
+      (
+        await store!.listHouseholdActivity(owner.householdId, {
+          eventTypes: ['camera_source_added'],
+        })
+      ).total,
+    ).toBe(3);
+    expect(
+      registeredAgain.cameras.find(
+        (camera) => camera.sourceKey === 'browser:built-in',
+      ),
+    ).toMatchObject({
+      deviceName: 'My office camera',
+      facing: 'front',
+      name: 'Desk camera',
     });
     await expect(
       store!.revokeDevice(owner.householdId, browser.device.publicDeviceId),

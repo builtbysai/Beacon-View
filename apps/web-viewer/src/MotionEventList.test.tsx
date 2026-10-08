@@ -40,9 +40,147 @@ const props = {
   onCamera: vi.fn<(id: string) => void>(),
   filterStorageKey: 'motion-test',
   refreshRevision: 0,
+  includeHouseholdActivity: false,
 };
 
 describe('Activity timeline', () => {
+  it('restores a saved legacy week filter as seven days', async () => {
+    localStorage.setItem('motion-test:time', 'week');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response([])));
+    render(<MotionEventList {...props} />);
+    expect(await screen.findByRole('combobox', { name: /time/i })).toHaveValue(
+      '7',
+    );
+    expect(localStorage.getItem('motion-test:time')).toBe('7');
+  });
+
+  it('shows structured household activity alongside motion without claiming object detection', async () => {
+    const occurredAt = new Date().toISOString();
+    const fetch = vi.fn((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/activity')
+          ? {
+              ok: true,
+              status: 200,
+              json: () =>
+                Promise.resolve({
+                  events: [
+                    {
+                      id: 'offline-event',
+                      actorEmail: null,
+                      householdId: 'household-one',
+                      publicDeviceId: 'device-one',
+                      cameraSourceId: null,
+                      deviceName: 'Hallway phone',
+                      sourceName: null,
+                      eventType: 'device_offline',
+                      occurredAt,
+                      success: true,
+                      metadata: { deviceId: 'device-one' },
+                    },
+                  ],
+                  total: 1,
+                }),
+            }
+          : response([event('motion-event', occurredAt)]),
+      ),
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    render(<MotionEventList {...props} includeHouseholdActivity />);
+    expect(await screen.findByText('Device went offline')).toBeVisible();
+    expect(screen.getByText('Motion detected')).toBeVisible();
+    expect(screen.queryByText('Person detected')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Device went offline'));
+    const details = screen.getByRole('dialog');
+    expect(details).toHaveTextContent('Device went offline');
+    expect(details).not.toHaveTextContent('Motion intensity');
+    expect(details).not.toHaveTextContent('Open Hallway phone');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(
+      fetch.mock.calls.some(
+        ([url]) =>
+          url.startsWith('/api/activity?limit=50&since=') &&
+          url.endsWith('&offset=0'),
+      ),
+    ).toBe(true);
+  });
+
+  it('filters and opens household activity by the structured source ID', async () => {
+    const occurredAt = new Date().toISOString();
+    const fetch = vi.fn((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/activity')
+          ? {
+              ok: true,
+              status: 200,
+              json: () =>
+                Promise.resolve({
+                  events: [
+                    {
+                      id: 'renamed',
+                      actorEmail: 'owner@example.com',
+                      householdId: 'household-one',
+                      publicDeviceId: 'device-one',
+                      cameraSourceId: 'camera-one',
+                      deviceName: 'Hallway phone',
+                      sourceName: 'Entry view',
+                      eventType: 'camera_updated',
+                      occurredAt,
+                      success: true,
+                      metadata: {},
+                    },
+                  ],
+                  total: 1,
+                }),
+            }
+          : response([]),
+      ),
+    );
+    vi.stubGlobal('fetch', fetch);
+    const onCamera = vi.fn();
+    render(
+      <MotionEventList
+        {...props}
+        onCamera={onCamera}
+        includeHouseholdActivity
+      />,
+    );
+    expect(await screen.findByText('Camera updated')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Filter activity by camera'), {
+      target: { value: 'camera-one' },
+    });
+    await waitFor(() =>
+      expect(
+        fetch.mock.calls.some(
+          ([url]) =>
+            url.startsWith('/api/activity?') &&
+            url.includes('cameraId=camera-one'),
+        ),
+      ).toBe(true),
+    );
+    expect(await screen.findByText('Camera updated')).toBeVisible();
+    fireEvent.click(screen.getByText('Camera updated'));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Entry view');
+    expect(screen.getByRole('dialog')).toHaveTextContent('owner@example.com');
+    fireEvent.click(screen.getByRole('button', { name: 'Open Hallway phone' }));
+    expect(onCamera).toHaveBeenCalledWith('camera-one');
+  });
+
+  it('labels motion from the API as motion regardless of its event ID', async () => {
+    const fetch = vi.fn().mockResolvedValue(response([event('ab')]));
+    vi.stubGlobal('fetch', fetch);
+
+    render(<MotionEventList {...props} />);
+
+    await screen.findByText('ab');
+    expect(screen.getByText('Motion detected')).toBeVisible();
+    expect(screen.queryByText('Animal detected')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('ab'));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Motion intensity');
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('Animal detected');
+  });
+
   it('loads older events with stable filters, groups by day, and opens the source camera', async () => {
     const fetch = vi
       .fn<
@@ -59,10 +197,8 @@ describe('Activity timeline', () => {
     render(<MotionEventList {...props} />);
     await screen.findByText('newest');
     expect(screen.getAllByRole('option').length).toBeGreaterThan(0);
-    
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Load more' }),
-    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
     await screen.findByText('older');
     expect(screen.getAllByRole('region').length).toBeGreaterThan(0);
     const first = new URL(fetch.mock.calls[0]![0], 'https://beacon.test');
@@ -71,11 +207,9 @@ describe('Activity timeline', () => {
       first.searchParams.get('since'),
     );
     expect(second.searchParams.get('cursor')).toBe('page-two');
-    
+
     fireEvent.click(screen.getByText('newest'));
-    fireEvent.click(
-      screen.getAllByRole('button', { name: /Open / })[0]!,
-    );
+    fireEvent.click(screen.getAllByRole('button', { name: /Open / })[0]!);
     expect(props.onCamera).toHaveBeenCalledWith('camera-one');
   });
 
@@ -96,7 +230,7 @@ describe('Activity timeline', () => {
     view.rerender(<MotionEventList {...props} refreshRevision={1} />);
     await screen.findByText('new');
     expect(screen.queryByText('old')).not.toBeInTheDocument();
-    
+
     view.rerender(
       <MotionEventList {...props} refreshRevision={2} clearRevision={1} />,
     );
@@ -121,7 +255,7 @@ describe('Activity timeline', () => {
       .mockResolvedValueOnce(response([]));
     vi.stubGlobal('fetch', fetch);
     render(<MotionEventList {...props} />);
-    fireEvent.change(screen.getByLabelText('Filter motion events by camera'), {
+    fireEvent.change(screen.getByLabelText('Filter activity by camera'), {
       target: { value: 'camera-two' },
     });
     await screen.findByText(/No activity matches these filters./);
@@ -131,7 +265,7 @@ describe('Activity timeline', () => {
       await Promise.resolve();
     });
     expect(screen.queryByText('stale')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Filter motion events by camera')).toHaveValue(
+    expect(screen.getByLabelText('Filter activity by camera')).toHaveValue(
       'camera-two',
     );
     expect(fetch.mock.calls[1]![0]).toContain('cameraId=camera-two');
@@ -151,9 +285,7 @@ describe('Activity timeline', () => {
     vi.stubGlobal('fetch', fetch);
     render(<MotionEventList {...props} />);
     await screen.findByText('first');
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Load more' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
     await screen.findByRole('alert');
     expect(screen.getByText('first')).toBeVisible();
     fireEvent.click(
@@ -184,15 +316,15 @@ describe('Activity timeline', () => {
     render(<MotionEventList {...props} />);
     await screen.findByText('saved');
     fireEvent.click(
-      screen.getByRole('button', { name: 'Clear activity history' }),
+      screen.getByRole('button', { name: 'Clear motion history' }),
     );
     expect(
-      await screen.findByText(/permanently deletes the event metadata/),
+      await screen.findByText(/permanently deletes motion event metadata/),
     ).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(fetch).toHaveBeenCalledTimes(1);
     fireEvent.click(
-      screen.getByRole('button', { name: 'Clear activity history' }),
+      screen.getByRole('button', { name: 'Clear motion history' }),
     );
     fireEvent.click(
       await screen.findByRole('button', { name: 'Clear history' }),

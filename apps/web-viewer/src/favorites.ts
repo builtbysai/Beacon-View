@@ -35,5 +35,7 @@ export function saveFavoriteDeviceIds(
       STORAGE_PREFIX + householdId,
       JSON.stringify(deviceIds),
     );
-  } catch {}
+  } catch {
+    // Favorites remain usable in memory when storage is unavailable.
+  }
 }

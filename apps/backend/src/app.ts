@@ -8,11 +8,16 @@ import { registerAuthenticationRoutes } from './authentication-routes.js';
 import { registerCameraManagementRoutes } from './camera-management-routes.js';
 import type { AppConfig } from './config.js';
 import { registerDeviceRuntimeRoutes } from './device-runtime-routes.js';
+import { DriveHealth } from './drive-connection-health.js';
+import { registerErrorHandling } from './error-handling.js';
 import { registerDriveRoutes } from './drive-routes.js';
 import { registerEnrollmentRoutes } from './enrollment-routes.js';
 import { registerGuestRoutes } from './guest-routes.js';
 import { RateLimiter } from './rate-limit.js';
-import { registerHouseholdEvents } from './household-events.js';
+import {
+  HouseholdEventHub,
+  registerHouseholdEvents,
+} from './household-events.js';
 import { createSessionAuth } from './session-auth.js';
 import { registerSignaling } from './signaling-route.js';
 import { registerServiceRoutes } from './service-routes.js';
@@ -41,6 +46,7 @@ export function createPostgresStore(config: AppConfig): PostgresStore {
 export function buildApp(
   config: AppConfig,
   suppliedStore?: MilestoneStore,
+  suppliedHouseholdEvents?: HouseholdEventHub,
 ): FastifyInstance {
   const app = Fastify({
     logger: {
@@ -54,6 +60,7 @@ export function buildApp(
           'req.body.token',
           'req.body.fid',
           'req.body.subscription',
+          'req.body.encryption.dataKey',
           'res.headers["set-cookie"]',
         ],
         censor: '[REDACTED]',
@@ -61,13 +68,19 @@ export function buildApp(
     },
     requestIdHeader: 'x-request-id',
   });
+  registerErrorHandling(app);
   const store = suppliedStore ?? createPostgresStore(config);
   const sessionAuth = createSessionAuth(config, store);
   const limiter = new RateLimiter();
 
   void app.register(cookie);
   void app.register(websocket, { options: { maxPayload: 1_100_000 } });
-  const householdEvents = registerHouseholdEvents(app, config, store);
+  const householdEvents = registerHouseholdEvents(
+    app,
+    config,
+    store,
+    suppliedHouseholdEvents,
+  );
   const signaling = registerSignaling(app, config, store, householdEvents);
   app.addHook('onClose', async () => store.close());
   app.addHook('onClose', () => limiter.close());
@@ -95,6 +108,7 @@ export function buildApp(
   });
   registerEnrollmentRoutes(app, {
     auth: sessionAuth,
+    config,
     householdEvents,
     limiter,
     signaling,
@@ -124,10 +138,15 @@ export function buildApp(
     limiter,
     store,
   });
-  registerDriveRoutes(app, { auth: sessionAuth, config, store });
+  // One Drive health tracker shared by status and recording routes, so a
+  // token confirmed by either is trusted by both (ADR 0086).
+  const driveHealth = new DriveHealth(store, config);
+  registerDriveRoutes(app, { auth: sessionAuth, config, driveHealth, store });
   registerRecordingRoutes(app, {
     auth: sessionAuth,
     config,
+    driveHealth,
+    limiter,
     signaling,
     store,
   });

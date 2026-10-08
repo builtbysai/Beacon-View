@@ -7,6 +7,7 @@ import {
 } from 'react';
 
 import { request } from './api';
+import { friendlyError } from './friendly-errors';
 import { Avatar } from './Avatar';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Icon } from './Icon';
@@ -118,7 +119,10 @@ export function HouseholdSharingSettings({
   useEffect(() => {
     void load().catch((caught) =>
       setError(
-        caught instanceof Error ? caught.message : 'Unable to load sharing',
+        friendlyError(
+          caught,
+          'Sharing settings couldn’t be loaded. Try again.',
+        ),
       ),
     );
     // refreshRevision is never read in the body -- it's here purely as a
@@ -131,8 +135,7 @@ export function HouseholdSharingSettings({
         sharing.members.filter((member) => member.status === 'active').length,
       );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sharing]);
+  }, [onMemberCountChange, sharing]);
 
   async function createInvitation(
     formData: FormData,
@@ -215,9 +218,7 @@ export function HouseholdSharingSettings({
       await load();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Unable to resend invitation',
+        friendlyError(caught, 'The invitation couldn’t be resent. Try again.'),
       );
     } finally {
       setBusy(false);
@@ -235,9 +236,10 @@ export function HouseholdSharingSettings({
       await load();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Unable to revoke invitation',
+        friendlyError(
+          caught,
+          'The invitation couldn’t be cancelled. Try again.',
+        ),
       );
     } finally {
       setBusy(false);
@@ -255,9 +257,7 @@ export function HouseholdSharingSettings({
       setConfirmRevoke(null);
       await load();
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : 'Unable to revoke access',
-      );
+      setError(friendlyError(caught, 'Access couldn’t be revoked. Try again.'));
     } finally {
       setBusy(false);
     }
@@ -275,7 +275,7 @@ export function HouseholdSharingSettings({
       await load();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Unable to remove member',
+        friendlyError(caught, 'That person couldn’t be removed. Try again.'),
       );
     } finally {
       setBusy(false);
@@ -293,9 +293,10 @@ export function HouseholdSharingSettings({
       await load();
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Unable to revoke guest link',
+        friendlyError(
+          caught,
+          'The guest link couldn’t be turned off. Try again.',
+        ),
       );
     } finally {
       setBusy(false);
@@ -343,7 +344,10 @@ export function HouseholdSharingSettings({
       data,
       kind: 'invitation',
     })) ?? []),
-    ...guestLinks.map((data): OutstandingShare => ({ data, kind: 'guestLink' })),
+    ...guestLinks.map((data): OutstandingShare => ({
+      data,
+      kind: 'guestLink',
+    })),
   ].sort(
     (a, b) =>
       new Date(b.data.createdAt).getTime() -
@@ -591,7 +595,10 @@ function JoinHouseholdDialog({
       await onJoin(code.trim());
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Unable to accept invitation',
+        friendlyError(
+          caught,
+          'That invitation couldn’t be accepted. Ask for a new one.',
+        ),
       );
       setBusy(false);
     }
@@ -663,7 +670,9 @@ function ResentInviteDialog({
 
   async function copy(value: string, label: string) {
     if (!navigator.clipboard) {
-      setError(`Clipboard access is unavailable. Select and copy the ${label}.`);
+      setError(
+        `Clipboard access is unavailable. Select and copy the ${label}.`,
+      );
       return;
     }
     try {
@@ -680,8 +689,7 @@ function ResentInviteDialog({
           <div>
             <h2 id="resent-invite-title">New invitation sent</h2>
             <p>
-              A fresh code was created for {email}; the old one no longer
-              works.
+              A fresh code was created for {email}; the old one no longer works.
             </p>
           </div>
           <button
@@ -771,7 +779,7 @@ function InvitePersonDialog({
       }
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Unable to send invitation',
+        friendlyError(caught, 'The invitation couldn’t be sent. Try again.'),
       );
     } finally {
       setBusy(false);
@@ -780,7 +788,9 @@ function InvitePersonDialog({
 
   async function copy(value: string, label: string) {
     if (!navigator.clipboard) {
-      setError(`Clipboard access is unavailable. Select and copy the ${label}.`);
+      setError(
+        `Clipboard access is unavailable. Select and copy the ${label}.`,
+      );
       return;
     }
     try {
@@ -841,8 +851,7 @@ function InvitePersonDialog({
             </div>
             {result.kind === 'invite' && (
               <p className="invite-result-code">
-                Or share the code:{' '}
-                <code>{result.code}</code>{' '}
+                Or share the code: <code>{result.code}</code>{' '}
                 <button
                   type="button"
                   className="quiet-button"
@@ -1142,7 +1151,7 @@ function ManageMemberDialog({
       onDismiss();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Unable to save camera access',
+        friendlyError(caught, 'Camera access couldn’t be saved. Try again.'),
       );
     } finally {
       setSaving(false);

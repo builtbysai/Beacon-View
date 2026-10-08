@@ -1,3 +1,4 @@
+import { type CameraUseCase, cameraUseCase } from './camera-use-case';
 import { useEffect, useRef, useState } from 'react';
 import { cameraStatus, type CameraAvailability } from './camera-status';
 import { Icon } from './Icon';
@@ -13,6 +14,7 @@ export interface TileCamera extends CameraAvailability {
   name: string;
   facing: string;
   platform: 'android' | 'browser';
+  useCase?: CameraUseCase;
   viewerCount: number;
   lastSeenAt: string | null;
   canRemove?: boolean;
@@ -37,6 +39,9 @@ export function CameraTile({
   onRename,
   onDelete,
   onLeave,
+  onContinueCamera,
+  previewOnHover = true,
+  conciseStatus = false,
 }: {
   camera: TileCamera;
   highlighted?: boolean;
@@ -47,21 +52,30 @@ export function CameraTile({
   onRename?: (camera: TileCamera, name: string) => void;
   onDelete?: (camera: TileCamera) => void;
   onLeave?: (camera: TileCamera) => void;
+  onContinueCamera?: () => void;
+  previewOnHover?: boolean;
+  conciseStatus?: boolean;
 }) {
   const state = cameraStatus(camera);
   const [previewing, setPreviewing] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const hoverTimer = useRef<number | null>(null);
-  const canPreview = state.available && hoverCapable();
+  const canPreview = previewOnHover && state.available && hoverCapable();
   const showRemove = Boolean(onDelete && camera.canRemove);
   const showLeave = Boolean(onLeave && camera.canLeave && !camera.canRemove);
-  const hasMenu = Boolean(onDevice || onReconnect || onRename || showRemove || showLeave);
+  const hasMenu = Boolean(
+    onDevice || onReconnect || onRename || showRemove || showLeave,
+  );
   const primaryName = groupedByHost ? camera.deviceName : camera.name;
   const secondaryStatus = state.available
-    ? 'Online · ready to view'
+    ? onContinueCamera
+      ? 'Camera running in this browser'
+      : 'Online · ready to view'
     : state.label === 'Privacy on'
       ? 'Online · privacy on'
-      : 'Offline · reconnect required';
+      : onContinueCamera
+        ? 'Stopped here · open Camera Mode to continue'
+        : 'Offline · check camera device';
 
   useEffect(
     () => () => {
@@ -110,9 +124,13 @@ export function CameraTile({
               className="camera-tile-placeholder"
               data-tone={state.tone}
               aria-hidden="true"
-            />
+            >
+              {conciseStatus && <Icon name="camera" />}
+            </span>
           )}
-          <span className={`camera-tile-status status-badge status-${state.tone}`}>
+          <span
+            className={`camera-tile-status status-badge status-${state.tone}`}
+          >
             {state.label}
           </span>
           {camera.viewerCount > 0 && (
@@ -153,13 +171,20 @@ export function CameraTile({
               </strong>
             )}
             <span className="camera-tile-secondary-status">
-              {camera.platform === 'android' ? 'Android device' : 'Browser'} · {secondaryStatus}
+              {camera.platform === 'android' ? 'Android device' : 'Browser'}
+              {camera.useCase && camera.useCase !== 'general' && (
+                <> · {cameraUseCase(camera.useCase).label}</>
+              )}
+              {!conciseStatus && <> · {secondaryStatus}</>}
             </span>
           </span>
         </div>
 
         {hasMenu && (
-          <OverflowMenu anchorClassName="overflow-menu-container" label={`${primaryName} options`}>
+          <OverflowMenu
+            anchorClassName="overflow-menu-container"
+            label={`${primaryName} options`}
+          >
             {(close) => (
               <>
                 <button
@@ -246,6 +271,16 @@ export function CameraTile({
           </OverflowMenu>
         )}
       </div>
+      {onContinueCamera && (
+        <button
+          className="camera-tile-resume"
+          type="button"
+          onClick={onContinueCamera}
+        >
+          <Icon name="camera" />{' '}
+          {state.available ? 'Open Camera Mode' : 'Continue as camera'}
+        </button>
+      )}
     </article>
   );
 }

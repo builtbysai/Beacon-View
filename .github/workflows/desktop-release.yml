@@ -1,0 +1,55 @@
+name: Desktop release builds
+
+# Builds the desktop app installers on each operating system (ADR 0083).
+# Manual only: it uses macOS and Windows runners, which cost more minutes.
+# Builds are unsigned until the owner provisions signing credentials.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win
+          - os: macos-latest
+            target: mac
+          - os: ubuntu-latest
+            target: linux
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    env:
+      # Never pick up a stray signing identity on the runner.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @beacon/desktop test
+      - run: pnpm --filter @beacon/desktop package:${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: beacon-desktop-${{ matrix.target }}
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/latest*.yml
+          if-no-files-found: error
+          retention-days: 14

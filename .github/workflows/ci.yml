@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# CI never launches Electron (the desktop unit tests are Electron-free), so
+# skip its ~100 MB runtime download on every install.
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -31,6 +36,38 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  sbom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+      - name: Install the locked dependency graph without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: beacon-secureview.cdx.json
+          upload-artifact: false
+      - name: Retain SBOM with this CI run
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: beacon-secureview-cyclonedx-sbom
+          path: beacon-secureview.cdx.json
+          if-no-files-found: error
+          retention-days: 90
 
   database:
     runs-on: ubuntu-24.04
@@ -67,8 +104,14 @@ jobs:
         run: pnpm --filter @beacon/backend db:check
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+      - name: Test migration schema contract extraction
+        run: pnpm --filter @beacon/backend db:verify:parser
       - name: Migrate the clean disposable database
         run: pnpm --filter @beacon/backend db:migrate
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+      - name: Verify the migrated schema independently
+        run: pnpm --filter @beacon/backend db:verify
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
       - name: Verify migration reruns are safe

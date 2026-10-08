@@ -64,7 +64,7 @@ export function CameraBrowser<T extends SearchableCamera>({
     if (filter === 'all') url.searchParams.delete('availability');
     else url.searchParams.set('availability', filter);
     window.history.replaceState(
-      {},
+      window.history.state,
       '',
       `${url.pathname}${url.search}${url.hash}`,
     );

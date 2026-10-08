@@ -42,6 +42,15 @@ const subscriptionSchema = z.discriminatedUnion('channel', [
         .strict(),
     })
     .strict(),
+  // The desktop app (ADR 0083): alerts arrive over this session's own
+  // authenticated realtime connection, so there is no provider token.
+  z
+    .object({
+      channel: z.literal('desktop'),
+      installationId: z.string().uuid(),
+      deviceLabel: z.string().trim().min(1).max(80),
+    })
+    .strict(),
 ]);
 const subscriptionParameterSchema = z.object({
   subscriptionId: z.string().uuid(),
@@ -65,6 +74,8 @@ export function registerNotificationRoutes(
   },
 ): void {
   const { auth, config, limiter, store } = dependencies;
+  const { authenticateHouseholdAdmin, authenticateHouseholdAdminStateChange } =
+    auth;
 
   app.get('/api/notification-config/web-push-key', async (request, reply) => {
     const session = await auth.authenticate(request, reply);
@@ -114,7 +125,9 @@ export function registerNotificationRoutes(
     const providerMaterial =
       parsed.data.channel === 'fcm'
         ? (parsed.data.token ?? parsed.data.fid!)
-        : JSON.stringify(parsed.data.subscription);
+        : parsed.data.channel === 'desktop'
+          ? session.id
+          : JSON.stringify(parsed.data.subscription);
     const id = await store.upsertNotificationSubscription({
       channel: parsed.data.channel,
       consentedAt: new Date(),
@@ -162,15 +175,18 @@ export function registerNotificationRoutes(
   );
 
   app.get('/api/notification-preferences', async (request, reply) => {
-    const session = await auth.authenticate(request, reply);
+    const session = await authenticateHouseholdAdmin(request, reply);
     if (!session) return;
     return {
-      preferences: await store.listNotificationPreferences(session.userId),
+      preferences: await store.listNotificationPreferences(
+        session.userId,
+        session.householdId,
+      ),
     };
   });
 
   app.put('/api/notification-preferences/:deviceId', async (request, reply) => {
-    const session = await auth.authenticateStateChange(request, reply);
+    const session = await authenticateHouseholdAdminStateChange(request, reply);
     if (!session) return;
     const parameters = preferenceParameterSchema.safeParse(request.params);
     const body = preferenceSchema.safeParse(request.body);
@@ -178,6 +194,7 @@ export function registerNotificationRoutes(
       return reply.code(400).send({ error: 'Invalid notification preference' });
     const preference = await store.updateNotificationPreference({
       userId: session.userId,
+      householdId: session.householdId,
       publicDeviceId: parameters.data.deviceId,
       ...body.data,
     });

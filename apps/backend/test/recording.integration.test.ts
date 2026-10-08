@@ -57,6 +57,15 @@ describe.skipIf(!store)('recording persistence', () => {
       await store!.listRecordings(randomUUID(), [camera!.cameraId]),
     ).toHaveLength(0);
 
+    await store!.pool.query(`UPDATE recordings SET updated_at=$2 WHERE id=$1`, [
+      recording!.id,
+      new Date(Date.now() - 16 * 60_000),
+    ]);
+    expect(await store!.recoverStaleRecordings(new Date())).toBe(1);
+    expect(
+      await store!.listRecordings(owner.householdId, [camera!.cameraId]),
+    ).toEqual([expect.objectContaining({ status: 'failed' })]);
+
     expect(await store!.deleteRecording(owner.householdId, recording!.id)).toBe(
       true,
     );
@@ -73,6 +82,9 @@ describe.skipIf(!store)('recording persistence', () => {
       byteSize: 1_024,
       checksumSha256: 'a'.repeat(64),
       durationMs: 5_000,
+      encryptionDataKeyCiphertext: Buffer.alloc(48),
+      encryptionDataKeyIv: Buffer.alloc(12),
+      encryptionIv: Buffer.alloc(12),
       householdId: owner.householdId,
       mimeType: 'video/webm',
       recordingId: uploaded!.id,
@@ -149,6 +161,9 @@ describe.skipIf(!store)('recording persistence', () => {
       checksumSha256: 'b'.repeat(64),
       credentialHash: hashSecret('device-recording-credential'),
       durationMs: 8_000,
+      encryptionDataKeyCiphertext: Buffer.alloc(48),
+      encryptionDataKeyIv: Buffer.alloc(12),
+      encryptionIv: Buffer.alloc(12),
       mimeType: 'video/mp4',
       recordingId: requested!.id,
     });
@@ -198,6 +213,9 @@ describe.skipIf(!store)('recording persistence', () => {
       checksumSha256: 'c'.repeat(64),
       credentialHash: hashSecret('device-recording-credential'),
       durationMs: 3_000,
+      encryptionDataKeyCiphertext: Buffer.alloc(48),
+      encryptionDataKeyIv: Buffer.alloc(12),
+      encryptionIv: Buffer.alloc(12),
       mimeType: 'video/mp4',
       recordingId: second!.id,
     });

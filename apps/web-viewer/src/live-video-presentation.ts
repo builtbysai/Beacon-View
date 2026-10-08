@@ -69,7 +69,13 @@ export function talkStatusText(state: Exclude<TalkState, 'idle'>): string {
     speaking: 'Speaking · microphone on',
     busy: 'Another viewer is talking.',
     recovering: 'Microphone off · reconnecting',
-    unavailable: 'Talk unavailable.',
+    unavailable:
+      'Talk isn’t available right now. Wait for the video to connect, then try again.',
+    not_allowed: 'Your access doesn’t include talking through this camera.',
+    mic_blocked:
+      'Beacon can’t use your microphone. Allow microphone access in your browser’s site settings, then tap Talk again.',
+    mic_failed:
+      'Your microphone couldn’t start. Check that it’s connected and not in use by another app, or choose another in Settings → Audio.',
   };
   return messages[state];
 }

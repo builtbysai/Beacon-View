@@ -25,7 +25,11 @@ function delivery(
 describe('runNotificationSweep', () => {
   it('logs a safe per-run summary broken down by outcome, channel and category', async () => {
     const deliveries: NotificationDelivery[] = [
-      delivery({ channel: 'fcm', id: 'd1', safePayload: { category: 'motion' } }),
+      delivery({
+        channel: 'fcm',
+        id: 'd1',
+        safePayload: { category: 'motion' },
+      }),
       delivery({
         channel: 'fcm',
         id: 'd2',
@@ -70,8 +74,20 @@ describe('runNotificationSweep', () => {
     expect(sender.send).toHaveBeenCalledTimes(4);
     expect(markDelivered).toHaveBeenCalledTimes(2);
     expect(markFailed).toHaveBeenCalledTimes(2);
-    expect(markFailed).toHaveBeenCalledWith('d2', 'subscription-id', now, false, undefined);
-    expect(markFailed).toHaveBeenCalledWith('d3', 'subscription-id', now, true, undefined);
+    expect(markFailed).toHaveBeenCalledWith(
+      'd2',
+      'subscription-id',
+      now,
+      false,
+      undefined,
+    );
+    expect(markFailed).toHaveBeenCalledWith(
+      'd3',
+      'subscription-id',
+      now,
+      true,
+      undefined,
+    );
 
     expect(info).toHaveBeenCalledTimes(1);
     const [summary, message] = info.mock.calls[0] as [
@@ -84,10 +100,13 @@ describe('runNotificationSweep', () => {
       byChannel: { fcm: 2, web_push: 2 },
       delivered: 2,
       deliveryCount: 4,
+      expired: 0,
       failedPermanent: 1,
       failedRetryable: 1,
     });
-    expect(JSON.stringify(summary)).not.toContain('super-secret-provider-token');
+    expect(JSON.stringify(summary)).not.toContain(
+      'super-secret-provider-token',
+    );
   });
 
   it('does not log anything for an empty sweep', async () => {
@@ -107,5 +126,33 @@ describe('runNotificationSweep', () => {
     );
 
     expect(info).not.toHaveBeenCalled();
+  });
+
+  it('ends an expired desktop alert without treating it as a failure', async () => {
+    const markExpired = vi.fn(() => Promise.resolve());
+    const markFailed = vi.fn(() => Promise.resolve());
+    const store = {
+      claimNotificationDeliveries: () =>
+        Promise.resolve([delivery({ channel: 'desktop', id: 'd1' })]),
+      markNotificationExpired: markExpired,
+      markNotificationFailed: markFailed,
+      scanNotificationPresence: () => Promise.resolve(),
+    } as unknown as MilestoneStore;
+    const sender = {
+      send: () =>
+        Promise.resolve({ expired: true, permanent: false, success: false }),
+    };
+    const info = vi.fn();
+    const now = new Date('2026-10-07T12:00:00Z');
+    await runNotificationSweep(
+      store,
+      sender,
+      { info } as unknown as FastifyBaseLogger,
+      now,
+      120,
+    );
+    expect(markExpired).toHaveBeenCalledWith('d1', now);
+    expect(markFailed).not.toHaveBeenCalled();
+    expect(info.mock.calls[0]?.[0]).toMatchObject({ expired: 1 });
   });
 });

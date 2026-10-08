@@ -40,7 +40,7 @@
   text-decoration: none;
   color: var(--ink);
   font-weight: 800;
-  letter-spacing: -.025em;
+  letter-spacing: -0.025em;
 }
 
 .contact-v4 .brand svg {
@@ -49,7 +49,7 @@
 }
 
 .contact-v4 .back {
-  font-size: .8rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
   text-decoration: none;
   font-weight: 650;
@@ -66,7 +66,7 @@
 .contact-v4 .main {
   align-self: center;
   display: grid;
-  grid-template-columns: minmax(280px, .8fr) minmax(440px, 1.2fr);
+  grid-template-columns: minmax(280px, 0.8fr) minmax(440px, 1.2fr);
   gap: clamp(50px, 8vw, 105px);
   align-items: center;
   padding-block: clamp(25px, 5dvh, 60px);
@@ -75,23 +75,23 @@
 .contact-v4 .eyebrow {
   margin: 0 0 13px;
   color: var(--accent-base);
-  font-size: .7rem;
+  font-size: 0.7rem;
   font-weight: 800;
-  letter-spacing: .13em;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
 }
 
 .contact-v4 h1 {
   font-size: clamp(2.8rem, 5vw, 5rem);
-  line-height: .95;
-  letter-spacing: -.06em;
+  line-height: 0.95;
+  letter-spacing: -0.06em;
   margin: 0;
   max-width: 500px;
   color: var(--text-primary);
 }
 
 .contact-v4 .lede {
-  font-size: clamp(.96rem, 1.15vw, 1.06rem);
+  font-size: clamp(0.96rem, 1.15vw, 1.06rem);
   line-height: 1.65;
   color: var(--muted);
   max-width: 440px;
@@ -120,11 +120,11 @@
   color: var(--accent-base);
   display: grid;
   place-items: center;
-  font-size: .8rem;
+  font-size: 0.8rem;
 }
 
 .contact-v4 .option h2 {
-  font-size: .84rem;
+  font-size: 0.84rem;
   margin: 1px 0 3px;
   color: var(--text-primary);
   font-weight: 700;
@@ -132,7 +132,7 @@
 }
 
 .contact-v4 .option p {
-  font-size: .75rem;
+  font-size: 0.75rem;
   line-height: 1.45;
   color: var(--muted);
   margin: 0;
@@ -156,13 +156,13 @@
 
 .contact-v4 .cardhead h2 {
   font-size: 1.25rem;
-  letter-spacing: -.025em;
+  letter-spacing: -0.025em;
   margin: 0 0 5px;
   color: var(--text-primary);
 }
 
 .contact-v4 .cardhead p {
-  font-size: .78rem;
+  font-size: 0.78rem;
   color: var(--muted);
   margin: 0;
 }
@@ -179,13 +179,15 @@
 
 .contact-v4 label {
   display: block;
-  font-size: .75rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 7px;
 }
 
-.contact-v4 input, .contact-v4 select, .contact-v4 textarea {
+.contact-v4 input,
+.contact-v4 select,
+.contact-v4 textarea {
   width: 100%;
   border: 1px solid var(--border-default);
   border-radius: 9px;
@@ -193,12 +195,13 @@
   color: var(--ink);
   outline: none;
   padding: 0 11px;
-  transition: .15s;
+  transition: 0.15s;
   font-family: inherit;
   font-size: inherit;
 }
 
-.contact-v4 input, .contact-v4 select {
+.contact-v4 input,
+.contact-v4 select {
   height: 42px;
 }
 
@@ -210,10 +213,12 @@
   line-height: 1.5;
 }
 
-.contact-v4 input:focus, .contact-v4 select:focus, .contact-v4 textarea:focus {
+.contact-v4 input:focus,
+.contact-v4 select:focus,
+.contact-v4 textarea:focus {
   background: var(--bg-surface);
   border-color: var(--accent-base);
-  box-shadow: 0 0 0 3px rgba(7, 152, 223, .12);
+  box-shadow: 0 0 0 3px rgba(7, 152, 223, 0.12);
 }
 
 .contact-v4 .actions {
@@ -229,7 +234,7 @@
   align-items: center;
   gap: 7px;
   color: var(--text-muted);
-  font-size: .7rem;
+  font-size: 0.7rem;
   line-height: 1.4;
 }
 
@@ -245,7 +250,7 @@
   color: var(--action-text);
   padding: 0 17px;
   font-weight: 750;
-  font-size: .8rem;
+  font-size: 0.8rem;
   cursor: pointer;
   white-space: nowrap;
   font-family: inherit;
@@ -260,8 +265,9 @@
   cursor: not-allowed;
 }
 
-.contact-v4 .send:focus-visible, .contact-v4 .back:focus-visible {
-  outline: 3px solid rgba(7, 152, 223, .2);
+.contact-v4 .send:focus-visible,
+.contact-v4 .back:focus-visible {
+  outline: 3px solid rgba(7, 152, 223, 0.2);
   outline-offset: 2px;
 }
 
@@ -273,7 +279,7 @@
 
 .contact-v4 .sent.show {
   display: block;
-  animation: state-enter .2s ease-out both;
+  animation: state-enter 0.2s ease-out both;
 }
 
 .contact-v4 .form.hide {
@@ -281,12 +287,18 @@
 }
 
 .contact-v4 .form:not(.hide) {
-  animation: state-enter .2s ease-out both;
+  animation: state-enter 0.2s ease-out both;
 }
 
 @keyframes state-enter {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .contact-v4 .check {
@@ -308,7 +320,7 @@
 }
 
 .contact-v4 .sent p {
-  font-size: .84rem;
+  font-size: 0.84rem;
   color: var(--muted);
   line-height: 1.55;
   margin: 0 auto 20px;
@@ -333,7 +345,7 @@
   border-top: 1px solid var(--line);
   padding-top: 14px;
   color: var(--text-muted);
-  font-size: .72rem;
+  font-size: 0.72rem;
 }
 
 .contact-v4 .links {
@@ -347,35 +359,93 @@
   font-weight: 650;
 }
 
-@media(max-width:800px) {
-  .contact-v4 .main { grid-template-columns: 1fr; gap: 30px; align-self: start; padding-block: 40px; }
-  .contact-v4 .intro { max-width: 650px; }
-  .contact-v4 .options { display: none; }
-  .contact-v4 .card { width: min(560px, 100%); }
+@media (max-width: 800px) {
+  .contact-v4 .main {
+    grid-template-columns: 1fr;
+    gap: 30px;
+    align-self: start;
+    padding-block: 40px;
+  }
+  .contact-v4 .intro {
+    max-width: 650px;
+  }
+  .contact-v4 .options {
+    display: none;
+  }
+  .contact-v4 .card {
+    width: min(560px, 100%);
+  }
 }
 
-@media(max-width:520px) {
-  .contact-v4 { padding: 16px; }
-  .contact-v4 .main { padding-block: 28px; gap: 24px; }
-  .contact-v4 h1 { font-size: clamp(2.5rem, 13vw, 3.6rem); }
-  .contact-v4 .lede { margin-top: 14px; }
-  .contact-v4 .card { border: 0; box-shadow: none; background: transparent; padding: 0; border-radius: 0; }
-  .contact-v4 .twocol { grid-template-columns: 1fr; }
-  .contact-v4 .actions { align-items: stretch; flex-direction: column; }
-  .contact-v4 .send { width: 100%; }
-  .contact-v4 .safety { order: 2; }
-  .contact-v4 footer { align-items: flex-start; flex-direction: column; }
+@media (max-width: 520px) {
+  .contact-v4 {
+    padding: 16px;
+  }
+  .contact-v4 .main {
+    padding-block: 28px;
+    gap: 24px;
+  }
+  .contact-v4 h1 {
+    font-size: clamp(2.5rem, 13vw, 3.6rem);
+  }
+  .contact-v4 .lede {
+    margin-top: 14px;
+  }
+  .contact-v4 .card {
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+  }
+  .contact-v4 .twocol {
+    grid-template-columns: 1fr;
+  }
+  .contact-v4 .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .contact-v4 .send {
+    width: 100%;
+  }
+  .contact-v4 .safety {
+    order: 2;
+  }
+  .contact-v4 footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
-@media(max-height:720px) and (min-width:801px) {
-  .contact-v4 { padding-block: 12px; }
-  .contact-v4 .main { padding-block: 12px; }
-  .contact-v4 .intro h1 { font-size: clamp(2.5rem, 4.2vw, 4rem); }
-  .contact-v4 .lede { margin-top: 12px; }
-  .contact-v4 .options { margin-top: 17px; }
-  .contact-v4 .option { padding: 10px 0; }
-  .contact-v4 .card { padding: 22px 28px; }
-  .contact-v4 .field { margin-bottom: 11px; }
-  .contact-v4 textarea { min-height: 90px; }
-  .contact-v4 .cardhead { margin-bottom: 16px; }
+@media (max-height: 720px) and (min-width: 801px) {
+  .contact-v4 {
+    padding-block: 12px;
+  }
+  .contact-v4 .main {
+    padding-block: 12px;
+  }
+  .contact-v4 .intro h1 {
+    font-size: clamp(2.5rem, 4.2vw, 4rem);
+  }
+  .contact-v4 .lede {
+    margin-top: 12px;
+  }
+  .contact-v4 .options {
+    margin-top: 17px;
+  }
+  .contact-v4 .option {
+    padding: 10px 0;
+  }
+  .contact-v4 .card {
+    padding: 22px 28px;
+  }
+  .contact-v4 .field {
+    margin-bottom: 11px;
+  }
+  .contact-v4 textarea {
+    min-height: 90px;
+  }
+  .contact-v4 .cardhead {
+    margin-bottom: 16px;
+  }
 }

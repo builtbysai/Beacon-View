@@ -1,6 +1,7 @@
 package com.beaconsecureview.camera
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -15,11 +16,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -28,12 +26,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalView
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -45,7 +46,7 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 
 class MainActivity : ComponentActivity() {
     private var inboundPairingCode by mutableStateOf<String?>(null)
-    private var inboundGoogleAuthCode by mutableStateOf<String?>(null)
+    private var inboundGoogleAuthCode by mutableStateOf<MobileGoogleAuthResult?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -131,12 +132,23 @@ private fun BeaconCameraApp(
     installationId: String,
     inboundPairingCode: String?,
     onInboundPairingCodeHandled: () -> Unit,
-    inboundGoogleAuthCode: String?,
+    inboundGoogleAuthCode: MobileGoogleAuthResult?,
     onInboundGoogleAuthCodeHandled: () -> Unit,
 ) {
     val context = LocalContext.current
     val navigationPreferences =
         remember { context.getSharedPreferences("beacon_navigation", Context.MODE_PRIVATE) }
+    val appearancePreferences =
+        remember { context.getSharedPreferences("beacon_appearance", Context.MODE_PRIVATE) }
+    var themePreference by remember {
+        mutableStateOf(
+            runCatching {
+                BeaconThemePreference.valueOf(
+                    appearancePreferences.getString("theme", BeaconThemePreference.System.name)!!,
+                )
+            }.getOrDefault(BeaconThemePreference.System),
+        )
+    }
     var credential by remember { mutableStateOf(credentialStore.read()) }
     var cameraSetupStarted by rememberSaveable {
         mutableStateOf(
@@ -230,6 +242,40 @@ private fun BeaconCameraApp(
             }
         }
     }
+    fun pairSignedInCamera(sessionToken: String) {
+        if (busy) return
+        busy = true
+        pairingState = PairingLifecycle.Waiting
+        cameraSetupStarted = true
+        navigationPreferences.edit().putBoolean("camera_setup_started", true).apply()
+        message = "Preparing secure camera setup…"
+        selectMonitor(false)
+        scope.launch {
+            val result =
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        val code = api.createPairingCode(sessionToken)
+                        api.register(installationId, "Android Camera", code)
+                    }
+                }
+            result.onSuccess {
+                credentialStore.save(it)
+                pairingState = PairingLifecycle.Accepted
+                pairingCode = ""
+                message = ""
+                busy = false
+            }.onFailure {
+                pairingState = PairingLifecycle.Pending
+                message = it.userFacingMessage("Beacon could not set up this camera. Try again.")
+                busy = false
+            }
+            result.getOrNull()?.let {
+                delay(900)
+                credential = it
+                pairingState = PairingLifecycle.Completed
+            }
+        }
+    }
     val permissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             cameraPermission = it
@@ -291,13 +337,19 @@ private fun BeaconCameraApp(
         }
     }
 
-    BeaconTheme(darkCameraSurface = !monitorMode && credential != null) {
+    BeaconTheme(
+        darkCameraSurface = !monitorMode && credential != null,
+        preference = themePreference,
+    ) {
         Surface(modifier = Modifier.fillMaxSize()) {
             if (monitorMode) {
                 MonitorHome(
                     api = api,
                     sessionStore = accountSessionStore,
                     onCameraMode = { selectMonitor(false) },
+                    onSetUpThisDevice = {
+                        if (credential == null) pairSignedInCamera(it) else selectMonitor(false)
+                    },
                     onAccountDeleted = {
                         CameraForegroundService.stop(context)
                         credentialStore.clear()
@@ -312,6 +364,11 @@ private fun BeaconCameraApp(
                                 Uri.parse("${BuildConfig.BEACON_API_URL.trimEnd('/')}/api/auth/google?platform=android"),
                             ).addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY),
                         )
+                    },
+                    themePreference = themePreference,
+                    onThemePreferenceChange = {
+                        themePreference = it
+                        appearancePreferences.edit().putString("theme", it.name).apply()
                     },
                 )
             } else when {
@@ -459,50 +516,34 @@ internal fun shouldShowWelcome(
 ): Boolean = !paired && !monitorMode && !cameraSetupStarted
 
 @Composable
+@Suppress("DEPRECATION")
 private fun BeaconTheme(
     darkCameraSurface: Boolean,
+    preference: BeaconThemePreference,
     content: @Composable () -> Unit,
 ) {
-    val useDarkColors = darkCameraSurface || isSystemInDarkTheme()
-    val light =
-        lightColorScheme(
-            primary = Color(0xFF0369A1),
-            onPrimary = Color.White,
-            primaryContainer = Color(0xFFE0F2FE),
-            onPrimaryContainer = Color(0xFF075985),
-            secondary = Color(0xFF475569),
-            background = Color(0xFFF5F7FB),
-            surface = Color.White,
-            surfaceVariant = Color(0xFFF1F5F9),
-            onSurface = Color(0xFF0F172A),
-            onSurfaceVariant = Color(0xFF48566B),
-            outline = Color(0xFFCBD3DD),
-            outlineVariant = Color(0xFFE3E8F0),
-            error = Color(0xFFB91C1C),
-        )
-    val dark =
-        darkColorScheme(
-            primary = Color(0xFF38BDF8),
-            onPrimary = Color(0xFF04101C),
-            primaryContainer = Color(0xFF0C4A6E),
-            onPrimaryContainer = Color(0xFFBAE6FD),
-            secondary = Color(0xFFA7B3C8),
-            background = Color(0xFF090D16),
-            surface = Color(0xFF111A2C),
-            surfaceVariant = Color(0xFF152035),
-            onSurface = Color(0xFFEEF2F8),
-            onSurfaceVariant = Color(0xFFA7B3C8),
-            outline = Color(0xFF2C3D5C),
-            outlineVariant = Color(0xFF21304A),
-            error = Color(0xFFF87171),
-        )
+    val useDarkColors =
+        darkCameraSurface ||
+            when (preference) {
+                BeaconThemePreference.Light -> false
+                BeaconThemePreference.System -> isSystemInDarkTheme()
+                BeaconThemePreference.Dark -> true
+            }
+    val colors = if (useDarkColors) BeaconDarkColorScheme else BeaconLightColorScheme
+    val view = LocalView.current
+    SideEffect {
+        val window = (view.context as? Activity)?.window ?: return@SideEffect
+        window.statusBarColor = colors.background.toArgb()
+        window.navigationBarColor = colors.background.toArgb()
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = !useDarkColors
+            isAppearanceLightNavigationBars = !useDarkColors
+        }
+    }
     MaterialTheme(
-        colorScheme = if (useDarkColors) dark else light,
-        typography =
-            Typography(
-                headlineLarge = MaterialTheme.typography.headlineLarge.copy(lineHeight = 38.sp),
-                bodyLarge = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
-            ),
+        colorScheme = colors,
+        typography = BeaconTypography,
+        shapes = BeaconShapes,
         content = content,
     )
 }

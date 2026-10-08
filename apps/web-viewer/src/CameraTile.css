@@ -5,7 +5,9 @@
   border: 1px solid var(--border-default);
   border-radius: 14px;
   overflow: hidden;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
   position: relative;
 }
 
@@ -60,7 +62,7 @@
 }
 
 /* If tone is live, give it a darker preview background to match mockup */
-.camera-tile-placeholder[data-tone="live"] {
+.camera-tile-placeholder[data-tone='live'] {
   background-color: #172437;
   color: #dce5ef;
 }
@@ -160,8 +162,6 @@
   margin: 0;
 }
 
-
-
 .overflow-menu-container button[aria-haspopup] {
   width: 32px;
   height: 32px;
@@ -186,8 +186,6 @@
 .camera-tile-menu-danger:hover {
   background-color: var(--error-subtle) !important;
 }
-
-
 
 .camera-tile-identity-wrapper {
   background: none;
@@ -217,4 +215,26 @@
 
 .camera-tile-open:disabled {
   cursor: default;
+}
+.camera-tile-resume {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 12px 12px;
+  min-height: 38px;
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+  background: var(--bg-canvas-hover);
+  color: var(--text-primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+.camera-tile-resume svg {
+  width: 16px;
+  height: 16px;
+}
+.camera-tile-resume:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 2px;
 }

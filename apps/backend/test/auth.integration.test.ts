@@ -197,6 +197,21 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
        VALUES ($1,'Rear camera','rear','rear') RETURNING public_camera_id AS "cameraId"`,
       [device.rows[0]!.id],
     );
+    const ungrantedSource = await store!.pool.query<{ cameraId: string }>(
+      `INSERT INTO camera_sources (device_id, display_name, source_key, facing)
+       VALUES ($1,'Front camera','front','front') RETURNING public_camera_id AS "cameraId"`,
+      [device.rows[0]!.id],
+    );
+    for (const cameraId of [
+      source.rows[0]!.cameraId,
+      ungrantedSource.rows[0]!.cameraId,
+    ]) {
+      await store!.pool.query(
+        `INSERT INTO motion_events (camera_source_id, confidence, occurred_at)
+         SELECT id, 0.8, now() FROM camera_sources WHERE public_camera_id = $1`,
+        [cameraId],
+      );
+    }
 
     const memberRegistration = await app!.inject({
       method: 'POST',
@@ -295,6 +310,43 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     expect(cameras.json<{ cameras: Array<{ id: string }> }>().cameras).toEqual([
       expect.objectContaining({ id: source.rows[0]!.cameraId }),
     ]);
+    const history = (cookie: string, query = '') =>
+      app!.inject({
+        headers: { cookie },
+        method: 'GET',
+        url: `/api/motion-events${query}`,
+      });
+    const viewerHistory = await history(memberCredentials.cookie);
+    expect(viewerHistory.statusCode).toBe(200);
+    expect(
+      viewerHistory.json<{ events: Array<{ cameraId: string }> }>().events,
+    ).toEqual([
+      expect.objectContaining({ cameraId: source.rows[0]!.cameraId }),
+    ]);
+    const ungrantedHistory = await history(
+      memberCredentials.cookie,
+      `?cameraId=${ungrantedSource.rows[0]!.cameraId}`,
+    );
+    expect(ungrantedHistory.json<{ events: unknown[] }>().events).toEqual([]);
+    expect(
+      (await history(ownerCredentials.cookie)).json<{ events: unknown[] }>()
+        .events,
+    ).toHaveLength(2);
+    const removedGrant = await app!.inject({
+      headers: {
+        cookie: ownerCredentials.cookie,
+        origin: config!.WEB_ORIGIN,
+        'x-csrf-token': ownerCredentials.csrf,
+      },
+      method: 'PUT',
+      payload: { grants: [] },
+      url: `/api/household/members/${member!.id}/grants`,
+    });
+    expect(removedGrant.statusCode).toBe(204);
+    expect(
+      (await history(memberCredentials.cookie)).json<{ events: unknown[] }>()
+        .events,
+    ).toEqual([]);
 
     const viewer = await store!.findUserByEmail('viewer@example.com');
     const ownerSession = await store!.pool.query<{ id: string }>(
@@ -741,6 +793,55 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     expect(revoked.statusCode).toBe(401);
   });
 
+  it('registers Android monitor accounts with revocable bearer sessions', async () => {
+    const invalid = await app!.inject({
+      method: 'POST',
+      payload: { email: 'mobile-new@example.com', password: 'too short' },
+      remoteAddress: '127.0.0.21',
+      url: '/api/mobile/auth/register',
+    });
+    expect(invalid.statusCode).toBe(400);
+
+    const registration = await app!.inject({
+      headers: { 'user-agent': 'Beacon Android test' },
+      method: 'POST',
+      payload: {
+        email: ' Mobile-New@Example.com ',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.21',
+      url: '/api/mobile/auth/register',
+    });
+    expect(registration.statusCode).toBe(201);
+    expect(registration.headers['set-cookie']).toBeUndefined();
+    const body = registration.json<{
+      sessionToken: string;
+      user: { email: string; id: string };
+    }>();
+    expect(body.sessionToken.length).toBeGreaterThan(32);
+    expect(body.user.email).toBe('mobile-new@example.com');
+
+    const account = await app!.inject({
+      headers: { authorization: `Bearer ${body.sessionToken}` },
+      method: 'GET',
+      url: '/api/auth/me',
+    });
+    expect(account.statusCode).toBe(200);
+    expect(account.json<{ user: { id: string } }>().user.id).toBe(body.user.id);
+
+    const duplicate = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'mobile-new@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.21',
+      url: '/api/mobile/auth/register',
+    });
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json()).toEqual({ error: 'Unable to create account' });
+  });
+
   it('immediately rejects idle-expired sessions', async () => {
     const registration = await app!.inject({
       method: 'POST',
@@ -1035,22 +1136,31 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     const camera = owned.cameras[0]!.publicCameraId;
     const quietCamera = owned.cameras[1]!.publicCameraId;
     const foreignCamera = foreign.cameras[0]!.publicCameraId;
+    // Relative to today: motion history only returns events inside the
+    // household's retention window (30 days by default), so fixed calendar
+    // dates silently age out of every query.
+    const isoDay = (daysAgo: number) =>
+      new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);
+    const [threeDaysAgo, twoDaysAgo, oneDayAgo] = [3, 2, 1].map(isoDay);
     const insert = (cameraId: string, time: string) =>
       store!.pool.query<{ id: string }>(
         `INSERT INTO motion_events (camera_source_id, confidence, occurred_at) SELECT id, 0.42, $2::timestamptz FROM camera_sources WHERE public_camera_id = $1 RETURNING id`,
         [cameraId, time],
       );
     await store!.pool.query(
-      `INSERT INTO motion_events (camera_source_id, confidence, occurred_at) SELECT cs.id, 0.42, '2026-09-05T12:00:00Z'::timestamptz + (n * interval '1 second') FROM camera_sources cs CROSS JOIN generate_series(1, 105) n WHERE cs.public_camera_id = $1`,
-      [camera],
+      `INSERT INTO motion_events (camera_source_id, confidence, occurred_at) SELECT cs.id, 0.42, $2::timestamptz + (n * interval '1 second') FROM camera_sources cs CROSS JOIN generate_series(1, 105) n WHERE cs.public_camera_id = $1`,
+      [camera, `${twoDaysAgo}T12:00:00Z`],
     );
-    const sameTimeA = (await insert(quietCamera, '2026-09-04T00:00:00.123456Z'))
-      .rows[0]!.id;
-    const sameTimeB = (await insert(quietCamera, '2026-09-04T00:00:00.123456Z'))
-      .rows[0]!.id;
-    const older = (await insert(quietCamera, '2026-09-04T00:00:00.123455Z'))
-      .rows[0]!.id;
-    await insert(foreignCamera, '2026-09-06T00:00:00Z');
+    const sameTimeA = (
+      await insert(quietCamera, `${threeDaysAgo}T00:00:00.123456Z`)
+    ).rows[0]!.id;
+    const sameTimeB = (
+      await insert(quietCamera, `${threeDaysAgo}T00:00:00.123456Z`)
+    ).rows[0]!.id;
+    const older = (
+      await insert(quietCamera, `${threeDaysAgo}T00:00:00.123455Z`)
+    ).rows[0]!.id;
+    await insert(foreignCamera, `${oneDayAgo}T00:00:00Z`);
     const get = (query = '') =>
       app!.inject({
         method: 'GET',
@@ -1074,7 +1184,7 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     });
     expect(
       (
-        await get(`?cameraId=${quietCamera}&since=2026-09-05T00:00:00Z`)
+        await get(`?cameraId=${quietCamera}&since=${twoDaysAgo}T00:00:00Z`)
       ).json<HistoryPage>().events,
     ).toEqual([]);
     const found: string[] = [];

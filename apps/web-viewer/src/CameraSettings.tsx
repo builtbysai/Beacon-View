@@ -7,6 +7,7 @@ import { capabilitySummary, relativeLastSeen } from './device-presentation';
 import type { Camera, Device } from './domain';
 import { Icon } from './Icon';
 import { InlineRename } from './InlineRename';
+import { CameraUseCasePanel } from './CameraUseCasePanel';
 import { MotionSettingsPanel } from './MotionSettingsPanel';
 import { deviceKindLabel } from './naming';
 import './CameraSettingsSheet.css';
@@ -14,6 +15,7 @@ import './CameraSettingsSheet.css';
 export function CameraSettings({
   cameras,
   device,
+  error,
   onBack,
   onLive,
   onDelete,
@@ -25,9 +27,11 @@ export function CameraSettings({
   onCameraLeave,
   onSwitchSource,
   onReconnect,
+  canManageSettings,
 }: {
   cameras: Camera[];
   device: Device | undefined;
+  error?: string;
   onBack: () => void;
   onLive: (camera: Camera) => void;
   onDelete: (device: Device) => void;
@@ -39,21 +43,31 @@ export function CameraSettings({
   onCameraLeave?: (camera: Camera) => void;
   onSwitchSource: (camera: Camera) => void;
   onReconnect?: (device: Device) => void;
+  canManageSettings: boolean;
 }) {
+  // Bumped when a use-case preset changes motion settings, so the motion
+  // panel reloads what the server now has.
+  const [motionRevision, setMotionRevision] = useState(0);
   const [renamingDevice, setRenamingDevice] = useState(false);
 
   if (!device) {
     return (
       <div className="camera-settings-missing">
-        <h3>Camera not found</h3>
+        <h3 id="camera-settings-title">Camera not found</h3>
         <p>This camera is unavailable or does not belong to your household.</p>
-        <button className="secondary" onClick={onBack}>Back to Cameras</button>
+        <button className="secondary" onClick={onBack}>
+          Back to Cameras
+        </button>
       </div>
     );
   }
 
-  const viewers = cameras.reduce((total, camera) => total + camera.viewerCount, 0);
-  const healthy = device.online && device.enabled && !device.privacyMode && !device.revoked;
+  const viewers = cameras.reduce(
+    (total, camera) => total + camera.viewerCount,
+    0,
+  );
+  const healthy =
+    device.online && device.enabled && !device.privacyMode && !device.revoked;
   const connectionLabel = device.privacyMode
     ? 'Privacy mode on'
     : device.revoked
@@ -81,7 +95,15 @@ export function CameraSettings({
       ? 'Battery is low. Connect this camera to power to keep it available.'
       : null;
   const needsReconnect =
-    Boolean(onReconnect) && device.platform === 'android' && (!device.online || device.revoked);
+    Boolean(onReconnect) &&
+    device.canRemove &&
+    device.platform === 'android' &&
+    (!device.online || device.revoked);
+  const switchableCameras = cameras.filter(
+    (camera) => camera.canFlip && camera.enabled && !camera.credentialRevoked,
+  );
+  const canControlPrivacy =
+    canManageSettings || cameras.some((camera) => camera.canPause);
   const guidance = deviceGuidance({
     cameraCount: cameras.length,
     enabled: device.enabled,
@@ -92,7 +114,11 @@ export function CameraSettings({
   });
 
   return (
-    <div className="camera-settings-sheet" role="region" aria-label={`${device.name} settings`}>
+    <div
+      className="camera-settings-sheet"
+      role="region"
+      aria-label={`${device.name} settings`}
+    >
       <header className="camera-settings-sheet-head">
         <button
           type="button"
@@ -103,43 +129,56 @@ export function CameraSettings({
           <Icon name="close" />
         </button>
         <div className="camera-settings-identity">
-          <span className="camera-settings-eyebrow">{deviceKindLabel(device)}</span>
+          <span className="camera-settings-eyebrow">
+            {deviceKindLabel(device)}
+          </span>
           {renamingDevice ? (
-            <InlineRename
-              value={device.name}
-              ariaLabel="Rename this camera"
-              className="inline-rename-heading"
-              explicitActions
-              onSubmit={(name) => {
-                setRenamingDevice(false);
-                onRename(device, name);
-              }}
-              onCancel={() => setRenamingDevice(false)}
-            />
+            <>
+              <h2 id="camera-settings-title" className="visually-hidden">
+                {device.name} settings
+              </h2>
+              <InlineRename
+                value={device.name}
+                ariaLabel="Rename this camera"
+                className="inline-rename-heading"
+                explicitActions
+                onSubmit={(name) => {
+                  setRenamingDevice(false);
+                  onRename(device, name);
+                }}
+                onCancel={() => setRenamingDevice(false)}
+              />
+            </>
           ) : (
             <div className="camera-settings-titleline">
-              <h2>{device.name}</h2>
-              <button
-                type="button"
-                className="camera-settings-rename"
-                aria-label="Rename this camera"
-                onClick={() => setRenamingDevice(true)}
-              >
-                <Icon name="edit" />
-              </button>
+              <h2 id="camera-settings-title">{device.name}</h2>
+              {canManageSettings && (
+                <button
+                  type="button"
+                  className="camera-settings-rename"
+                  aria-label="Rename this camera"
+                  onClick={() => setRenamingDevice(true)}
+                >
+                  <Icon name="edit" />
+                </button>
+              )}
             </div>
           )}
         </div>
-        <span className={`camera-settings-status ${healthy ? 'is-online' : 'is-attention'}`}>
-          {connectionLabel}
-        </span>
       </header>
 
       <div className="camera-settings-sheet-body">
+        {error && (
+          <p role="alert" className="camera-settings-error">
+            {error}
+          </p>
+        )}
         <section className="camera-settings-summary" aria-label="Device health">
           <div>
             <span>Connection</span>
-            <strong className={healthy ? 'online' : 'offline'}>{connectionLabel}</strong>
+            <strong className={healthy ? 'online' : 'offline'}>
+              {connectionLabel}
+            </strong>
           </div>
           <div>
             <span>Last seen</span>
@@ -152,21 +191,46 @@ export function CameraSettings({
         </section>
 
         {(needsReconnect || warning || guidance.attention) && (
-          <section className="camera-settings-notice" aria-label="Camera attention">
+          <section
+            className="camera-settings-notice"
+            aria-label="Camera attention"
+          >
             <span className="camera-settings-notice-icon" aria-hidden="true">
               <Icon name="alert" />
             </span>
             <div>
-              <strong>{needsReconnect ? 'This camera needs to reconnect' : warning ? 'Camera needs attention' : guidance.title}</strong>
-              <p>{needsReconnect ? "Beacon cannot currently reach this phone. Reconnect it without deleting its settings." : warning ?? guidance.summary}</p>
+              <strong>
+                {needsReconnect
+                  ? 'This camera needs to reconnect'
+                  : warning
+                    ? 'Camera needs attention'
+                    : guidance.title}
+              </strong>
+              <p>
+                {needsReconnect
+                  ? 'Beacon cannot currently reach this phone. Reconnect it without deleting its settings.'
+                  : (warning ?? guidance.summary)}
+              </p>
               <div className="camera-settings-inline-actions">
                 {needsReconnect && onReconnect && (
-                  <button type="button" className="secondary" onClick={() => onReconnect(device)}>Reconnect</button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => onReconnect(device)}
+                  >
+                    Reconnect
+                  </button>
                 )}
                 <details className="camera-settings-troubleshoot">
-                  <summary>{guidance.attention ? 'Troubleshoot' : 'Readiness tips'}</summary>
+                  <summary>
+                    {guidance.attention ? 'Troubleshoot' : 'Readiness tips'}
+                  </summary>
                   <div>
-                    <ol>{guidance.steps.map((step) => <li key={step}>{step}</li>)}</ol>
+                    <ol>
+                      {guidance.steps.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ol>
                     <p>{guidance.summary}</p>
                   </div>
                 </details>
@@ -181,37 +245,72 @@ export function CameraSettings({
               <h3>{cameras.length > 1 ? 'Cameras' : 'Camera'}</h3>
               <p>Live view and source information.</p>
             </div>
-            {cameras.length > 1 && (
-              <CameraFlipButton
-                sources={cameras}
-                activeId={(cameras.find((camera) => camera.streaming) ?? cameras.find((camera) => camera.online) ?? cameras[0]!).id}
-                onSwitch={(id) => {
-                  const target = cameras.find((camera) => camera.id === id);
-                  if (target) onSwitchSource(target);
-                }}
-              />
-            )}
+            {switchableCameras.length > 1 &&
+              device.online &&
+              !device.privacyMode && (
+                <CameraFlipButton
+                  sources={switchableCameras}
+                  activeId={
+                    (
+                      switchableCameras.find((camera) => camera.streaming) ??
+                      switchableCameras.find((camera) => camera.online) ??
+                      switchableCameras[0]!
+                    ).id
+                  }
+                  onSwitch={(id) => {
+                    const target = cameras.find((camera) => camera.id === id);
+                    if (target) onSwitchSource(target);
+                  }}
+                />
+              )}
           </div>
           {cameras.length === 0 ? (
-            <p className="camera-settings-empty">No camera paired to this device yet.</p>
+            <p className="camera-settings-empty">
+              No camera paired to this device yet.
+            </p>
           ) : (
             <div className="camera-settings-source-grid">
               {cameras.map((camera) => (
-                <CameraTile
-                  key={camera.id}
-                  camera={camera}
-                  onOpen={onLive}
-                  {...(needsReconnect && onReconnect ? { onReconnect: () => onReconnect(device) } : {})}
-                  onRename={onCameraRename}
-                  onDelete={onCameraDelete}
-                  {...(onCameraLeave ? { onLeave: onCameraLeave } : {})}
-                />
+                <div className="camera-settings-source" key={camera.id}>
+                  <CameraTile
+                    camera={camera}
+                    onOpen={onLive}
+                    previewOnHover={false}
+                    conciseStatus
+                    {...(needsReconnect && onReconnect
+                      ? { onReconnect: () => onReconnect(device) }
+                      : {})}
+                    {...(canManageSettings ? { onRename: onCameraRename } : {})}
+                    onDelete={onCameraDelete}
+                    {...(onCameraLeave ? { onLeave: onCameraLeave } : {})}
+                  />
+                  {(camera.facing !== 'unknown' ||
+                    (camera.capabilities &&
+                      Object.values(camera.capabilities).some(
+                        (value) => value !== false,
+                      ))) && (
+                    <p className="camera-settings-source-meta">
+                      {camera.facing !== 'unknown' && (
+                        <span>
+                          {camera.facing[0]?.toUpperCase()}
+                          {camera.facing.slice(1)} source
+                        </span>
+                      )}
+                      {camera.capabilities &&
+                        Object.values(camera.capabilities).some(
+                          (value) => value !== false,
+                        ) && (
+                          <span>{capabilitySummary(camera.capabilities)}</span>
+                        )}
+                    </p>
+                  )}
+                </div>
               ))}
             </div>
           )}
         </section>
 
-        {device.platform === 'android' && (
+        {device.platform === 'android' && canControlPrivacy && (
           <section className="camera-settings-group camera-settings-privacy">
             <div className="camera-settings-group-head">
               <div>
@@ -229,38 +328,92 @@ export function CameraSettings({
                 <span />
               </button>
             </div>
-            <p className="camera-settings-boundary">Local privacy is the fastest way to stop camera and microphone capture.</p>
+            <p className="camera-settings-boundary">
+              Local privacy is the fastest way to stop camera and microphone
+              capture.
+            </p>
           </section>
         )}
 
-        {device.platform === 'android' && !device.revoked && (
-          <MotionSettingsPanel deviceId={device.id} cameras={cameras} />
+        {canManageSettings && !device.revoked && cameras.length > 0 && (
+          <CameraUseCasePanel
+            cameras={cameras}
+            onApplied={() => setMotionRevision((value) => value + 1)}
+          />
         )}
 
+        {device.platform === 'android' &&
+          canManageSettings &&
+          !device.revoked && (
+            <MotionSettingsPanel
+              key={motionRevision}
+              deviceId={device.id}
+              cameras={cameras}
+            />
+          )}
+
         <section className="camera-settings-group">
-          <div className="camera-settings-group-head"><div><h3>Device information</h3></div></div>
+          <div className="camera-settings-group-head">
+            <div>
+              <h3>Device information</h3>
+            </div>
+          </div>
           <dl className="camera-settings-info-list">
-            <div><dt>Device</dt><dd>{deviceKindLabel(device)}</dd></div>
-            <div><dt>Power</dt><dd>{batteryLabel}</dd></div>
-            <div><dt>Capabilities</dt><dd>{capabilitySummary(device.capabilities)}</dd></div>
-            <div><dt>Software version</dt><dd>{device.softwareVersion ?? 'Not reported'}</dd></div>
-            <div><dt>Access</dt><dd>{device.revoked ? 'Revoked' : device.enabled ? 'Active' : 'Disabled'}</dd></div>
+            <div>
+              <dt>Device</dt>
+              <dd>{deviceKindLabel(device)}</dd>
+            </div>
+            <div>
+              <dt>Power</dt>
+              <dd>{batteryLabel}</dd>
+            </div>
+            {device.platform === 'android' && (
+              <div>
+                <dt>Health updated</dt>
+                <dd>{relativeLastSeen(device.healthReportedAt ?? null)}</dd>
+              </div>
+            )}
+            <div>
+              <dt>Capabilities</dt>
+              <dd>{capabilitySummary(device.capabilities)}</dd>
+            </div>
+            <div>
+              <dt>Software version</dt>
+              <dd>{device.softwareVersion ?? 'Not reported'}</dd>
+            </div>
+            <div>
+              <dt>Access</dt>
+              <dd>
+                {device.revoked
+                  ? 'Revoked'
+                  : device.enabled
+                    ? 'Active'
+                    : 'Disabled'}
+              </dd>
+            </div>
           </dl>
         </section>
 
-        {(device.canRemove || (onLeave && cameras.some((camera) => camera.canLeave))) && (
+        {(device.canRemove ||
+          (onLeave && cameras.some((camera) => camera.canLeave))) && (
           <section className="camera-settings-group camera-settings-danger-wrap">
             <div className="camera-settings-danger">
-              <h3>{device.canRemove ? 'Remove camera' : 'Leave this camera'}</h3>
+              <h3>
+                {device.canRemove ? 'Remove camera' : 'Leave this camera'}
+              </h3>
               <p>
                 {device.canRemove
                   ? 'Disconnects every source paired to this camera. You can pair the device again later.'
                   : 'You will stop seeing this camera. It stays paired and visible to the rest of the household.'}
               </p>
               {device.canRemove ? (
-                <button className="danger" onClick={() => onDelete(device)}>Remove camera</button>
+                <button className="danger" onClick={() => onDelete(device)}>
+                  Remove camera
+                </button>
               ) : (
-                <button className="danger" onClick={() => onLeave?.(device)}>Leave this camera</button>
+                <button className="danger" onClick={() => onLeave?.(device)}>
+                  Leave this camera
+                </button>
               )}
             </div>
           </section>
@@ -268,8 +421,12 @@ export function CameraSettings({
       </div>
 
       <footer className="camera-settings-sheet-foot">
-        <span>Device changes apply immediately. Motion settings save separately.</span>
-        <button type="button" className="secondary" onClick={onBack}>Done</button>
+        <span>
+          Device changes apply immediately. Motion settings save separately.
+        </span>
+        <button type="button" className="secondary" onClick={onBack}>
+          Done
+        </button>
       </footer>
     </div>
   );

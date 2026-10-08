@@ -37,7 +37,8 @@ export function AccessHistory({ currentEmail }: { currentEmail: string }) {
         if (active) setEvents(result.events);
       })
       .catch(() => {
-        if (active) setError('Recent access is temporarily unavailable.');
+        if (active)
+          setError('Recent access couldn’t be loaded. Try again in a moment.');
       });
     return () => {
       active = false;

@@ -223,6 +223,20 @@ export function registerCameraManagementRoutes(
     ) {
       return reply.code(404).send({ error: 'Device not found' });
     }
+    await store.audit({
+      eventType: 'device_updated',
+      householdId: session.householdId,
+      ipAddress: request.ip,
+      metadata: {
+        deviceId: parameters.data.deviceId,
+        ...(body.data.name !== undefined ? { deviceName: body.data.name } : {}),
+        ...(body.data.enabled !== undefined
+          ? { enabled: String(body.data.enabled) }
+          : {}),
+      },
+      success: true,
+      userId: session.userId,
+    });
     if (body.data.enabled === false) {
       const cameras = await store.listCameras(session.householdId);
       for (const camera of cameras.filter(
@@ -323,6 +337,20 @@ export function registerCameraManagementRoutes(
     ) {
       return reply.code(404).send({ error: 'Camera not found' });
     }
+    await store.audit({
+      eventType: 'camera_updated',
+      householdId: session.householdId,
+      ipAddress: request.ip,
+      metadata: {
+        cameraId: parameters.data.cameraId,
+        ...(body.data.name !== undefined ? { cameraName: body.data.name } : {}),
+        ...(body.data.enabled !== undefined
+          ? { enabled: String(body.data.enabled) }
+          : {}),
+      },
+      success: true,
+      userId: session.userId,
+    });
     householdEvents.publish(session.householdId, {
       cameraId: parameters.data.cameraId,
       type: 'camera-presence-changed',
@@ -456,7 +484,12 @@ export function registerCameraManagementRoutes(
       eventType: 'camera_source_deleted',
       householdId: session.householdId,
       ipAddress: request.ip,
-      metadata: { cameraName: camera.name, deviceName: camera.deviceName },
+      metadata: {
+        cameraId: camera.publicCameraId,
+        cameraName: camera.name,
+        deviceId: camera.publicDeviceId,
+        deviceName: camera.deviceName,
+      },
       success: true,
       userId: session.userId,
     });

@@ -4,6 +4,10 @@ import { eventsUrl } from './app-navigation';
 
 export interface HouseholdEvent {
   cameraId?: string;
+  /** Desktop alerts (type 'notification', ADR 0083) carry these. */
+  category?: string;
+  eventId?: string;
+  route?: string;
   type: string;
 }
 
@@ -29,6 +33,7 @@ export function useHouseholdEvents({
     let socket: WebSocket | null = null;
     let reconnectTimer: number | null = null;
     let retry = 0;
+    let refreshOnSubscribe = false;
 
     const connect = () => {
       if (!active) return;
@@ -39,6 +44,10 @@ export function useHouseholdEvents({
       socket.onmessage = (message) => {
         try {
           const event = JSON.parse(String(message.data)) as HouseholdEvent;
+          if (event.type === 'subscribed' && refreshOnSubscribe) {
+            refreshOnSubscribe = false;
+            onRefreshNeeded?.();
+          }
           if (typeof event.type === 'string') onEvent(event);
         } catch {
           // Ignore malformed server events. A later valid event or inventory
@@ -59,6 +68,7 @@ export function useHouseholdEvents({
         // reconnect right away rather than waiting out the backoff below.
         if (event.code === 4002) {
           onRefreshNeeded?.();
+          refreshOnSubscribe = false;
           retry = 0;
           reconnectTimer = window.setTimeout(connect, 200);
           return;
@@ -68,6 +78,7 @@ export function useHouseholdEvents({
         // leaves the session valid, so this must not sign the person out
         // either. If this tab's own state hasn't already disabled this
         // hook (see `enabled` above), just keep retrying with backoff.
+        if (event.code !== 4003) refreshOnSubscribe = true;
         const delay = Math.min(1_000 * 2 ** retry, 15_000);
         retry += 1;
         reconnectTimer = window.setTimeout(connect, delay);

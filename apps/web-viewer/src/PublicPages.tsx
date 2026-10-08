@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 import { Brand, Icon } from './Icon';
 import { PublicHeader } from './PublicHeader';
 import './Trust.css';
@@ -24,7 +26,8 @@ export function PairLinkPage() {
           <>
             <p className="trust-lead">
               Beacon opens automatically when it is installed. Otherwise, open
-              the Beacon Android app and enter this one-time code.
+              the Beacon Android app and enter this one-time code, or use this
+              browser as the camera.
             </p>
             <p
               className="pair-link-code"
@@ -36,6 +39,12 @@ export function PairLinkPage() {
               Only use this link on a device you own or are authorized to set
               up. It expires in 10 minutes.
             </p>
+            <a
+              className="btn-secondary w-full"
+              href={`/camera-mode/setup?code=${validCode}`}
+            >
+              Use this browser as camera
+            </a>
           </>
         ) : (
           <p className="trust-lead">
@@ -78,6 +87,77 @@ export function MobileAuthReturnPage() {
   );
 }
 
+/** Google sign-in for the desktop app finishes here, in the person's own
+ * browser (ADR 0083). The page hands the one-time, PKCE-bound code to the
+ * app through its link and removes it from the address bar. Browsers only
+ * let a page close tabs that a script opened, so it says plainly that this
+ * tab can be closed instead of leaving the person on Google's page. */
+export function DesktopAuthReturnPage() {
+  const [appLink] = useState(() => {
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const code = params.get('code');
+    if (code && /^[A-Za-z0-9_-]{32,512}$/.test(code))
+      return `beaconsecureview://auth/desktop?code=${encodeURIComponent(code)}`;
+    if (params.get('status') === 'failed')
+      return 'beaconsecureview://auth/desktop?status=failed';
+    return null;
+  });
+  const [closeHint, setCloseHint] = useState(false);
+  useEffect(() => {
+    window.history.replaceState(null, '', window.location.pathname);
+    if (appLink) window.location.href = appLink;
+  }, [appLink]);
+  const failed = appLink?.endsWith('status=failed') ?? false;
+
+  return (
+    <main className="trust-shell">
+      <section className="trust-page" aria-labelledby="desktop-auth-title">
+        <a className="trust-brand" href="/" aria-label="Beacon home">
+          <Brand />
+        </a>
+        <p className="eyebrow">Beacon for desktop</p>
+        <h1 id="desktop-auth-title">
+          {!appLink
+            ? 'This sign-in link has already been used.'
+            : failed
+              ? 'Sign-in didn’t finish.'
+              : 'You’re signing in to the Beacon app.'}
+        </h1>
+        <p className="trust-lead">
+          {!appLink
+            ? 'Start Google sign-in again from the Beacon app if you still need to sign in.'
+            : failed
+              ? 'Return to the Beacon app and try again.'
+              : 'Beacon is opening and finishing your sign-in. If your browser asks, choose Open Beacon.'}{' '}
+          You can close this tab.
+        </p>
+        {appLink && !failed && (
+          <a className="btn-primary w-full" href={appLink}>
+            Open Beacon
+          </a>
+        )}
+        <button
+          className="btn-secondary w-full"
+          onClick={() => {
+            window.close();
+            // window.close() is ignored for tabs the browser opened itself.
+            setCloseHint(true);
+          }}
+          type="button"
+        >
+          Close this tab
+        </button>
+        {closeHint && (
+          <p className="pair-link-note" role="status">
+            Your browser keeps this tab open. Close it with Ctrl+W (⌘W on a
+            Mac).
+          </p>
+        )}
+      </section>
+    </main>
+  );
+}
+
 export function PublicTrustPage({
   returnHref = '/',
   returnLabel = 'Return to Beacon',
@@ -112,8 +192,8 @@ export function PublicTrustPage({
               <p className="eyebrow">Trust & privacy</p>
               <h1>Privacy is part of how Beacon works.</h1>
               <p className="lede">
-                Beacon connects your devices for live viewing without building
-                a cloud archive of your camera or microphone.
+                Beacon connects your devices for live viewing without building a
+                cloud archive of your camera or microphone.
               </p>
             </div>
             <div className="commitments">

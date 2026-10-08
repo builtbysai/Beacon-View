@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 const shapes = {
   chevronLeft: <path d="m15 18-6-6 6-6" />,
@@ -164,6 +164,12 @@ const shapes = {
       <path d="M9 3H4v5m11-5h5v5M4 16v5h5m11-5v5h-5" />
     </>
   ),
+  pip: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <rect x="12" y="11" width="7" height="6" rx="1" fill="currentColor" />
+    </>
+  ),
   minimize: (
     <>
       <path d="M4 9h5V4M15 4v5h5M20 15h-5v5M9 20v-5H4" />
@@ -245,7 +251,26 @@ const shapes = {
       <path d="M13.7 21a2 2 0 0 1-3.4 0" />
     </>
   ),
-
+  download: (
+    <>
+      <path d="M12 3v12m0 0-4-4m4 4 4-4" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+    </>
+  ),
+  share: (
+    <>
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="m8.6 10.5 6.8-3.9M8.6 13.5l6.8 3.9" />
+    </>
+  ),
+  film: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 9h18M3 15h18M8 4v16M16 4v16" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof shapes;
@@ -283,6 +308,7 @@ export function Brand({
   compact = false,
   className = '',
 }: { compact?: boolean; className?: string } = {}) {
+  const glowId = `beacon-glow-${useId().replace(/:/g, '')}`;
   const mark = (
     <svg
       className="brand-mark"
@@ -293,37 +319,51 @@ export function Brand({
       aria-label="Beacon"
       style={{ width: 'auto', height: '100%' }}
     >
+      <defs>
+        <radialGradient id={glowId} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <circle cx="22" cy="20" r="14" fill={`url(#${glowId})`} />
       <path
-        d="M11 11.5C5.5 16.2 5.5 23.8 11 28.5M33 11.5c5.5 4.7 5.5 12.3 0 17"
+        d="M11.39 9.39A15 15 0 0 0 11.39 30.61M32.61 9.39A15 15 0 0 1 32.61 30.61"
         stroke="#38bdf8"
-        strokeWidth="2.6"
+        strokeWidth="2.4"
         strokeLinecap="round"
         fill="none"
       />
       <path
-        d="M15 15.5c-2.8 2.5-2.8 6.5 0 9M29 15.5c2.8 2.5 2.8 6.5 0 9"
+        d="M14.12 13.84A10 10 0 0 0 14.12 26.16M29.88 13.84A10 10 0 0 1 29.88 26.16"
         stroke="#7dd3fc"
-        strokeWidth="2.3"
+        strokeWidth="2"
         strokeLinecap="round"
         fill="none"
+        opacity="0.9"
       />
-      <circle cx="22" cy="20" r="9" fill="#0ea5e9" />
-      <circle cx="22" cy="20" r="5.2" fill="#071b31" />
-      <circle cx="22" cy="20" r="2" fill="#e0f2fe" />
       <path
-        d="M22 29v7M15 38h14"
+        d="M20 28 17.5 38M24 28 26.5 38M14 38h16"
         stroke="currentColor"
-        strokeWidth="2.8"
+        strokeWidth="2"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
+      <circle
+        cx="22"
+        cy="20"
+        r="7.5"
+        fill="#0284c7"
+        stroke="#38bdf8"
+        strokeWidth="1.5"
+      />
+      <circle cx="22" cy="20" r="4.25" fill="#0b1727" />
+      <circle cx="22" cy="20" r="2" fill="#f0f9ff" />
     </svg>
   );
-  
+
   if (compact) {
     return (
-      <div className={`brand-lockup brand-compact ${className}`}>
-        {mark}
-      </div>
+      <div className={`brand-lockup brand-compact ${className}`}>{mark}</div>
     );
   }
 

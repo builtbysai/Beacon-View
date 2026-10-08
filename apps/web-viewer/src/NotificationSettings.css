@@ -40,7 +40,9 @@
 
 .notification-table-head {
   display: grid;
-  grid-template-columns: minmax(140px, 1.1fr) minmax(80px, .65fr) minmax(120px, .9fr) minmax(230px, 1.6fr);
+  grid-template-columns:
+    minmax(140px, 1.1fr) minmax(80px, 0.65fr) minmax(120px, 0.9fr)
+    minmax(230px, 1.6fr);
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
   background-color: var(--bg-surface-hover);
@@ -53,7 +55,9 @@
 
 .notification-table-row {
   display: grid;
-  grid-template-columns: minmax(140px, 1.1fr) minmax(80px, .65fr) minmax(120px, .9fr) minmax(230px, 1.6fr);
+  grid-template-columns:
+    minmax(140px, 1.1fr) minmax(80px, 0.65fr) minmax(120px, 0.9fr)
+    minmax(230px, 1.6fr);
   gap: var(--space-3);
   align-items: start;
   padding: var(--space-3) var(--space-4);
@@ -122,7 +126,7 @@
   font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: .05em;
+  letter-spacing: 0.05em;
 }
 
 .notification-quiet-heading small,
@@ -210,7 +214,6 @@
   }
 }
 
-
 @media (max-width: 560px) {
   .notification-table {
     border: 0;
@@ -225,7 +228,7 @@
     border: 1px solid var(--border-default);
     border-radius: 14px;
     background: var(--bg-surface);
-    box-shadow: 0 1px 2px rgba(16, 24, 40, .035);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.035);
   }
 
   .notification-table-row + .notification-table-row {
@@ -297,7 +300,8 @@
     display: block;
   }
 
-  .notification-quiet-hours span[aria-hidden='true']:not(.notification-time-caption) {
+  .notification-quiet-hours
+    span[aria-hidden='true']:not(.notification-time-caption) {
     display: none;
   }
 

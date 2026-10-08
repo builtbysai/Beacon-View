@@ -54,11 +54,27 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     private var selectedCamera: RegisteredCameraSource? = null
     private var captureGeneration = 0
     private lateinit var privacyGate: PrivacyGate
+    private var startupBlockedByMissingCameraPermission = false
     @Volatile
     private var motionSettings = emptyMap<String, MotionSettings>()
 
     override fun onCreate() {
         super.onCreate()
+        if (!hasCameraPermission()) {
+            startupBlockedByMissingCameraPermission = true
+            CameraRuntime.update {
+                it.copy(
+                    cameraEnabled = false,
+                    sourceLifecycle = CameraSourceLifecycle.Disabled,
+                    diagnostic = "Camera permission is required",
+                )
+            }
+            // Android may restart this START_STICKY service immediately after the user
+            // revokes camera permission. Declaring a camera foreground-service type in
+            // that state throws SecurityException before the Activity can request access.
+            stopSelf()
+            return
+        }
         privacyGate = PrivacyGate(
             getSharedPreferences(PREFERENCES, MODE_PRIVATE).getBoolean(PENDING_PRIVACY_PAUSE, false),
         )
@@ -77,7 +93,10 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         }
     }
 
-    private fun showForegroundStatus(captureActive: Boolean) {
+    private fun showForegroundStatus(
+        captureActive: Boolean,
+        recordingActive: Boolean = CameraRuntime.state.value.recordingActive,
+    ) {
         val pendingIntent =
             PendingIntent.getActivity(
                 this,
@@ -101,6 +120,8 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 .setContentTitle(
                     if (!captureActive) {
                         "Beacon privacy is on"
+                    } else if (recordingActive) {
+                        "Beacon is recording a clip"
                     } else if (microphoneEnabled) {
                         "Beacon camera and microphone are active"
                     } else {
@@ -108,10 +129,12 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                     },
                 )
                 .setContentText(
-                    if (captureActive) {
-                        "Visible and ready for authorized live viewers"
-                    } else {
+                    if (!captureActive) {
                         "Camera and microphone are off"
+                    } else if (recordingActive) {
+                        "Recording is visible and stops automatically"
+                    } else {
+                        "Visible and ready for authorized live viewers"
                     },
                 )
                 .setContentIntent(pendingIntent)
@@ -141,6 +164,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        if (startupBlockedByMissingCameraPermission) return START_NOT_STICKY
         if (intent?.action == ACTION_SELECT_CAMERA) {
             selectCamera(intent.getStringExtra(EXTRA_CAMERA_ID))
             return START_STICKY
@@ -402,6 +426,10 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         sessions[connectionId]?.setTalkEnabled(active)
     }
 
+    override fun onRecordingRequested(recordingId: String) {
+        startRequestedRecording(captureGeneration, recordingId, MANUAL_CLIP_MAX_DURATION_MS)
+    }
+
     override fun onAuthorizationLost() {
         requirePairing()
     }
@@ -554,64 +582,113 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                     }
                     .getOrNull()
             if (recordingId != null) {
-                withContext(Dispatchers.Main) { startMotionRecording(generation, recordingId) }
+                withContext(Dispatchers.Main) {
+                    startRequestedRecording(generation, recordingId, MOTION_CLIP_MAX_DURATION_MS)
+                }
             }
         }
     }
 
-    /** Best-effort: the recording stays in Beacon's "requested" state
-     * forever (the same as if this had never been called) when this device
-     * can't record a clip right now -- never a crash, never an interruption
-     * to the live capture this service also drives for any viewer already
-     * watching. */
-    private fun startMotionRecording(generation: Int, recordingId: String) {
-        if (generation != captureGeneration) return
-        val activeMedia = media ?: return
+    /** Best-effort clip capture that reports terminal failures without
+     * interrupting the live stream this service may already be sending. */
+    private fun startRequestedRecording(
+        generation: Int,
+        recordingId: String,
+        maxDurationMs: Long,
+    ) {
+        if (generation != captureGeneration) {
+            reportRecordingFailure(recordingId, "abandoned")
+            return
+        }
+        val activeMedia = media
+        if (activeMedia == null) {
+            reportRecordingFailure(recordingId, "capture_failed")
+            return
+        }
         val outputFile = File(cacheDir, "beacon-clip-$recordingId.mp4")
+        CameraRuntime.update {
+            it.copy(recordingActive = true, diagnostic = "Recording a short clip")
+        }
+        showForegroundStatus(captureActive = true, recordingActive = true)
         val started =
             activeMedia.startClipRecording(
                 outputFile,
-                MOTION_CLIP_MAX_DURATION_MS,
+                maxDurationMs,
                 shouldCaptureAudio(hasMicrophonePermission()),
             ) { durationMs, success ->
+                CameraRuntime.update {
+                    it.copy(
+                        recordingActive = false,
+                        diagnostic = if (success) "Encrypting and uploading clip" else "Clip recording failed",
+                    )
+                }
+                showForegroundStatus(captureActive = !privacyGate.privacyEnabled, recordingActive = false)
                 lifecycleScope.launch(Dispatchers.IO) {
                     if (generation != captureGeneration) {
                         outputFile.delete()
+                        reportRecordingFailure(recordingId, "abandoned")
                         return@launch
                     }
                     if (success) {
-                        uploadMotionClip(recordingId, outputFile, durationMs)
+                        uploadRequestedClip(recordingId, outputFile, durationMs)
                     } else {
                         outputFile.delete()
                         Log.w(LOG_TAG, "event=motion_clip_capture_failed")
+                        reportRecordingFailure(recordingId, "capture_failed")
                     }
                 }
             }
-        if (!started) outputFile.delete()
+        if (!started) {
+            CameraRuntime.update {
+                it.copy(recordingActive = false, diagnostic = "Clip recording is unavailable")
+            }
+            showForegroundStatus(captureActive = !privacyGate.privacyEnabled, recordingActive = false)
+            outputFile.delete()
+            reportRecordingFailure(recordingId, "capture_failed")
+        }
     }
 
-    private suspend fun uploadMotionClip(recordingId: String, file: File, durationMs: Long) {
+    private suspend fun uploadRequestedClip(recordingId: String, file: File, durationMs: Long) {
+        val encryptedFile = File(cacheDir, "beacon-clip-$recordingId.encrypted")
         runCatching {
-            val checksum = sha256Hex(file)
+            val encrypted = encryptClip(file, encryptedFile)
+            file.delete()
+            val checksum = sha256Hex(encrypted.file)
             val uploadUrl =
                 api.beginRecordingUpload(
                     credential,
                     recordingId,
-                    file.length(),
+                    encrypted.file.length(),
                     checksum,
                     durationMs.coerceIn(1_000, 600_000),
                     "video/mp4",
+                    encrypted.dataKey,
+                    encrypted.iv,
                 )
-            val providerFileId = uploadClipToDrive(uploadUrl, file, "video/mp4")
+            val providerFileId = uploadClipToDrive(uploadUrl, encrypted.file)
             api.completeRecording(credential, recordingId, providerFileId)
-            Log.i(LOG_TAG, "event=motion_clip_uploaded")
+            Log.i(LOG_TAG, "event=clip_uploaded")
         }.onFailure { error ->
             Log.w(LOG_TAG, "event=motion_clip_upload_failed")
+            runCatching { api.failRecording(credential, recordingId, "upload_failed") }
             if (error is AuthorizationLostException) {
                 withContext(Dispatchers.Main) { requirePairing() }
             }
         }
         file.delete()
+        encryptedFile.delete()
+    }
+
+    private fun reportRecordingFailure(recordingId: String, reason: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { api.failRecording(credential, recordingId, reason) }
+                .onFailure { error ->
+                    Log.w(LOG_TAG, "event=recording_failure_report_failed")
+                    if (error is AuthorizationLostException) {
+                        withContext(Dispatchers.Main) { requirePairing() }
+                    }
+                }
+        }
     }
 
     private fun handleCaptureStart(generation: Int, started: Boolean) {
@@ -731,6 +808,10 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
 
+    private fun hasCameraPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -757,6 +838,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         private const val PENDING_PRIVACY_PAUSE = "pending_privacy_pause"
         private const val LOG_TAG = "BeaconLifecycle"
         private const val MOTION_CLIP_MAX_DURATION_MS = 20_000L
+        private const val MANUAL_CLIP_MAX_DURATION_MS = 15_000L
 
         fun start(context: Context) {
             androidx.core.content.ContextCompat.startForegroundService(

@@ -18,6 +18,16 @@ class PairingQrTest {
                 "https://beacon.builtbysai.com",
             ),
         )
+        // ADR 0067's direct browser setup link carries the same bearer code and must be
+        // accepted too -- a household member scanning it with the Android app should not
+        // be told it "is not a Beacon setup link" just because a browser normally opens it.
+        assertEquals(
+            "ABCD234567",
+            parsePairingQr(
+                "https://beacon.builtbysai.com/camera-mode/setup?code=ABCD234567",
+                "https://beacon.builtbysai.com",
+            ),
+        )
     }
 
     @Test
@@ -31,6 +41,12 @@ class PairingQrTest {
         )
         assertNull(parsePairingQr("beacon://pair?code=too-short"))
         assertNull(parsePairingQr(null))
+        assertNull(
+            parsePairingQr(
+                "https://beacon.builtbysai.com/not-a-setup-path?code=ABCD234567",
+                "https://beacon.builtbysai.com",
+            ),
+        )
     }
 
     @Test
@@ -45,14 +61,14 @@ class PairingQrTest {
     fun acceptsOnlyTrustedGoogleMobileReturnLinks() {
         val code = "A".repeat(40)
         assertEquals(
-            code,
+            MobileGoogleAuthResult(code = code),
             parseMobileGoogleAuthLink(
                 "https://beacon.builtbysai.com/auth/mobile#code=$code",
                 "https://beacon.builtbysai.com",
             ),
         )
         assertEquals(
-            code,
+            MobileGoogleAuthResult(code = code),
             parseMobileGoogleAuthLink(
                 "beaconsecureview://auth/mobile?code=$code",
                 "https://beacon.builtbysai.com",
@@ -67,6 +83,30 @@ class PairingQrTest {
         assertNull(
             parseMobileGoogleAuthLink(
                 "beaconsecureview://other/mobile?code=$code",
+                "https://beacon.builtbysai.com",
+            ),
+        )
+    }
+
+    @Test
+    fun surfacesGoogleSignInFailureAndLinkRequiredStatuses() {
+        assertEquals(
+            MobileGoogleAuthResult(status = "failed"),
+            parseMobileGoogleAuthLink(
+                "https://beacon.builtbysai.com/auth/mobile#status=failed",
+                "https://beacon.builtbysai.com",
+            ),
+        )
+        assertEquals(
+            MobileGoogleAuthResult(status = "linkRequired"),
+            parseMobileGoogleAuthLink(
+                "https://beacon.builtbysai.com/auth/mobile#status=linkRequired",
+                "https://beacon.builtbysai.com",
+            ),
+        )
+        assertNull(
+            parseMobileGoogleAuthLink(
+                "https://beacon.builtbysai.com/auth/mobile#status=bogus",
                 "https://beacon.builtbysai.com",
             ),
         )

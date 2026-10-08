@@ -43,16 +43,22 @@ path through OCI. Do not restore a public TCP 22 rule as a permanent workaround.
    secrets, and set permissions to owner-read only.
 3. Confirm the hostname resolves to `TURN_EXTERNAL_IP` before starting Caddy. Caddy
    obtains a public certificate over ports 80 and 443.
-4. Run the migration as a deliberate release step, then start only the long-running
-   services:
+4. Run the migration as a deliberate release step and independently verify the
+   resulting PostgreSQL catalog before starting long-running services:
 
    ```bash
    cd /opt/beacon/app/infrastructure/cloud
    sudo docker compose --env-file /etc/beacon/production.env run --rm migrate
+   sudo docker compose --env-file /etc/beacon/production.env run --rm migrate-verify
    sudo docker compose --env-file /etc/beacon/production.env up -d postgres backend coturn web
    ```
 
-5. Verify HTTPS, WSS, a direct WebRTC view, then a forced relay view. Check logs for
+5. `migrate-verify` checks every table, added column, named constraint, index,
+   extension, function, and trigger introduced by the checked-in additive migrations.
+   It must complete successfully; a migration ledger entry alone is not evidence that
+   its DDL exists. Update the verifier when a migration introduces a non-additive
+   invariant.
+6. Verify HTTPS, WSS, a direct WebRTC view, then a forced relay view. Check logs for
    redaction before creating a household or pairing a physical device.
 
 ## Encrypted off-VM backup and restore verification
@@ -104,7 +110,8 @@ separate owner-readable configuration and systemd timers are installed.
 
 5. Verify a restore before relying on the schedule. Create a separate empty database,
    never the live database, then run the helper with its explicit confirmation marker.
-   Review the restored row counts and application migration table. Keep the command
+   The helper refuses a non-empty target and reports migration and public-table counts.
+   Review aggregate application row counts separately. Keep the command
    and any restore output out of shared shell history.
 
    ```bash
@@ -115,6 +122,14 @@ separate owner-readable configuration and systemd timers are installed.
      -e BEACON_ALLOW_DESTRUCTIVE_RESTORE=RESTORE_A_SEPARATE_DATABASE \
      --entrypoint /usr/local/bin/beacon-restore-verify backup latest
    ```
+
+   On September 25, 2026, this drill restored a temporary encrypted snapshot into
+   `beacon_restore_verify_20260925` in three seconds. The restored database matched
+   the source at 28 migration rows, 23 public tables, and aggregate counts for users,
+   households, cameras, motion events, and recordings. Repository integrity passed.
+   The verification database and temporary snapshot were then removed and pruned.
+   The daily and weekly timers were disabled at the time of the drill, so scheduled
+   retention and expiry remain unproven.
 
 The supplied retention policy keeps seven daily, four weekly, and three monthly
 snapshots. Do not configure an Object Storage lifecycle policy that deletes backup

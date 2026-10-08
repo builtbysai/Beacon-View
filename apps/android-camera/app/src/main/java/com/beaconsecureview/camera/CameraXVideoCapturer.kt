@@ -3,6 +3,7 @@ package com.beaconsecureview.camera
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.util.Size
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -51,6 +52,8 @@ class CameraXVideoCapturer(
     private val disposed = AtomicBoolean(false)
     private val captureStartReported = AtomicBoolean(false)
     private val motionDetector = ConfiguredMotionDetector()
+    private var smartDetector: SmartDetector? = null
+    private var smartDetectorInitAttempted = false
     @Volatile
     private var recorder: Recorder? = null
     private var activeRecording: Recording? = null
@@ -186,6 +189,9 @@ class CameraXVideoCapturer(
         val stop = Runnable {
             analysis?.clearAnalyzer()
             analysis = null
+            smartDetector?.close()
+            smartDetector = null
+            smartDetectorInitAttempted = false
             provider?.unbindAll()
             runCatching { analysisExecutor.submit {}.get(2, TimeUnit.SECONDS) }
             analysisExecutor.shutdown()
@@ -267,6 +273,22 @@ class CameraXVideoCapturer(
         activeRecording?.stop()
     }
 
+    /** Lazily creates the real detector only when BuildConfig.SMART_DETECTION_ENABLED
+     * is on for this build -- never attempted otherwise, so a normal build never
+     * touches the (also normally absent) model asset. A load failure disables the
+     * experiment for this capture session rather than crashing capture. */
+    private fun smartDetectorOrNull(): SmartDetector? {
+        if (!BuildConfig.SMART_DETECTION_ENABLED) return null
+        if (!smartDetectorInitAttempted) {
+            smartDetectorInitAttempted = true
+            smartDetector =
+                runCatching { SmartDetector.create(context) }
+                    .onFailure { Log.w(LOG_TAG, "event=smart_detector_init_failed error=${it.message}") }
+                    .getOrNull()
+        }
+        return smartDetector
+    }
+
     private fun publish(image: ImageProxy, framerate: Int) {
         try {
             if (disposed.get()) return
@@ -279,6 +301,17 @@ class CameraXVideoCapturer(
                 image.height,
                 image.imageInfo.timestamp,
             )?.let(onMotionDetected)
+            // ADR 0074/0075: experimental, default-off, logged locally only -- never
+            // sent to the backend or shown in any UI. See smartDetectorOrNull().
+            smartDetectorOrNull()?.let { detector ->
+                runCatching { detector.analyze(image) }
+                    .onSuccess { detections ->
+                        detections?.forEach {
+                            Log.i(LOG_TAG, "event=smart_detection label=${it.label} confidence=${it.confidence}")
+                        }
+                    }
+                    .onFailure { Log.w(LOG_TAG, "event=smart_detection_failed error=${it.message}") }
+            }
             val minimumInterval = 1_000_000_000L / framerate.coerceAtLeast(1)
             if (image.imageInfo.timestamp - lastFrameTimestamp < minimumInterval) return
             lastFrameTimestamp = image.imageInfo.timestamp
@@ -360,5 +393,6 @@ class CameraXVideoCapturer(
     private companion object {
         const val MAX_BIND_ATTEMPTS = 2
         const val BIND_RETRY_DELAY_MS = 300L
+        const val LOG_TAG = "BeaconLifecycle"
     }
 }

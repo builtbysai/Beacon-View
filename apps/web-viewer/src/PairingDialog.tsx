@@ -1,6 +1,6 @@
 import { QRCodeSVG } from 'qrcode.react';
 import { ModalDialog } from './ModalDialog';
-import { pairingLink } from './app-navigation';
+import { browserCameraSetupLink, pairingLink } from './app-navigation';
 import type { PairingLifecycle } from './lifecycle';
 import { Icon } from './Icon';
 import './PairingDialog.css';
@@ -31,7 +31,9 @@ export function PairingDialog({
       <section aria-labelledby="pair-title" className="pair-modal">
         {state === 'completed' ? (
           <div className="pair-success" role="status">
-            <span className="icon" aria-hidden="true"><Icon name="check" /></span>
+            <span className="icon" aria-hidden="true">
+              <Icon name="check" />
+            </span>
             <h2 id="pair-title">Camera connected</h2>
             <p>Taking you to Cameras...</p>
           </div>
@@ -47,10 +49,10 @@ export function PairingDialog({
               <p>
                 {reconnecting
                   ? 'On the disconnected Android camera, scan this code to restore its existing settings.'
-                  : 'Scan the QR code with Beacon on Android, or share the one-time setup link.'}
+                  : 'Open this one-time setup link on an Android device or any browser with a camera.'}
               </p>
             </div>
-            
+
             {code ? (
               <div className="pairbody" role="status">
                 <div className="pair-qr">
@@ -61,7 +63,7 @@ export function PairingDialog({
                     level="M"
                     marginSize={0}
                     size={180}
-                    title="Scan with Beacon on Android"
+                    title="Open on the camera device"
                     value={pairingLink(code)}
                   />
                 </div>
@@ -69,34 +71,63 @@ export function PairingDialog({
                   <h3>One-time pairing code</h3>
                   <div className="big">{code}</div>
                   <p>Expires in 10 minutes</p>
-                  <button 
-                    className="btn secondary" 
+                  <button
+                    className="btn secondary"
                     onClick={() => {
-                      navigator.clipboard.writeText(pairingLink(code)).catch(onCopyError);
+                      navigator.clipboard
+                        .writeText(pairingLink(code))
+                        .catch(onCopyError);
                     }}
                   >
                     Copy setup link
                   </button>
+                  {!reconnecting && (
+                    <button
+                      className="btn secondary"
+                      onClick={() => {
+                        navigator.clipboard
+                          .writeText(browserCameraSetupLink(code))
+                          .catch(onCopyError);
+                      }}
+                    >
+                      Copy browser camera link
+                    </button>
+                  )}
+                  {!reconnecting && (
+                    <p className="pair-link-hint">
+                      Send the browser camera link to a device you own. It opens
+                      Camera Mode without signing in; the one-time code pairs it
+                      to your account.
+                    </p>
+                  )}
                 </div>
               </div>
             ) : error ? (
               <div className="pair-error" role="alert">
-                <p><strong>Couldn't prepare pairing code</strong></p>
+                <p>
+                  <strong>Couldn't prepare pairing code</strong>
+                </p>
                 <p>{error}</p>
                 <div className="pair-modalfoot">
-                  <button className="btn secondary" onClick={onDismiss}>Cancel</button>
-                  <button className="btn primary" onClick={onRetry}>Try again</button>
+                  <button className="btn secondary" onClick={onDismiss}>
+                    Cancel
+                  </button>
+                  <button className="btn primary" onClick={onRetry}>
+                    Try again
+                  </button>
                 </div>
               </div>
             ) : (
-              <div className="pair-loading" aria-busy="true">
+              <div className="pair-loading" aria-busy={busy}>
                 <p>Preparing...</p>
               </div>
             )}
-            
+
             {!error && (
               <div className="pair-modalfoot">
-                <button className="btn secondary" onClick={onDismiss}>Cancel</button>
+                <button className="btn secondary" onClick={onDismiss}>
+                  Cancel
+                </button>
               </div>
             )}
           </>

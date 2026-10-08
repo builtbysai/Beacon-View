@@ -75,7 +75,8 @@ describe('Google Drive OAuth client', () => {
       initiateDriveRecordingUpload({
         accessToken: 'private-access-token',
         byteSize: 1_024,
-        mimeType: 'video/webm',
+        mimeType: 'application/octet-stream',
+        origin: 'https://beacon.example',
         recordingId: '8aedbca1-6d5a-47b6-8c31-d20da64eb670',
       }),
     ).resolves.toBe(location);
@@ -89,6 +90,9 @@ describe('Google Drive OAuth client', () => {
     );
     expect(new Headers(options?.headers).get('x-upload-content-length')).toBe(
       '1024',
+    );
+    expect(new Headers(options?.headers).get('origin')).toBe(
+      'https://beacon.example',
     );
     if (typeof options?.body !== 'string')
       throw new Error('Expected a string request body');
@@ -106,7 +110,7 @@ describe('Google Drive OAuth client', () => {
               recordingId: '8aedbca1-6d5a-47b6-8c31-d20da64eb670',
             },
             id: 'drive-file-id',
-            mimeType: 'video/webm',
+            mimeType: 'application/octet-stream',
             size: '1024',
             trashed: false,
           }),
@@ -118,7 +122,7 @@ describe('Google Drive OAuth client', () => {
       verifyDriveRecordingFile({
         accessToken: 'recording-token',
         byteSize: 1_024,
-        mimeType: 'video/webm',
+        mimeType: 'application/octet-stream',
         providerFileId: 'drive-file-id',
         recordingId: '8aedbca1-6d5a-47b6-8c31-d20da64eb670',
       }),
@@ -136,7 +140,7 @@ describe('Google Drive OAuth client', () => {
               recordingId: 'different-recording',
             },
             id: 'drive-file-id',
-            mimeType: 'video/webm',
+            mimeType: 'application/octet-stream',
             size: '12',
             trashed: false,
           }),
@@ -148,7 +152,7 @@ describe('Google Drive OAuth client', () => {
       verifyDriveRecordingFile({
         accessToken: 'recording-token',
         byteSize: 1_024,
-        mimeType: 'video/webm',
+        mimeType: 'application/octet-stream',
         providerFileId: 'drive-file-id',
         recordingId: '8aedbca1-6d5a-47b6-8c31-d20da64eb670',
       }),

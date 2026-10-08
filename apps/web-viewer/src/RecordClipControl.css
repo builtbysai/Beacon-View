@@ -1,0 +1,66 @@
+/* "Reconnect Google Drive" card over the live view and Camera Mode. It sits
+   on video, so it uses its own dark surface in both themes. */
+.drive-reconnect-notice {
+  position: absolute;
+  top: 76px;
+  left: 50%;
+  z-index: 30;
+  display: grid;
+  gap: 10px;
+  width: min(420px, calc(100% - 32px));
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 14px;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+  line-height: 1.45;
+  transform: translateX(-50%);
+}
+
+.drive-reconnect-notice p {
+  margin: 0;
+}
+
+.drive-reconnect-notice strong {
+  color: #fcd34d;
+}
+
+.drive-reconnect-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.drive-reconnect-actions .primary {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  color: #04111f;
+  background: #7dd3fc;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.drive-reconnect-actions .primary:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.drive-reconnect-actions .link {
+  min-height: 40px;
+  border: 0;
+  color: #cbd5e1;
+  background: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.drive-reconnect-hint {
+  color: #cbd5e1;
+  font-size: 12px;
+}

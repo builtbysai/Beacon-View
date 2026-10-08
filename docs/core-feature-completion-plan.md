@@ -72,7 +72,11 @@ not considered complete.
       keys, so an attacker cycling through distinct emails/IPs against
       password-reset/login could grow it unboundedly for the process
       lifetime — added a periodic sweep (`rate-limit.test.ts`).
-- [ ] Wire verification/reset/reauth into the web UI (belongs with step 6).
+- [x] Wire verification, reset, and account-deletion reauthentication into
+      the web UI. Password reset and verification shipped in the frontend
+      integration baseline; account deletion now prompts for the existing
+      password reauthentication contract when its ten-minute window expires
+      (ADR 0062).
 - [ ] Non-silenceable push/in-app security alerts belong with step 1's
       notification outbox, not this step — email alerts ship here instead.
 
@@ -85,31 +89,39 @@ not considered complete.
       `requested` → `uploading` directly — noted as a real but harmless
       naming/observability gap, not fixed this pass.)
 - [x] Start with explicit user-triggered or motion-triggered short clips; no
-      hidden or continuous recording. User-triggered capture ships on both
-      web (viewer and browser-camera modes) and Android; motion-triggered
-      capture is server-authoritative (a new per-camera `recordOnMotion`
+      hidden or continuous recording. User-triggered capture ships on web
+      (viewer and browser-camera modes); Android currently captures only
+      server-authorized motion-triggered clips and still needs a manual control
+      and visible indicator. Motion-triggered capture is server-authoritative
+      (a new per-camera `recordOnMotion`
       setting gates whether the motion-event response hands the device a
       `recordingId` to act on) and ships on both platforms. September 16,
       commit `314ff37` — see
       [development-handoff.md](development-handoff.md)'s September 16 entry
       for the full breakdown and what's still unverified.
-- [ ] Store only metadata and opaque provider IDs in Beacon (done — media
-      never transits Beacon's server). Media must be encrypted before
-      leaving the camera and must not be persisted by Beacon: the
-      "must not be persisted by Beacon" half holds; **the "encrypted before
-      leaving the camera" half does not yet** — neither the browser nor the
-      Android capture path encrypts a clip before the resumable upload PUT to
-      Drive. This is a real deviation from ADR 0051's stated scope, not an
-      oversight to silently close — flag before calling recording
-      release-ready.
+- [~] Store only metadata and opaque provider IDs in Beacon (media never
+  transits Beacon's server). Web/PWA clips now use a unique AES-GCM
+  envelope before the direct Drive upload; the backend stores ciphertext
+  metadata and an encrypted per-clip key (ADR 0065). Android now streams each
+  local clip through the same AES-GCM envelope before its direct Drive upload
+  (ADR 0069). Authorized ciphertext download/local decryption playback exists
+  for the owner on web/PWA (ADR 0068). Physical end-to-end playback evidence
+  remains required before recording can be called release-ready.
 - [x] Use a separate Google OAuth grant with the least-privileged
       `drive.file` scope for user-visible recording files, kept separate
       from the existing `drive.appdata` connection.
 - [x] Implement resumable upload, listing, deletion, and Drive-verification-
       mismatch handling (`finalizeRecordingUpload` calls
       `verifyDriveRecordingFile` before trusting the client's completion
-      claim). Playback authorization, retry UX, quota/full-disk handling, and
-      provider-disconnect recovery are not separately exercised yet.
+      claim). Explicit browser/Android failure reporting, credential-scoped
+      device transitions, an hourly stale-request/upload recovery sweep, and
+      owner cleanup for failed entries ship in ADR 0070. Web/PWA now retains
+      failed encrypted clips in memory for explicit retry and distinguishes
+      quota, authorization, expired-session, and temporary Drive failures
+      (ADR 0071). Background retry and real-provider recovery still need
+      acceptance evidence. Owner-only
+      playback now verifies Drive metadata and decrypts in the browser; its
+      real-account Drive path still needs acceptance evidence.
 
 ### 5. Integration and operational proof
 
@@ -121,15 +133,72 @@ not considered complete.
 
 ### 6. UI/UX pass (after core)
 
-- Rework settings, sidebar, recording controls/library, notification states,
-  household management, and recovery guidance against the finished contracts.
-- Add accessibility, responsive, loading, empty, error, and reconnect states.
+- [x] **Recording controls/library** — September 26-27 batch. The Activity feed
+      is now split from a dedicated Clips library, with a clip attached to the
+      event that caused it (`recordings.trigger_motion_event_id`) instead of
+      showing recording-lifecycle transitions as their own timeline rows.
+      Clips gained keyset pagination, per-camera-grant read access (previously
+      owner-only), time-limited external share links (ADR 0077), and
+      client-captured encrypted thumbnails for browser-recorded clips (ADR
+      0078, Android capture still open). The manual-record control's
+      previously inert `data-tooltip` state indicator was replaced with a
+      persistent, accessible `RecordingBadge`, and an in-progress recording
+      now aborts intentionally (visible failure, not a silent one) if its
+      source stream drops or ends unexpectedly (ADR 0079).
+- [ ] Rework settings, sidebar, notification states, household management, and
+      recovery guidance against the finished contracts. Not started.
+- [ ] Add accessibility, responsive, loading, empty, error, and reconnect
+      states. Done for the Clips/Activity surfaces above; the rest of the app
+      still needs the systematic audit in [responsive-audit.md](responsive-audit.md).
+- [x] **Android/web feature-and-design parity audit** — owner-requested
+      September 27 and completed September 27. See
+      [android-web-parity-audit.md](android-web-parity-audit.md) for the full
+      screen-by-screen and design-token comparison. Headline: color tokens
+      already match (Android's palette was deliberately copied from the
+      web's); the real design gap is an untokenized Android typography/
+      spacing scale, and the real feature gaps at audit time were a missing Clips library,
+      motion settings panel, manual-recording control/indicator, and household/
+      sharing management on Android — none of which are styling issues.
+      The owner approved sequential continuation September 27 and explicitly
+      selected PWA-identical mobile navigation. Android now uses the same modal
+      sidebar grouping (Home/Cameras/Events/Settings), with Activity and Clips
+      inside Events, plus the shared Inter/type/spacing/radius system and the
+      PWA-style native sign-in/password-recovery/registration surfaces. The
+      mobile registration route reuses the browser registration security
+      policy and returns a revocable bearer session. Deployed registration
+      acceptance and the order of later sharing work remain open. The native
+      camera-settings screen also now implements the existing owner/admin motion
+      settings contract (source, detection, sensitivity, record-on-motion,
+      cooldown, and quiet hours). Automated gates and the physical empty state
+      pass; a live settings save/apply acceptance remains open because the
+      current Pixel household returned no editable motion rows.
+      Manual 15-second recording is also implemented locally through a
+      server-owned camera command after the existing owner/storage/access/online
+      checks. It reuses the camera's encrypted upload pipeline and exposes visible
+      viewer, camera-screen, and foreground-notification state. Deployment and a
+      real Drive-backed Android capture remain open.
+- [~] **Android Clips library** — first U7 implementation slice started
+  September 27 on `codex/android-clips-library`: grant-filtered listing,
+  paginated loading, integrity-checked local decryption/playback, and
+  owner-only deletion use the existing backend contracts. Automated Android
+  unit/lint/debug-build gates pass. Physical playback, external sharing,
+  thumbnail display/capture, download/export, and final owner UX review are
+  still open, so this is not complete.
 
 ### 7. Release gate (last)
 
 - Privacy/trust/legal copy, Google OAuth verification, email-domain operations,
   support/retention disclosures, SBOM/CI/signing/staged rollout, and final
   security review.
+- [ ] **MFA/passkeys** — owner-approved September 27 (roadmap N5): add where
+      applicable and on devices that support it. Proposed shape: WebAuthn
+      (passkey) registration/login for the web app as the primary path, since
+      it needs no new server-side OTP delivery channel; Android via Credential
+      Manager passkeys where the device supports it, falling back to the
+      existing password flow everywhere else. Not started -- no MFA/passkey
+      code exists yet on either platform. Needs a design decision on whether a
+      passkey can be the _only_ credential on an account (recovery story if
+      the authenticator is lost) before implementation.
 
 ## Explicit scope boundaries
 
@@ -137,3 +206,13 @@ Beacon will not claim end-to-end encryption unless the implemented key model and
 threat model support that claim. Cloud recording is opt-in, visible to the camera
 user, short-clip based, and disabled while privacy mode is active. Google Drive
 is a user-owned cloud processor and recordings consume the user's quota.
+
+## Camera use-case profiles — research and proposal
+
+The owner is considering purpose-built camera profiles (e.g. doorbell: dormant
+until motion/button; car camera; baby monitor/nursery; the current always-on
+profile) rather than one undifferentiated camera behavior. See
+[camera-use-case-profiles.md](camera-use-case-profiles.md) for the research and
+a proposed incremental implementation plan. No implementation has started; this
+is a research deliverable awaiting owner direction on which profile (if any) to
+build first.

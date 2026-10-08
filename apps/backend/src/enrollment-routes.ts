@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { HouseholdEventHub } from './household-events.js';
+import type { AppConfig } from './config.js';
 import {
   browserDeviceSchema,
   deviceParameterSchema,
@@ -21,9 +22,11 @@ import type { SessionRecord } from './store-contract.js';
 const HOUR = 60 * 60 * 1_000;
 const FIFTEEN_MINUTES = 15 * 60 * 1_000;
 const TEN_MINUTES = 10 * 60 * 1_000;
+export const BROWSER_CAMERA_COOKIE = 'beacon_browser_camera';
 
 interface EnrollmentRouteDependencies {
   auth: SessionAuth;
+  config: AppConfig;
   householdEvents: HouseholdEventHub;
   limiter: RateLimiter;
   signaling: SignalingHub;
@@ -34,7 +37,8 @@ export function registerEnrollmentRoutes(
   app: FastifyInstance,
   dependencies: EnrollmentRouteDependencies,
 ): void {
-  const { auth, householdEvents, limiter, signaling, store } = dependencies;
+  const { auth, config, householdEvents, limiter, signaling, store } =
+    dependencies;
   const { authenticateHouseholdAdminStateChange, authenticateStateChange } =
     auth;
 
@@ -251,5 +255,95 @@ export function registerEnrollmentRoutes(
         platform: result.device.platform,
       },
     });
+  });
+
+  // A browser camera is paired by a signed-in household member on another
+  // device. The short-lived code is consumed atomically with credential
+  // creation; the producer credential never enters JavaScript or a URL.
+  app.post('/api/browser-devices/pair', async (request, reply) => {
+    if (request.headers.origin !== config.WEB_ORIGIN)
+      return reply.code(403).send({ error: 'Request origin required' });
+    const parsed = browserDeviceSchema
+      .extend({
+        pairingCode: registerDeviceSchema.shape.pairingCode,
+      })
+      .safeParse(request.body);
+    if (!parsed.success)
+      return reply.code(400).send({ error: 'Invalid browser camera details' });
+    const key = `${request.ip}:${parsed.data.installationId}`;
+    if (!limiter.take(`pairing-redeem:${key}`, 10, FIFTEEN_MINUTES))
+      return reply.code(429).send({ error: 'Too many requests' });
+    const credential = generateToken();
+    const result = await store.redeemPairingCode({
+      codeHash: hashSecret(parsed.data.pairingCode.toUpperCase()),
+      credentialHash: hashSecret(credential),
+      installationId: parsed.data.installationId,
+      name: parsed.data.name,
+      ipAddress: request.ip,
+      now: new Date(),
+      browserSources: parsed.data.sources,
+    });
+    if (result === DEVICE_REGISTRATION_RATE_LIMITED)
+      return reply.code(429).send({ error: 'Too many requests' });
+    if (!result)
+      return reply.code(400).send({ error: 'Pairing code expired or invalid' });
+    const identity = await store.findDeviceByCredential(hashSecret(credential));
+    if (identity) {
+      householdEvents.publish(identity.householdId, {
+        cameraId: result.publicCameraId,
+        pairingState: 'completed',
+        type: 'camera-paired',
+      });
+    }
+    reply.setCookie(BROWSER_CAMERA_COOKIE, credential, {
+      httpOnly: true,
+      path: '/api',
+      sameSite: 'strict',
+      secure: config.NODE_ENV === 'production',
+    });
+    const cameras = identity
+      ? (await store.listCameras(identity.householdId)).filter(
+          (camera) => camera.publicDeviceId === result.publicDeviceId,
+        )
+      : [];
+    return reply.code(201).send({
+      cameras: cameras.map((camera) => ({
+        id: camera.publicCameraId,
+        name: camera.name,
+        sourceKey: camera.sourceKey,
+      })),
+      device: { id: result.publicDeviceId, name: result.name },
+    });
+  });
+
+  app.post('/api/browser-devices/restore', async (request, reply) => {
+    if (request.headers.origin !== config.WEB_ORIGIN)
+      return reply.code(403).send({ error: 'Request origin required' });
+    const credential = request.cookies[BROWSER_CAMERA_COOKIE];
+    if (!credential) return unauthorized(reply);
+    const parsed = browserDeviceSchema.safeParse(request.body);
+    if (!parsed.success)
+      return reply.code(400).send({ error: 'Invalid browser camera details' });
+    const identity = await store.findDeviceByCredential(hashSecret(credential));
+    if (
+      !identity ||
+      identity.platform !== 'browser' ||
+      identity.installationId !== parsed.data.installationId
+    )
+      return unauthorized(reply);
+    const cameras = await store.syncDeviceCameras(
+      hashSecret(credential),
+      parsed.data.sources,
+      new Date(),
+    );
+    if (!cameras) return unauthorized(reply);
+    return {
+      cameras: cameras.map((camera) => ({
+        id: camera.publicCameraId,
+        name: camera.name,
+        sourceKey: camera.sourceKey,
+      })),
+      device: { id: identity.publicDeviceId, name: identity.name },
+    };
   });
 }

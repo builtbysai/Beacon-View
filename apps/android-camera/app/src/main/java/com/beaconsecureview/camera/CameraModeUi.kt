@@ -133,7 +133,7 @@ internal fun PairingScreen(
                 .padding(horizontal = 16.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
+        IconButton(onClick = onBack) {
             Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back")
         }
         BeaconPageHeader(
@@ -216,42 +216,94 @@ internal fun WelcomeScreen(
             Modifier.fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .safeDrawingPadding()
-                .padding(horizontal = 16.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = BeaconSpacing.Lg, vertical = BeaconSpacing.Lg),
+        verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Xl),
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             BeaconWordmark(compact = true)
+            BeaconStatusPill("PRIVATE ALPHA", MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        BeaconPageHeader(
-            eyebrow = "Your space, within reach",
-            title = "Welcome to Beacon",
-            supportingText = "Use this Android device as a camera or securely view your household.",
-        )
-        BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-            Icon(
-                Icons.Outlined.Smartphone,
-                null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp),
+        Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Md)) {
+            Text(
+                "YOUR SPACE, WITHIN REACH",
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelMedium,
+                letterSpacing = 1.4.sp,
             )
-            Text("Android phone or tablet", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 12.dp))
-            Text("Best for always-on camera use.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
+            Text(
+                "Turn a spare device into your camera.",
+                style = MaterialTheme.typography.displayLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                "Use this phone or tablet as a live camera, or securely view cameras already in your household.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Sm)) {
             Button(
                 onClick = onCameraSetup,
                 modifier = Modifier.fillMaxWidth(),
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.onSurface,
+                        contentColor = MaterialTheme.colorScheme.surface,
+                    ),
+                shape = RoundedCornerShape(BeaconRadii.Md),
             ) {
                 Icon(Icons.Outlined.Smartphone, null, modifier = Modifier.size(20.dp))
                 Text("Set up camera", modifier = Modifier.padding(start = 8.dp))
                 Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, modifier = Modifier.padding(start = 8.dp).size(18.dp))
             }
+            OutlinedButton(
+                onClick = onMonitor,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(BeaconRadii.Md),
+            ) {
+                Icon(Icons.Outlined.Videocam, null, modifier = Modifier.size(20.dp))
+                Text("Monitor cameras", modifier = Modifier.padding(start = BeaconSpacing.Sm))
+            }
         }
-        BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Outlined.Videocam, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
-            Text("Monitor your cameras", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 12.dp))
-            Text("Sign in to view cameras already on your account.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
-            OutlinedButton(onClick = onMonitor, modifier = Modifier.fillMaxWidth()) { Text("Open Monitor") }
+        BeaconHeroPanel(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Beacon Live", color = Color.White, fontWeight = FontWeight.Bold)
+                BeaconStatusPill("LIVE", BeaconOnline)
+            }
+            Surface(
+                modifier = Modifier.fillMaxWidth().height(170.dp),
+                color = BeaconCanvas,
+                shape = RoundedCornerShape(BeaconRadii.Lg),
+            ) {
+                Column(
+                    modifier = Modifier.padding(BeaconSpacing.Lg),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("HD · 1080p", color = BeaconHeroSupporting, style = MaterialTheme.typography.labelSmall)
+                    Column {
+                        Text("Living room", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                        Text("Spare phone · Rear camera", color = BeaconHeroSupporting, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(BeaconSpacing.Lg)) {
+                BeaconTrustBadge(Icons.Outlined.Lock, "Encrypted", Modifier.weight(1f))
+                BeaconTrustBadge(Icons.Outlined.Visibility, "Visible capture", Modifier.weight(1f))
+            }
         }
-        BeaconTrustLine("Private by design. No cloud recordings.")
+        Text(
+            "Live viewing · Private access · Optional encrypted clips",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -278,7 +330,11 @@ internal fun parsePairingQr(rawValue: String?, trustedApiUrl: String? = null): S
         !link.scheme.equals("https", ignoreCase = true) ||
         trustedHost == null ||
         !link.host.equals(trustedHost, ignoreCase = true) ||
-        link.path != "/pair"
+        // ADR 0067 added a direct browser setup link alongside the original generic
+        // pairing link; the code is the same bearer secret either way, so Android must
+        // accept both paths the web app is willing to hand a scanner (app-navigation.ts's
+        // pairingCodeFromScan), not only the original one.
+        link.path !in setOf("/pair", "/camera-mode/setup")
     ) {
         return null
     }
@@ -290,7 +346,15 @@ internal fun parsePairingQr(rawValue: String?, trustedApiUrl: String? = null): S
     return code?.trim()?.uppercase()?.takeIf(::isValidPairingCode)
 }
 
-internal fun parseMobileGoogleAuthLink(rawValue: String?, trustedApiUrl: String?): String? {
+/** A successful exchange carries [code]; a failed or link-required attempt
+ * (the backend redirects to `/auth/mobile#status=failed` or
+ * `#status=linkRequired` when it has no handoff code to give, matching the
+ * web's `?googleSignIn=failed`/`linkRequired` query param) carries [status]
+ * instead so the caller can still show the PWA's equivalent message rather
+ * than silently doing nothing. */
+internal data class MobileGoogleAuthResult(val code: String? = null, val status: String? = null)
+
+internal fun parseMobileGoogleAuthLink(rawValue: String?, trustedApiUrl: String?): MobileGoogleAuthResult? {
     if (rawValue == null) return null
     val link = runCatching { java.net.URI(rawValue.trim()) }.getOrNull() ?: return null
     val trustedHost = trustedApiUrl?.let { runCatching { java.net.URI(it).host }.getOrNull() }
@@ -304,12 +368,19 @@ internal fun parseMobileGoogleAuthLink(rawValue: String?, trustedApiUrl: String?
             link.host.equals("auth", ignoreCase = true) &&
             link.path == "/mobile"
     if (!trustedHttps && !trustedAppReturn) return null
+    val parameters = (link.rawQuery ?: link.rawFragment)?.split('&') ?: return null
     val code =
-        (link.rawQuery ?: link.rawFragment)
-            ?.split('&')
-            ?.firstOrNull { it.substringBefore('=').equals("code", ignoreCase = true) }
+        parameters
+            .firstOrNull { it.substringBefore('=').equals("code", ignoreCase = true) }
             ?.substringAfter('=', missingDelimiterValue = "")
-    return code?.takeIf { it.length in 32..512 && it.matches(Regex("[A-Za-z0-9_-]+")) }
+            ?.takeIf { it.length in 32..512 && it.matches(Regex("[A-Za-z0-9_-]+")) }
+    val status =
+        parameters
+            .firstOrNull { it.substringBefore('=').equals("status", ignoreCase = true) }
+            ?.substringAfter('=', missingDelimiterValue = "")
+            ?.takeIf { it == "failed" || it == "linkRequired" }
+    if (code == null && status == null) return null
+    return MobileGoogleAuthResult(code = code, status = status)
 }
 
 @Composable
@@ -330,6 +401,40 @@ internal fun PairingSuccess() {
     }
 }
 
+internal enum class CameraPermissionPrompt(
+    val title: String,
+    val description: String,
+    val action: String,
+) {
+    Camera(
+        title = "Camera access needed",
+        description = "Allow camera access to show the local preview and share live video.",
+        action = "Allow camera",
+    ),
+    Notification(
+        title = "Status notification needed",
+        description = "Allow Beacon's ongoing status notification before Camera mode starts.",
+        action = "Allow status notification",
+    ),
+    Microphone(
+        title = "Microphone is off",
+        description = "Video remains available. Allow microphone access for Listen and recordings with sound.",
+        action = "Allow microphone",
+    ),
+}
+
+internal fun cameraPermissionPrompt(
+    cameraAllowed: Boolean,
+    notificationsAllowed: Boolean,
+    microphoneAllowed: Boolean,
+): CameraPermissionPrompt? =
+    when {
+        !cameraAllowed -> CameraPermissionPrompt.Camera
+        !notificationsAllowed -> CameraPermissionPrompt.Notification
+        !microphoneAllowed -> CameraPermissionPrompt.Microphone
+        else -> null
+    }
+
 @Composable
 internal fun CameraHome(
     runtime: CameraRuntimeState,
@@ -349,6 +454,12 @@ internal fun CameraHome(
 ) {
     var settingsOpen by remember { mutableStateOf(false) }
     var disconnectConfirmationOpen by remember { mutableStateOf(false) }
+    val permissionPrompt =
+        cameraPermissionPrompt(
+            cameraAllowed = cameraPermission,
+            notificationsAllowed = notificationPermission,
+            microphoneAllowed = microphonePermission,
+        )
     val selectedSource = runtime.cameras.find { it.id == runtime.selectedCameraId }
     val selectedIndex = runtime.cameras.indexOfFirst { it.id == runtime.selectedCameraId }
     val switchTarget =
@@ -385,7 +496,16 @@ internal fun CameraHome(
                     tint = Color(0xFF7FA3C9),
                     modifier = Modifier.size(38.dp),
                 )
-                Text(if (runtime.privacyMode) "Paused" else "Starting camera…", color = Color.White, fontWeight = FontWeight.Bold)
+                Text(
+                    when {
+                        runtime.privacyMode -> "Paused"
+                        permissionPrompt == CameraPermissionPrompt.Camera -> "Camera permission needed"
+                        permissionPrompt == CameraPermissionPrompt.Notification -> "Status notification needed"
+                        else -> "Starting camera…"
+                    },
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
 
@@ -452,13 +572,32 @@ internal fun CameraHome(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            if (!cameraPermission || !notificationPermission || !microphonePermission) {
+            if (permissionPrompt != null) {
                 Surface(shape = RoundedCornerShape(16.dp), color = Color(0xEFFFFFFF)) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        when {
-                            !cameraPermission -> Button(onClick = onAllowCamera, modifier = Modifier.fillMaxWidth()) { Text("Allow camera") }
-                            !notificationPermission -> Button(onClick = onAllowNotifications, modifier = Modifier.fillMaxWidth()) { Text("Allow status notification") }
-                            !microphonePermission -> Button(onClick = onAllowMicrophone, modifier = Modifier.fillMaxWidth()) { Text("Allow microphone") }
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            permissionPrompt.title,
+                            color = Color(0xFF0F172A),
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            permissionPrompt.description,
+                            color = Color(0xFF64748B),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Button(
+                            onClick =
+                                when (permissionPrompt) {
+                                    CameraPermissionPrompt.Camera -> onAllowCamera
+                                    CameraPermissionPrompt.Notification -> onAllowNotifications
+                                    CameraPermissionPrompt.Microphone -> onAllowMicrophone
+                                },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(permissionPrompt.action)
                         }
                     }
                 }
@@ -615,6 +754,7 @@ private fun CameraRuntimeStatus(runtime: CameraRuntimeState) {
 internal fun cameraRuntimeLabel(runtime: CameraRuntimeState): String =
     when {
         runtime.privacyMode -> "PRIVACY ON"
+        runtime.recordingActive -> "RECORDING"
         runtime.activeViewers > 0 -> "LIVE"
         runtime.device == DeviceLifecycle.Idle || runtime.device == DeviceLifecycle.Online -> "ONLINE"
         runtime.device == DeviceLifecycle.Reconnecting -> "RECONNECTING"
@@ -625,6 +765,7 @@ internal fun cameraRuntimeLabel(runtime: CameraRuntimeState): String =
 private fun cameraRuntimeColor(runtime: CameraRuntimeState): Color =
     when {
         runtime.privacyMode -> BeaconPrivacy
+        runtime.recordingActive -> BeaconLive
         runtime.activeViewers > 0 -> BeaconLive
         runtime.device == DeviceLifecycle.Idle || runtime.device == DeviceLifecycle.Online -> BeaconOnline
         runtime.device == DeviceLifecycle.Reconnecting -> BeaconWarning

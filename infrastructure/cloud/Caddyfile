@@ -16,6 +16,21 @@
 	encode zstd gzip
 	import beacon_api
 
+	# Desktop app downloads (ADR 0083), published to /opt/beacon/downloads on
+	# the host and mounted read-only. Missing files are a real 404, never the
+	# app shell, and the manifest is always revalidated.
+	handle /downloads/* {
+		root * /srv
+		# The manifest and the update feeds (latest*.yml, ADR 0085) always
+		# revalidate so a release is seen at once.
+		@manifest path /downloads/manifest.json /downloads/*.yml
+		header @manifest Cache-Control "no-cache"
+		@installers not path /downloads/manifest.json /downloads/*.yml
+		header @installers Cache-Control "public, max-age=3600"
+		header X-Content-Type-Options "nosniff"
+		file_server
+	}
+
 	handle {
 		root * /srv
 		try_files {path} /index.html

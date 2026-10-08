@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { ApiError, request } from './api';
+import { request } from './api';
+import { friendlyError } from './friendly-errors';
 import { Brand } from './Icon';
 
 export function ResetPasswordPage() {
@@ -15,7 +16,9 @@ export function ResetPasswordPage() {
     const password = (data.get('password') as string | null) ?? '';
     const confirmation = (data.get('confirmation') as string | null) ?? '';
     if (password !== confirmation) {
-      setError('Those passwords do not match.');
+      setError(
+        'The passwords don’t match. Type the same password in both fields.',
+      );
       return;
     }
     setBusy(true);
@@ -28,9 +31,7 @@ export function ResetPasswordPage() {
       setDone(true);
     } catch (thrown) {
       setError(
-        thrown instanceof ApiError
-          ? thrown.message
-          : 'The password could not be reset. Try again.',
+        friendlyError(thrown, 'The password couldn’t be reset. Try again.'),
       );
     } finally {
       setBusy(false);
@@ -69,9 +70,14 @@ export function ResetPasswordPage() {
         ) : (
           <>
             <h1 id="reset-password-title">Choose a new password.</h1>
-            <form onSubmit={(event) => void onSubmit(event)} className="flex-col gap-4">
+            <form
+              onSubmit={(event) => void onSubmit(event)}
+              className="flex-col gap-4"
+            >
               <div className="form-group">
-                <label className="form-label" htmlFor="reset-password">New password</label>
+                <label className="form-label" htmlFor="reset-password">
+                  New password
+                </label>
                 <input
                   id="reset-password"
                   name="password"
@@ -85,7 +91,9 @@ export function ResetPasswordPage() {
                 />
               </div>
               <div className="form-group">
-                <label className="form-label" htmlFor="reset-password-confirm">Confirm password</label>
+                <label className="form-label" htmlFor="reset-password-confirm">
+                  Confirm password
+                </label>
                 <input
                   id="reset-password-confirm"
                   name="confirmation"
@@ -98,8 +106,16 @@ export function ResetPasswordPage() {
                   className="input-field"
                 />
               </div>
-              {error && <p className="auth-alert" role="alert">{error}</p>}
-              <button className="btn-primary w-full mt-4" type="submit" disabled={busy}>
+              {error && (
+                <p className="auth-alert" role="alert">
+                  {error}
+                </p>
+              )}
+              <button
+                className="btn-primary w-full mt-4"
+                type="submit"
+                disabled={busy}
+              >
                 {busy ? 'Updating...' : 'Update password'}
               </button>
             </form>

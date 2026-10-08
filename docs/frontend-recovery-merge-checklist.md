@@ -12,7 +12,7 @@ Use this before merging `antigravity/recovery-checkpoint` with backend work.
 - [ ] Verify Home, Cameras, Activity, Settings and Add Camera at 100% zoom.
 - [ ] Verify desktop, laptop, tablet and narrow-phone widths without horizontal overflow.
 - [ ] Verify all dialogs/sheets restore focus and do not shift the app layout.
-- [ ] Verify Camera Settings opens contextually over its trigger page once issue #19 is completed.
+- [x] Verify Camera Settings opens contextually over its trigger page once issue #19 is completed.
 - [ ] Confirm development-only Live Viewer fixtures/simulation cannot be exposed in production.
 - [ ] Complete physical-device Live Viewer QA tracked in issue #21.
 - [ ] Reconcile expanded Activity event metadata when issue #20 is implemented.

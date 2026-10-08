@@ -87,7 +87,6 @@ export function SecurityActivityDialog({
         replaceRoute(`${url.pathname}${url.search}`);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function goTo(nextOffset: number) {
@@ -165,7 +164,9 @@ export function SecurityActivityDialog({
                         {attempts > 1 && (
                           <span>{attempts} connection attempts</span>
                         )}
-                        {latest.actorEmail && <span>By {latest.actorEmail}</span>}
+                        {latest.actorEmail && (
+                          <span>By {latest.actorEmail}</span>
+                        )}
                       </div>
                     </div>
                   </li>

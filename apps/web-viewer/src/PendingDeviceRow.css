@@ -1,0 +1,50 @@
+.pending-device-list {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.pending-device-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.pending-device-identity {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pending-device-identity strong,
+.pending-device-identity span {
+  overflow-wrap: anywhere;
+}
+
+.pending-device-identity span {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.pending-device-row .quiet-button {
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .pending-device-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .pending-device-row .quiet-button {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

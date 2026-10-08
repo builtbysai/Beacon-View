@@ -60,7 +60,11 @@ export function MotionRetentionSettings() {
           {error ? 'Could not load.' : 'Loading…'}
         </span>
       ) : (
-        <div className="retention-choices" role="radiogroup" aria-label="Keep motion history for">
+        <div
+          className="retention-choices"
+          role="radiogroup"
+          aria-label="Keep motion history for"
+        >
           {OPTIONS.map((option) => (
             <button
               key={option.days}

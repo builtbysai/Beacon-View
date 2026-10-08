@@ -14,6 +14,7 @@ import type {
   MotionRetentionRecord,
   RetentionPurgeRecord,
 } from './store-contract.js';
+import type { CameraUseCase, MotionPreset } from './camera-use-case.js';
 import type { PostgresNotificationRepository } from './postgres-notification-repository.js';
 
 export class PostgresMotionRepository {
@@ -31,28 +32,57 @@ export class PostgresMotionRepository {
               cs.display_name AS "cameraName", d.name AS "deviceName",
               me.confidence::double precision AS confidence,
               me.occurred_at AS "occurredAt",
-              to_char(me.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorTimestamp"
+              to_char(me.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorTimestamp",
+              r.id AS "recordingId", r.status AS "recordingStatus"
        FROM motion_events me
        JOIN camera_sources cs ON cs.id = me.camera_source_id
        JOIN cameras d ON d.id = cs.device_id
        JOIN households h ON h.id = d.household_id
+       LEFT JOIN recordings r ON r.trigger_motion_event_id = me.id
+         AND r.deleted_at IS NULL
        WHERE d.household_id = $1
          AND me.occurred_at >= now() - (h.motion_retention_days * interval '1 day')
          AND ($2::uuid IS NULL OR cs.public_camera_id = $2)
          AND ($3::timestamptz IS NULL OR me.occurred_at >= $3)
          AND ($4::timestamptz IS NULL OR (me.occurred_at, me.id) < ($4, $5::uuid))
+         AND ($6::uuid[] IS NULL OR cs.public_camera_id = ANY($6::uuid[]))
        ORDER BY me.occurred_at DESC, me.id DESC
-       LIMIT $6`,
+       LIMIT $7`,
       [
         householdId,
         options.cameraId ?? null,
         options.since ?? null,
         options.before?.time ?? null,
         options.before?.id ?? null,
+        options.allowedCameraIds ?? null,
         options.limit ?? 100,
       ],
     );
     return result.rows;
+  }
+
+  async getMotionEventById(
+    householdId: string,
+    motionEventId: string,
+    allowedCameraIds?: string[],
+  ): Promise<MotionEventRecord | null> {
+    const result = await this.pool.query<MotionEventRecord>(
+      `SELECT me.id, cs.public_camera_id AS "publicCameraId",
+              cs.display_name AS "cameraName", d.name AS "deviceName",
+              me.confidence::double precision AS confidence,
+              me.occurred_at AS "occurredAt",
+              to_char(me.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorTimestamp",
+              r.id AS "recordingId", r.status AS "recordingStatus"
+       FROM motion_events me
+       JOIN camera_sources cs ON cs.id = me.camera_source_id
+       JOIN cameras d ON d.id = cs.device_id
+       LEFT JOIN recordings r ON r.trigger_motion_event_id = me.id
+         AND r.deleted_at IS NULL
+       WHERE d.household_id = $1 AND me.id = $2
+         AND ($3::uuid[] IS NULL OR cs.public_camera_id = ANY($3::uuid[]))`,
+      [householdId, motionEventId, allowedCameraIds ?? null],
+    );
+    return result.rows[0] ?? null;
   }
 
   async getMotionRetention(
@@ -162,6 +192,40 @@ export class PostgresMotionRepository {
     return result.rows[0] ?? null;
   }
 
+  async setCameraUseCase(
+    householdId: string,
+    publicCameraId: string,
+    useCase: CameraUseCase,
+    preset: MotionPreset | null,
+  ): Promise<{ motionPresetApplied: boolean; useCase: CameraUseCase } | null> {
+    // Only Android cameras detect motion on the device; a browser camera's
+    // use case is a label and its camera-power/sound defaults.
+    const result = await this.pool.query<{
+      motionPresetApplied: boolean;
+      useCase: CameraUseCase;
+    }>(
+      `UPDATE camera_sources cs SET use_case = $3, updated_at = now(),
+              motion_enabled = CASE WHEN d.platform = 'android' AND $4::boolean IS NOT NULL THEN $4 ELSE cs.motion_enabled END,
+              motion_record_enabled = CASE WHEN d.platform = 'android' AND $5::boolean IS NOT NULL THEN $5 ELSE cs.motion_record_enabled END,
+              motion_sensitivity = CASE WHEN d.platform = 'android' AND $6::text IS NOT NULL THEN $6 ELSE cs.motion_sensitivity END,
+              motion_cooldown_seconds = CASE WHEN d.platform = 'android' AND $7::integer IS NOT NULL THEN $7 ELSE cs.motion_cooldown_seconds END
+       FROM cameras d WHERE cs.device_id = d.id AND d.household_id = $1
+         AND cs.public_camera_id = $2 AND cs.removed_at IS NULL AND d.revoked_at IS NULL
+       RETURNING cs.use_case AS "useCase",
+                 (d.platform = 'android' AND $4::boolean IS NOT NULL) AS "motionPresetApplied"`,
+      [
+        householdId,
+        publicCameraId,
+        useCase,
+        preset?.enabled ?? null,
+        preset?.recordOnMotion ?? null,
+        preset?.sensitivity ?? null,
+        preset?.cooldownSeconds ?? null,
+      ],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async createMotionEvent(input: {
     credentialHash: string;
     publicCameraId: string;
@@ -173,6 +237,7 @@ export class PostgresMotionRepository {
     cameraSourceId: string;
     ownerId: string;
     recordOnMotion: boolean;
+    motionEventId: string | null;
   } | null> {
     const client = await this.pool.connect();
     try {
@@ -232,6 +297,7 @@ export class PostgresMotionRepository {
           cameraSourceId: sourceId,
           created: false,
           householdId: device.householdId,
+          motionEventId: null,
           ownerId: device.userId,
           recordOnMotion: false,
         };
@@ -252,6 +318,7 @@ export class PostgresMotionRepository {
           cameraSourceId: sourceId,
           created: false,
           householdId: device.householdId,
+          motionEventId: null,
           ownerId: device.userId,
           recordOnMotion: false,
         };
@@ -276,7 +343,6 @@ export class PostgresMotionRepository {
           motionEventId,
           now: input.now,
           sourceId,
-          userId: device.userId,
         });
       }
       const created = (inserted.rowCount ?? 0) === 1;
@@ -285,6 +351,7 @@ export class PostgresMotionRepository {
         cameraSourceId: sourceId,
         created,
         householdId: device.householdId,
+        motionEventId: created ? motionEventId! : null,
         ownerId: device.userId,
         recordOnMotion: created && sourceSettings.recordOnMotion,
       };

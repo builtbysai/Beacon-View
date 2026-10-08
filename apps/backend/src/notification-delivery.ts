@@ -2,6 +2,7 @@ import { GoogleAuth } from 'google-auth-library';
 import webPush from 'web-push';
 
 import type { AppConfig } from './config.js';
+import type { DesktopAlertMessage } from './household-events.js';
 import type {
   NotificationDelivery,
   NotificationDeliveryOutcome,
@@ -22,10 +23,28 @@ export function parseRetryAfter(
   return Math.min(Math.ceil(milliseconds), MAX_RETRY_AFTER_MS);
 }
 
+/** Delivers a desktop alert to one session's live realtime connection(s)
+ * and returns how many received it (HouseholdEventHub.sendToSession). */
+export type DesktopAlertTransport = (
+  sessionId: string,
+  message: DesktopAlertMessage,
+) => number;
+
+/** Desktop alerts have no push service to hold them while the app is
+ * offline, so the outbox retries (1 min, 5 min, 30 min, ...) only while the
+ * alert is still useful -- mirroring Web Push TTLs of 15 minutes for motion
+ * and an hour otherwise -- and then lets it expire. */
+export function desktopAttemptLimit(category: string | undefined): number {
+  return category === 'motion' ? 2 : 3;
+}
+
 export class NotificationSender {
   readonly #googleAuth: GoogleAuth | null;
 
-  constructor(private readonly config: AppConfig) {
+  constructor(
+    private readonly config: AppConfig,
+    private readonly desktopTransport?: DesktopAlertTransport,
+  ) {
     this.#googleAuth = config.FIREBASE_PROJECT_ID
       ? new GoogleAuth({
           scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
@@ -48,7 +67,26 @@ export class NotificationSender {
     delivery: NotificationDelivery,
   ): Promise<NotificationDeliveryOutcome> {
     if (delivery.channel === 'fcm') return this.#sendFcm(delivery);
+    if (delivery.channel === 'desktop') return this.#sendDesktop(delivery);
     return this.#sendWebPush(delivery);
+  }
+
+  #sendDesktop(delivery: NotificationDelivery): NotificationDeliveryOutcome {
+    const { category, eventId, route } = delivery.safePayload;
+    // providerMaterial for the desktop channel is the subscribing session.
+    const delivered =
+      category && eventId
+        ? (this.desktopTransport?.(delivery.providerMaterial, {
+            category,
+            eventId,
+            route: route === 'settings' ? '/settings' : '/activity',
+            type: 'notification',
+          }) ?? 0)
+        : 0;
+    if (delivered > 0) return { permanent: false, success: true };
+    return delivery.attemptCount >= desktopAttemptLimit(category)
+      ? { expired: true, permanent: false, success: false }
+      : { permanent: false, success: false };
   }
 
   async #sendFcm(

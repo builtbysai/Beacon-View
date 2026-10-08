@@ -124,6 +124,126 @@ camera/microphone indicators stop, restart the process, restore connectivity, an
 confirm only an authorized Resume restarts capture. Repeat without microphone and
 notification permission and with a late viewer connection.
 
+September 25, 2026 partial N1 evidence — Pixel 7a `34171JEHN07672`, Android 16,
+production-targeted debug build from `codex/android-signed-in-camera-setup`, open
+`amzn-internet` Wi-Fi after captive-portal validation. Signed-in setup created and
+consumed the existing one-time pairing code and entered visible Camera mode. With
+Wi-Fi disabled, local **Pause** immediately showed `PRIVACY ON`, CameraX disconnected,
+`dumpsys media.camera` reported no active client, and the foreground-service type
+dropped from camera+microphone (`0xC0`) to camera-only (`0x40`). A process stop and
+restart while offline stayed paused with no camera client. Restoring Wi-Fi produced a
+validated network, synchronized the pending privacy state, and did not resume capture.
+An explicit **Resume** reopened CameraX. Six consecutive front/rear switches alternated
+camera IDs without an app exception or stuck state, and backgrounding the Activity kept
+the declared foreground service and camera client active. Pixel camera HAL TNR/flush
+warnings occurred during intentional source teardown; Beacon logged no fatal or
+CameraX exception. Still open: repeat privacy with an active Listen viewer so a real
+microphone source is released, verify remote frame delivery after every switch, late
+viewer rejection, denied microphone/notification permissions, and the remaining N2
+audio/TURN matrix.
+
+September 25, 2026 permission-recovery follow-up — while Camera mode was active,
+revoking microphone permission caused Android to recreate Beacon in video-only mode.
+The foreground-service type changed from camera+microphone (`0xC0`) to camera-only
+(`0x40`), CameraX remained active, and `appops` reported no active microphone use.
+Revoking notification permission during active capture did not interrupt the
+foreground service or camera. After a forced cold restart with notification
+permission still denied, Beacon failed closed: no camera service and no camera
+client started. Restoring both permissions and relaunching recovered the declared
+camera+microphone foreground service and CameraX without clearing the account,
+pairing, or settings; no Android runtime fatal was logged. The in-app denied-state
+tap-through still requires an unlocked denied-permission state.
+
+September 25, 2026 unlocked privacy-control follow-up — from active Camera mode,
+tapping **Pause** immediately rendered `PRIVACY ON` and **Resume**, disconnected the
+Pixel camera client, and reduced the foreground-service type from camera+microphone
+(`0xC0`) to camera-only (`0x40`). Tapping **Resume** restored the preview, Online
+state, active camera client, and `0xC0` service type. No fatal Android or CameraX
+exception was logged. This closes the local privacy tap-through; microphone release
+with an active remote Listen session remains open.
+
+September 26, 2026 camera-permission-denial recovery — Pixel 7a `34171JEHN07672`,
+production-targeted debug build from `codex/android-privacy-evidence`. While Camera
+mode was active with a real capture client, `pm revoke android.permission.CAMERA`
+killed the process as expected; the restarted `CameraForegroundService` detected the
+missing permission in `onCreate()`, set `Disabled`/"Camera permission is required",
+and called `stopSelf()` before declaring a camera foreground-service type. No
+`SecurityException` or other fatal exception was logged, `dumpsys activity services`
+showed no service and no crash-restart loop, and `onStartCommand` returned
+`START_NOT_STICKY` while permission remained absent. Relaunching `MainActivity`
+presented the system permission request (`GrantPermissionsActivity`); granting camera
+access through that normal UI brought the service back as an active foreground camera
+client with a live preview, without re-pairing. This closes the camera-denied flow
+gap that blocked PR #66.
+
+September 26, 2026 pairing-link and build-configuration fixes, found during the
+recovery test above — two independent problems surfaced while re-pairing the same
+Pixel after its app data was cleared:
+
+1. Android's `parsePairingQr` only accepted the original `/pair` path. ADR 0067
+   (2026-09-24) added a second valid link shape, `/camera-mode/setup?code=...`, and
+   updated the web app's own scanner (`pairingCodeFromScan`) to accept both, but never
+   updated Android, which rejected the newer link with "That is not a Beacon setup
+   link." Fixed by accepting both paths on the trusted host; `PairingQrTest` covers
+   the newly-accepted path and confirms an arbitrary third path is still rejected.
+2. A debug APK built without explicitly exporting `BEACON_API_URL` silently compiles
+   against the emulator-only `http://10.0.2.2:3000` default (see
+   [physical-android-device-development.md](physical-android-device-development.md)),
+   which is unreachable from a physical device and explained the remaining sign-in and
+   "cannot reach your account" failures independent of the path bug above.
+
+September 26, 2026 live two-device viewer evidence (N1/N2/U-checklist follow-up,
+`builtbysai/Beacon-SecureView#21`) -- Pixel 7a `34171JEHN07672` as the camera, a
+signed-in Chrome session as the viewer, against production `beacon.builtbysai.com`
+after deploying `392bd7b`. Beyond UI state, device-side ground truth was checked
+directly. Listen: `adb shell appops get ... RECORD_AUDIO` showed `allow ...
+(running)` on the Pixel continuously while Listen was enabled from the viewer.
+Talk: `adb shell dumpsys audio` showed a real `AudioTrack`
+(`usage=USAGE_VOICE_COMMUNICATION`, `content=CONTENT_TYPE_SPEECH`, 48kHz,
+`state:started`) on the Beacon process while speaking from the viewer. Camera
+source switching produced a genuine `CONNECTING` -> `LIVE` renegotiation and real
+new frames after switching back; one intermediate source showed a black frame,
+most likely the covered/misdirected rear lens rather than a software fault, not
+confirmed either way. The browser's "1 other viewer" count matched the Pixel's
+own on-device viewer badge during the switch. An interrupted connection recovered
+automatically ("Beacon is retrying - attempt 1" then `LIVE`) without a repair
+action. Still open: after ending Talk, `dumpsys audio` still showed the
+`AudioTrack` in `state:started` several seconds later -- not a privacy issue
+since this is speaker output rather than microphone capture, but worth checking
+whether `TalkSession.stop()` and its Android-side counterpart fully tear down the
+audio sink. Recording/Drive states as seen by a viewer and Browser Camera Mode's
+own states remain open per the roadmap.
+
+September 26, 2026 smart-detection real-device verification (ADR 0074/0075) --
+Pixel 7a `34171JEHN07672`, debug build with `SMART_DETECTION_ENABLED=true` (the
+production default remains off; this flag exists only for controlled test
+builds). `downloadSmartDetectionModel` fetched and checksum-verified
+`efficientdet_lite0.tflite` at build time; the app loaded it and ran real
+MediaPipe inference roughly once per second with zero crashes across a
+multi-minute session. With the camera facing an empty wall/ceiling it correctly
+reported no detections. With the owner standing in frame, it reported real,
+sustained `person` detections for about 19 consecutive cycles at confidence
+0.55-0.89. `top` showed the process using roughly 1.5 CPU cores and
+`dumpsys battery` reported 43.6C during this window -- a preliminary signal
+only, not the dedicated thermal/battery/false-positive study roadmap N9 still
+requires. The Pixel was reinstalled with the flag-off build afterward; the
+experiment is not left running on it.
+
+With both fixed and `BEACON_API_URL=https://beacon.builtbysai.com` set explicitly,
+scanning a freshly generated production pairing code completed a real pairing: the
+Pixel reached an active `CameraForegroundService`, front-camera preview rendered a
+real room image, and Pause/flip controls worked, confirmed by screenshot and
+`dumpsys`/logcat with no fatal exception.
+
+September 25, 2026 recording diagnosis — Chrome manually recorded two Android
+camera clips. PostgreSQL retained valid encrypted upload metadata for both:
+460,095 bytes / 2,740 ms and 488,949 bytes / 2,808 ms. Recording creation returned
+202 and each Drive session returned 201, followed by the browser's explicit
+upload-failure transition without a completion request. This proves capture and
+local encryption completed and isolates the failure to the cross-origin Drive
+PUT. The owner session initiation now sends Beacon's configured web origin;
+repeat upload, playback, retry, removal, and Drive-file verification after deploy.
+
 Activity regression tests cover server-side camera/time filters, household isolation,
 bounded cursor validation, more than 100 rows, equal timestamps, and PostgreSQL
 microsecond precision. Web tests cover day grouping, source-camera navigation,
@@ -164,3 +284,12 @@ migration execution, cloud Compose configuration validation, and Android
 against a dedicated PostgreSQL 18 `beacon_secureview_test` database, including the 37
 PostgreSQL-backed cases and notification persistence. Docker Desktop was unavailable, so
 the database ran in the local Ubuntu WSL environment and was stopped after validation.
+
+On September 22, 2026, the frontend/backend integration candidate passed Prettier,
+ESLint, web and backend typechecks, both production builds, all 178 web tests, and
+all 211 backend tests against a freshly migrated dedicated
+`beacon_secureview_test` database. All 27 migrations applied successfully. A
+web/PWA smoke pass covered 390x844, 768x1024, and 1440x900 layouts, a clean browser
+console with the local backend, the linked standalone manifest, all five manifest
+icons, and the service worker. Android was outside that integration pass because
+the candidate did not change its request/response contract.

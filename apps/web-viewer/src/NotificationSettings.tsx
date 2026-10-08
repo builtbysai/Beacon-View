@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { request } from './api';
+import { friendlyError } from './friendly-errors';
+import { desktopSupportsAlerts, isDesktopShell } from './desktop-shell';
 import { useSettingsAutosave } from './SettingsAutosave';
 import { SettingsRow } from './SettingsUI';
 import { Switch } from './Switch';
+import { randomUuid } from './random-id';
 import './NotificationSettings.css';
 
 interface Preference {
@@ -30,7 +33,7 @@ function installationId(): string {
   const key = 'beacon.notification.installation.v1';
   const existing = localStorage.getItem(key);
   if (existing) return existing;
-  const created = crypto.randomUUID();
+  const created = randomUuid();
   localStorage.setItem(key, created);
   return created;
 }
@@ -52,33 +55,108 @@ export async function disableWebNotifications(): Promise<void> {
   localStorage.removeItem('beacon.notification.subscription.v1');
 }
 
-export function NotificationSettings() {
+const DESKTOP_SUBSCRIPTION_KEY = 'beacon.notification.desktop-subscription.v1';
+
+function storedDesktopSubscription(): string | null {
+  try {
+    return localStorage.getItem(DESKTOP_SUBSCRIPTION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function NotificationSettings({
+  webPushAvailable: serverWebPushAvailable = true,
+}: {
+  webPushAvailable?: boolean;
+}) {
+  // Electron has no push service, so the desktop app cannot hold a Web Push
+  // subscription even though the API objects exist (ADR 0082). Newer desktop
+  // apps receive the same alerts over their own realtime connection instead
+  // (ADR 0083); older ones honestly report alerts as unavailable.
+  const desktopShell = isDesktopShell();
+  const desktopAlerts = desktopSupportsAlerts();
+  const webPushAvailable = serverWebPushAvailable && !desktopShell;
+  const channelAvailable = desktopAlerts || webPushAvailable;
   const { run } = useSettingsAutosave();
   const [preferences, setPreferences] = useState<Preference[] | null>(null);
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState(
+    () => desktopAlerts && storedDesktopSubscription() !== null,
+  );
   const [channelBusy, setChannelBusy] = useState(false);
   const [channelError, setChannelError] = useState('');
+  const [preferencesError, setPreferencesError] = useState(false);
   const [visible, setVisible] = useState(REVEAL_INITIAL);
+  const latestPreferences = useRef<Preference[]>([]);
+  const confirmedPreferences = useRef(new Map<string, Preference>());
+  const saveChains = useRef(new Map<string, Promise<void>>());
+  const editVersions = useRef(new Map<string, number>());
+
+  function loadPreferences() {
+    setPreferencesError(false);
+    setPreferences(null);
+    void request<{ preferences: Preference[] }>('/api/notification-preferences')
+      .then((result) => {
+        latestPreferences.current = result.preferences;
+        confirmedPreferences.current = new Map(
+          result.preferences.map((item) => [item.deviceId, item]),
+        );
+        setPreferences(result.preferences);
+      })
+      .catch(() => {
+        setPreferencesError(true);
+        setPreferences([]);
+      });
+  }
 
   useEffect(() => {
-    void request<{ preferences: Preference[] }>('/api/notification-preferences')
-      .then((result) => setPreferences(result.preferences))
-      .catch(() => setPreferences([]));
-    if ('serviceWorker' in navigator) {
+    loadPreferences();
+    if (!desktopShell && 'serviceWorker' in navigator) {
       void navigator.serviceWorker
         .getRegistration('/')
         .then(async (registration) => {
           setEnabled(
             Boolean(await registration?.pushManager.getSubscription()),
           );
-        });
+        })
+        .catch(() => setEnabled(false));
     }
   }, []);
+
+  async function enableDesktopAlerts() {
+    const result = await request<{ id: string }>(
+      '/api/notification-subscriptions',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          channel: 'desktop',
+          deviceLabel: 'Beacon desktop app',
+          installationId: installationId(),
+        }),
+      },
+    );
+    localStorage.setItem(DESKTOP_SUBSCRIPTION_KEY, result.id);
+  }
+
+  async function disableDesktopAlerts() {
+    const id = storedDesktopSubscription();
+    if (id)
+      await request(
+        `/api/notification-subscriptions/${encodeURIComponent(id)}`,
+        { method: 'DELETE' },
+      ).catch(() => undefined);
+    localStorage.removeItem(DESKTOP_SUBSCRIPTION_KEY);
+  }
 
   async function enableChannel() {
     setChannelBusy(true);
     setChannelError('');
     try {
+      if (desktopAlerts) {
+        await enableDesktopAlerts();
+        setEnabled(true);
+        return;
+      }
       if (!('serviceWorker' in navigator) || !('PushManager' in window))
         throw new Error('This browser does not support notifications.');
       if ((await Notification.requestPermission()) !== 'granted')
@@ -114,9 +192,7 @@ export function NotificationSettings() {
       setEnabled(true);
     } catch (error) {
       setChannelError(
-        error instanceof Error
-          ? error.message
-          : 'Notifications could not be enabled.',
+        friendlyError(error, 'Notifications couldn’t be turned on. Try again.'),
       );
     } finally {
       setChannelBusy(false);
@@ -127,7 +203,8 @@ export function NotificationSettings() {
     setChannelBusy(true);
     setChannelError('');
     try {
-      await disableWebNotifications();
+      if (desktopAlerts) await disableDesktopAlerts();
+      else await disableWebNotifications();
       setEnabled(false);
     } finally {
       setChannelBusy(false);
@@ -138,37 +215,59 @@ export function NotificationSettings() {
     deviceId: string,
     update: (preference: Preference) => Preference,
   ) {
-    const previous = preferences;
-    const current = previous?.find((item) => item.deviceId === deviceId);
+    const current = latestPreferences.current.find(
+      (item) => item.deviceId === deviceId,
+    );
     if (!current) return;
     const next = update(current);
-    setPreferences((items) =>
-      items?.map((item) => (item.deviceId === deviceId ? next : item)) ??
-      items,
+    const version = (editVersions.current.get(deviceId) ?? 0) + 1;
+    editVersions.current.set(deviceId, version);
+    latestPreferences.current = latestPreferences.current.map((item) =>
+      item.deviceId === deviceId ? next : item,
     );
+    setPreferences(latestPreferences.current);
     run(async () => {
+      const prior = saveChains.current.get(deviceId) ?? Promise.resolve();
+      const save = prior
+        .catch(() => undefined)
+        .then(async () => {
+          const result = await request<{ preference: Preference }>(
+            `/api/notification-preferences/${encodeURIComponent(deviceId)}`,
+            {
+              method: 'PUT',
+              body: JSON.stringify({
+                motionEnabled: next.motionEnabled,
+                offlineEnabled: next.offlineEnabled,
+                quietHours: next.quietHours,
+              }),
+            },
+          );
+          confirmedPreferences.current.set(deviceId, result.preference);
+          if (editVersions.current.get(deviceId) === version) {
+            latestPreferences.current = latestPreferences.current.map((item) =>
+              item.deviceId === deviceId ? result.preference : item,
+            );
+            setPreferences(latestPreferences.current);
+          }
+        });
+      saveChains.current.set(deviceId, save);
       try {
-        const result = await request<{ preference: Preference }>(
-          `/api/notification-preferences/${encodeURIComponent(deviceId)}`,
-          {
-            method: 'PUT',
-            body: JSON.stringify({
-              motionEnabled: next.motionEnabled,
-              offlineEnabled: next.offlineEnabled,
-              quietHours: next.quietHours,
-            }),
-          },
-        );
-        setPreferences((items) =>
-          items?.map((item) =>
-            item.deviceId === deviceId ? result.preference : item,
-          ) ?? items,
-        );
+        await save;
       } catch (error) {
-        // Roll the switch back rather than leaving it showing a state the
-        // server never confirmed.
-        setPreferences(previous ?? null);
+        if (editVersions.current.get(deviceId) === version) {
+          const confirmed = confirmedPreferences.current.get(deviceId);
+          if (confirmed) {
+            latestPreferences.current = latestPreferences.current.map((item) =>
+              item.deviceId === deviceId ? confirmed : item,
+            );
+            setPreferences(latestPreferences.current);
+          }
+        }
         throw error;
+      } finally {
+        if (saveChains.current.get(deviceId) === save) {
+          saveChains.current.delete(deviceId);
+        }
       }
     });
   }
@@ -180,22 +279,53 @@ export function NotificationSettings() {
   const visiblePreferences = preferences.slice(0, visible);
   const remaining = preferences.length - visiblePreferences.length;
 
+  if (preferencesError) {
+    return (
+      <p role="alert" className="settings-card-inline-message">
+        Notification settings could not be loaded.{' '}
+        <button type="button" className="secondary" onClick={loadPreferences}>
+          Retry
+        </button>
+      </p>
+    );
+  }
+
   return (
     <div className="notification-settings">
       <SettingsRow
-        title="Browser notifications"
-        description="Receive private Beacon alerts on this browser."
+        title={desktopShell ? 'Desktop alerts' : 'Browser notifications'}
+        description={
+          desktopAlerts
+            ? 'Show private Beacon alerts on this computer, even while the window is closed.'
+            : desktopShell
+              ? 'Update the Beacon desktop app to receive alerts here, or turn them on in Chrome, Edge, or the Android app.'
+              : 'Receive private Beacon alerts on this browser.'
+        }
       >
         <div className="notification-channel-action">
-          <span className={enabled ? 'pill pill-on' : 'pill'}>
-            {enabled ? 'On' : 'Off'}
+          <span
+            className={
+              enabled
+                ? 'pill pill-on'
+                : channelAvailable
+                  ? 'pill'
+                  : 'pill pill-warn'
+            }
+          >
+            {enabled ? 'On' : channelAvailable ? 'Off' : 'Unavailable'}
           </span>
           <button
             className="secondary"
-            disabled={channelBusy}
+            disabled={channelBusy || !channelAvailable}
             onClick={() => void (enabled ? disableChannel() : enableChannel())}
           >
-            {channelBusy ? 'Updating…' : enabled ? 'Turn off' : 'Turn on'}
+            {channelBusy
+              ? 'Updating…'
+              : enabled
+                ? 'Turn off'
+                : channelAvailable
+                  ? 'Turn on'
+                  : 'Unavailable'}
           </button>
         </div>
       </SettingsRow>
@@ -287,7 +417,10 @@ function NotificationCameraRow({
           }
         />
       </span>
-      <span className="notification-table-cell notification-table-quiet" role="cell">
+      <span
+        className="notification-table-cell notification-table-quiet"
+        role="cell"
+      >
         <span className="notification-table-label notification-quiet-heading">
           <span>Quiet hours</span>
           <small>Pause alerts during this window</small>
@@ -303,8 +436,7 @@ function NotificationCameraRow({
                     start: '22:00',
                     end: '07:00',
                     timeZone:
-                      Intl.DateTimeFormat().resolvedOptions().timeZone ||
-                      'UTC',
+                      Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
                   }
                 : null,
             }))

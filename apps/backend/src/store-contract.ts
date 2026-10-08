@@ -12,7 +12,15 @@ import type {
   RecordingDeletionClaim,
   RecordingRecord,
 } from './recording-types.js';
+import type { CameraUseCase, MotionPreset } from './camera-use-case.js';
 import type { RecordingUploadClaim } from './recording-types.js';
+import type { RecordingPlaybackClaim } from './recording-types.js';
+import type {
+  RecordingShareLinkPlaybackClaim,
+  RecordingShareLinkStatus,
+  RecordingThumbnailPlaybackClaim,
+  RecordingThumbnailUploadClaim,
+} from './recording-types.js';
 
 export interface UserRecord {
   id: string;
@@ -118,6 +126,7 @@ export interface CameraRecord {
   enabled: boolean;
   privacyMode: boolean;
   name: string;
+  useCase: CameraUseCase;
   lastSeenAt: Date | null;
   credentialRevokedAt: Date | null;
   capabilities: Record<string, boolean | number | string>;
@@ -144,6 +153,15 @@ export interface CameraIdentity {
   householdId: string;
   publicCameraId: string;
   publicDeviceId: string;
+}
+
+export interface DeviceHeartbeatIdentity extends CameraIdentity {
+  name: string;
+  platform: 'android' | 'browser';
+  installationId: string;
+  lastSeenAt: Date | null;
+  batteryPercent: number | null;
+  batteryCharging: boolean | null;
 }
 
 export interface CameraAccess extends CameraIdentity {
@@ -228,6 +246,95 @@ export interface AccessHistoryPage {
   total: number;
 }
 
+export const HOUSEHOLD_ACTIVITY_EVENT_TYPES = [
+  'camera_source_deleted',
+  'camera_source_added',
+  'camera_source_updated',
+  'device_paired',
+  'device_reconnected',
+  'device_credential_revoked',
+  'device_deleted',
+  'device_self_removed',
+  'device_self_disconnected',
+  'device_updated',
+  'device_offline',
+  'device_recovered',
+  'camera_updated',
+  'household_invitation_created',
+  'household_invitation_resent',
+  'household_invitation_accepted',
+  'household_invitation_revoked',
+  'household_camera_grants_changed',
+  'household_member_revoked',
+  'household_member_removed',
+  'camera_access_left',
+  'recording_requested',
+  'recording_deleted',
+  'recording_available',
+  'recording_failed',
+  'recording_share_link_created',
+  'recording_share_link_revoked',
+  'live_view_started',
+  'live_view_rejected',
+  'privacy_disabled',
+  'privacy_enabled',
+  'motion_settings_changed',
+  'motion_history_cleared',
+  'motion_retention_changed',
+  'notification_preference_changed',
+  'notification_subscription_created',
+  'notification_subscription_revoked',
+] as const;
+
+export type HouseholdActivityEventType =
+  (typeof HOUSEHOLD_ACTIVITY_EVENT_TYPES)[number];
+
+// Recording lifecycle transitions (requested -> uploading -> available/failed)
+// are internal state, not something that "happened" from a household's point
+// of view -- the resulting clip attaches to the activity event that caused
+// the recording instead (see recordings.trigger_motion_event_id). These stay
+// valid, queryable audit-event types (an explicit ?eventType= request can
+// still ask for them), they are just excluded from the *default* timeline a
+// caller gets when it asks for "everything".
+const RECORDING_LIFECYCLE_EVENT_TYPES = new Set<HouseholdActivityEventType>([
+  'recording_requested',
+  'recording_deleted',
+  'recording_available',
+  'recording_failed',
+]);
+
+export const DEFAULT_TIMELINE_EVENT_TYPES =
+  HOUSEHOLD_ACTIVITY_EVENT_TYPES.filter(
+    (eventType) => !RECORDING_LIFECYCLE_EVENT_TYPES.has(eventType),
+  );
+
+export interface HouseholdActivityRecord {
+  id: string;
+  actorEmail: string | null;
+  householdId: string;
+  publicDeviceId: string | null;
+  cameraSourceId: string | null;
+  deviceName: string | null;
+  sourceName: string | null;
+  eventType: HouseholdActivityEventType;
+  occurredAt: Date;
+  success: boolean;
+  metadata: Record<string, string>;
+}
+
+export interface HouseholdActivityOptions {
+  limit?: number;
+  offset?: number;
+  eventTypes?: HouseholdActivityEventType[];
+  cameraSourceId?: string;
+  since?: Date;
+}
+
+export interface HouseholdActivityPage {
+  events: HouseholdActivityRecord[];
+  total: number;
+}
+
 export interface MotionEventRecord {
   id: string;
   publicCameraId: string;
@@ -236,10 +343,15 @@ export interface MotionEventRecord {
   confidence: number;
   occurredAt: Date;
   cursorTimestamp: string;
+  /** Null when no clip was ever requested for this event (recording was off,
+   * Drive wasn't connected, or another recording was already in flight). */
+  recordingId: string | null;
+  recordingStatus: string | null;
 }
 
 export interface MotionEventOptions {
   cameraId?: string;
+  allowedCameraIds?: string[];
   since?: string;
   before?: { time: string; id: string };
   limit?: number;
@@ -272,7 +384,71 @@ export interface MilestoneStore {
   listRecordings(
     householdId: string,
     cameraSourceIds: string[],
+    options?: { limit?: number; before?: { time: string; id: string } },
   ): Promise<RecordingRecord[]>;
+  getRecordingPlaybackClaim(
+    householdId: string,
+    recordingId: string,
+    cameraSourceIds: string[],
+  ): Promise<RecordingPlaybackClaim | null>;
+  createRecordingShareLink(input: {
+    recordingId: string;
+    householdId: string;
+    createdByUserId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<RecordingShareLinkStatus | null>;
+  getActiveRecordingShareLink(
+    householdId: string,
+    recordingId: string,
+  ): Promise<RecordingShareLinkStatus | null>;
+  revokeRecordingShareLink(
+    householdId: string,
+    linkId: string,
+  ): Promise<boolean>;
+  getRecordingShareLinkPlaybackClaim(
+    tokenHash: string,
+  ): Promise<RecordingShareLinkPlaybackClaim | null>;
+  touchRecordingShareLinkAccess(linkId: string): Promise<void>;
+  beginOwnerThumbnailUpload(input: {
+    byteSize: number;
+    checksumSha256: string;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
+    householdId: string;
+    mimeType: 'image/jpeg' | 'image/webp';
+    recordingId: string;
+    userId: string;
+  }): Promise<RecordingThumbnailUploadClaim | null>;
+  beginThumbnailUploadByCredential(input: {
+    byteSize: number;
+    checksumSha256: string;
+    credentialHash: string;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
+    mimeType: 'image/jpeg' | 'image/webp';
+    recordingId: string;
+  }): Promise<RecordingThumbnailUploadClaim | null>;
+  getThumbnailUploadClaim(
+    userId: string,
+    recordingId: string,
+  ): Promise<RecordingThumbnailUploadClaim | null>;
+  getThumbnailUploadClaimByCredential(
+    credentialHash: string,
+    recordingId: string,
+  ): Promise<RecordingThumbnailUploadClaim | null>;
+  completeThumbnailUpload(input: {
+    recordingId: string;
+    providerFileId: string;
+    userId: string;
+  }): Promise<boolean>;
+  getThumbnailPlaybackClaim(
+    householdId: string,
+    recordingId: string,
+    cameraSourceIds: string[],
+  ): Promise<RecordingThumbnailPlaybackClaim | null>;
   deleteRecording(householdId: string, recordingId: string): Promise<boolean>;
   beginAvailableRecordingDeletion(
     householdId: string,
@@ -288,6 +464,9 @@ export interface MilestoneStore {
     checksumSha256: string;
     credentialHash: string;
     durationMs: number;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
     mimeType: 'video/mp4' | 'video/webm';
     recordingId: string;
   }): Promise<RecordingUploadClaim | null>;
@@ -295,6 +474,9 @@ export interface MilestoneStore {
     byteSize: number;
     checksumSha256: string;
     durationMs: number;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
     householdId: string;
     mimeType: 'video/mp4' | 'video/webm';
     recordingId: string;
@@ -309,6 +491,16 @@ export interface MilestoneStore {
     recordingId: string,
   ): Promise<RecordingUploadClaim | null>;
   markRecordingUploadFailed(recordingId: string): Promise<void>;
+  markOwnerRecordingFailed(
+    householdId: string,
+    userId: string,
+    recordingId: string,
+  ): Promise<boolean>;
+  markDeviceRecordingFailed(
+    credentialHash: string,
+    recordingId: string,
+  ): Promise<boolean>;
+  recoverStaleRecordings(now: Date): Promise<number>;
   completeRecordingUpload(input: {
     recordingId: string;
     providerFileId: string;
@@ -326,6 +518,10 @@ export interface MilestoneStore {
     userId: string;
   }): Promise<void>;
   removeGoogleDriveConnection(userId: string): Promise<boolean>;
+  /** Marks the connection as no longer accepted by Google (ADR 0086);
+   * true only on the first call. Expired connections read as absent. */
+  markGoogleDriveConnectionExpired(userId: string): Promise<boolean>;
+  googleDriveConnectionExpired(userId: string): Promise<boolean>;
   notificationsConfigured(): boolean;
   recordSecurityEvent(input: {
     userId: string;
@@ -342,9 +538,11 @@ export interface MilestoneStore {
   ): Promise<boolean>;
   listNotificationPreferences(
     userId: string,
+    householdId: string,
   ): Promise<NotificationPreferenceRecord[]>;
   updateNotificationPreference(input: {
     userId: string;
+    householdId: string;
     publicDeviceId: string;
     motionEnabled: boolean;
     offlineEnabled: boolean;
@@ -367,6 +565,7 @@ export interface MilestoneStore {
     permanent: boolean,
     retryAfterMs?: number,
   ): Promise<void>;
+  markNotificationExpired(id: string, now: Date): Promise<void>;
   isReady(): Promise<boolean>;
   listMotionSettings(
     householdId: string,
@@ -377,6 +576,14 @@ export interface MilestoneStore {
     publicCameraId: string,
     settings: MotionSettings,
   ): Promise<CameraMotionSettings | null>;
+  /** Sets a camera's use case and, for motion-capable (Android) cameras,
+   * applies its motion preset in the same statement (ADR 0084). */
+  setCameraUseCase(
+    householdId: string,
+    publicCameraId: string,
+    useCase: CameraUseCase,
+    preset: MotionPreset | null,
+  ): Promise<{ motionPresetApplied: boolean; useCase: CameraUseCase } | null>;
   close(): Promise<void>;
   createAccount(
     email: string,
@@ -534,10 +741,29 @@ export interface MilestoneStore {
     householdId: string,
     options?: AccessHistoryOptions,
   ): Promise<AccessHistoryPage>;
+  listHouseholdActivity(
+    householdId: string,
+    options?: HouseholdActivityOptions,
+  ): Promise<HouseholdActivityPage>;
+  scanDevicePresenceActivity(
+    now: Date,
+    offlineAfterMs: number,
+  ): Promise<string[]>;
+  recordDeviceRecoveredIfOffline(input: {
+    cameraId: string;
+    householdId: string;
+    publicDeviceId: string;
+    now: Date;
+  }): Promise<boolean>;
   listMotionEvents(
     householdId: string,
     options?: MotionEventOptions,
   ): Promise<MotionEventRecord[]>;
+  getMotionEventById(
+    householdId: string,
+    motionEventId: string,
+    allowedCameraIds?: string[],
+  ): Promise<MotionEventRecord | null>;
   getMotionRetention(
     householdId: string,
   ): Promise<MotionRetentionRecord | null>;
@@ -558,6 +784,7 @@ export interface MilestoneStore {
     cameraSourceId: string;
     ownerId: string;
     recordOnMotion: boolean;
+    motionEventId: string | null;
   } | null>;
   /** Best-effort: starts a recording for a motion-triggered camera, when the
    * household owner has Drive's recording scope connected and this camera
@@ -567,6 +794,7 @@ export interface MilestoneStore {
   createMotionTriggeredRecording(input: {
     cameraSourceId: string;
     householdId: string;
+    motionEventId: string;
     ownerId: string;
   }): Promise<{ recordingId: string } | null>;
   createPairingCode(
@@ -587,6 +815,7 @@ export interface MilestoneStore {
     name: string;
     ipAddress: string;
     now: Date;
+    browserSources?: CameraSourceInput[];
   }): Promise<PairingRedemptionResult>;
   listCameras(householdId: string): Promise<CameraRecord[]>;
   listDevices(householdId: string): Promise<DeviceRecord[]>;
@@ -647,7 +876,7 @@ export interface MilestoneStore {
   deleteCamera(householdId: string, publicCameraId: string): Promise<boolean>;
   findDeviceByCredential(
     credentialHash: string,
-  ): Promise<CameraIdentity | null>;
+  ): Promise<DeviceHeartbeatIdentity | null>;
   findCameraForDeviceCredential(
     credentialHash: string,
     publicCameraId: string,

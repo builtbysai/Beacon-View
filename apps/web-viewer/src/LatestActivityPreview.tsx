@@ -27,26 +27,41 @@ export function LatestActivityPreview({
 }) {
   const [events, setEvents] = useState<MotionEvent[] | null>(null);
   const [error, setError] = useState(false);
+  const [retryRevision, setRetryRevision] = useState(0);
 
   useEffect(() => {
     let active = true;
+    setEvents(null);
+    setError(false);
     void request<{ events: MotionEvent[] }>('/api/motion-events?limit=4')
       .then((result) => {
         if (active) setEvents(result.events ?? []);
       })
       .catch(() => {
-        if (active) setError(true);
+        if (active) {
+          setEvents(null);
+          setError(true);
+        }
       });
     return () => {
       active = false;
     };
-  }, [refreshRevision]);
+  }, [refreshRevision, retryRevision]);
 
   if (events === null) {
     return (
-      <p role="status" className="latest-activity-message">
+      <div className="latest-activity-message" role="status">
         {error ? 'Activity is temporarily unavailable.' : 'Loading activity…'}
-      </p>
+        {error && (
+          <button
+            className="btn secondary"
+            type="button"
+            onClick={() => setRetryRevision((revision) => revision + 1)}
+          >
+            Retry
+          </button>
+        )}
+      </div>
     );
   }
 

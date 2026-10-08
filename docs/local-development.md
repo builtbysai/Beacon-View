@@ -41,6 +41,13 @@ role-specific viewer/device STUN and TURN UDP/TCP URLs,
 required. Local example values are not deployment credentials. Do not commit a
 real `.env`.
 
+Encrypted recording uploads additionally require `RECORDING_ENCRYPTION_KEY`: a
+separate 32-byte base64url application key. The browser encrypts each clip with
+a unique AES-GCM key before the direct Drive upload; the backend encrypts that
+per-clip key before storing its metadata. Do not reuse the Drive-token or
+notification keys. The Android camera uploader is deliberately blocked until
+its own encryption implementation is available, so it cannot export plaintext.
+
 ## Migrations
 
 Set `DATABASE_URL` or copy the example file, then use:
@@ -177,6 +184,19 @@ Record physical-device evidence before claiming completion.
 Local PostgreSQL, Coturn, and their deliberately weak example credentials are
 loopback-only. Never reuse those credentials outside an isolated developer
 machine.
+
+## Desktop app
+
+`apps/desktop` is the Electron desktop app (ADR 0082). `pnpm install` downloads the
+Electron runtime. To run it against your local web viewer:
+
+```bash
+BEACON_DESKTOP_ORIGIN=http://127.0.0.1:5173 pnpm --filter @beacon/desktop dev
+```
+
+The real-Electron smoke test is `node scripts/Test-BeaconDesktop.mjs`. It runs against a
+fixture-only local viewer. Packaging, signing, and environment variables are in
+[apps/desktop/README.md](../apps/desktop/README.md).
 
 ## Web viewport regression audit
 

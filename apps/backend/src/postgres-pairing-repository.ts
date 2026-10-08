@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import type { CameraSourceInput } from './store-contract.js';
 import { PostgresAuditRepository } from './postgres-audit-repository.js';
 import {
   DEVICE_REGISTRATION_RATE_LIMITED,
@@ -12,6 +13,7 @@ type PairingRedemptionInput = {
   ipAddress: string;
   name: string;
   now: Date;
+  browserSources?: CameraSourceInput[];
 };
 
 export class PostgresPairingRepository {
@@ -86,6 +88,10 @@ export class PostgresPairingRepository {
         return null;
       }
       pairingHouseholdId = pairingCode.householdId;
+      if (input.browserSources && pairingCode.targetDeviceId) {
+        await client.query('COMMIT');
+        return null;
+      }
       if (pairingCode.targetDeviceId) {
         const device = await client.query<{
           id: string;
@@ -137,6 +143,10 @@ export class PostgresPairingRepository {
           eventType: 'device_reconnected',
           householdId: pairingCode.householdId,
           ipAddress: input.ipAddress,
+          metadata: {
+            deviceId: reconnected.publicDeviceId,
+            deviceName: reconnected.name,
+          },
           success: true,
         });
         await client.query('COMMIT');
@@ -167,14 +177,15 @@ export class PostgresPairingRepository {
         publicDeviceId: string;
         name: string;
       }>(
-        `INSERT INTO cameras (household_id, installation_id, name, paired_by_user_id)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO cameras (household_id, installation_id, name, paired_by_user_id, platform, device_type)
+         VALUES ($1, $2, $3, $4, $5, $5)
          RETURNING id, public_device_id AS "publicDeviceId", name`,
         [
           pairingCode.householdId,
           input.installationId,
           input.name,
           pairingCode.createdByUserId,
+          input.browserSources ? 'browser' : 'android',
         ],
       );
       const created = device.rows[0]!;
@@ -184,10 +195,23 @@ export class PostgresPairingRepository {
       }>(
         `INSERT INTO camera_sources
            (device_id, display_name, source_key, facing)
-         VALUES ($1, $2, 'legacy-default', 'rear')
+         VALUES ($1, $2, $3, $4)
          RETURNING id, public_camera_id AS "publicCameraId"`,
-        [created.id, created.name],
+        [
+          created.id,
+          input.browserSources?.[0]?.name ?? created.name,
+          input.browserSources?.[0]?.sourceKey ?? 'legacy-default',
+          input.browserSources?.[0]?.facing ?? 'rear',
+        ],
       );
+      for (const source of input.browserSources?.slice(1) ?? []) {
+        await client.query(
+          `INSERT INTO camera_sources
+             (device_id, display_name, source_key, facing)
+           VALUES ($1, $2, $3, $4)`,
+          [created.id, source.name, source.sourceKey, source.facing],
+        );
+      }
       // A viewer who pairs their own camera gets full access to it
       // immediately -- they set it up, so waiting on an admin to grant it
       // back to them would make "pair your own camera" pointless. Owner and
@@ -208,6 +232,19 @@ export class PostgresPairingRepository {
             pairingCode.createdByUserId,
           ],
         );
+        if (input.browserSources) {
+          await client.query(
+            `INSERT INTO camera_grants
+               (household_id, member_id, camera_source_id, can_listen, can_talk, can_flip, can_pause)
+             SELECT $1, m.id, cs.id, true, true, true, true
+             FROM household_members m
+             JOIN camera_sources cs ON cs.device_id = $2 AND cs.removed_at IS NULL
+             WHERE m.household_id = $1 AND m.user_id = $3
+               AND m.status = 'active' AND m.role = 'viewer'
+             ON CONFLICT (member_id, camera_source_id) DO NOTHING`,
+            [pairingCode.householdId, created.id, pairingCode.createdByUserId],
+          );
+        }
       }
       // Notifications default to on for a newly paired device -- without
       // this row, listPreferences/scanNotificationPresence treat the device
@@ -232,9 +269,14 @@ export class PostgresPairingRepository {
       );
       await this.audit.insert(client, {
         cameraId: created.id,
-        eventType: 'pairing_succeeded',
+        eventType: 'device_paired',
         householdId: pairingCode.householdId,
         ipAddress: input.ipAddress,
+        metadata: {
+          cameraId: defaultCamera.rows[0]!.publicCameraId,
+          deviceId: created.publicDeviceId,
+          deviceName: created.name,
+        },
         success: true,
       });
       await client.query('COMMIT');

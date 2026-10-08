@@ -16,9 +16,11 @@ import org.webrtc.EglBase
 import org.webrtc.IceCandidate
 import org.webrtc.MediaConstraints
 import org.webrtc.MediaStream
+import org.webrtc.MediaStreamTrack
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
 import org.webrtc.RtpReceiver
+import org.webrtc.RtpTransceiver
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 import org.webrtc.SurfaceViewRenderer
@@ -26,13 +28,17 @@ import org.webrtc.VideoTrack
 import org.webrtc.AudioTrack
 import kotlin.concurrent.thread
 
-class AndroidViewerSession(
+internal class AndroidViewerSession(
     context: Context,
     baseUrl: String,
     cameraId: String,
     sessionToken: String,
     private val renderer: SurfaceViewRenderer,
     private val onState: (StreamingState) -> Unit,
+    private val onCanListen: (Boolean) -> Unit,
+    private val onCanTalk: (Boolean) -> Unit = {},
+    private val onTalkState: (TalkState) -> Unit = {},
+    private val onQuality: (StreamQuality?) -> Unit = {},
     private val onAuthorizationLost: () -> Unit,
 ) {
     private val main = Handler(Looper.getMainLooper())
@@ -43,8 +49,12 @@ class AndroidViewerSession(
     private var peer: PeerConnection? = null
     private var connectionId: String? = null
     private var remoteTrack: VideoTrack? = null
-    private var remoteAudioTrack: AudioTrack? = null
-    private var listening = false
+    @Volatile private var remoteAudioTrack: AudioTrack? = null
+    @Volatile private var canListen = false
+    @Volatile private var listening = false
+    private var talkSession: TalkSession? = null
+    private var qualityPoll: Runnable? = null
+    private var previousInboundBytes: PreviousInboundBytes? = null
     private val pendingIce = mutableListOf<IceCandidate>()
     @Volatile
     private var closed = false
@@ -70,9 +80,42 @@ class AndroidViewerSession(
     }
 
     @Synchronized
-    fun setListening(enabled: Boolean) {
-        listening = enabled
-        remoteAudioTrack?.setEnabled(enabled)
+    fun setListening(enabled: Boolean): Boolean {
+        listening = enabled && canListen
+        remoteAudioTrack?.setEnabled(listening)
+        return listening
+    }
+
+    fun startTalk() {
+        talkSession?.start()
+    }
+
+    fun stopTalk() {
+        talkSession?.stop()
+    }
+
+    private fun stopQualityPolling() {
+        qualityPoll?.let(main::removeCallbacks)
+        qualityPoll = null
+    }
+
+    private fun startQualityPolling() {
+        stopQualityPolling()
+        val poll =
+            object : Runnable {
+                override fun run() {
+                    val activePeer = peer
+                    if (activePeer == null || closed) return
+                    activePeer.getStats { report ->
+                        val sample = readStreamQuality(report, previousInboundBytes)
+                        if (sample != null) previousInboundBytes = sample.first
+                        main.post { if (!closed) onQuality(sample?.second) }
+                    }
+                    if (!closed) main.postDelayed(this, 2_000)
+                }
+            }
+        qualityPoll = poll
+        main.post(poll)
     }
 
     fun close() {
@@ -80,6 +123,9 @@ class AndroidViewerSession(
             if (closed) return
             closed = true
         }
+        stopQualityPolling()
+        talkSession?.dispose()
+        talkSession = null
         thread(name = "BeaconViewerCleanup") {
             synchronized(this) {
                 val id = connectionId
@@ -142,6 +188,17 @@ class AndroidViewerSession(
             object : SimpleSdpObserver() {
                 override fun onSetSuccess() {
                     pendingIce.toList().also { pendingIce.clear() }.forEach(activePeer::addIceCandidate)
+                    // Negotiate the offered return-audio channel without opening a
+                    // microphone yet. The device's offer direction for each audio
+                    // m-line (sendonly for its own mic, recvonly for talk-back) still
+                    // constrains the final negotiated direction either way -- this
+                    // only unlocks the talk-back line to become sendonly instead of
+                    // inactive, matching the PWA's identical pre-answer step.
+                    for (transceiver in activePeer.transceivers) {
+                        if (transceiver.receiver.track()?.kind() == MediaStreamTrack.AUDIO_TRACK_KIND) {
+                            transceiver.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV
+                        }
+                    }
                     activePeer.createAnswer(
                         object : SimpleSdpObserver() {
                             override fun onCreateSuccess(description: SessionDescription) {
@@ -177,10 +234,36 @@ class AndroidViewerSession(
                 val message = JSONObject(text)
                 when (message.getString("type")) {
                     "ready" -> {
-                        connectionId = message.getString("connectionId")
+                        val id = message.getString("connectionId")
+                        connectionId = id
+                        val allowed = message.optBoolean("canListen", false)
+                        synchronized(this@AndroidViewerSession) {
+                            canListen = allowed
+                            if (!allowed) {
+                                listening = false
+                                remoteAudioTrack?.setEnabled(false)
+                            }
+                        }
+                        main.post { if (!closed) onCanListen(allowed) }
+                        main.post { if (!closed) onCanTalk(message.optBoolean("canTalk", false)) }
                         createPeer(message)
+                        peer?.let { activePeer ->
+                            talkSession =
+                                TalkSession(
+                                    connectionId = id,
+                                    peer = activePeer,
+                                    factory = factory,
+                                    send = { payload -> socket?.send(payload.toString()) },
+                                    onState = { talkState -> main.post { if (!closed) onTalkState(talkState) } },
+                                )
+                        }
                     }
                     "offer" -> applyOffer(message)
+                    "talk-state" ->
+                        talkSession?.receive(
+                            message.getBoolean("active"),
+                            message.optString("reason").ifEmpty { null },
+                        )
                     "ice" -> {
                         val value = message.getJSONObject("candidate")
                         val candidate = IceCandidate(
@@ -223,6 +306,7 @@ class AndroidViewerSession(
                 PeerConnection.PeerConnectionState.CONNECTED -> {
                     send("connected")
                     emit(StreamingState.Connected)
+                    startQualityPolling()
                 }
                 PeerConnection.PeerConnectionState.DISCONNECTED -> emit(StreamingState.Reconnecting)
                 PeerConnection.PeerConnectionState.FAILED,
@@ -241,7 +325,7 @@ class AndroidViewerSession(
                 }
                 is AudioTrack -> {
                     remoteAudioTrack = track
-                    track.setEnabled(listening)
+                    track.setEnabled(listening && canListen)
                 }
             }
         }

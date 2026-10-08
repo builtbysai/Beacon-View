@@ -170,7 +170,10 @@ describe.skipIf(!app || !store)('anonymous guest links', () => {
   });
 
   it('creates a link, redeems it for a cookie, and lists only the granted camera with the chosen permissions', async () => {
-    const owner = await registerAndSignIn('guest-link-owner@example.com', '10.1.0.1');
+    const owner = await registerAndSignIn(
+      'guest-link-owner@example.com',
+      '10.1.0.1',
+    );
     const granted = await pairCamera(owner, 'Front door');
     await pairCamera(owner, 'Backyard');
 
@@ -196,8 +199,9 @@ describe.skipIf(!app || !store)('anonymous guest links', () => {
       url: '/api/household/guest-links',
     });
     expect(
-      list.json<{ guestLinks: { cameraIds: string[]; label: string | null }[] }>()
-        .guestLinks,
+      list.json<{
+        guestLinks: { cameraIds: string[]; label: string | null }[];
+      }>().guestLinks,
     ).toEqual([
       expect.objectContaining({
         cameraIds: [granted.cameraId],
@@ -239,7 +243,10 @@ describe.skipIf(!app || !store)('anonymous guest links', () => {
   });
 
   it('rejects an invalid or already-revoked link token', async () => {
-    const owner = await registerAndSignIn('guest-link-bad-owner@example.com', '10.1.1.1');
+    const owner = await registerAndSignIn(
+      'guest-link-bad-owner@example.com',
+      '10.1.1.1',
+    );
     const camera = await pairCamera(owner, 'Garage');
 
     const badToken = await app!.inject({
@@ -273,7 +280,10 @@ describe.skipIf(!app || !store)('anonymous guest links', () => {
   });
 
   it('connects a guest viewer over signaling only for a camera included in the link, and cuts it off once revoked', async () => {
-    const owner = await registerAndSignIn('guest-link-ws-owner@example.com', '10.1.2.1');
+    const owner = await registerAndSignIn(
+      'guest-link-ws-owner@example.com',
+      '10.1.2.1',
+    );
     const granted = await pairCamera(owner, 'Front porch');
     const notGranted = await pairCamera(owner, 'Side gate');
 

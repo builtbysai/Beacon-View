@@ -3,6 +3,7 @@ import {
   type CameraMotionSettings,
   type MotionSettings,
 } from './motion-settings.js';
+import type { CameraUseCase, MotionPreset } from './camera-use-case.js';
 import { PostgresMotionRepository } from './postgres-motion-repository.js';
 import { PostgresAuditRepository } from './postgres-audit-repository.js';
 import { PostgresAccountRepository } from './postgres-account-repository.js';
@@ -39,6 +40,7 @@ import {
   type CameraRecord,
   type CameraSourceInput,
   type DeviceRecord,
+  type DeviceHeartbeatIdentity,
   type MilestoneStore,
   type MotionEventOptions,
   type MotionEventRecord,
@@ -48,6 +50,8 @@ import {
   type RetentionPurgeRecord,
   type SessionRecord,
   type HouseholdAccessRecord,
+  type HouseholdActivityOptions,
+  type HouseholdActivityPage,
   type HouseholdInvitationRecord,
   type HouseholdMemberRecord,
   type GoogleDriveConnectionRecord,
@@ -139,14 +143,108 @@ export class PostgresStore implements MilestoneStore {
   async listRecordings(
     householdId: string,
     cameraSourceIds: string[],
+    options?: { limit?: number; before?: { time: string; id: string } },
   ): Promise<RecordingRecord[]> {
-    return this.recordings.listForCameraSources(householdId, cameraSourceIds);
+    return this.recordings.listForCameraSources(
+      householdId,
+      cameraSourceIds,
+      options,
+    );
+  }
+
+  async getRecordingPlaybackClaim(
+    householdId: string,
+    recordingId: string,
+    cameraSourceIds: string[],
+  ) {
+    return this.recordings.getPlaybackClaim(
+      householdId,
+      recordingId,
+      cameraSourceIds,
+    );
+  }
+
+  async createRecordingShareLink(input: {
+    recordingId: string;
+    householdId: string;
+    createdByUserId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }) {
+    return this.recordings.createShareLink(input);
+  }
+
+  async getActiveRecordingShareLink(householdId: string, recordingId: string) {
+    return this.recordings.getActiveShareLink(householdId, recordingId);
+  }
+
+  async revokeRecordingShareLink(householdId: string, linkId: string) {
+    return this.recordings.revokeShareLink(householdId, linkId);
+  }
+
+  async getRecordingShareLinkPlaybackClaim(tokenHash: string) {
+    return this.recordings.getShareLinkPlaybackClaim(tokenHash);
+  }
+
+  async touchRecordingShareLinkAccess(linkId: string) {
+    return this.recordings.touchShareLinkAccess(linkId);
+  }
+
+  async beginOwnerThumbnailUpload(
+    input: Parameters<
+      PostgresRecordingRepository['beginOwnerThumbnailUpload']
+    >[0],
+  ) {
+    return this.recordings.beginOwnerThumbnailUpload(input);
+  }
+
+  async beginThumbnailUploadByCredential(
+    input: Parameters<
+      PostgresRecordingRepository['beginThumbnailUploadByCredential']
+    >[0],
+  ) {
+    return this.recordings.beginThumbnailUploadByCredential(input);
+  }
+
+  async getThumbnailUploadClaim(userId: string, recordingId: string) {
+    return this.recordings.getThumbnailUploadClaim(userId, recordingId);
+  }
+
+  async getThumbnailUploadClaimByCredential(
+    credentialHash: string,
+    recordingId: string,
+  ) {
+    return this.recordings.getThumbnailUploadClaimByCredential(
+      credentialHash,
+      recordingId,
+    );
+  }
+
+  async completeThumbnailUpload(input: {
+    recordingId: string;
+    providerFileId: string;
+    userId: string;
+  }) {
+    return this.recordings.completeThumbnailUpload(input);
+  }
+
+  async getThumbnailPlaybackClaim(
+    householdId: string,
+    recordingId: string,
+    cameraSourceIds: string[],
+  ) {
+    return this.recordings.getThumbnailPlaybackClaim(
+      householdId,
+      recordingId,
+      cameraSourceIds,
+    );
   }
 
   async createMotionTriggeredRecording(input: {
     cameraSourceId: string;
     householdId: string;
     ownerId: string;
+    motionEventId: string;
   }): Promise<{ recordingId: string } | null> {
     const drive = await this.googleDrive.get(input.ownerId);
     if (
@@ -164,6 +262,7 @@ export class PostgresStore implements MilestoneStore {
     const recording = await this.recordings.createRequested({
       cameraSourceId: input.cameraSourceId,
       householdId: input.householdId,
+      triggerMotionEventId: input.motionEventId,
       userId: input.ownerId,
     });
     return recording ? { recordingId: recording.id } : null;
@@ -199,6 +298,9 @@ export class PostgresStore implements MilestoneStore {
     checksumSha256: string;
     credentialHash: string;
     durationMs: number;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
     mimeType: 'video/mp4' | 'video/webm';
     recordingId: string;
   }): Promise<RecordingUploadClaim | null> {
@@ -209,6 +311,9 @@ export class PostgresStore implements MilestoneStore {
     byteSize: number;
     checksumSha256: string;
     durationMs: number;
+    encryptionDataKeyCiphertext: Buffer;
+    encryptionDataKeyIv: Buffer;
+    encryptionIv: Buffer;
     householdId: string;
     mimeType: 'video/mp4' | 'video/webm';
     recordingId: string;
@@ -236,6 +341,25 @@ export class PostgresStore implements MilestoneStore {
 
   async markRecordingUploadFailed(recordingId: string): Promise<void> {
     await this.recordings.markUploadFailed(recordingId);
+  }
+
+  async markOwnerRecordingFailed(
+    householdId: string,
+    userId: string,
+    recordingId: string,
+  ): Promise<boolean> {
+    return this.recordings.markOwnerFailed(householdId, userId, recordingId);
+  }
+
+  async markDeviceRecordingFailed(
+    credentialHash: string,
+    recordingId: string,
+  ): Promise<boolean> {
+    return this.recordings.markFailedByCredential(credentialHash, recordingId);
+  }
+
+  async recoverStaleRecordings(now: Date): Promise<number> {
+    return this.recordings.recoverStale(now);
   }
 
   async completeRecordingUpload(input: {
@@ -269,6 +393,14 @@ export class PostgresStore implements MilestoneStore {
     return this.googleDrive.remove(userId);
   }
 
+  async markGoogleDriveConnectionExpired(userId: string): Promise<boolean> {
+    return this.googleDrive.markExpired(userId);
+  }
+
+  async googleDriveConnectionExpired(userId: string): Promise<boolean> {
+    return this.googleDrive.isExpired(userId);
+  }
+
   async upsertNotificationSubscription(
     input: NotificationSubscriptionInput,
   ): Promise<string> {
@@ -285,12 +417,14 @@ export class PostgresStore implements MilestoneStore {
 
   async listNotificationPreferences(
     userId: string,
+    householdId: string,
   ): Promise<NotificationPreferenceRecord[]> {
-    return this.notifications.listPreferences(userId);
+    return this.notifications.listPreferences(userId, householdId);
   }
 
   async updateNotificationPreference(input: {
     userId: string;
+    householdId: string;
     publicDeviceId: string;
     motionEnabled: boolean;
     offlineEnabled: boolean;
@@ -335,6 +469,10 @@ export class PostgresStore implements MilestoneStore {
       permanent,
       retryAfterMs,
     );
+  }
+
+  async markNotificationExpired(id: string, now: Date): Promise<void> {
+    await this.notifications.markExpired(id, now);
   }
 
   async close(): Promise<void> {
@@ -636,11 +774,46 @@ export class PostgresStore implements MilestoneStore {
     return this.auditRepository.listAccessHistory(householdId, options);
   }
 
+  async listHouseholdActivity(
+    householdId: string,
+    options?: HouseholdActivityOptions,
+  ): Promise<HouseholdActivityPage> {
+    return this.auditRepository.listHouseholdActivity(householdId, options);
+  }
+
+  async scanDevicePresenceActivity(
+    now: Date,
+    offlineAfterMs: number,
+  ): Promise<string[]> {
+    return this.auditRepository.scanDevicePresenceActivity(now, offlineAfterMs);
+  }
+
+  async recordDeviceRecoveredIfOffline(input: {
+    cameraId: string;
+    householdId: string;
+    publicDeviceId: string;
+    now: Date;
+  }): Promise<boolean> {
+    return this.auditRepository.recordDeviceRecoveredIfOffline(input);
+  }
+
   async listMotionEvents(
     householdId: string,
     options: MotionEventOptions = {},
   ): Promise<MotionEventRecord[]> {
     return this.motion.listMotionEvents(householdId, options);
+  }
+
+  async getMotionEventById(
+    householdId: string,
+    motionEventId: string,
+    allowedCameraIds?: string[],
+  ): Promise<MotionEventRecord | null> {
+    return this.motion.getMotionEventById(
+      householdId,
+      motionEventId,
+      allowedCameraIds,
+    );
   }
 
   async getMotionRetention(
@@ -683,6 +856,20 @@ export class PostgresStore implements MilestoneStore {
     );
   }
 
+  async setCameraUseCase(
+    householdId: string,
+    publicCameraId: string,
+    useCase: CameraUseCase,
+    preset: MotionPreset | null,
+  ): Promise<{ motionPresetApplied: boolean; useCase: CameraUseCase } | null> {
+    return this.motion.setCameraUseCase(
+      householdId,
+      publicCameraId,
+      useCase,
+      preset,
+    );
+  }
+
   async createMotionEvent(input: {
     credentialHash: string;
     publicCameraId: string;
@@ -694,6 +881,7 @@ export class PostgresStore implements MilestoneStore {
     cameraSourceId: string;
     ownerId: string;
     recordOnMotion: boolean;
+    motionEventId: string | null;
   } | null> {
     return this.motion.createMotionEvent(input);
   }
@@ -728,6 +916,7 @@ export class PostgresStore implements MilestoneStore {
     name: string;
     ipAddress: string;
     now: Date;
+    browserSources?: CameraSourceInput[];
   }): Promise<PairingRedemptionResult> {
     return this.pairing.redeem(input);
   }
@@ -833,7 +1022,7 @@ export class PostgresStore implements MilestoneStore {
 
   async findDeviceByCredential(
     credentialHash: string,
-  ): Promise<CameraIdentity | null> {
+  ): Promise<DeviceHeartbeatIdentity | null> {
     return this.devices.findByCredential(credentialHash);
   }
 

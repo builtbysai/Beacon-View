@@ -34,7 +34,10 @@ describe('MotionRetentionSettings', () => {
     await waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith(
         '/api/motion-retention',
-        expect.objectContaining({ method: 'PUT', body: JSON.stringify({ days: 7 }) }),
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ days: 7 }),
+        }),
       ),
     );
     expect(

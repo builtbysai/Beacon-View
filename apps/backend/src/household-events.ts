@@ -33,6 +33,15 @@ export type HouseholdEvent =
       type: 'household-membership-changed';
     };
 
+/** A desktop alert. The copy is generic, exactly like Web Push and FCM:
+ * category and an opaque event ID only, never camera names or details. */
+export interface DesktopAlertMessage {
+  category: string;
+  eventId: string;
+  route: string;
+  type: 'notification';
+}
+
 export class HouseholdEventHub {
   readonly #subscribers = new Map<string, Set<WebSocket>>();
   // Sessions are tracked separately from households so revoking one
@@ -54,6 +63,18 @@ export class HouseholdEventHub {
       if (session.size === 0) this.#sessionSockets.delete(sessionId);
     });
     socket.send(JSON.stringify({ type: 'subscribed' }));
+  }
+
+  /** Sends a message to the realtime connection(s) of one signed-in session
+   * and returns how many received it. Used for desktop alerts (ADR 0083). */
+  sendToSession(sessionId: string, message: DesktopAlertMessage): number {
+    let delivered = 0;
+    for (const socket of this.#sessionSockets.get(sessionId) ?? []) {
+      if (socket.readyState !== socket.OPEN) continue;
+      socket.send(JSON.stringify(message));
+      delivered += 1;
+    }
+    return delivered;
   }
 
   publish(householdId: string, event: HouseholdEvent): void {
@@ -115,8 +136,8 @@ export function registerHouseholdEvents(
   app: FastifyInstance,
   config: AppConfig,
   store: MilestoneStore,
+  hub = new HouseholdEventHub(),
 ): HouseholdEventHub {
-  const hub = new HouseholdEventHub();
   void app.register((eventApp) => {
     eventApp.addHook('onClose', () => hub.close());
     eventApp.get(

@@ -42,17 +42,21 @@ function CameraGlyph({ privacyMode }: { privacyMode?: boolean | undefined }) {
 export function FavoriteCameraCard({
   camera,
   needsPairing,
+  canReconnect,
   onOpen,
   onDevice,
   onReconnect,
   onRemoveFavorite,
+  onContinueCamera,
 }: {
   camera: TileCamera;
   needsPairing: boolean;
+  canReconnect: boolean;
   onOpen: (camera: TileCamera) => void;
   onDevice: (deviceId: string) => void;
   onReconnect: (deviceId: string) => void;
   onRemoveFavorite: (deviceId: string) => void;
+  onContinueCamera?: () => void;
 }) {
   const state = cameraStatus(camera);
   const [previewing, setPreviewing] = useState(false);
@@ -81,9 +85,11 @@ export function FavoriteCameraCard({
     ? 'Ready to view'
     : state.label === 'Privacy on'
       ? 'Privacy on'
-      : needsPairing
-        ? 'Needs pairing'
-        : 'Reconnect required';
+      : onContinueCamera
+        ? 'Camera stopped here'
+        : needsPairing
+          ? 'Needs pairing'
+          : 'Reconnect required';
 
   return (
     <article
@@ -110,10 +116,7 @@ export function FavoriteCameraCard({
               deviceName={camera.deviceName}
             />
           ) : (
-            <span
-              className="favorite-card-placeholder"
-              data-tone={state.tone}
-            >
+            <span className="favorite-card-placeholder" data-tone={state.tone}>
               <CameraGlyph privacyMode={camera.privacyMode} />
             </span>
           )}
@@ -158,11 +161,16 @@ export function FavoriteCameraCard({
             className="favorite-card-cta"
             onClick={() => {
               if (state.available) onOpen(camera);
-              else if (needsPairing) onReconnect(camera.deviceId);
+              else if (onContinueCamera) onContinueCamera();
+              else if (canReconnect) onReconnect(camera.deviceId);
               else onDevice(camera.deviceId);
             }}
           >
-            {state.available ? 'Open live' : 'Review'}
+            {state.available
+              ? 'Open live'
+              : onContinueCamera
+                ? 'Resume camera'
+                : 'Review'}
             <Icon name="chevronRight" />
           </button>
         </div>
@@ -197,7 +205,7 @@ export function FavoriteCameraCard({
               <Icon name="settings" />
               Camera settings
             </button>
-            {needsPairing && (
+            {canReconnect && (
               <button
                 role="menuitem"
                 type="button"
@@ -208,6 +216,18 @@ export function FavoriteCameraCard({
               >
                 <Icon name="refresh" />
                 Reconnect camera
+              </button>
+            )}
+            {onContinueCamera && (
+              <button
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  close();
+                  onContinueCamera();
+                }}
+              >
+                <Icon name="camera" /> Continue as camera
               </button>
             )}
             <button

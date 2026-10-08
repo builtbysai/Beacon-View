@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
+import { isCameraOnline } from './camera-presentation.js';
 import type { HouseholdEventHub } from './household-events.js';
 import {
   cameraParameterSchema,
@@ -74,27 +75,44 @@ export function registerDeviceRuntimeRoutes(
     const token = authorization?.startsWith('Bearer ')
       ? authorization.slice('Bearer '.length)
       : '';
-    const identity = token
-      ? await store.findDeviceByCredential(hashSecret(token))
-      : null;
-    const cameraId =
-      token && identity
-        ? await store.heartbeat(
-            hashSecret(token),
-            new Date(),
-            health.data.batteryPercent === undefined
-              ? undefined
-              : {
-                  batteryPercent: health.data.batteryPercent,
-                  batteryCharging: health.data.batteryCharging!,
-                },
-          )
-        : null;
+    if (!token) return unauthorized(reply);
+    const credentialHash = hashSecret(token);
+    const identity = await store.findDeviceByCredential(credentialHash);
+    if (!identity) return unauthorized(reply);
+    const now = new Date();
+    const presenceChanged = !isCameraOnline(identity.lastSeenAt, now);
+    const healthChanged =
+      health.data.batteryPercent !== undefined &&
+      (health.data.batteryPercent !== identity.batteryPercent ||
+        health.data.batteryCharging !== identity.batteryCharging);
+    const cameraId = await store.heartbeat(
+      credentialHash,
+      now,
+      health.data.batteryPercent === undefined
+        ? undefined
+        : {
+            batteryPercent: health.data.batteryPercent,
+            batteryCharging: health.data.batteryCharging!,
+          },
+    );
     if (!cameraId) return unauthorized(reply);
-    householdEvents.publish(identity!.householdId, {
-      cameraId: identity!.publicCameraId,
-      type: 'camera-presence-changed',
+    const recovered = await store.recordDeviceRecoveredIfOffline({
+      cameraId,
+      householdId: identity.householdId,
+      publicDeviceId: identity.publicDeviceId,
+      now,
     });
+    if (presenceChanged || healthChanged) {
+      householdEvents.publish(identity.householdId, {
+        cameraId: identity.publicCameraId,
+        type: 'camera-presence-changed',
+      });
+    }
+    if (recovered) {
+      householdEvents.publish(identity.householdId, {
+        type: 'device-management-changed',
+      });
+    }
     return reply.code(204).send();
   });
 
@@ -134,13 +152,15 @@ export function registerDeviceRuntimeRoutes(
       // Best-effort: a missed auto-recording (Drive not connected, or one
       // already in flight for this camera) never fails the motion report
       // itself -- the event is already committed above either way.
-      const recording = result.recordOnMotion
-        ? await store.createMotionTriggeredRecording({
-            cameraSourceId: result.cameraSourceId,
-            householdId: result.householdId,
-            ownerId: result.ownerId,
-          })
-        : null;
+      const recording =
+        result.recordOnMotion && result.motionEventId
+          ? await store.createMotionTriggeredRecording({
+              cameraSourceId: result.cameraSourceId,
+              householdId: result.householdId,
+              motionEventId: result.motionEventId,
+              ownerId: result.ownerId,
+            })
+          : null;
       return reply.code(201).send({
         created: true,
         ...(recording ? { recordingId: recording.recordingId } : {}),
