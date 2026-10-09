@@ -334,6 +334,69 @@ pages are no longer a U7 requirement. Drive-backed recording/playback, native
 viewer acceptance with a second active camera, and deployed registration still
 need end-to-end evidence; configuration presence alone does not close them.
 
+## Convenience batch (C1–C18) — approved October 8, 2026
+
+The owner approved this batch ("plan, build and implement them all") after
+picture-in-picture shipped. [ADR 0089](decisions/0089-convenience-features-plan.md)
+records the plan, assumptions, and boundary decisions. It also approves two rows of
+the Later table below (activity zones and rich device health) for their
+bounded forms described here. Capture visibility, privacy mode, and the hard
+boundaries below are unchanged.
+
+Status values: **Planned**, **In progress**, **Done** (merged and deployed),
+**Deferred** (needs an owner decision first).
+
+### Track A: Viewing
+
+| ID  | Feature                                 | Platforms             | Milestone | Status   |
+| --- | --------------------------------------- | --------------------- | --------- | -------- |
+| C1  | Camera wall: live grid, tap to focus    | Web, desktop          | M3        | Planned  |
+| C2  | Keyboard shortcuts and help overlay     | Web, desktop          | M2        | Planned  |
+| C3  | Zoom and pan on live video              | Web, desktop, Android | M2, M5    | Planned  |
+| C4  | Snapshot, saved on the device only      | Web, desktop, Android | M2, M5    | Planned  |
+| C5  | Hold-to-talk                            | Web, desktop, Android | M2, M5    | Planned  |
+| C6  | Mini-player that follows you in the app | Web, desktop          | M3        | Planned  |
+| C7  | Announce on all cameras                 | Web, desktop          | M3        | Planned  |
+| C8  | Cast to a TV                            | None yet              | n/a       | Deferred |
+
+### Track B: Shortcuts and entry points
+
+| ID  | Feature                                        | Platforms             | Milestone | Status  |
+| --- | ---------------------------------------------- | --------------------- | --------- | ------- |
+| C9  | PWA app shortcuts                              | Installed web app     | M2        | Planned |
+| C10 | Android launcher shortcuts (static, favorites) | Android               | M5        | Planned |
+| C11 | Desktop tray: favorite cameras and the wall    | Desktop               | M5        | Planned |
+| C12 | Alerts open the exact camera or clip           | Web, desktop, Android | M2, M5    | Planned |
+
+### Track C: Safety and automation
+
+| ID  | Feature                                        | Platforms                               | Milestone | Status  |
+| --- | ---------------------------------------------- | --------------------------------------- | --------- | ------- |
+| C13 | Home / Away modes (manual and scheduled)       | Server, web, Android                    | M4        | Planned |
+| C14 | Camera health alerts: low battery, overheating | Server, web, Android                    | M4        | Planned |
+| C15 | Motion zones: ignore areas of the picture      | Server, web, Android                    | M4        | Planned |
+| C16 | Data saver: lower quality on request           | Web viewer, browser and desktop cameras | M3        | Planned |
+
+### Track D: Engineering
+
+| ID  | Work                                                                 | Milestone | Status      |
+| --- | -------------------------------------------------------------------- | --------- | ----------- |
+| C17 | Split `MonitorHome` into per-page composables; lower the Gradle heap | M6        | Planned     |
+| C18 | Move CI actions off the deprecated Node 20 runtimes                  | M1        | In progress |
+
+### Needs an owner decision before any work
+
+- **C8, cast to a TV.** A live WebRTC stream cannot be sent through the
+  browser Remote Playback API, and a Chromecast or AirPlay sender needs a
+  receiver app (a new client surface beyond ADR 0082). Options for a later
+  design: an HTML5 Cast receiver, or screen mirroring guidance only.
+- **Location-based Home / Away.** Needs a threat model and consent for
+  collecting where people are. C13 ships with manual and scheduled modes.
+- **Code-signing certificates** stay deferred, as before (affects macOS
+  auto-updates and Windows SmartScreen).
+- **Google OAuth consent screen:** publish to "In production" so Drive
+  connections stop expiring every 7 days.
+
 ## Later / deferred — requires a separate approved milestone
 
 The following table is retained for historical sequencing. Notifications,
