@@ -28,6 +28,140 @@ function renderNotificationSettings() {
 }
 
 describe('NotificationSettings', () => {
+  it('refreshes an expired snooze on browser focus without enabling alerts or sending a mutation', async () => {
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    try {
+      vi.mocked(request).mockResolvedValue({
+        preferences: [
+          {
+            deviceId: 'camera-one',
+            deviceName: 'Expiry camera',
+            motionEnabled: false,
+            offlineEnabled: true,
+            quietHours: null,
+            motionSnoozedUntil: new Date(start + 60_000).toISOString(),
+          },
+        ],
+      });
+      renderNotificationSettings();
+      expect(
+        await screen.findByRole('button', {
+          name: 'Resume motion alerts for Expiry camera',
+        }),
+      ).toBeVisible();
+      clock.mockReturnValue(start + 60_000);
+      fireEvent.focus(window);
+      expect(
+        screen.queryByRole('button', {
+          name: 'Resume motion alerts for Expiry camera',
+        }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('switch', { name: 'Motion alerts for Expiry camera' }),
+      ).not.toBeChecked();
+      expect(request).toHaveBeenCalledTimes(1);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('snoozes and resumes motion without changing camera problem preferences or quiet hours', async () => {
+    const base = {
+      deviceId: 'camera-one',
+      deviceName: 'Snooze camera',
+      motionEnabled: true,
+      offlineEnabled: true,
+      quietHours: { start: '22:00', end: '07:00', timeZone: 'UTC' },
+      motionSnoozedUntil: null as string | null,
+    };
+    const until = new Date(Date.now() + 15 * 60_000).toISOString();
+    vi.mocked(request).mockImplementation((path, options) => {
+      if (path === '/api/notification-preferences')
+        return Promise.resolve({ preferences: [base] });
+      const { minutes } = JSON.parse(options?.body as string) as {
+        minutes: number;
+      };
+      return Promise.resolve({
+        preference: {
+          ...base,
+          motionSnoozedUntil: minutes === 0 ? null : until,
+        },
+      });
+    });
+    renderNotificationSettings();
+    fireEvent.change(
+      await screen.findByRole('combobox', {
+        name: 'Snooze motion alerts for Snooze camera',
+      }),
+      { target: { value: '15' } },
+    );
+    expect(await screen.findByText('Saved')).toBeVisible();
+    expect(request).toHaveBeenLastCalledWith(
+      '/api/notification-preferences/camera-one/motion-snooze',
+      { method: 'PUT', body: JSON.stringify({ minutes: 15 }) },
+    );
+    expect(
+      screen.getByRole('switch', { name: 'Motion alerts for Snooze camera' }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole('switch', {
+        name: 'Camera problem alerts for Snooze camera',
+      }),
+    ).toBeChecked();
+    expect(
+      screen.getByLabelText('Quiet hours start for Snooze camera'),
+    ).toHaveValue('22:00');
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Resume motion alerts for Snooze camera',
+      }),
+    );
+    await waitFor(() =>
+      expect(request).toHaveBeenLastCalledWith(
+        '/api/notification-preferences/camera-one/motion-snooze',
+        { method: 'PUT', body: JSON.stringify({ minutes: 0 }) },
+      ),
+    );
+    expect(
+      screen.queryByRole('button', {
+        name: 'Resume motion alerts for Snooze camera',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('restores the confirmed state if snooze cannot be saved', async () => {
+    vi.mocked(request)
+      .mockResolvedValueOnce({
+        preferences: [
+          {
+            deviceId: 'camera-one',
+            deviceName: 'Failure camera',
+            motionEnabled: true,
+            offlineEnabled: true,
+            quietHours: null,
+          },
+        ],
+      })
+      .mockRejectedValueOnce(new Error('offline'));
+    renderNotificationSettings();
+    fireEvent.change(
+      await screen.findByRole('combobox', {
+        name: 'Snooze motion alerts for Failure camera',
+      }),
+      { target: { value: '30' } },
+    );
+    expect(await screen.findByText(/Couldn’t save/)).toBeVisible();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Resume motion alerts for Failure camera',
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('switch', { name: 'Motion alerts for Failure camera' }),
+    ).toBeChecked();
+  });
+
   beforeEach(() => {
     vi.mocked(request)
       .mockReset()

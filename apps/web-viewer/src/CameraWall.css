@@ -1,4 +1,37 @@
 /* Camera wall (ADR 0091). */
+.wall-layout-editor {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+}
+.wall-layout-editor label,
+.wall-layout-editor fieldset {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.wall-layout-editor fieldset label {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  overflow-wrap: anywhere;
+}
+.wall-layout-editor li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block: 8px;
+}
+.wall-layout-editor li span {
+  flex: 1 1 160px;
+  overflow-wrap: anywhere;
+}
+.wall-layout-editor button {
+  min-height: 44px;
+}
 .camera-wall {
   display: grid;
   gap: 16px;

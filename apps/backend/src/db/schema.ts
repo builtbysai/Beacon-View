@@ -689,6 +689,9 @@ export const notificationPreferences = pgTable(
     quietStartMinute: integer('quiet_start_minute'),
     quietEndMinute: integer('quiet_end_minute'),
     quietTimeZone: text('quiet_time_zone'),
+    motionSnoozedUntil: timestamp('motion_snoozed_until', {
+      withTimezone: true,
+    }),
     ...timestamps,
   },
   (table) => [

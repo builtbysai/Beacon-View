@@ -2,6 +2,11 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { request } from './api';
 import { Icon } from './Icon';
 import { ConfirmDialog } from './ConfirmDialog';
+import {
+  activityDateStart,
+  activitySince,
+  localActivityDate,
+} from './activity-filters';
 import { recordingStatusLabels, recordingStatusTone } from './recording-status';
 import './EventsShared.css';
 import './MotionEventList.css';
@@ -81,7 +86,7 @@ function savedTimeFilter(key: string): string {
   const value = savedFilter(key, '24');
   if (value === 'day') return '24';
   if (value === 'week') return '7';
-  return ['24', '7', 'all'].includes(value) ? value : '24';
+  return ['24', '7', '30', 'since', 'all'].includes(value) ? value : '24';
 }
 
 const activityLabels: Record<string, string> = {
@@ -213,6 +218,10 @@ export function MotionEventList({
     savedTimeFilter(`${filterStorageKey}:time`),
   );
   const [kindFilter, setKindFilter] = useState('all');
+  const [sinceDate, setSinceDate] = useState(() => {
+    const saved = savedFilter(`${filterStorageKey}:since`, '');
+    return activityDateStart(saved) ? saved : localActivityDate();
+  });
   const [sortOrder, setSortOrder] = useState('new');
 
   const generation = useRef(0);
@@ -226,10 +235,12 @@ export function MotionEventList({
     try {
       window.localStorage.setItem(`${filterStorageKey}:camera`, cameraFilter);
       window.localStorage.setItem(`${filterStorageKey}:time`, timeFilter);
+      if (activityDateStart(sinceDate))
+        window.localStorage.setItem(`${filterStorageKey}:since`, sinceDate);
     } catch {
       // Activity filters still work when browser storage is unavailable.
     }
-  }, [cameraFilter, filterStorageKey, timeFilter]);
+  }, [cameraFilter, filterStorageKey, timeFilter, sinceDate]);
 
   useEffect(() => {
     if (!focusMotionEventId) return;
@@ -312,26 +323,37 @@ export function MotionEventList({
   }
 
   useEffect(() => {
+    if (!includeHouseholdActivity)
+      setDrawerEvent((current) =>
+        current && !isMotionEvent(current) ? null : current,
+      );
     const filters = new URLSearchParams({ limit: '50' });
     if (cameraFilter !== 'all') filters.set('cameraId', cameraFilter);
-    if (timeFilter !== 'all') {
-      const days = timeFilter === '24' ? 1 : 7;
-      filters.set(
-        'since',
-        new Date(Date.now() - days * 86_400_000).toISOString(),
-      );
-    }
+    const since = activitySince(timeFilter, sinceDate);
+    if (since) filters.set('since', since);
     query.current = filters.toString();
     setEvents(null);
     setCursor(null);
     setActivityHasMore(false);
     activityOffset.current = 0;
-    void fetchPage(false);
+    if (timeFilter === 'since' && !since) {
+      setBusy(false);
+      pending.current = false;
+      setLoadFailed(false);
+      setError('Choose a valid start date.');
+    } else void fetchPage(false);
     return () => {
       generation.current += 1;
       controller.current?.abort();
     };
-  }, [cameraFilter, timeFilter, refreshRevision, clearRevision]);
+  }, [
+    cameraFilter,
+    timeFilter,
+    sinceDate,
+    refreshRevision,
+    clearRevision,
+    includeHouseholdActivity,
+  ]);
 
   async function clearHistory() {
     setConfirmClear(false);
@@ -367,7 +389,8 @@ export function MotionEventList({
       );
     }
     if (timeFilter !== 'all') {
-      const since = Date.now() - (timeFilter === '24' ? 1 : 7) * 86_400_000;
+      const start = activitySince(timeFilter, sinceDate);
+      const since = start ? new Date(start).getTime() : Infinity;
       result = result.filter(
         (event) =>
           isMotionEvent(event) || new Date(event.occurredAt).getTime() >= since,
@@ -379,7 +402,7 @@ export function MotionEventList({
       );
     }
     if (search.trim()) {
-      const q = search.toLowerCase();
+      const q = search.trim().toLowerCase();
       result = result.filter(
         (e) =>
           activityDeviceName(e).toLowerCase().includes(q) ||
@@ -413,7 +436,15 @@ export function MotionEventList({
       );
     }
     return result;
-  }, [events, cameraFilter, timeFilter, kindFilter, search, sortOrder]);
+  }, [
+    events,
+    cameraFilter,
+    timeFilter,
+    sinceDate,
+    kindFilter,
+    search,
+    sortOrder,
+  ]);
 
   const groups = new Map<string, ActivityEvent[]>();
   for (const event of filteredEvents) {
@@ -493,6 +524,8 @@ export function MotionEventList({
           <input
             type="search"
             placeholder="Search activity"
+            aria-label="Search loaded activity"
+            aria-describedby="activity-search-help"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -508,7 +541,7 @@ export function MotionEventList({
           <option value="all">All devices</option>
           {cameras.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.deviceName}
+              {c.deviceName} · {c.name}
             </option>
           ))}
         </select>
@@ -522,9 +555,45 @@ export function MotionEventList({
         >
           <option value="24">Last 24 hours</option>
           <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="since">Since date</option>
           <option value="all">All time</option>
         </select>
+        {timeFilter === 'since' && (
+          <label className="activity-since-date">
+            Since date
+            <input
+              type="date"
+              value={sinceDate}
+              disabled={clearing}
+              onChange={(e) => setSinceDate(e.target.value)}
+            />
+          </label>
+        )}
+        <button
+          type="button"
+          className="secondary2"
+          disabled={clearing}
+          onClick={() => {
+            setSearch('');
+            setCameraFilter('all');
+            setTimeFilter('24');
+            setKindFilter('all');
+            setSortOrder('new');
+          }}
+        >
+          Reset filters
+        </button>
       </section>
+
+      <p id="activity-search-help" className="activity-filter-help">
+        Camera and time filters apply to saved history. Search, event type,
+        counts, and sorting apply to loaded events.
+        {(cursor || activityHasMore) &&
+          ' Load more to check additional events in this time range.'}
+        {timeFilter === 'since' &&
+          ' Dates start at midnight in your local timezone.'}
+      </p>
 
       <div className="events-chips">
         {kinds.map((k) => {
@@ -534,6 +603,7 @@ export function MotionEventList({
               key={k.id}
               className={`events-chip ${kindFilter === k.id ? 'on' : ''}`}
               onClick={() => setKindFilter(k.id)}
+              aria-pressed={kindFilter === k.id}
             >
               {k.label} <span className="n">{count}</span>
             </button>
@@ -544,7 +614,7 @@ export function MotionEventList({
       <div className="events-resultbar">
         <strong role="status" tabIndex={-1} ref={status}>
           {filteredEvents.length}{' '}
-          {filteredEvents.length === 1 ? 'event' : 'events'}
+          {filteredEvents.length === 1 ? 'event' : 'events'} loaded
         </strong>
         <label className="events-sort">
           Sort
@@ -589,7 +659,7 @@ export function MotionEventList({
           <p>
             {cameras.length === 0
               ? 'Activity will appear here after you connect a camera.'
-              : 'No activity matches these filters.'}
+              : 'No activity matches these filters in the loaded events.'}
           </p>
         </div>
       )}
@@ -661,7 +731,7 @@ export function MotionEventList({
         </section>
       ))}
 
-      {events && events.length > 0 && (
+      {events && (events.length > 0 || cursor || activityHasMore) && (
         <div className="events-bottom">
           {(cursor || activityHasMore) && (
             <button

@@ -1,8 +1,49 @@
 # Beacon delivery roadmap
 
-Updated September 12, 2026. This is the single actionable roadmap and current scope
+Updated October 9, 2026. This is the single actionable roadmap and current scope
 authority. Detailed release gates remain in
 [pre-deployment-readiness.md](pre-deployment-readiness.md).
+
+## Current continuation — October 9, 2026
+
+The owner approved and completed the convenience continuation on
+`codex/saved-camera-layouts`:
+
+- Saved account/household camera groups, tile order and columns (ADR 0098).
+- Live-view sleep timer with session teardown and explicit resume (ADR 0099).
+- Activity date filters, reset and loaded-page search guidance (ADR 0100).
+- Personal per-camera motion-alert snooze and early resume (ADR 0101).
+- Connection help and a sanitized local troubleshooting report (ADR 0102).
+- Read-only setup health checks (ADR 0103).
+- Local account/household-scoped clip bookmarks (ADR 0104).
+
+All currently approved convenience implementation items are complete. On October
+9 the owner authorized committing, merging to GitHub main, and deploying to the
+Oracle private alpha. Release execution follows
+[GitHub deployment](github-web-deployment.md); the
+[deployment workflow runs](https://github.com/builtbysai/Beacon-SecureView/actions/workflows/deploy-web.yml)
+record the validated SHA and deployment result. Migration 0037 is required before
+the updated backend starts. No native package rebuild is required for these
+canonical web/desktop UI changes. Physical media, privacy, alert delivery and Cast
+acceptance remain open independently of deployment.
+
+The governing [testing policy](testing-policy.md) requires meaningful regression
+protection and a small useful suite, with no test-count or coverage targets.
+
+C1–C18 have implementations in the October 9 baseline. Done in the convenience
+tables means implementation present, not physical/release acceptance. The
+[project review](project-review-2026-10-09.md) separates remaining evidence from
+shipped code. N1–N9 and the ordered acceptance queue below remain open where
+explicit evidence is missing; historical dated entries describe their own dates.
+
+Cast account and receiver registration are complete (`E850DDA7`, unpublished),
+and production configuration/health checks passed. Register a physical test
+device and prove real receiver playback/revocation before publication. See the
+[Cast guide](google-cast-registration.md). Google Play account payment is complete;
+identity review and subsequent phone verification block app creation.
+
+Browser-opened Android Trust/Contact pages are an accepted U7 exception, per the
+September 28 update. Physical clip/media/accessibility acceptance remains open.
 
 The owner approved a maintainability milestone on September 10–11: refactor existing
 Android, web, and backend code into reviewable feature/security boundaries without
@@ -46,8 +87,8 @@ live at `https://beacon.builtbysai.com`. The owner also approved N5's
 MFA/passkey policy in principle, requested a research pass on purpose-built
 camera use-case profiles (see
 [camera-use-case-profiles.md](camera-use-case-profiles.md)), and requested an
-Android/web feature-and-design parity pass (U7). None of the latter three are
-implemented; see the relevant table rows and
+Android/web feature-and-design parity pass (U7). At that date none of the latter three were
+implemented; later U7 and profile implementation entries supersede this status; see the relevant table rows and
 [development-handoff.md](development-handoff.md)'s September 26 entry for
 what to do next and in what order.
 
@@ -214,8 +255,8 @@ remained stable for 40 seconds and returned the count to zero on exit.
 ADR 0047 is also implemented on the Pixel: the Android foreground service survived an
 Activity background transition, accepted a real TURN viewer, exposes **Pause camera**
 from its ongoing notification, and reports battery-optimization restriction with a link
-to Android settings. Browser-camera naming is the current bounded milestone. Sharing and
-Drive remain subsequent security-sensitive milestones rather than being interleaved.
+to Android settings. Browser-camera naming was the bounded milestone at that date. Sharing and
+Drive subsequently received approved implementation scope; see later entries.
 
 Source-verified foundations: Google browser OAuth and Android browser handoff;
 password sign-in/registration; browser-session revocation and account deletion;
@@ -317,15 +358,15 @@ explicitly where a design, privacy, infrastructure, or release decision is requi
 
 ## UI/UX completion — current approved batch
 
-| ID  | Deliverable / owner                                                          | Acceptance evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| --- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| U1  | Compact auth card — Engineering                                              | Approx. 440px Paper/Evening card, existing Beacon icon system, Google mark/arrow primary, explicit divider, password fields and visibility control, honest account creation/OAuth failures, compact capture disclosure. No remote fonts or fake reset capability. Password/error forms may scroll on short screens.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| U2  | Desktop sidebar collapse — Engineering                                       | Accessible icon names and hover/focus labels, keyboard toggle, persisted browser preference, storage-failure fallback, usable sign-out/trust links; expanded/collapsed layouts; mobile labels/navigation unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| U3  | Systematic viewport/state audit — Engineering                                | 320px, 390px, tablet, 1280×800, ultrawide; auth/register/OAuth failures, Home, Cameras, Activity, Settings, device states, Add camera/pairing, Monitor/Live, Trust/contact. Include empty/error/loading/long content, dark theme and enlarged type. Fix causes of overflow; retain usable list/form/history/legal scroll. Record browser versions and screenshots, not only DOM assertions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| U4  | Finish design-package screen details — Engineering + Owner visual acceptance | Mobile Activity/Settings/device states and wide Monitor remain within current backend/media contracts. Preserve independent streams and explicit Listen/Talk. Validate web tests, lint, types/build and review incremental diff; deploy web only and verify public assets, TLS and `/ready`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| U5  | Sidebar and account-menu reliability — Engineering                           | Sticky header/footer, independently scrollable navigation, icon-collapse rail and keyboard toggle implemented without adding shadcn. The account menu renders outside the sidebar clipping boundary and keeps Trust & privacy and Sign out reachable when collapsed. Unit, responsive keyboard/portal, short-viewport, and production rendering checks pass.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| U6  | Notification settings and Android disconnect — Engineering + Device tester   | Web notification delivery state and per-camera preferences use explicit cards, switches, dirty-state feedback, and responsive layout; the web build is live and verified. Android disconnect is always visible, requires confirmation, stops capture and sends a JSON disconnect action; the backend revokes the credential and retains settings for device-bound repair. Unit/build validation passes; the production request-path failure is fixed and a physical disconnect/re-pair tap-through remains required.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| U7  | Android/web feature-and-design parity pass — Engineering + Owner review      | In progress on `codex/android-clips-library`, most functional gaps now closed. Owner selected the PWA's mobile sidebar model. Inter/shared tokens, PWA-style auth/navigation (audited against the PWA, two real bugs fixed), Events Activity/Clips, Clips listing/playback/deletion, owner/admin motion settings (save/apply acceptance database-verified), backend-authorized 15-second manual recording (request path acceptance-verified end-to-end against local dev, which lacks the Drive OAuth credentials production already has), household/sharing management with per-camera grants (physically verified with a real second account), and Talk plus a WebRTC quality-metrics panel on the live viewer (the live-video connection failure previously flagged here was root-caused to a local dev environment gap and fixed) are implemented and physically verified where fixtures allow. Deployed registration acceptance, a real local Drive-backed capture and clip playback (or deferring that proof to production), native Trust/Contact pages, and accessibility parity remain separate secured slices. |
+| ID  | Deliverable / owner                                                          | Acceptance evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| U1  | Compact auth card — Engineering                                              | Approx. 440px Paper/Evening card, existing Beacon icon system, Google mark/arrow primary, explicit divider, password fields and visibility control, honest account creation/OAuth failures, compact capture disclosure. No remote fonts or fake reset capability. Password/error forms may scroll on short screens.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| U2  | Desktop sidebar collapse — Engineering                                       | Accessible icon names and hover/focus labels, keyboard toggle, persisted browser preference, storage-failure fallback, usable sign-out/trust links; expanded/collapsed layouts; mobile labels/navigation unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| U3  | Systematic viewport/state audit — Engineering                                | 320px, 390px, tablet, 1280×800, ultrawide; auth/register/OAuth failures, Home, Cameras, Activity, Settings, device states, Add camera/pairing, Monitor/Live, Trust/contact. Include empty/error/loading/long content, dark theme and enlarged type. Fix causes of overflow; retain usable list/form/history/legal scroll. Record browser versions and screenshots, not only DOM assertions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| U4  | Finish design-package screen details — Engineering + Owner visual acceptance | Mobile Activity/Settings/device states and wide Monitor remain within current backend/media contracts. Preserve independent streams and explicit Listen/Talk. Validate web tests, lint, types/build and review incremental diff; deploy web only and verify public assets, TLS and `/ready`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| U5  | Sidebar and account-menu reliability — Engineering                           | Sticky header/footer, independently scrollable navigation, icon-collapse rail and keyboard toggle implemented without adding shadcn. The account menu renders outside the sidebar clipping boundary and keeps Trust & privacy and Sign out reachable when collapsed. Unit, responsive keyboard/portal, short-viewport, and production rendering checks pass.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| U6  | Notification settings and Android disconnect — Engineering + Device tester   | Web notification delivery state and per-camera preferences use explicit cards, switches, dirty-state feedback, and responsive layout; the web build is live and verified. Android disconnect is always visible, requires confirmation, stops capture and sends a JSON disconnect action; the backend revokes the credential and retains settings for device-bound repair. Unit/build validation passes; the production request-path failure is fixed and a physical disconnect/re-pair tap-through remains required.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| U7  | Android/web feature-and-design parity pass — Engineering + Owner review      | In progress on `codex/android-clips-library`, most functional gaps now closed. Owner selected the PWA's mobile sidebar model. Inter/shared tokens, PWA-style auth/navigation (audited against the PWA, two real bugs fixed), Events Activity/Clips, Clips listing/playback/deletion, owner/admin motion settings (save/apply acceptance database-verified), backend-authorized 15-second manual recording (request path acceptance-verified end-to-end against local dev, which lacks the Drive OAuth credentials production already has), household/sharing management with per-camera grants (physically verified with a real second account), and Talk plus a WebRTC quality-metrics panel on the live viewer (the live-video connection failure previously flagged here was root-caused to a local dev environment gap and fixed) are implemented and physically verified where fixtures allow. Deployed registration acceptance, a real local Drive-backed capture and clip playback (or deferring that proof to production), accessibility parity remain separate secured slices; browser-opened Trust/Contact pages are an accepted exception (September 28). |
 
 September 28 U7 update: the two-emulator parity pass and narrow-screen
 follow-up are on `codex/u7-emulator-parity`. The owner accepted browser-opened
@@ -343,39 +384,40 @@ the Later table below (activity zones and rich device health) for their
 bounded forms described here. Capture visibility, privacy mode, and the hard
 boundaries below are unchanged.
 
-Status values: **Planned**, **In progress**, **Done** (merged and deployed),
+Status values: **Planned**, **In progress**, **Done** (implementation present;
+deployment evidence recorded separately, physical acceptance may remain open),
 **Deferred** (needs an owner decision first).
 
 ### Track A: Viewing
 
-| ID  | Feature                                 | Platforms             | Milestone | Status  |
-| --- | --------------------------------------- | --------------------- | --------- | ------- |
-| C1  | Camera wall: live grid, tap to focus    | Web, desktop          | M3        | Planned |
-| C2  | Keyboard shortcuts and help overlay     | Web, desktop          | M2        | Planned |
-| C3  | Zoom and pan on live video              | Web, desktop, Android | M2, M5    | Done    |
-| C4  | Snapshot, saved on the device only      | Web, desktop, Android | M2, M5    | Done    |
-| C5  | Hold-to-talk                            | Web, desktop, Android | M2, M5    | Done    |
-| C6  | Mini-player that follows you in the app | Web, desktop          | M3        | Planned |
-| C7  | Announce on all cameras                 | Web, desktop          | M3        | Planned |
-| C8  | Cast to a TV                            | None yet              | n/a       | Done    |
+| ID  | Feature                                 | Platforms             | Milestone | Status |
+| --- | --------------------------------------- | --------------------- | --------- | ------ |
+| C1  | Camera wall: live grid, tap to focus    | Web, desktop          | M3        | Done   |
+| C2  | Keyboard shortcuts and help overlay     | Web, desktop          | M2        | Done   |
+| C3  | Zoom and pan on live video              | Web, desktop, Android | M2, M5    | Done   |
+| C4  | Snapshot, saved on the device only      | Web, desktop, Android | M2, M5    | Done   |
+| C5  | Hold-to-talk                            | Web, desktop, Android | M2, M5    | Done   |
+| C6  | Mini-player that follows you in the app | Web, desktop          | M3        | Done   |
+| C7  | Announce on all cameras                 | Web, desktop          | M3        | Done   |
+| C8  | Cast to a TV                            | Web                   | C8        | Done   |
 
 ### Track B: Shortcuts and entry points
 
-| ID  | Feature                                        | Platforms             | Milestone | Status  |
-| --- | ---------------------------------------------- | --------------------- | --------- | ------- |
-| C9  | PWA app shortcuts                              | Installed web app     | M2        | Planned |
-| C10 | Android launcher shortcuts (static, favorites) | Android               | M5        | Done    |
-| C11 | Desktop tray: favorite cameras and the wall    | Desktop               | M5        | Done    |
-| C12 | Alerts open the exact camera or clip           | Web, desktop, Android | M2, M5    | Done    |
+| ID  | Feature                                        | Platforms             | Milestone | Status |
+| --- | ---------------------------------------------- | --------------------- | --------- | ------ |
+| C9  | PWA app shortcuts                              | Installed web app     | M2        | Done   |
+| C10 | Android launcher shortcuts (static, favorites) | Android               | M5        | Done   |
+| C11 | Desktop tray: favorite cameras and the wall    | Desktop               | M5        | Done   |
+| C12 | Alerts open the exact camera or clip           | Web, desktop, Android | M2, M5    | Done   |
 
 ### Track C: Safety and automation
 
-| ID  | Feature                                        | Platforms                               | Milestone | Status  |
-| --- | ---------------------------------------------- | --------------------------------------- | --------- | ------- |
-| C13 | Home / Away modes (manual and scheduled)       | Server, web, Android                    | M4        | Done    |
-| C14 | Camera health alerts: low battery, overheating | Server, web, Android                    | M4        | Planned |
-| C15 | Motion zones: ignore areas of the picture      | Server, web, Android                    | M4        | Planned |
-| C16 | Data saver: lower quality on request           | Web viewer, browser and desktop cameras | M3        | Planned |
+| ID  | Feature                                        | Platforms                               | Milestone | Status |
+| --- | ---------------------------------------------- | --------------------------------------- | --------- | ------ |
+| C13 | Home / Away modes (manual and scheduled)       | Server, web, Android                    | M4        | Done   |
+| C14 | Camera health alerts: low battery, overheating | Server, web, Android                    | M4        | Done   |
+| C15 | Motion zones: ignore areas of the picture      | Server, web, Android                    | M4        | Done   |
+| C16 | Data saver: lower quality on request           | Web viewer, browser and desktop cameras | M3        | Done   |
 
 ### Track D: Engineering
 
@@ -386,12 +428,11 @@ Status values: **Planned**, **In progress**, **Done** (merged and deployed),
 
 ### Needs an owner decision before any work
 
-- **C8, cast to a TV.** A live WebRTC stream cannot be sent through the
-  browser Remote Playback API, and a Chromecast or AirPlay sender needs a
-  receiver app (a new client surface beyond ADR 0082). Options for a later
-  design: an HTML5 Cast receiver, or screen mirroring guidance only.
-- **Location-based Home / Away.** Needs a threat model and consent for
-  collecting where people are. C13 ships with manual and scheduled modes.
+- **C8, Cast activation/acceptance.** ADR 0097 supersedes the earlier deferral.
+  Web sender/receiver implemented; registration and backend activation complete.
+  Physical device registration/testing and owner-approved publication remain.
+- **Location-based Home / Away.** Owner declined this feature per the October 9
+  handoff. Do not build it. C13 uses manual and scheduled modes.
 - **Code-signing certificates** stay deferred, as before (affects macOS
   auto-updates and Windows SmartScreen).
 - **Google OAuth consent screen:** publish to "In production" so Drive

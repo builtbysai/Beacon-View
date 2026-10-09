@@ -14,13 +14,22 @@ import { Icon } from './Icon';
 import { LiveVideo } from './LiveVideo';
 import { PushToTalk } from './push-to-talk';
 import type { Camera } from './domain';
+import { WallLayoutEditor } from './WallLayoutEditor';
+import {
+  layoutCameras,
+  loadWallLayouts,
+  saveWallLayouts,
+  MAX_SAVED_LAYOUTS,
+  type WallLayout,
+  type WallColumns,
+} from './wall-layouts';
 import './CameraWall.css';
 
 /** More simultaneous streams than this strain the cameras and the network. */
 export const MAX_WALL_TILES = 9;
 
 const LAYOUT_KEY = 'beacon.wall.columns.v1';
-export type WallColumns = 'auto' | 1 | 2 | 3;
+export type { WallColumns } from './wall-layouts';
 
 export function loadWallColumns(): WallColumns {
   try {
@@ -110,23 +119,36 @@ export function CameraWall({
   cameras,
   onBack,
   onOpen,
+  storageKey,
 }: {
   /** One camera per device (its active source), already in display order. */
   cameras: Camera[];
   onBack: () => void;
   onOpen: (camera: Camera) => void;
+  storageKey: string;
 }) {
   const [columns, setColumns] = useState<WallColumns>(loadWallColumns);
+  const [layouts, setLayouts] = useState(() => loadWallLayouts(storageKey));
+  const [selected, setSelected] = useState('');
+  const [editor, setEditor] = useState<WallLayout | null>(null);
+  const [notice, setNotice] = useState('');
+  const activeLayout = layouts.find((layout) => layout.name === selected);
+  const grouped = activeLayout
+    ? layoutCameras(cameras, activeLayout.deviceIds)
+    : cameras;
   const wallRef = useRef<HTMLElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const registry = useMemo(() => new AnnounceRegistry(), []);
 
   const live = useMemo(
-    () => cameras.filter((camera) => cameraStatus(camera).available),
-    [cameras],
+    () => grouped.filter((camera) => cameraStatus(camera).available),
+    [grouped],
   );
   const shown = live.slice(0, MAX_WALL_TILES);
-  const waiting = cameras.filter((camera) => !shown.includes(camera));
+  const waiting = grouped.filter((camera) => !shown.includes(camera));
+  const missing = activeLayout
+    ? activeLayout.deviceIds.length - grouped.length
+    : 0;
   const columnCount = columns === 'auto' ? autoColumns(shown.length) : columns;
 
   const summary = useSyncExternalStore(
@@ -159,6 +181,24 @@ export function CameraWall({
     }
   }
 
+  function persist(next: WallLayout[]) {
+    setLayouts(next);
+    setNotice(
+      saveWallLayouts(storageKey, next)
+        ? 'Layout changes saved.'
+        : 'Browser storage is unavailable. Your changes last for this page only.',
+    );
+  }
+
+  function chooseLayout(name: string) {
+    registry.stopAll();
+    setSelected(name);
+    setEditor(null);
+    const layout = layouts.find((item) => item.name === name);
+    setColumns(layout?.columns ?? loadWallColumns());
+    setNotice('');
+  }
+
   function toggleFullscreen() {
     const wall = wallRef.current;
     if (!wall?.requestFullscreen) return;
@@ -185,6 +225,67 @@ export function CameraWall({
         </button>
         <h1>Camera wall</h1>
         <div className="camera-wall-actions">
+          <label className="camera-wall-layout">
+            <span className="visually-hidden">Saved layout</span>
+            <select
+              className="input-field"
+              aria-label="Saved layout"
+              value={selected}
+              onChange={(event) => chooseLayout(event.target.value)}
+            >
+              <option value="">All cameras</option>
+              {layouts.map((layout) => (
+                <option key={layout.name} value={layout.name}>
+                  {layout.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="secondary"
+            type="button"
+            disabled={
+              editor !== null ||
+              layouts.length >= MAX_SAVED_LAYOUTS ||
+              cameras.length === 0
+            }
+            onClick={() =>
+              setEditor({
+                name: '',
+                deviceIds: grouped
+                  .slice(0, MAX_WALL_TILES)
+                  .map((camera) => camera.deviceId),
+                columns,
+              })
+            }
+          >
+            New group / layout
+          </button>
+          {activeLayout && (
+            <>
+              <button
+                className="secondary"
+                disabled={editor !== null}
+                type="button"
+                onClick={() => setEditor({ ...activeLayout, columns })}
+              >
+                Edit layout
+              </button>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => {
+                  const next = layouts.filter(
+                    (layout) => layout.name !== selected,
+                  );
+                  chooseLayout('');
+                  persist(next);
+                }}
+              >
+                Delete layout
+              </button>
+            </>
+          )}
           <label className="camera-wall-layout">
             <span className="visually-hidden">Columns</span>
             <select
@@ -237,6 +338,44 @@ export function CameraWall({
           </button>
         </div>
       </header>
+
+      {notice && <p role="status">{notice}</p>}
+      {missing > 0 && (
+        <p role="status">
+          {missing} saved {missing === 1 ? 'camera is' : 'cameras are'} no
+          longer available to this account.
+        </p>
+      )}
+      {editor && (
+        <WallLayoutEditor
+          cameras={cameras}
+          initial={editor}
+          onCancel={() => setEditor(null)}
+          onSave={(layout) => {
+            if (
+              layouts.some(
+                (item) =>
+                  item.name !== editor.name &&
+                  item.name.toLocaleLowerCase() ===
+                    layout.name.toLocaleLowerCase(),
+              )
+            ) {
+              setNotice(
+                'Choose a different layout name. That name is already saved.',
+              );
+              return;
+            }
+            registry.stopAll();
+            persist([
+              ...layouts.filter((item) => item.name !== editor.name),
+              layout,
+            ]);
+            setSelected(layout.name);
+            setColumns(layout.columns);
+            setEditor(null);
+          }}
+        />
+      )}
 
       {shown.length === 0 ? (
         <p className="camera-wall-empty" role="status">

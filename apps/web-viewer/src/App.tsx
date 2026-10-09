@@ -6,6 +6,7 @@ import { friendlyError } from './friendly-errors';
 import { alertDestination, resolveAlert, takeAlertId } from './alert-link';
 import { useDriveRecording } from './drive-recording';
 import { CameraWall } from './CameraWall';
+import { wallStorageKey } from './wall-layouts';
 import { LivePlayerProvider, LivePlayerSlot } from './LivePlayerHost';
 import { ErrorNotice } from './ErrorNotice';
 import { nextPairingState } from './lifecycle';
@@ -1572,6 +1573,8 @@ function AppShell() {
 
             {page === 'wall' && (
               <CameraWall
+                key={wallStorageKey(user.id, household?.id ?? '')}
+                storageKey={wallStorageKey(user.id, household?.id ?? '')}
                 cameras={groupCamerasByDevice(cameras)}
                 onBack={() => navigate('cameras')}
                 onOpen={(camera) => openCamera(camera)}
@@ -1655,6 +1658,8 @@ function AppShell() {
                 <EventsViewSwitch value={eventsView} onChange={setEventsView} />
                 {eventsView === 'clips' ? (
                   <RecordingLibrary
+                    key={`clips_${user.id}_${household?.id ?? ''}_${household?.role ?? ''}_${membershipRevision}`}
+                    bookmarkStorageKey={`beacon_clip_bookmarks_${user.id}_${household?.id ?? ''}`}
                     cameras={cameras}
                     canDelete={household?.role === 'owner'}
                     canShare={household?.role === 'owner'}
@@ -1667,7 +1672,8 @@ function AppShell() {
                   />
                 ) : (
                   <MotionEventList
-                    filterStorageKey={`beacon_motion_filters_${user.id}`}
+                    key={`activity_${user.id}_${household?.id ?? ''}`}
+                    filterStorageKey={`beacon_motion_filters_${user.id}_${household?.id ?? ''}`}
                     includeHouseholdActivity={
                       household?.role === 'owner' || household?.role === 'admin'
                     }
@@ -1688,7 +1694,11 @@ function AppShell() {
                 )}
               </>
             )}
-            {page === 'diagnostics' && <Diagnostics />}
+            {page === 'diagnostics' && (
+              <Diagnostics
+                key={`diagnostics_${user.id}_${household?.id ?? ''}_${household?.role ?? ''}`}
+              />
+            )}
             {page === 'settings' && (
               <SettingsPage
                 cameras={cameras}

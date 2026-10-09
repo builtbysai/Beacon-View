@@ -24,6 +24,7 @@ export interface NotificationPreferenceRecord {
   deviceName: string;
   motionEnabled: boolean;
   offlineEnabled: boolean;
+  motionSnoozedUntil: string | null;
   quietHours: { start: string; end: string; timeZone: string } | null;
 }
 

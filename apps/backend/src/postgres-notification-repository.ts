@@ -168,10 +168,12 @@ export class PostgresNotificationRepository {
       quietStartMinute: number | null;
       quietEndMinute: number | null;
       quietTimeZone: string | null;
+      motionSnoozedUntil: Date | null;
     }>(
       `SELECT d.public_device_id AS "deviceId", d.name AS "deviceName",
               coalesce(np.motion_enabled, false) AS "motionEnabled",
               coalesce(np.offline_enabled, false) AS "offlineEnabled",
+              np.motion_snoozed_until AS "motionSnoozedUntil",
               np.quiet_start_minute AS "quietStartMinute",
               np.quiet_end_minute AS "quietEndMinute", np.quiet_time_zone AS "quietTimeZone"
        FROM cameras d
@@ -185,6 +187,7 @@ export class PostgresNotificationRepository {
       deviceName: row.deviceName,
       motionEnabled: row.motionEnabled,
       offlineEnabled: row.offlineEnabled,
+      motionSnoozedUntil: row.motionSnoozedUntil?.toISOString() ?? null,
       quietHours:
         row.quietStartMinute === null
           ? null
@@ -238,6 +241,60 @@ export class PostgresNotificationRepository {
     );
   }
 
+  /** A personal deadline, independent of quiet hours and other alert categories. */
+  async snoozeMotion(input: {
+    userId: string;
+    householdId: string;
+    publicDeviceId: string;
+    minutes: 0 | 15 | 30 | 60;
+    now: Date;
+  }): Promise<NotificationPreferenceRecord | null> {
+    const until =
+      input.minutes === 0
+        ? null
+        : new Date(input.now.getTime() + input.minutes * 60_000);
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query<{ id: string }>(
+        `INSERT INTO notification_preferences (user_id, device_id, motion_snoozed_until)
+         SELECT $1, d.id, $4 FROM cameras d
+         WHERE d.public_device_id = $3 AND d.household_id = $2 AND d.revoked_at IS NULL
+         ON CONFLICT (user_id, device_id) DO UPDATE SET motion_snoozed_until = excluded.motion_snoozed_until,
+           updated_at = $5 RETURNING device_id AS id`,
+        [
+          input.userId,
+          input.householdId,
+          input.publicDeviceId,
+          until,
+          input.now,
+        ],
+      );
+      if (until && result.rows[0]) {
+        // Drop queued motion alerts rather than delivering a backlog after resume.
+        await client.query(
+          `UPDATE notification_outbox no SET terminal_at = $3, claimed_until = NULL
+           FROM notification_events ne WHERE ne.id = no.event_id
+             AND ne.user_id = $1 AND ne.device_id = $2 AND ne.category = 'motion'
+             AND no.delivered_at IS NULL AND no.terminal_at IS NULL`,
+          [input.userId, result.rows[0].id, input.now],
+        );
+      }
+      await client.query('COMMIT');
+      if (!result.rows[0]) return null;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    return (
+      (await this.listPreferences(input.userId, input.householdId)).find(
+        (item) => item.deviceId === input.publicDeviceId,
+      ) ?? null
+    );
+  }
+
   async enqueueMotion(
     client: PoolClient,
     input: {
@@ -260,7 +317,8 @@ export class PostgresNotificationRepository {
        JOIN cameras d ON d.id = np.device_id
        JOIN household_members hm ON hm.household_id = d.household_id AND hm.user_id = np.user_id
        WHERE np.device_id = $1 AND d.revoked_at IS NULL AND hm.status = 'active'
-         AND hm.role IN ('owner', 'admin') AND (hm.expires_at IS NULL OR hm.expires_at > $2)`,
+         AND hm.role IN ('owner', 'admin') AND (hm.expires_at IS NULL OR hm.expires_at > $2)
+         AND (np.motion_snoozed_until IS NULL OR np.motion_snoozed_until <= $2)`,
       [input.deviceId, input.now],
     );
     // Home mode can mute motion alerts; the motion event itself is still kept.
@@ -541,6 +599,16 @@ export class PostgresNotificationRepository {
     limit = 20,
   ): Promise<NotificationDelivery[]> {
     if (!this.cipher) return [];
+    // Recheck the deadline for queued motion, including retries and concurrent enqueue.
+    await this.pool.query(
+      `UPDATE notification_outbox no SET terminal_at = $1, claimed_until = NULL
+       FROM notification_events ne, notification_preferences np
+       WHERE no.event_id = ne.id AND np.user_id = ne.user_id AND np.device_id = ne.device_id
+         AND ne.category = 'motion' AND np.motion_snoozed_until IS NOT NULL
+         AND ne.occurred_at < np.motion_snoozed_until
+         AND no.delivered_at IS NULL AND no.terminal_at IS NULL`,
+      [now],
+    );
     const result = await this.pool.query<{
       id: string;
       subscriptionId: string;
@@ -560,6 +628,10 @@ export class PostgresNotificationRepository {
          WHERE no.delivered_at IS NULL AND no.terminal_at IS NULL AND no.next_attempt_at <= $1
            AND (no.claimed_until IS NULL OR no.claimed_until < $1) AND ns.revoked_at IS NULL
            AND bs.revoked_at IS NULL AND bs.idle_expires_at > $1 AND bs.absolute_expires_at > $1
+           AND (ne.category <> 'motion' OR NOT EXISTS (
+             SELECT 1 FROM notification_preferences np WHERE np.user_id = ne.user_id
+               AND np.device_id = ne.device_id AND np.motion_snoozed_until > $1
+           ))
            AND (ne.category = 'security' OR EXISTS (
              SELECT 1 FROM cameras d
              JOIN household_members hm ON hm.household_id = d.household_id AND hm.user_id = ne.user_id
@@ -628,7 +700,7 @@ export class PostgresNotificationRepository {
              WHEN 2 THEN $2::timestamptz+interval '5 minutes' WHEN 3 THEN $2::timestamptz+interval '30 minutes'
              WHEN 4 THEN $2::timestamptz+interval '2 hours' ELSE $2::timestamptz+interval '8 hours' END,
              COALESCE($4::timestamptz, $2::timestamptz))
-         WHERE id=$1 RETURNING subscription_id
+         WHERE id=$1 AND delivered_at IS NULL AND terminal_at IS NULL RETURNING subscription_id
        )
        UPDATE notification_subscriptions SET revoked_at=$2, updated_at=$2
        WHERE id=$5 AND $3::boolean AND revoked_at IS NULL

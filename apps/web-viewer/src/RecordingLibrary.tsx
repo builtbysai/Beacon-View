@@ -92,7 +92,9 @@ export function RecordingLibrary({
   onOpenEvent,
   focusRecordingId = null,
   onFocusHandled,
+  bookmarkStorageKey,
 }: {
+  bookmarkStorageKey?: string;
   cameras?: CameraOption[];
   /** Only the household owner can delete a clip (matches the backend's
    * DELETE /api/recordings gate); everyone with camera access can still
@@ -122,6 +124,51 @@ export function RecordingLibrary({
   );
   const [shareTarget, setShareTarget] = useState<RecordingSummary | null>(null);
   const [search, setSearch] = useState('');
+  const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
+  const [bookmarkNotice, setBookmarkNotice] = useState('');
+  const [bookmarks, setBookmarks] = useState<string[]>(() => {
+    if (!bookmarkStorageKey) return [];
+    try {
+      const raw = localStorage.getItem(bookmarkStorageKey);
+      if (!raw || raw.length > 128_000) return [];
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed)
+        ? [
+            ...new Set(
+              parsed.filter(
+                (id): id is string =>
+                  typeof id === 'string' && id.length > 0 && id.length <= 200,
+              ),
+            ),
+          ].slice(0, 500)
+        : [];
+    } catch {
+      return [];
+    }
+  });
+
+  function saveBookmarks(next: string[]) {
+    setBookmarks(next);
+    setBookmarkNotice('');
+    if (!bookmarkStorageKey) return;
+    try {
+      localStorage.setItem(bookmarkStorageKey, JSON.stringify(next));
+    } catch {
+      setBookmarkNotice(
+        'Bookmarks work for this visit, but this browser could not save them.',
+      );
+    }
+  }
+
+  function toggleBookmark(id: string) {
+    if (bookmarks.includes(id))
+      saveBookmarks(bookmarks.filter((item) => item !== id));
+    else if (bookmarks.length >= 500)
+      setBookmarkNotice(
+        'Remove a bookmark before adding another; this browser can save up to 500.',
+      );
+    else saveBookmarks([...bookmarks, id]);
+  }
   const [cameraFilter, setCameraFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState('all');
   const abortRef = useRef<AbortController | null>(null);
@@ -228,6 +275,8 @@ export function RecordingLibrary({
         (current ?? []).filter((item) => item.id !== recording.id),
       );
       if (playback?.id === recording.id) closePlayback();
+      if (bookmarks.includes(recording.id))
+        saveBookmarks(bookmarks.filter((id) => id !== recording.id));
     } catch (caught) {
       setError(
         friendlyError(caught, 'The clip couldn’t be deleted. Try again.'),
@@ -240,6 +289,8 @@ export function RecordingLibrary({
   const filtered = useMemo(() => {
     if (!recordings) return [];
     let result = recordings;
+    if (bookmarkedOnly)
+      result = result.filter((recording) => bookmarks.includes(recording.id));
     if (cameraFilter !== 'all')
       result = result.filter((r) => r.cameraId === cameraFilter);
     if (timeFilter !== 'all') {
@@ -255,7 +306,7 @@ export function RecordingLibrary({
       );
     }
     return [...result].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [recordings, cameraFilter, timeFilter, search]);
+  }, [recordings, cameraFilter, timeFilter, search, bookmarks, bookmarkedOnly]);
 
   const groups = new Map<string, RecordingSummary[]>();
   for (const recording of filtered) {
@@ -306,6 +357,14 @@ export function RecordingLibrary({
       </section>
 
       <section className="events-controls">
+        <label>
+          <input
+            type="checkbox"
+            checked={bookmarkedOnly}
+            onChange={(event) => setBookmarkedOnly(event.target.checked)}
+          />{' '}
+          Bookmarked only
+        </label>
         <label className="events-search">
           <span className="icon-wrapper">
             <Icon name="search" />
@@ -347,6 +406,12 @@ export function RecordingLibrary({
           {filtered.length} {filtered.length === 1 ? 'clip' : 'clips'}
         </strong>
       </div>
+      <p className="clips-bookmark-guidance">
+        Bookmarks stay in this browser for this account and household. They do
+        not preserve clips beyond retention. Filters apply to loaded clips; use
+        Load more to search older clips.
+      </p>
+      {bookmarkNotice && <p role="status">{bookmarkNotice}</p>}
 
       {error && (
         <p className="recording-library-error" role="alert">
@@ -407,6 +472,17 @@ export function RecordingLibrary({
                       </span>
                     </div>
                     <div className="clips-actions">
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        aria-pressed={bookmarks.includes(recording.id)}
+                        disabled={busyId !== null}
+                        onClick={() => toggleBookmark(recording.id)}
+                      >
+                        {bookmarks.includes(recording.id)
+                          ? 'Remove bookmark'
+                          : 'Bookmark clip'}
+                      </button>
                       {recording.status === 'available' ? (
                         <>
                           <button

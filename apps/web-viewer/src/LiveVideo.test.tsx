@@ -99,6 +99,61 @@ afterEach(() => {
 });
 
 describe('LiveVideo', () => {
+  it('ends the live peer and signaling on sleep expiry, and only resumes on request', async () => {
+    vi.useFakeTimers();
+    FakeWebSocket.instances = [];
+    FakePeer.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    const view = render(
+      <LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} />,
+    );
+    try {
+      const socket = FakeWebSocket.instances[0]!;
+      await act(async () => {
+        socket.message({
+          type: 'ready',
+          connectionId: 'connection-sleep',
+          iceServers: [],
+          iceTransportPolicy: 'all',
+        });
+        await Promise.resolve();
+      });
+      const peer = FakePeer.instances[0]!;
+      act(() => {
+        peer.connectionState = 'connected';
+        peer.onconnectionstatechange?.();
+      });
+      fireEvent.change(screen.getByLabelText('Sleep timer'), {
+        target: { value: '15' },
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(15 * 60_000);
+        await Promise.resolve();
+      });
+      expect(socket.close).toHaveBeenCalled();
+      expect(peer.close).toHaveBeenCalled();
+      expect(socket.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          connectionId: 'connection-sleep',
+          type: 'disconnect',
+        }),
+      );
+      expect(screen.getByText('Sleep timer finished')).toBeVisible();
+      expect(screen.queryByRole('button', { name: 'Talk' })).toBeNull();
+      const count = FakeWebSocket.instances.length;
+      act(() => {
+        vi.advanceTimersByTime(60_000);
+      });
+      expect(FakeWebSocket.instances).toHaveLength(count);
+      fireEvent.click(screen.getByRole('button', { name: 'Resume viewing' }));
+      expect(FakeWebSocket.instances).toHaveLength(count + 1);
+      expect(screen.getByLabelText('Sleep timer')).toHaveValue('0');
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
   it('requests fullscreen for the surface containing all controls and explains rejection', async () => {
     vi.stubGlobal('WebSocket', FakeWebSocket);
     const { container } = render(

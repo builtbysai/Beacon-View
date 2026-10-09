@@ -43,6 +43,27 @@ afterEach(() => {
 });
 
 describe('picture-in-picture', () => {
+  it('clears floating state when viewing is disabled by a sleep timer', async () => {
+    const { video, exitPictureInPicture } = floatingVideo();
+    const ref = { current: video };
+    const { result, rerender, unmount } = renderHook(
+      ({ enabled }) =>
+        usePictureInPicture(ref, { auto: false, enabled, title: 'Porch' }),
+      { initialProps: { enabled: true } },
+    );
+    await act(async () => {
+      result.current.toggle();
+      await Promise.resolve();
+    });
+    expect(result.current.active).toBe(true);
+    await act(async () => {
+      rerender({ enabled: false });
+      await Promise.resolve();
+    });
+    expect(exitPictureInPicture).toHaveBeenCalled();
+    expect(result.current.active).toBe(false);
+    unmount();
+  });
   it('floats the live video and brings it back', async () => {
     const { video } = floatingVideo();
     const ref = { current: video };

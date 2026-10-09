@@ -13,6 +13,7 @@ interface Preference {
   deviceName: string;
   motionEnabled: boolean;
   offlineEnabled: boolean;
+  motionSnoozedUntil?: string | null;
   quietHours: { start: string; end: string; timeZone: string } | null;
 }
 
@@ -214,6 +215,7 @@ export function NotificationSettings({
   function updatePreference(
     deviceId: string,
     update: (preference: Preference) => Preference,
+    snoozeMinutes?: number,
   ) {
     const current = latestPreferences.current.find(
       (item) => item.deviceId === deviceId,
@@ -232,14 +234,18 @@ export function NotificationSettings({
         .catch(() => undefined)
         .then(async () => {
           const result = await request<{ preference: Preference }>(
-            `/api/notification-preferences/${encodeURIComponent(deviceId)}`,
+            `/api/notification-preferences/${encodeURIComponent(deviceId)}${snoozeMinutes === undefined ? '' : '/motion-snooze'}`,
             {
               method: 'PUT',
-              body: JSON.stringify({
-                motionEnabled: next.motionEnabled,
-                offlineEnabled: next.offlineEnabled,
-                quietHours: next.quietHours,
-              }),
+              body: JSON.stringify(
+                snoozeMinutes === undefined
+                  ? {
+                      motionEnabled: next.motionEnabled,
+                      offlineEnabled: next.offlineEnabled,
+                      quietHours: next.quietHours,
+                    }
+                  : { minutes: snoozeMinutes },
+              ),
             },
           );
           confirmedPreferences.current.set(deviceId, result.preference);
@@ -341,6 +347,12 @@ export function NotificationSettings({
         </div>
       ) : (
         <>
+          <p className="notification-snooze-help">
+            Snooze pauses your motion alerts for one camera across your
+            signed-in devices. Motion history, camera problems, and security
+            alerts continue. Quiet hours and Home/Away settings still apply
+            after snooze ends.
+          </p>
           <div className="notification-table" role="table">
             <div className="notification-table-head" role="row">
               <span role="columnheader">Camera</span>
@@ -354,6 +366,21 @@ export function NotificationSettings({
                 preference={preference}
                 onChange={(update) =>
                   updatePreference(preference.deviceId, update)
+                }
+                onSnooze={(minutes) =>
+                  updatePreference(
+                    preference.deviceId,
+                    (item) => ({
+                      ...item,
+                      motionSnoozedUntil:
+                        minutes === 0
+                          ? null
+                          : new Date(
+                              Date.now() + minutes * 60_000,
+                            ).toISOString(),
+                    }),
+                    minutes,
+                  )
                 }
               />
             ))}
@@ -387,17 +414,38 @@ export function NotificationSettings({
 function NotificationCameraRow({
   preference,
   onChange,
+  onSnooze,
 }: {
   preference: Preference;
   onChange: (update: (preference: Preference) => Preference) => void;
+  onSnooze: (minutes: number) => void;
 }) {
   const quietHours = preference.quietHours;
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const refresh = () => setNow(Date.now());
+    const timer = window.setInterval(refresh, 15_000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, []);
+  const snoozedUntil = preference.motionSnoozedUntil
+    ? new Date(preference.motionSnoozedUntil)
+    : null;
+  const snoozed = snoozedUntil !== null && snoozedUntil.getTime() > now;
   return (
     <div className="notification-table-row" role="row">
       <span className="notification-table-name" role="cell">
         {preference.deviceName}
       </span>
-      <span className="notification-table-cell" role="cell">
+      <span
+        className="notification-table-cell notification-motion-cell"
+        role="cell"
+      >
         <span className="notification-table-label">Motion</span>
         <Switch
           label={`Motion alerts for ${preference.deviceName}`}
@@ -406,6 +454,47 @@ function NotificationCameraRow({
             onChange((item) => ({ ...item, motionEnabled: checked }))
           }
         />
+        <span className="notification-motion-snooze">
+          <label>
+            <span className="visually-hidden">
+              Snooze motion alerts for {preference.deviceName}
+            </span>
+            <select
+              aria-label={`Snooze motion alerts for ${preference.deviceName}`}
+              value=""
+              disabled={!preference.motionEnabled && !snoozed}
+              onChange={(event) => {
+                if (event.target.value) onSnooze(Number(event.target.value));
+              }}
+            >
+              <option value="">
+                {snoozed ? 'Extend snooze' : 'Snooze motion'}
+              </option>
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="60">60 minutes</option>
+            </select>
+          </label>
+          {snoozed && (
+            <>
+              <small>
+                Until{' '}
+                {snoozedUntil.toLocaleTimeString([], {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
+              </small>
+              <button
+                type="button"
+                className="secondary"
+                aria-label={`Resume motion alerts for ${preference.deviceName}`}
+                onClick={() => onSnooze(0)}
+              >
+                Resume alerts
+              </button>
+            </>
+          )}
+        </span>
       </span>
       <span className="notification-table-cell" role="cell">
         <span className="notification-table-label">Camera problems</span>

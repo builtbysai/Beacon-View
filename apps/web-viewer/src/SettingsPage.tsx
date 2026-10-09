@@ -307,7 +307,10 @@ export function SettingsPage({
               <SectionHead title="Notifications">
                 Control browser delivery and alerts from each camera.
               </SectionHead>
-              <NotificationSettings webPushAvailable={webPushAvailable} />
+              <NotificationSettings
+                key={`notifications_${user.id}_${household.id}`}
+                webPushAvailable={webPushAvailable}
+              />
             </section>
           )}
 

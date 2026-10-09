@@ -145,3 +145,8 @@
     justify-content: flex-start;
   }
 }
+.clips-bookmark-guidance {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}

@@ -562,6 +562,13 @@ export interface MilestoneStore {
     userId: string,
     householdId: string,
   ): Promise<NotificationPreferenceRecord[]>;
+  snoozeMotionAlerts(input: {
+    userId: string;
+    householdId: string;
+    publicDeviceId: string;
+    minutes: 0 | 15 | 30 | 60;
+    now: Date;
+  }): Promise<NotificationPreferenceRecord | null>;
   /** The category and camera an alert sent to this user was about. */
   findNotificationEvent(
     userId: string,

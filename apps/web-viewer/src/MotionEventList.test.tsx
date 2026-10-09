@@ -44,6 +44,179 @@ const props = {
 };
 
 describe('Activity timeline', () => {
+  it('closes household details when household activity eligibility is removed', async () => {
+    const fetch = vi.fn((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/activity')
+          ? {
+              ...response([]),
+              json: () =>
+                Promise.resolve({
+                  events: [
+                    {
+                      id: 'household-detail',
+                      eventType: 'device_offline',
+                      occurredAt: new Date().toISOString(),
+                      deviceName: 'Private household device',
+                      metadata: {},
+                    },
+                  ],
+                  total: 1,
+                }),
+            }
+          : response([]),
+      ),
+    );
+    vi.stubGlobal('fetch', fetch);
+    const view = render(
+      <MotionEventList {...props} includeHouseholdActivity />,
+    );
+    fireEvent.click(await screen.findByText('Device went offline'));
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Private household device',
+    );
+    view.rerender(
+      <MotionEventList {...props} includeHouseholdActivity={false} />,
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByText('Private household device'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('discards pending household history when household activity eligibility changes', async () => {
+    let resolve!: (value: unknown) => void;
+    const fetch = vi.fn((url: string) =>
+      url.startsWith('/api/activity')
+        ? new Promise((done) => {
+            resolve = done;
+          })
+        : Promise.resolve(response([event('authorized-motion')])),
+    );
+    vi.stubGlobal('fetch', fetch);
+    const view = render(
+      <MotionEventList {...props} includeHouseholdActivity />,
+    );
+    view.rerender(
+      <MotionEventList {...props} includeHouseholdActivity={false} />,
+    );
+    await screen.findByText('authorized-motion');
+    await act(async () => {
+      resolve({
+        ...response([]),
+        json: () =>
+          Promise.resolve({
+            events: [
+              {
+                id: 'stale-household',
+                eventType: 'device_offline',
+                occurredAt: new Date().toISOString(),
+                deviceName: 'Private household device',
+                metadata: {},
+              },
+            ],
+            total: 1,
+          }),
+      });
+      await Promise.resolve();
+    });
+    expect(
+      screen.queryByText('Private household device'),
+    ).not.toBeInTheDocument();
+    expect(
+      fetch.mock.calls.filter(([url]) => url.startsWith('/api/activity')),
+    ).toHaveLength(1);
+  });
+
+  it('sends a custom local date boundary to both histories and subsequent pages', async () => {
+    localStorage.setItem('motion-test:time', 'since');
+    localStorage.setItem('motion-test:since', '2026-09-01');
+    const fetch = vi.fn((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/activity')
+          ? {
+              ...response([]),
+              json: () => Promise.resolve({ events: [], total: 0 }),
+            }
+          : response(
+              [event(url.includes('cursor=') ? 'second' : 'first')],
+              url.includes('cursor=') ? null : 'next',
+            ),
+      ),
+    );
+    vi.stubGlobal('fetch', fetch);
+    render(<MotionEventList {...props} includeHouseholdActivity />);
+    await screen.findByText('first');
+    expect(screen.getByLabelText('Since date')).toHaveValue('2026-09-01');
+    expect(
+      screen.getByRole('option', { name: 'Hallway phone · Rear camera' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    await screen.findByText('second');
+    for (const [url] of fetch.mock.calls) {
+      expect(
+        new URL(url, 'https://beacon.test').searchParams.get('since'),
+      ).toBe(new Date(2026, 8, 1).toISOString());
+    }
+    const count = fetch.mock.calls.length;
+    fireEvent.change(screen.getByLabelText('Since date'), {
+      target: { value: '' },
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Choose a valid start date.',
+    );
+    expect(fetch).toHaveBeenCalledTimes(count);
+    expect(screen.queryByText('first')).not.toBeInTheDocument();
+  });
+
+  it('searches additional pages, trims text, and resets all filters', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(response([event('first')], 'next'))
+      .mockResolvedValueOnce(response([event('matching')]))
+      .mockResolvedValue(response([event('reset')]));
+    vi.stubGlobal('fetch', fetch);
+    render(<MotionEventList {...props} />);
+    await screen.findByText('first');
+    fireEvent.change(
+      screen.getByRole('searchbox', { name: 'Search loaded activity' }),
+      { target: { value: '  matching  ' } },
+    );
+    expect(
+      screen.getByText(/Load more to check additional events/),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    await screen.findByText('matching');
+    expect(screen.getByRole('status')).toHaveTextContent('1 event loaded');
+    expect(screen.queryByText('first')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Filter activity by time'), {
+      target: { value: '30' },
+    });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    const since = new URL(
+      fetch.mock.calls[2]![0] as string,
+      'https://beacon.test',
+    ).searchParams.get('since')!;
+    expect(
+      Math.abs(Date.now() - new Date(since).getTime() - 30 * 86_400_000),
+    ).toBeLessThan(2000);
+    fireEvent.change(screen.getByLabelText('Sort activity'), {
+      target: { value: 'old' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Household/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    expect(await screen.findByText('reset')).toBeVisible();
+    expect(screen.getByRole('searchbox')).toHaveValue('');
+    expect(screen.getByLabelText('Filter activity by time')).toHaveValue('24');
+    expect(screen.getByLabelText('Sort activity')).toHaveValue('new');
+    expect(screen.getByRole('button', { name: /^All / })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
   it('restores a saved legacy week filter as seven days', async () => {
     localStorage.setItem('motion-test:time', 'week');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response([])));
