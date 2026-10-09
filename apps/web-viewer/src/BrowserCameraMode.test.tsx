@@ -1067,10 +1067,12 @@ describe('BrowserCameraMode standby (wake on view)', () => {
         }),
       ).toBeVisible();
       expect(streamingOpens(getUserMedia)).toBe(0);
-      expect(setCameraResume).toHaveBeenLastCalledWith(
-        '/camera-mode?autostart=1&mic=1&power=standby',
-      );
-      expect(setCameraActivity).toHaveBeenLastCalledWith('standby');
+      await waitFor(() => {
+        expect(setCameraResume).toHaveBeenLastCalledWith(
+          '/camera-mode?autostart=1&mic=1&power=standby',
+        );
+        expect(setCameraActivity).toHaveBeenLastCalledWith('standby');
+      });
       expect(screen.getByText(/Runs in the background/)).toBeVisible();
 
       fireEvent.click(screen.getByRole('button', { name: 'Stop Camera Mode' }));
