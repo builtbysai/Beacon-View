@@ -6,6 +6,7 @@ export type Page =
   | 'dashboard'
   | 'cameras'
   | 'camera mode'
+  | 'wall'
   | 'settings'
   | 'diagnostics'
   | 'events'
@@ -15,6 +16,7 @@ export type Page =
 
 export const pagePaths: Record<Page, string> = {
   'camera mode': '/camera-mode',
+  wall: '/wall',
   cameras: '/cameras',
   dashboard: '/',
   diagnostics: '/diagnostics',
@@ -30,6 +32,7 @@ export const pageLabels: Record<Page, string> = {
   cameras: 'Cameras',
   events: 'Activity',
   'camera mode': 'Add camera',
+  wall: 'Camera wall',
   settings: 'Settings',
   trust: 'Trust and privacy',
   contact: 'Contact Beacon',
@@ -53,6 +56,7 @@ const pageContentWidth: Partial<Record<Page, 'medium' | 'wide'>> = {
   dashboard: 'wide',
   cameras: 'wide',
   events: 'wide',
+  wall: 'wide',
   settings: 'wide',
   'camera mode': 'medium',
 };

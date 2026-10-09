@@ -1,0 +1,145 @@
+/* Camera wall (ADR 0091). */
+.camera-wall {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-height: 100%;
+  background: var(--bg-base);
+}
+
+.camera-wall:fullscreen {
+  padding: 16px;
+  overflow: auto;
+}
+
+.camera-wall-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.camera-wall-toolbar h1 {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: clamp(20px, 3vw, 26px);
+}
+
+.camera-wall-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.camera-wall-actions button,
+.camera-wall-layout select {
+  min-height: 40px;
+}
+
+.camera-wall-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--wall-columns, 2), minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 560px) {
+  .camera-wall-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.wall-tile {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  background: #05070c;
+}
+
+.wall-tile .video-frame {
+  background: #05070c;
+}
+
+.wall-tile-idle {
+  display: grid;
+  gap: 8px;
+  place-content: center;
+  justify-items: center;
+  height: 100%;
+  color: #cbd5e1;
+  font-size: 14px;
+}
+
+.wall-tile-idle svg {
+  width: 28px;
+  height: 28px;
+  opacity: 0.7;
+}
+
+/* The whole tile opens the camera; the name sits on a scrim at the bottom. */
+.wall-tile-open {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 0;
+  color: #fff;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.62), transparent 45%);
+  text-align: left;
+  cursor: pointer;
+}
+
+.wall-tile-open:focus-visible {
+  outline: 3px solid #7dd3fc;
+  outline-offset: -3px;
+}
+
+.wall-tile-name {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.wall-tile-device {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.camera-wall-empty,
+.camera-wall-note {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.camera-catalog-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.camera-catalog-tools button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* The live player (LivePlayerHost) shows as the page itself; parked, it sits
+   off-screen and cannot be reached, so a floating window keeps playing. */
+.live-player:not(.is-parked) {
+  display: contents;
+}
+.live-player.is-parked {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  width: 320px;
+  height: 180px;
+  overflow: hidden;
+  pointer-events: none;
+}

@@ -5,11 +5,12 @@ import { ApiError, request, SESSION_ENDED_EVENT } from './api';
 import { friendlyError } from './friendly-errors';
 import { alertDestination, resolveAlert, takeAlertId } from './alert-link';
 import { useDriveRecording } from './drive-recording';
+import { CameraWall } from './CameraWall';
+import { LivePlayerProvider, LivePlayerSlot } from './LivePlayerHost';
 import { ErrorNotice } from './ErrorNotice';
 import { nextPairingState } from './lifecycle';
 import { cameraStatus } from './camera-status';
 import type { PairingLifecycle } from './lifecycle';
-import { LiveVideo } from './LiveVideo';
 import { CameraTile } from './CameraTile';
 import { CameraSettings } from './CameraSettings';
 import { ModalDialog } from './ModalDialog';
@@ -74,7 +75,17 @@ import { isLocalBrowserCamera } from './browser-camera-local';
 
 const SPLASH_SEEN_KEY = 'beacon.splash.seen.v1';
 
+/** The app, with the live player hosted above its pages so a floating
+ * picture-in-picture window can outlive the live page (ADR 0091). */
 export function App() {
+  return (
+    <LivePlayerProvider>
+      <AppShell />
+    </LivePlayerProvider>
+  );
+}
+
+function AppShell() {
   const [user, setUser] = useState<User | null>(null);
   const [household, setHousehold] = useState<HouseholdSession | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
@@ -1100,7 +1111,7 @@ export function App() {
     );
     return (
       <>
-        <LiveVideo
+        <LivePlayerSlot
           camera={selectedCamera}
           enabled={selectedCamera.enabled && !selectedCamera.credentialRevoked}
           privacyMode={selectedCamera.privacyMode}
@@ -1542,8 +1553,27 @@ export function App() {
                 );
               })()}
 
+            {page === 'wall' && (
+              <CameraWall
+                cameras={groupCamerasByDevice(cameras)}
+                onBack={() => navigate('cameras')}
+                onOpen={(camera) => openCamera(camera)}
+              />
+            )}
+
             {page === 'cameras' && (
               <section className="camera-catalog" aria-label="Your cameras">
+                {groupCamerasByDevice(cameras).length > 1 && (
+                  <div className="camera-catalog-tools">
+                    <button
+                      className="secondary"
+                      onClick={() => navigate('wall')}
+                      type="button"
+                    >
+                      <Icon name="grid" /> Camera wall
+                    </button>
+                  </div>
+                )}
                 {pendingDevices.length > 0 && (
                   <ul className="pending-device-list">
                     {pendingDevices.map((device) => (
