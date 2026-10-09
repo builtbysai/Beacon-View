@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isQuietHoursActive,
   motionSettingsSchema,
+  normalizeZones,
 } from '../src/motion-settings.js';
 
 describe('motion settings validation', () => {
@@ -104,5 +105,34 @@ describe('motion settings validation', () => {
     expect(isQuietHoursActive(quiet, new Date('2026-09-06T16:30:00Z'))).toBe(
       false,
     );
+  });
+
+  describe('motion zones', () => {
+    const base = {
+      enabled: true,
+      recordOnMotion: false,
+      sensitivity: 'medium' as const,
+      cooldownSeconds: 30,
+      quietHours: null,
+    };
+    it('accepts cells of the 16 x 16 grid, and none at all', () => {
+      expect(
+        motionSettingsSchema.safeParse({ ...base, ignoredZones: [0, 255] })
+          .success,
+      ).toBe(true);
+      expect(
+        motionSettingsSchema.safeParse({ ...base, ignoredZones: [] }).success,
+      ).toBe(true);
+      expect(motionSettingsSchema.safeParse(base).success).toBe(true);
+    });
+    it('refuses cells off the grid, duplicates, and non-integers', () => {
+      for (const ignoredZones of [[256], [-1], [3, 3], [1.5], ['4']])
+        expect(
+          motionSettingsSchema.safeParse({ ...base, ignoredZones }).success,
+        ).toBe(false);
+    });
+    it('stores zones one way, whatever order they arrive in', () => {
+      expect(normalizeZones([9, 2, 9, 5])).toEqual([2, 5, 9]);
+    });
   });
 });

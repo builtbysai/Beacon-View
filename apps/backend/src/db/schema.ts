@@ -337,6 +337,12 @@ export const cameraSources = pgTable(
     motionRecordEnabled: boolean('motion_record_enabled')
       .notNull()
       .default(false),
+    // Cells of a 16 x 16 grid over the upright picture where movement is
+    // ignored (ADR 0092). Cell numbers only, never an image.
+    motionIgnoredZones: jsonb('motion_ignored_zones')
+      .$type<number[]>()
+      .notNull()
+      .default([]),
     motionSensitivity: text('motion_sensitivity').notNull().default('medium'),
     motionCooldownSeconds: integer('motion_cooldown_seconds')
       .notNull()

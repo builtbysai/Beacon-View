@@ -20,9 +20,13 @@ data class MotionSettings(
     val sensitivity: MotionSensitivity = MotionSensitivity.Medium,
     val cooldownSeconds: Int = 30,
     val quietHours: QuietHours? = null,
+    // Cells of a 16 x 16 grid over the upright picture where movement is
+    // ignored (ADR 0092). Numbered row by row; the server keeps them sorted.
+    val ignoredZones: Set<Int> = emptySet(),
 ) {
     init {
         require(cooldownSeconds in listOf(30, 60, 120, 300)) { "Unsupported motion cooldown" }
+        require(ignoredZones.all { it in 0 until ZoneGrid.COUNT }) { "Unsupported motion zone" }
     }
 }
 

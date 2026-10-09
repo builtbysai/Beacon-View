@@ -76,7 +76,10 @@ export function keyboardBusy(target: EventTarget | null): boolean {
   const element = target instanceof Element ? target : null;
   if (element?.closest('input, textarea, select, [contenteditable="true"]'))
     return true;
-  return document.querySelector('dialog[open]') !== null;
+  // A dialog, or an editor that owns the keyboard (e.g. motion zones).
+  return (
+    document.querySelector('dialog[open], [data-keyboard-busy="true"]') !== null
+  );
 }
 
 export interface ShortcutHandlers {

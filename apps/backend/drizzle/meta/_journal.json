@@ -239,6 +239,13 @@
       "when": 1790899200000,
       "tag": "0033_google_drive_connection_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790985600000,
+      "tag": "0034_motion_ignored_zones",
+      "breakpoints": true
     }
   ]
 }

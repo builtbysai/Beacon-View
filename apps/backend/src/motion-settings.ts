@@ -58,6 +58,29 @@ export function isQuietHoursActive(quietHours: QuietHours, now: Date): boolean {
     : current >= start || current < end;
 }
 
+/** Motion zones (ADR 0092): a 16 x 16 grid over the upright picture,
+ * numbered row by row (0 is the top-left cell, 255 the bottom-right). */
+export const ZONE_GRID_SIZE = 16;
+export const ZONE_COUNT = ZONE_GRID_SIZE * ZONE_GRID_SIZE;
+
+export const ignoredZonesSchema = z
+  .array(
+    z
+      .number()
+      .int()
+      .min(0)
+      .max(ZONE_COUNT - 1),
+  )
+  .max(ZONE_COUNT)
+  .refine((cells) => new Set(cells).size === cells.length, {
+    message: 'Zone cells must be unique',
+  });
+
+/** Sorted and de-duplicated, so equal zones are stored one way. */
+export function normalizeZones(cells: readonly number[]): number[] {
+  return [...new Set(cells)].sort((a, b) => a - b);
+}
+
 export const motionSettingsSchema = z
   .object({
     enabled: z.boolean(),
@@ -75,10 +98,13 @@ export const motionSettingsSchema = z
       z.literal(300),
     ]),
     quietHours: quietHoursSchema.nullable(),
+    // Optional so older clients that omit it leave the zones alone.
+    ignoredZones: ignoredZonesSchema.optional(),
   })
   .strict();
 
 export type MotionSettings = z.infer<typeof motionSettingsSchema>;
 export interface CameraMotionSettings extends MotionSettings {
   cameraId: string;
+  ignoredZones: number[];
 }

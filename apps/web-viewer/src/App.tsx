@@ -1145,6 +1145,10 @@ function AppShell() {
           canFlip={selectedCamera.canFlip ?? true}
           canPause={selectedCamera.canPause ?? true}
           onStep={stepCamera}
+          canEditZones={
+            (household?.role === 'owner' || household?.role === 'admin') &&
+            liveDevice?.platform === 'android'
+          }
         />
         {cameraSettingsOverlay}
         {pendingConfirm && (
