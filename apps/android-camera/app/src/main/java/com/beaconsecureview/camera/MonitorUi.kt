@@ -133,6 +133,8 @@ internal fun MonitorHome(
     onGoogleSignIn: () -> Unit,
     themePreference: BeaconThemePreference,
     onThemePreferenceChange: (BeaconThemePreference) -> Unit,
+    launchTarget: LaunchTarget? = null,
+    onLaunchTargetHandled: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var session by remember { mutableStateOf(sessionStore.read()) }
@@ -455,6 +457,56 @@ internal fun MonitorHome(
     }
 
     LaunchedEffect(monitorPage) { monitorScrollState.scrollTo(0) }
+
+    // Alerts and launcher shortcuts (ADR 0095): open the camera or page they name once the person
+    // is signed in and the cameras are known. A target nobody got to goes stale.
+    LaunchedEffect(launchTarget, session?.token, cameras) {
+        val target = launchTarget ?: return@LaunchedEffect
+        if (!LaunchIntents.isFresh(target, System.currentTimeMillis())) {
+            onLaunchTargetHandled()
+            return@LaunchedEffect
+        }
+        val active = session ?: return@LaunchedEffect
+        if (target !is LaunchTarget.OpenPage && cameras.isEmpty()) return@LaunchedEffect
+        val alertCameraId =
+            if (target is LaunchTarget.OpenAlert) {
+                val resolved =
+                    withContext(Dispatchers.IO) {
+                        runCatching { api.notificationEventCamera(active.token, target.eventId) }
+                    }
+                if (resolved.exceptionOrNull() is AuthorizationLostException) {
+                    onLaunchTargetHandled()
+                    return@LaunchedEffect
+                }
+                resolved.getOrNull()
+            } else {
+                null
+            }
+        when (val resolution = resolveLaunch(target, monitorHostCameras(cameras).map { it.id }, alertCameraId)) {
+            is LaunchResolution.Watch -> {
+                selectedSettingsDeviceId = null
+                selectedCameraId = resolution.cameraId
+            }
+            is LaunchResolution.Show -> {
+                selectedCameraId = null
+                selectedSettingsDeviceId = null
+                monitorPage = resolution.page
+            }
+        }
+        onLaunchTargetHandled()
+    }
+
+    // Favorite cameras become launcher shortcuts; signing out removes them from the home screen.
+    LaunchedEffect(session?.userId, cameras, favoriteCameraIds, hasSavedFavorites) {
+        if (session == null) {
+            LauncherShortcuts.clear(context)
+        } else if (cameras.isNotEmpty()) {
+            LauncherShortcuts.publish(
+                context,
+                homeFavoriteCameras(monitorHostCameras(cameras), favoriteCameraIds, hasSavedFavorites),
+            )
+        }
+    }
 
     val activeSession = session
     val orderByCameraId = cameraOrderIds.withIndex().associate { it.value to it.index }

@@ -68,10 +68,19 @@ class BeaconFirebaseMessagingService : FirebaseMessagingService() {
                 },
             )
         }
-        val intent = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        // Tapping an alert opens the camera it was about (ADR 0090). The push itself stays
+        // generic: only the opaque event ID travels, and the app asks the server what it means.
+        val eventId = message.data["eventId"]
+        val intent =
+            if (eventId != null && eventId.matches(EVENT_ID)) {
+                LaunchIntents.alertIntent(this, eventId)
+            } else {
+                Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+        // One request code per alert, so a later alert never rewrites an earlier one's target.
         val pendingIntent = PendingIntent.getActivity(
             this,
-            0,
+            eventId?.hashCode() ?: 0,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -89,5 +98,8 @@ class BeaconFirebaseMessagingService : FirebaseMessagingService() {
         )
     }
 
-    private companion object { const val CHANNEL_ID = "beacon_camera_alerts" }
+    private companion object {
+        const val CHANNEL_ID = "beacon_camera_alerts"
+        val EVENT_ID = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+    }
 }

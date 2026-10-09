@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.MicOff
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Visibility
@@ -95,6 +97,8 @@ internal fun AndroidLiveView(
     var recordingBusy by remember(camera.id) { mutableStateOf(false) }
     var recordingElapsedSeconds by remember(camera.id) { mutableStateOf(0) }
     var recordingError by remember(camera.id) { mutableStateOf("") }
+    var zoom by remember(camera.id) { mutableStateOf(ZoomState.Identity) }
+    var snapshotNotice by remember(camera.id) { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val api = remember { BeaconApi(BuildConfig.BEACON_API_URL) }
     val renderer = remember(camera.id, viewerGeneration) { SurfaceViewRenderer(context) }
@@ -127,11 +131,10 @@ internal fun AndroidLiveView(
             if (granted) viewerSession?.startTalk() else talkState = TalkState.Unavailable
         }
 
-    fun toggleTalk() {
-        if (talkState == TalkState.Permission || talkState == TalkState.Connecting || talkState == TalkState.Speaking) {
-            viewerSession?.stopTalk()
-            return
-        }
+    fun talkActive() =
+        talkState == TalkState.Permission || talkState == TalkState.Connecting || talkState == TalkState.Speaking
+
+    fun startTalk() {
         val granted =
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
                 PackageManager.PERMISSION_GRANTED
@@ -139,6 +142,34 @@ internal fun AndroidLiveView(
             viewerSession?.startTalk()
         } else {
             microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    // Tap to start and stop, or hold to talk only while pressed (ADR 0090).
+    val pushToTalk =
+        remember(camera.id) {
+            PushToTalk(talking = { talkActive() }, start = { startTalk() }, stop = { viewerSession?.stopTalk() })
+        }
+
+    // Snapshots stay on this device (ADR 0090): the frame is read from the picture and saved to
+    // Pictures/Beacon; nothing is sent anywhere.
+    fun takeSnapshot() {
+        snapshotNotice = ""
+        SnapshotSaver.capture(renderer) { bitmap ->
+            scope.launch {
+                val saved =
+                    withContext(Dispatchers.IO) { SnapshotSaver.save(context, bitmap, camera.name) }
+                snapshotNotice =
+                    if (saved) "Snapshot saved to Pictures/Beacon on this device."
+                    else "The snapshot could not be saved."
+            }
+        }
+    }
+
+    LaunchedEffect(snapshotNotice) {
+        if (snapshotNotice.isNotEmpty()) {
+            delay(4_000)
+            snapshotNotice = ""
         }
     }
 
@@ -258,6 +289,12 @@ internal fun AndroidLiveView(
                         (renderer.parent as? ViewGroup)?.removeView(renderer)
                         renderer
                     },
+                    update = {
+                        it.scaleX = 1f
+                        it.scaleY = 1f
+                        it.translationX = 0f
+                        it.translationY = 0f
+                    },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -272,15 +309,15 @@ internal fun AndroidLiveView(
                     .background(Color.Black)
                     .semantics { contentDescription = "Fullscreen live video from ${camera.name}" },
         ) {
-            key(camera.id, viewerGeneration) {
-                AndroidView(
-                    factory = {
-                        (renderer.parent as? ViewGroup)?.removeView(renderer)
-                        renderer
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
+            ZoomableVideo(
+                renderer = renderer,
+                generation = viewerGeneration,
+                cameraKey = camera.id,
+                zoom = zoom,
+                onZoom = { zoom = it },
+                description = "Fullscreen live video from ${camera.name}",
+                modifier = Modifier.fillMaxSize(),
+            )
             Column(
                 modifier =
                     Modifier.align(Alignment.TopStart)
@@ -318,17 +355,32 @@ internal fun AndroidLiveView(
                     }
                 }
                 if (canTalk) {
-                    OutlinedButton(
-                        enabled =
-                            state == StreamingState.Connected ||
-                                talkState == TalkState.Permission ||
-                                talkState == TalkState.Connecting ||
-                                talkState == TalkState.Speaking,
-                        onClick = ::toggleTalk,
+                    TalkTouchTarget(
+                        push = pushToTalk,
+                        enabled = state == StreamingState.Connected || talkActive(),
+                        description = if (talkState == TalkState.Speaking) "Stop talking" else "Talk. Hold to talk while pressed.",
+                        modifier =
+                            Modifier.height(40.dp)
+                                .background(Color.White.copy(alpha = 0.14f), RoundedCornerShape(999.dp))
+                                .padding(horizontal = 16.dp),
                     ) {
-                        Icon(if (talkState == TalkState.Speaking) Icons.Outlined.MicOff else Icons.Outlined.Mic, null, modifier = Modifier.size(19.dp))
-                        Text(if (talkState == TalkState.Speaking) "Stop talking" else "Talk")
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                if (talkState == TalkState.Speaking) Icons.Outlined.MicOff else Icons.Outlined.Mic,
+                                null,
+                                tint = Color.White,
+                                modifier = Modifier.size(19.dp),
+                            )
+                            Text(if (talkState == TalkState.Speaking) "Stop talking" else "Talk", color = Color.White)
+                        }
                     }
+                }
+                OutlinedButton(enabled = state == StreamingState.Connected, onClick = ::takeSnapshot) {
+                    Icon(Icons.Outlined.PhotoCamera, null, modifier = Modifier.size(19.dp))
+                    Text("Snapshot", modifier = Modifier.padding(start = 6.dp))
                 }
                 if (canRecord) {
                     ManualRecordingControl(
@@ -349,17 +401,15 @@ internal fun AndroidLiveView(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(BeaconCanvas).safeDrawingPadding()) {
-        key(camera.id, viewerGeneration) {
-            AndroidView(
-                factory = {
-                    (renderer.parent as? ViewGroup)?.removeView(renderer)
-                    renderer
-                },
-                modifier =
-                    Modifier.fillMaxSize()
-                        .semantics { contentDescription = "Live video from ${camera.name}" },
-            )
-        }
+        ZoomableVideo(
+            renderer = renderer,
+            generation = viewerGeneration,
+            cameraKey = camera.id,
+            zoom = zoom,
+            onZoom = { zoom = it },
+            description = "Live video from ${camera.name}",
+            modifier = Modifier.fillMaxSize(),
+        )
         Row(
             modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -414,6 +464,9 @@ internal fun AndroidLiveView(
             if (recordingError.isNotBlank()) {
                 Text(recordingError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
+            if (snapshotNotice.isNotEmpty()) {
+                Text(snapshotNotice, color = Color.White, style = MaterialTheme.typography.bodySmall)
+            }
             if (talkState != TalkState.Idle) {
                 Text(talkStatusText(talkState), color = Color.White, style = MaterialTheme.typography.bodySmall)
             }
@@ -435,26 +488,30 @@ internal fun AndroidLiveView(
                         shape = RoundedCornerShape(999.dp),
                         color = if (talkState == TalkState.Speaking) BeaconLive else BeaconVideoControl,
                     ) {
-                        IconButton(
-                            enabled =
-                                state == StreamingState.Connected ||
-                                    talkState == TalkState.Permission ||
-                                    talkState == TalkState.Connecting ||
-                                    talkState == TalkState.Speaking,
-                            onClick = ::toggleTalk,
-                        ) {
-                            Icon(
-                                if (talkState == TalkState.Speaking) Icons.Outlined.MicOff else Icons.Outlined.Mic,
+                        TalkTouchTarget(
+                            push = pushToTalk,
+                            enabled = state == StreamingState.Connected || talkActive(),
+                            description =
                                 if (talkState == TalkState.Speaking) {
                                     "Stop talking"
                                 } else if (talkState == TalkState.Permission || talkState == TalkState.Connecting) {
                                     "Cancel talk"
                                 } else {
-                                    "Talk"
+                                    "Talk. Hold to talk while pressed."
                                 },
+                            modifier = Modifier.size(48.dp),
+                        ) {
+                            Icon(
+                                if (talkState == TalkState.Speaking) Icons.Outlined.MicOff else Icons.Outlined.Mic,
+                                null,
                                 tint = Color.White,
                             )
                         }
+                    }
+                }
+                Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
+                    IconButton(enabled = state == StreamingState.Connected, onClick = ::takeSnapshot) {
+                        Icon(Icons.Outlined.PhotoCamera, "Save a snapshot", tint = Color.White)
                     }
                 }
                 if (onFlip != null) {

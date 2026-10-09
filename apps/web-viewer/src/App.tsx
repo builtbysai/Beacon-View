@@ -38,6 +38,7 @@ import { PairingDialog } from './PairingDialog';
 import { SettingsPage } from './SettingsPage';
 import { HouseholdModeBar } from './HouseholdModeSettings';
 import { announceModeChange } from './household-mode';
+import { reportTrayCameras, trayCameras } from './desktop-tray';
 import {
   DesktopAuthReturnPage,
   MobileAuthReturnPage,
@@ -235,6 +236,14 @@ function AppShell() {
   }, []);
 
   const signedIn = user !== null;
+  // The desktop tray lists the favorite cameras as shortcuts (ADR 0095).
+  useEffect(() => {
+    reportTrayCameras(
+      signedIn
+        ? trayCameras(groupCamerasByDevice(cameras), favoriteDeviceIds)
+        : [],
+    );
+  }, [cameras, favoriteDeviceIds, signedIn]);
   useEffect(() => {
     if (!signedIn) return;
     const ended = () =>

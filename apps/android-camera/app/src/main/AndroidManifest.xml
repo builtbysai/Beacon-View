@@ -47,6 +47,10 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Static launcher shortcuts (ADR 0095); favorite cameras are added in code. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
             <!-- Canonical verified HTTPS links open Beacon when installed and fall back to the web page otherwise. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />

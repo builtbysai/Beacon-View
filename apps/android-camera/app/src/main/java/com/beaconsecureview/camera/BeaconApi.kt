@@ -425,6 +425,18 @@ class BeaconApi(private val baseUrl: String) {
         )
     }
 
+    /** The camera an alert was about, or null when it has none or is not visible to this user. */
+    fun notificationEventCamera(sessionToken: String, eventId: String): String? {
+        val connection = connection("/api/notification-events/${java.net.URLEncoder.encode(eventId, "UTF-8")}", "GET")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            throw AuthorizationLostException()
+        }
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
+        return JSONObject(body).optString("cameraId").takeIf { it.isNotEmpty() && it != "null" }
+    }
+
     fun listMonitorCameras(sessionToken: String): List<MonitorCamera> {
         val connection = connection("/api/cameras", "GET")
         connection.setRequestProperty("Authorization", "Bearer $sessionToken")

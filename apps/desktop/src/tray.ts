@@ -7,11 +7,20 @@ import {
   Tray,
 } from 'electron';
 
+import {
+  showsWall,
+  type TrayCamera,
+  trayCameraLabel,
+  trayCameraPath,
+  WALL_PATH,
+} from './tray-cameras.js';
+
 export type CameraActivity = 'off' | 'standby' | 'live';
 
 export interface TrayActions {
   autostart: { enabled: boolean; get(): boolean; set(value: boolean): void };
   open(): void;
+  openPath(path: string): void;
   quit(): void;
   reload(): void;
   version: string;
@@ -29,6 +38,7 @@ export class BeaconTray {
   private readonly icons;
   private activity: CameraActivity = 'off';
   private update: { label: string; run(): void } | null = null;
+  private cameras: TrayCamera[] = [];
 
   constructor(
     assetsDirectory: string,
@@ -55,6 +65,13 @@ export class BeaconTray {
     this.render();
   }
 
+  /** The favorite cameras to offer as shortcuts (ADR 0095). */
+  setCameras(cameras: TrayCamera[]): void {
+    if (JSON.stringify(cameras) === JSON.stringify(this.cameras)) return;
+    this.cameras = cameras;
+    this.render();
+  }
+
   /** Shows (or removes) the update entry, e.g. "Restart to update". */
   setUpdate(update: { label: string; run(): void } | null): void {
     this.update = update;
@@ -63,6 +80,26 @@ export class BeaconTray {
 
   destroy(): void {
     this.tray.destroy();
+  }
+
+  private cameraItems(): MenuItemConstructorOptions[] {
+    if (this.cameras.length === 0) return [];
+    const { actions } = this;
+    return [
+      { type: 'separator' },
+      ...(showsWall(this.cameras)
+        ? [
+            {
+              click: () => actions.openPath(WALL_PATH),
+              label: 'Camera wall',
+            },
+          ]
+        : []),
+      ...this.cameras.map((camera) => ({
+        click: () => actions.openPath(trayCameraPath(camera.id)),
+        label: trayCameraLabel(camera),
+      })),
+    ];
   }
 
   private render(): void {
@@ -91,6 +128,7 @@ export class BeaconTray {
       Menu.buildFromTemplate([
         { label: 'Open Beacon', click: () => actions.open() },
         ...status,
+        ...this.cameraItems(),
         { type: 'separator' },
         {
           checked: actions.autostart.get(),

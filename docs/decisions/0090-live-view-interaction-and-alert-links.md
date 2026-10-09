@@ -44,6 +44,6 @@ This covers items C2, C3, C4, C5, C9 and C12 of the batch.
 
 - No migration. The new endpoint is read-only and scoped to the signed-in
   user, with `Cache-Control: no-store`.
-- Android alerts open Activity until M5 (C12 on Android).
+- Android alerts open the camera too (ADR 0095).
 - Zoom does not apply inside a picture-in-picture window (the browser draws
   that window itself).

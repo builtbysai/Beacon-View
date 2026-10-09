@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher shortcuts (ADR 0095). Favorite cameras are added in code. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="page-cameras"
+        android:shortcutLongLabel="@string/shortcut_cameras_long"
+        android:shortcutShortLabel="@string/shortcut_cameras_short">
+        <intent
+            android:action="com.beaconsecureview.camera.action.OPEN_PAGE"
+            android:targetClass="com.beaconsecureview.camera.MainActivity"
+            android:targetPackage="com.beaconsecureview.camera">
+            <extra
+                android:name="beacon_page"
+                android:value="cameras" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="page-activity"
+        android:shortcutLongLabel="@string/shortcut_activity_long"
+        android:shortcutShortLabel="@string/shortcut_activity_short">
+        <intent
+            android:action="com.beaconsecureview.camera.action.OPEN_PAGE"
+            android:targetClass="com.beaconsecureview.camera.MainActivity"
+            android:targetPackage="com.beaconsecureview.camera">
+            <extra
+                android:name="beacon_page"
+                android:value="activity" />
+        </intent>
+    </shortcut>
+</shortcuts>

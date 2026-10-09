@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_cameras_short">Cameras</string>
+    <string name="shortcut_cameras_long">Open your cameras</string>
+    <string name="shortcut_activity_short">Activity</string>
+    <string name="shortcut_activity_long">Open activity and alerts</string>
+</resources>

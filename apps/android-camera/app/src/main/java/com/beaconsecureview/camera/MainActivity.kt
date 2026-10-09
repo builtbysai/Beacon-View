@@ -47,11 +47,14 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 class MainActivity : ComponentActivity() {
     private var inboundPairingCode by mutableStateOf<String?>(null)
     private var inboundGoogleAuthCode by mutableStateOf<MobileGoogleAuthResult?>(null)
+    private var launchTarget by mutableStateOf<LaunchTarget?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         inboundPairingCode = parsePairingQr(intent?.dataString, BuildConfig.BEACON_API_URL, BuildConfig.BEACON_WEB_URL)
         inboundGoogleAuthCode = parseMobileGoogleAuthLink(intent?.dataString, BuildConfig.BEACON_API_URL)
+        // A relaunch from the recents list repeats the old intent; only a fresh start counts.
+        if (savedInstanceState == null) launchTarget = LaunchIntents.parse(intent)
         val preferences = getSharedPreferences("beacon_installation", MODE_PRIVATE)
         val installationId =
             preferences.getString("installation_id", null)
@@ -68,6 +71,8 @@ class MainActivity : ComponentActivity() {
                 onInboundPairingCodeHandled = { inboundPairingCode = null },
                 inboundGoogleAuthCode = inboundGoogleAuthCode,
                 onInboundGoogleAuthCodeHandled = { inboundGoogleAuthCode = null },
+                launchTarget = launchTarget,
+                onLaunchTargetHandled = { launchTarget = null },
             )
         }
     }
@@ -77,6 +82,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         inboundPairingCode = parsePairingQr(intent.dataString, BuildConfig.BEACON_API_URL, BuildConfig.BEACON_WEB_URL)
         inboundGoogleAuthCode = parseMobileGoogleAuthLink(intent.dataString, BuildConfig.BEACON_API_URL)
+        LaunchIntents.parse(intent)?.let { launchTarget = it }
     }
 
     override fun onStart() {
@@ -134,6 +140,8 @@ private fun BeaconCameraApp(
     onInboundPairingCodeHandled: () -> Unit,
     inboundGoogleAuthCode: MobileGoogleAuthResult?,
     onInboundGoogleAuthCodeHandled: () -> Unit,
+    launchTarget: LaunchTarget?,
+    onLaunchTargetHandled: () -> Unit,
 ) {
     val context = LocalContext.current
     val navigationPreferences =
@@ -357,6 +365,8 @@ private fun BeaconCameraApp(
                     },
                     inboundGoogleAuthCode = inboundGoogleAuthCode,
                     onInboundGoogleAuthCodeHandled = onInboundGoogleAuthCodeHandled,
+                    launchTarget = launchTarget,
+                    onLaunchTargetHandled = onLaunchTargetHandled,
                     onGoogleSignIn = {
                         context.startActivity(
                             Intent(
