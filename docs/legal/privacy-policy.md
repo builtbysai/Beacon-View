@@ -1,12 +1,12 @@
-# Beacon SecureView Privacy Policy
+# Beacon View Privacy Policy
 
 Effective date: **[DATE]**
 
 > Draft only. Replace every bracketed field and obtain legal review before publication.
 
-Beacon SecureView ("Beacon," "we," "us," and "our") is operated by **[LEGAL
+Beacon View ("Beacon," "we," "us," and "our") is operated by **[LEGAL
 ENTITY / INDIVIDUAL NAME]**, located at **[BUSINESS ADDRESS]**. This Privacy Policy
-explains how we handle information when you use the Beacon SecureView website,
+explains how we handle information when you use the Beacon View website,
 Android app, and related live-camera service (collectively, the "Service"). Contact
 us at **[PRIVACY CONTACT EMAIL]**.
 

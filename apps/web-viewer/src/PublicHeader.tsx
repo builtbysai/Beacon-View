@@ -53,9 +53,9 @@ export function PublicHeader({
         className={`public-header ${sticky ? 'sticky' : ''} align-${alignContainer} ${links.length > 0 ? 'has-links' : 'no-links'}`}
       >
         <div className="ph-wrap">
-          <a className="ph-brand" href="/" aria-label="Beacon home">
+          <a className="ph-brand" href="/" aria-label="Beacon View home">
             <Brand compact />
-            <span className="ph-brand-word">Beacon</span>
+            <span className="ph-brand-word">Beacon View</span>
           </a>
 
           {links.length > 0 && (

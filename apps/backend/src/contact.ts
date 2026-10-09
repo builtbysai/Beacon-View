@@ -66,9 +66,9 @@ export async function deliverHouseholdInvitation(
     throw new Error('Invitation delivery is unavailable');
   await deliverResendEmail(config, {
     from: config.RESEND_FROM,
-    subject: 'You have a Beacon SecureView invitation',
+    subject: 'You have a Beacon View invitation',
     text: [
-      'You have been invited to share a Beacon SecureView household.',
+      'You have been invited to share a Beacon View household.',
       '',
       `Access level: ${invitation.role}`,
       `Expires: ${invitation.expiresAt.toISOString()}`,

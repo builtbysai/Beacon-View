@@ -1,10 +1,10 @@
-# Beacon SecureView
+# Beacon View
 
-Beacon SecureView is a device-agnostic camera platform. Android devices and
+Beacon View is a device-agnostic camera platform. Android devices and
 attended HTTPS browsers can produce video; responsive browsers can view it; and
 one device may expose several independently named camera sources.
 
-Beacon SecureView is an Android-first system intended to turn an unused Android
+Beacon View is an Android-first system intended to turn an unused Android
 phone into a remotely accessible smart security camera. The current foundation
 includes secure pairing, foreground-service camera readiness, authorized
 multi-viewer WebRTC, multiple sources per device, responsive device management,
@@ -21,7 +21,7 @@ wall, choose **New group / layout**, select/reorder cameras, then save. Layouts 
 not sync across installations. Browser storage failures are explained in the UI.
 
 <p align="center">
-  <img src="assets/architecture.svg" width="900" alt="Beacon SecureView system architecture: Android camera client, Fastify backend, React web viewer">
+  <img src="assets/architecture.svg" width="900" alt="Beacon View system architecture: Android camera client, Fastify backend, React web viewer">
 </p>
 
 Activity supports 24-hour, 7-day, 30-day, all-time, and local-calendar Since date

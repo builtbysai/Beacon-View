@@ -1,6 +1,6 @@
 {
-  "name": "Beacon",
-  "short_name": "Beacon",
+  "name": "Beacon View",
+  "short_name": "Beacon View",
   "description": "Turn any device into a secure camera and watch it live from anywhere.",
   "start_url": "/?source=pwa",
   "id": "/",

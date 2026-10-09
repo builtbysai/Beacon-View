@@ -174,7 +174,7 @@ internal fun BeaconWordmark(
         )
         if (!compact) {
             Text(
-                "SecureView",
+                "View",
                 color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,

@@ -1,8 +1,8 @@
 {
-  "name": "beacon-secureview",
+  "name": "beacon-view",
   "version": "0.0.0",
   "private": true,
-  "description": "Android-first secure peer-to-peer camera viewing for Beacon SecureView",
+  "description": "Android-first secure peer-to-peer camera viewing for Beacon View",
   "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=22.13.0 <23"

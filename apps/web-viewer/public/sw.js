@@ -1,4 +1,4 @@
-// Beacon SecureView service worker.
+// Beacon View service worker.
 //
 // Scope is deliberately narrow: this only makes the static app shell
 // installable and resilient to a flaky connection. It must never cache
