@@ -461,3 +461,8 @@ draft. Initial state already matches the saved schedule, so synchronization now
 only resets the draft when the saved server value changes. The existing workflow
 test is retained; no additional tiny unit test or weakened assertion was added.
 The first run's database, schema, migration-rerun, secret-scan and SBOM checks passed.
+The next release run passed the schedule workflow but exposed a test timing race
+in snooze expiry: it dispatched focus before the async-loaded preference row's
+effect registered the listener. That existing test now awaits the asynchronous
+React mount before focus; expiry, preference preservation, and no-mutation
+assertions are unchanged. No notification behavior or security boundary changed.

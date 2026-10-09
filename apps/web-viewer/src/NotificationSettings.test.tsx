@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -44,7 +45,12 @@ describe('NotificationSettings', () => {
           },
         ],
       });
-      renderNotificationSettings();
+      // Flush the async preference load and row mount before simulating focus;
+      // finding rendered markup alone does not guarantee effects are installed.
+      await act(async () => {
+        renderNotificationSettings();
+        await Promise.resolve();
+      });
       expect(
         await screen.findByRole('button', {
           name: 'Resume motion alerts for Expiry camera',
