@@ -352,9 +352,9 @@ Status values: **Planned**, **In progress**, **Done** (merged and deployed),
 | --- | --------------------------------------- | --------------------- | --------- | -------- |
 | C1  | Camera wall: live grid, tap to focus    | Web, desktop          | M3        | Planned  |
 | C2  | Keyboard shortcuts and help overlay     | Web, desktop          | M2        | Planned  |
-| C3  | Zoom and pan on live video              | Web, desktop, Android | M2, M5    | Planned  |
-| C4  | Snapshot, saved on the device only      | Web, desktop, Android | M2, M5    | Planned  |
-| C5  | Hold-to-talk                            | Web, desktop, Android | M2, M5    | Planned  |
+| C3  | Zoom and pan on live video              | Web, desktop, Android | M2, M5    | Done     |
+| C4  | Snapshot, saved on the device only      | Web, desktop, Android | M2, M5    | Done     |
+| C5  | Hold-to-talk                            | Web, desktop, Android | M2, M5    | Done     |
 | C6  | Mini-player that follows you in the app | Web, desktop          | M3        | Planned  |
 | C7  | Announce on all cameras                 | Web, desktop          | M3        | Planned  |
 | C8  | Cast to a TV                            | None yet              | n/a       | Deferred |
@@ -364,9 +364,9 @@ Status values: **Planned**, **In progress**, **Done** (merged and deployed),
 | ID  | Feature                                        | Platforms             | Milestone | Status  |
 | --- | ---------------------------------------------- | --------------------- | --------- | ------- |
 | C9  | PWA app shortcuts                              | Installed web app     | M2        | Planned |
-| C10 | Android launcher shortcuts (static, favorites) | Android               | M5        | Planned |
-| C11 | Desktop tray: favorite cameras and the wall    | Desktop               | M5        | Planned |
-| C12 | Alerts open the exact camera or clip           | Web, desktop, Android | M2, M5    | Planned |
+| C10 | Android launcher shortcuts (static, favorites) | Android               | M5        | Done    |
+| C11 | Desktop tray: favorite cameras and the wall    | Desktop               | M5        | Done    |
+| C12 | Alerts open the exact camera or clip           | Web, desktop, Android | M2, M5    | Done    |
 
 ### Track C: Safety and automation
 
