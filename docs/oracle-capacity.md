@@ -48,3 +48,11 @@ records an empty backup repository. A retained recovery point and current restor
 verification are required before a disruptive infrastructure change. No reboot
 or filesystem expansion was performed. Running Coturn alone does not prove a
 real allocation or an end-to-end camera relay stream.
+
+An authenticated Coturn `turnutils_uclient -y` client-to-client smoke attempt from
+both the VM and the Windows Docker client reached the server but failed at
+channel binding with `403 (Forbidden IP)`. The same-server relay test therefore
+did not establish packet delivery. The existing `no-loopback-peers` control was
+not relaxed to force it through. Validate actual two-device WebRTC relay behavior
+before claiming TURN readiness for Beacon Remote; this check does not establish
+whether a normal camera session succeeds or fails.
