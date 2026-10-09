@@ -20,12 +20,14 @@ The owner approved and completed the convenience continuation on
 All currently approved convenience implementation items are complete. On October
 9 the owner authorized committing, merging to GitHub main, and deploying to the
 Oracle private alpha. Release execution follows
-[GitHub deployment](github-web-deployment.md); the
-[deployment workflow runs](https://github.com/builtbysai/Beacon-SecureView/actions/workflows/deploy-web.yml)
-record the validated SHA and deployment result. Migration 0037 is required before
+[GitHub deployment](github-web-deployment.md). Automatic deployment is manually
+disabled; the authorized release uses the documented SSH release-directory
+procedure after successful merged-main CI. Migration 0037 is required before
 the updated backend starts. No native package rebuild is required for these
 canonical web/desktop UI changes. Physical media, privacy, alert delivery and Cast
-acceptance remain open independently of deployment.
+acceptance remain open independently of deployment. The completed private-alpha
+rollout and exact source SHA are recorded in
+[the release evidence](convenience-release-2026-10-09.md).
 
 The governing [testing policy](testing-policy.md) requires meaningful regression
 protection and a small useful suite, with no test-count or coverage targets.
