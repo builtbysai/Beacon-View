@@ -89,3 +89,15 @@ The tailnet policy includes saved tests proving that `tag:ci` can reach the Orac
 tailnet address on TCP 22 but cannot reach its web port or the maintainer's Windows
 device over SSH. After any policy edit, verify `ssh beacon-oracle` from a
 maintainer-owned device before ending the change window.
+
+## Independent product hostname routes
+
+Before a cloud web replacement, create the non-secret route directory with
+`sudo install -d -m 0755 /etc/beacon/products`. The compose file adds only the
+web/Caddy container to the `beacon-edge` frontend network. Optional root-owned
+`.caddy` files in that directory route dedicated product hostnames to independent
+frontend containers; credentials and backend/database containers must stay off
+that network. An empty directory keeps the standalone View deployment valid.
+Validate every fragment together with the main Caddyfile, reload gracefully,
+and check View health/readiness independently. See ADR 0106. Other products must
+join the network as external and manage their own database, backup and release.

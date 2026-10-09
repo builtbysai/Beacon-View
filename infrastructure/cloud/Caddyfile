@@ -12,6 +12,9 @@
 	}
 }
 
+# Optional independently deployed Beacon products. An empty glob is valid.
+import /etc/caddy/products/*.caddy
+
 {$BEACON_DOMAIN} {
 	encode zstd gzip
 	import beacon_api

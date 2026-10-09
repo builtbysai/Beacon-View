@@ -35,3 +35,16 @@ Do not enable automatic deployment as part of this rename.
 Google Cast's external console registration name and previously distributed
 installers need separate verification; this source change does not alter their
 identity or falsely claim new binaries have been distributed.
+
+## Verified deployment
+
+Reviewed merge `eeefbf0776586ca396fec0988c005ec3dbc5ddd3` passed main CI and was
+deployed under its exact `/opt/beacon/releases/web-<sha>` directory on October 9.
+Migration and independent schema verification passed before backend/web replacement.
+Local TLS and public HTTPS health/readiness passed afterward, and the live PWA
+manifest and browser opening screen report Beacon View. PostgreSQL and Coturn
+remained running. The prior backend/web images were tagged
+`beacon-view-backend:rollback-4d3bb30` and `beacon-view-web:rollback-4d3bb30`;
+the prior source release remains available. Android builds passed, but this does
+not claim installation of the renamed APK on a physical camera or installer/Cast
+console distribution. Real camera streaming was not exercised by this web release.
