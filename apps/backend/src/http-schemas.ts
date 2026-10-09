@@ -49,10 +49,23 @@ export const updateCameraSchema = z
   })
   .refine((value) => value.enabled !== undefined || value.name !== undefined);
 export const privacyModeSchema = z.object({ enabled: z.boolean() });
+/** Android's PowerManager thermal statuses (ADR 0093). */
+export const THERMAL_STATUSES = [
+  'none',
+  'light',
+  'moderate',
+  'severe',
+  'critical',
+  'emergency',
+  'shutdown',
+] as const;
+export type ThermalStatus = (typeof THERMAL_STATUSES)[number];
+
 export const heartbeatSchema = z
   .object({
     batteryPercent: z.number().int().min(0).max(100).optional(),
     batteryCharging: z.boolean().optional(),
+    thermalStatus: z.enum(THERMAL_STATUSES).optional(),
   })
   .strict()
   .refine(

@@ -5,7 +5,8 @@
  * copy matches the PWA service worker (apps/web-viewer/public/sw.js): no
  * camera names or event details ever appear in an OS notification.
  */
-export type AlertCategory = 'motion' | 'offline' | 'recovered' | 'security';
+export type AlertCategory =
+  'motion' | 'offline' | 'recovered' | 'security' | 'health';
 
 export interface DesktopAlert {
   category: AlertCategory;
@@ -17,6 +18,7 @@ export const ALERT_BODY: Record<AlertCategory, string> = {
   motion: 'Beacon detected activity.',
   offline: 'A Beacon camera needs attention.',
   recovered: 'A Beacon camera is back online.',
+  health: 'A Beacon camera has a battery or heat warning.',
   security: 'A security event occurred on your Beacon account.',
 };
 

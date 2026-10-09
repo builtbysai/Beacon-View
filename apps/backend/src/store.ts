@@ -58,6 +58,7 @@ import {
   type GuestLinkRecord,
   type UserRecord,
 } from './store-contract.js';
+import type { ThermalStatus } from './http-schemas.js';
 
 export * from './store-contract.js';
 
@@ -445,6 +446,10 @@ export class PostgresStore implements MilestoneStore {
     graceSeconds: number,
   ): Promise<void> {
     await this.notifications.scanPresence(now, graceSeconds);
+  }
+
+  async scanNotificationHealth(now: Date): Promise<void> {
+    await this.notifications.scanHealth(now);
   }
 
   async claimNotificationDeliveries(
@@ -974,7 +979,11 @@ export class PostgresStore implements MilestoneStore {
   async heartbeat(
     credentialHash: string,
     now: Date,
-    health?: { batteryPercent: number; batteryCharging: boolean },
+    health?: {
+      batteryCharging?: boolean;
+      batteryPercent?: number;
+      thermalStatus?: ThermalStatus;
+    },
   ): Promise<string | null> {
     return this.devices.heartbeat(credentialHash, now, health);
   }

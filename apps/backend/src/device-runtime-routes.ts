@@ -82,17 +82,27 @@ export function registerDeviceRuntimeRoutes(
     const now = new Date();
     const presenceChanged = !isCameraOnline(identity.lastSeenAt, now);
     const healthChanged =
-      health.data.batteryPercent !== undefined &&
-      (health.data.batteryPercent !== identity.batteryPercent ||
-        health.data.batteryCharging !== identity.batteryCharging);
+      (health.data.batteryPercent !== undefined &&
+        (health.data.batteryPercent !== identity.batteryPercent ||
+          health.data.batteryCharging !== identity.batteryCharging)) ||
+      (health.data.thermalStatus !== undefined &&
+        health.data.thermalStatus !== identity.thermalStatus);
     const cameraId = await store.heartbeat(
       credentialHash,
       now,
-      health.data.batteryPercent === undefined
+      health.data.batteryPercent === undefined &&
+        health.data.thermalStatus === undefined
         ? undefined
         : {
-            batteryPercent: health.data.batteryPercent,
-            batteryCharging: health.data.batteryCharging!,
+            ...(health.data.batteryPercent === undefined
+              ? {}
+              : {
+                  batteryPercent: health.data.batteryPercent,
+                  batteryCharging: health.data.batteryCharging!,
+                }),
+            ...(health.data.thermalStatus === undefined
+              ? {}
+              : { thermalStatus: health.data.thermalStatus }),
           },
     );
     if (!cameraId) return unauthorized(reply);

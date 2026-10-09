@@ -269,7 +269,14 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 if (privacyGate.pendingPause && !privacyGate.requestInFlight) setLocalPrivacy(true)
                 val accepted =
                     withContext(Dispatchers.IO) {
-                        runCatching { api.heartbeat(credential, batteryPercent(), batteryCharging()) }.getOrNull()
+                        runCatching {
+                            api.heartbeat(
+                                credential,
+                                batteryPercent(),
+                                batteryCharging(),
+                                ThermalStatus.current(getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager),
+                            )
+                        }.getOrNull()
                     }
                 when (accepted) {
                     true -> {

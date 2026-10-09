@@ -20,6 +20,33 @@ import {
   offlineGraceElapsed,
 } from './notification-presence.js';
 
+/** A camera this low on battery, and not charging, needs attention. */
+export const LOW_BATTERY_PERCENT = 15;
+/** It counts as recovered once it is charging or back above this. */
+export const LOW_BATTERY_CLEARED_PERCENT = 25;
+/** From "severe" up, Android is already throttling or about to shut down. */
+export const HOT_THERMAL_STATUSES: ReadonlySet<string> = new Set([
+  'severe',
+  'critical',
+  'emergency',
+  'shutdown',
+]);
+
+/**
+ * One health condition across scans: raised once when it starts, held until
+ * it clears. `since` is the stored marker (null when clear).
+ */
+export function nextHealthState(
+  since: Date | null,
+  active: boolean,
+  cleared: boolean,
+  now: Date,
+): { changed: boolean; raised: boolean; since: Date | null } {
+  if (active && !since) return { changed: true, raised: true, since: now };
+  if (cleared && since) return { changed: true, raised: false, since: null };
+  return { changed: false, raised: false, since };
+}
+
 export class PostgresNotificationRepository {
   constructor(
     private readonly pool: Pool,
@@ -258,6 +285,113 @@ export class PostgresNotificationRepository {
         userId: setting.userId,
         now: input.now,
       });
+    }
+  }
+
+  /**
+   * Health alerts (ADR 0093): a camera that is low on battery or overheating
+   * raises one alert per episode, for owners and admins who have the camera's
+   * "offline and needs attention" alerts on. Hysteresis keeps a battery that
+   * hovers around the limit from alerting repeatedly, and quiet hours silence
+   * the alert without making it fire later.
+   */
+  async scanHealth(now: Date): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const locked = await client.query<{ acquired: boolean }>(
+        `SELECT pg_try_advisory_xact_lock(1111846222) AS acquired`,
+      );
+      if (!locked.rows[0]?.acquired) {
+        await client.query('ROLLBACK');
+        return;
+      }
+      const devices = await client.query<{
+        id: string;
+        userId: string;
+        batteryPercent: number | null;
+        batteryCharging: boolean | null;
+        thermalStatus: string | null;
+        lowBatterySince: Date | null;
+        overheatingSince: Date | null;
+        quietStartMinute: number | null;
+        quietEndMinute: number | null;
+        quietTimeZone: string | null;
+      }>(
+        `SELECT d.id, np.user_id AS "userId", d.battery_percent AS "batteryPercent",
+                d.battery_charging AS "batteryCharging", d.thermal_status AS "thermalStatus",
+                nps.low_battery_since AS "lowBatterySince", nps.overheating_since AS "overheatingSince",
+                np.quiet_start_minute AS "quietStartMinute", np.quiet_end_minute AS "quietEndMinute",
+                np.quiet_time_zone AS "quietTimeZone"
+         FROM cameras d
+         JOIN notification_preferences np ON np.device_id = d.id
+         JOIN household_members hm ON hm.household_id = d.household_id AND hm.user_id = np.user_id
+         LEFT JOIN notification_presence_state nps ON nps.device_id = d.id AND nps.user_id = np.user_id
+         WHERE np.offline_enabled = true AND d.enabled = true AND d.revoked_at IS NULL
+           AND d.health_reported_at IS NOT NULL
+           AND d.health_reported_at > $1::timestamptz - interval '10 minutes'
+           AND hm.status = 'active' AND hm.role IN ('owner', 'admin')
+           AND (hm.expires_at IS NULL OR hm.expires_at > $1)
+           AND EXISTS (SELECT 1 FROM device_credentials dc WHERE dc.camera_id = d.id AND dc.revoked_at IS NULL)
+         FOR UPDATE OF d`,
+        [now],
+      );
+      for (const device of devices.rows) {
+        const lowBattery = nextHealthState(
+          device.lowBatterySince,
+          device.batteryPercent !== null &&
+            device.batteryCharging === false &&
+            device.batteryPercent <= LOW_BATTERY_PERCENT,
+          device.batteryCharging === true ||
+            (device.batteryPercent !== null &&
+              device.batteryPercent >= LOW_BATTERY_CLEARED_PERCENT),
+          now,
+        );
+        const overheating = nextHealthState(
+          device.overheatingSince,
+          device.thermalStatus !== null &&
+            HOT_THERMAL_STATUSES.has(device.thermalStatus),
+          device.thermalStatus !== null &&
+            !HOT_THERMAL_STATUSES.has(device.thermalStatus),
+          now,
+        );
+        if (lowBattery.changed || overheating.changed) {
+          const quiet = this.#isQuiet(device, now);
+          for (const [state, kind] of [
+            [lowBattery, 'battery'],
+            [overheating, 'heat'],
+          ] as const) {
+            if (state.raised && !quiet)
+              await this.#enqueueEvent(client, {
+                category: 'health',
+                deduplicationKey: `${kind}:${device.id}:${now.toISOString()}`,
+                deviceId: device.id,
+                userId: device.userId,
+                now,
+              });
+          }
+          await client.query(
+            `INSERT INTO notification_presence_state
+             (user_id, device_id, low_battery_since, overheating_since, updated_at)
+             VALUES ($1,$2,$3,$4,$5)
+             ON CONFLICT (user_id, device_id) DO UPDATE SET
+               low_battery_since = $3, overheating_since = $4, updated_at = $5`,
+            [
+              device.userId,
+              device.id,
+              lowBattery.since,
+              overheating.since,
+              now,
+            ],
+          );
+        }
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
   }
 

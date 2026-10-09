@@ -267,6 +267,160 @@ describe.skipIf(!store)('notification transport persistence', () => {
     ).toBeNull();
   });
 
+  describe('health alerts (ADR 0093)', () => {
+    async function watched(
+      quietHours: {
+        end: string;
+        start: string;
+        timeZone: string;
+      } | null = null,
+    ) {
+      const setup = await fixture();
+      await store!.upsertNotificationSubscription({
+        channel: 'fcm',
+        consentedAt: setup.now,
+        deviceLabel: 'Pixel test',
+        installationId: randomUUID(),
+        providerMaterial: 'provider-token-for-health-alert-testing',
+        sessionId: setup.sessionId,
+        userId: setup.owner.id,
+      });
+      await store!.updateNotificationPreference({
+        userId: setup.owner.id,
+        householdId: setup.owner.householdId,
+        publicDeviceId: setup.device.publicDeviceId,
+        motionEnabled: false,
+        offlineEnabled: true,
+        quietHours,
+      });
+      let minute = 0;
+      const report = async (
+        battery: number | null,
+        charging: boolean | null,
+        thermal: string | null,
+        ageMinutes = 0,
+      ) => {
+        minute += 1;
+        const at = new Date(setup.now.getTime() + minute * 60_000);
+        await store!.pool.query(
+          `UPDATE cameras SET battery_percent=$2, battery_charging=$3, thermal_status=$4,
+             health_reported_at=$5 WHERE id=$1`,
+          [
+            setup.device.id,
+            battery,
+            charging,
+            thermal,
+            new Date(at.getTime() - ageMinutes * 60_000),
+          ],
+        );
+        await store!.scanNotificationHealth(at);
+      };
+      const alerts = async () =>
+        (
+          await store!.pool.query<{ n: number }>(
+            "SELECT count(*)::int AS n FROM notification_events WHERE category='health'",
+          )
+        ).rows[0]!.n;
+      return { alerts, report, setup };
+    }
+
+    it('alerts once when the battery runs low, not again while it stays low, and again after a recovery', async () => {
+      const { alerts, report } = await watched();
+      await report(40, false, 'none');
+      expect(await alerts()).toBe(0);
+      await report(12, false, 'none');
+      expect(await alerts()).toBe(1);
+      await report(11, false, 'none');
+      await report(9, false, 'none');
+      expect(await alerts()).toBe(1);
+      // Hovering just above the limit is not a recovery.
+      await report(20, false, 'none');
+      await report(14, false, 'none');
+      expect(await alerts()).toBe(1);
+      // Charging (or climbing well past the limit) clears it.
+      await report(14, true, 'none');
+      await report(10, false, 'none');
+      expect(await alerts()).toBe(2);
+      await report(60, false, 'none');
+      await report(8, false, 'none');
+      expect(await alerts()).toBe(3);
+    });
+
+    it('does not alert for a low battery that is charging', async () => {
+      const { alerts, report } = await watched();
+      await report(5, true, 'none');
+      expect(await alerts()).toBe(0);
+    });
+
+    it('alerts once per overheating episode and clears when it cools to moderate', async () => {
+      const { alerts, report } = await watched();
+      await report(80, false, 'moderate');
+      expect(await alerts()).toBe(0);
+      await report(80, false, 'severe');
+      await report(80, false, 'critical');
+      expect(await alerts()).toBe(1);
+      // Easing from critical to severe is still hot.
+      await report(80, false, 'severe');
+      expect(await alerts()).toBe(1);
+      await report(80, false, 'moderate');
+      await report(80, false, 'emergency');
+      expect(await alerts()).toBe(2);
+    });
+
+    it('ignores health that has gone stale (the offline alert covers a silent camera)', async () => {
+      const { alerts, report } = await watched();
+      await report(5, false, 'critical', 11);
+      expect(await alerts()).toBe(0);
+    });
+
+    it('stays silent during quiet hours and does not fire the same episode afterwards', async () => {
+      // The fixture clock is 12:00 UTC; these quiet hours cover the whole day.
+      const { alerts, report } = await watched({
+        end: '23:59',
+        start: '00:00',
+        timeZone: 'UTC',
+      });
+      await report(5, false, 'none');
+      expect(await alerts()).toBe(0);
+      await report(5, false, 'none');
+      expect(await alerts()).toBe(0);
+    });
+
+    it('only tells people who turned the camera’s attention alerts on', async () => {
+      const setup = await fixture();
+      await store!.upsertNotificationSubscription({
+        channel: 'fcm',
+        consentedAt: setup.now,
+        deviceLabel: 'Pixel test',
+        installationId: randomUUID(),
+        providerMaterial: 'provider-token-for-health-optout-testing',
+        sessionId: setup.sessionId,
+        userId: setup.owner.id,
+      });
+      await store!.updateNotificationPreference({
+        userId: setup.owner.id,
+        householdId: setup.owner.householdId,
+        publicDeviceId: setup.device.publicDeviceId,
+        motionEnabled: true,
+        offlineEnabled: false,
+        quietHours: null,
+      });
+      await store!.pool.query(
+        `UPDATE cameras SET battery_percent=3, battery_charging=false,
+           thermal_status='critical', health_reported_at=$2 WHERE id=$1`,
+        [setup.device.id, setup.now],
+      );
+      await store!.scanNotificationHealth(setup.now);
+      expect(
+        (
+          await store!.pool.query(
+            "SELECT id FROM notification_events WHERE category='health'",
+          )
+        ).rowCount,
+      ).toBe(0);
+    });
+  });
+
   it('waits for the presence window plus grace, emits one offline transition, and recovers once', async () => {
     const { device, now, owner, sessionId } = await fixture();
     await store!.upsertNotificationSubscription({

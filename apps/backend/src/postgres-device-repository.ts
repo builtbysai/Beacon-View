@@ -8,6 +8,7 @@ import type {
   DeviceRecord,
   DeviceHeartbeatIdentity,
 } from './store-contract.js';
+import type { ThermalStatus } from './http-schemas.js';
 
 export class PostgresDeviceRepository {
   constructor(private readonly pool: Pool) {}
@@ -352,12 +353,17 @@ export class PostgresDeviceRepository {
   async heartbeat(
     credentialHash: string,
     now: Date,
-    health?: { batteryPercent: number; batteryCharging: boolean },
+    health?: {
+      batteryCharging?: boolean;
+      batteryPercent?: number;
+      thermalStatus?: ThermalStatus;
+    },
   ): Promise<string | null> {
     const result = await this.pool.query<{ id: string }>(
       `UPDATE cameras c SET last_seen_at = $2, updated_at = $2,
          battery_percent = COALESCE($3::int, battery_percent), battery_charging = COALESCE($4::boolean, battery_charging),
-         health_reported_at = CASE WHEN $3::int IS NULL THEN health_reported_at ELSE $2 END
+         thermal_status = COALESCE($5::text, thermal_status),
+         health_reported_at = CASE WHEN $3::int IS NULL AND $5::text IS NULL THEN health_reported_at ELSE $2 END
        FROM device_credentials dc
        WHERE dc.camera_id = c.id AND dc.credential_hash = $1
          AND dc.revoked_at IS NULL AND c.revoked_at IS NULL
@@ -367,6 +373,7 @@ export class PostgresDeviceRepository {
         now,
         health?.batteryPercent ?? null,
         health?.batteryCharging ?? null,
+        health?.thermalStatus ?? null,
       ],
     );
     return result.rows[0]?.id ?? null;
@@ -491,7 +498,8 @@ export class PostgresDeviceRepository {
               d.name, d.platform, d.installation_id AS "installationId",
               d.last_seen_at AS "lastSeenAt",
               d.battery_percent AS "batteryPercent",
-              d.battery_charging AS "batteryCharging"
+              d.battery_charging AS "batteryCharging",
+              d.thermal_status AS "thermalStatus"
        FROM cameras d
        JOIN device_credentials dc ON dc.camera_id = d.id
        JOIN LATERAL (

@@ -56,6 +56,7 @@ class BeaconFirebaseMessagingService : FirebaseMessagingService() {
             "motion" -> "Beacon detected activity."
             "offline" -> "A Beacon camera needs attention."
             "recovered" -> "A Beacon camera is back online."
+            "health" -> "A Beacon camera has a battery or heat warning."
             "security" -> "A security event occurred on your Beacon account."
             else -> return
         }

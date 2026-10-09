@@ -21,6 +21,7 @@ import type {
   RecordingThumbnailPlaybackClaim,
   RecordingThumbnailUploadClaim,
 } from './recording-types.js';
+import type { ThermalStatus } from './http-schemas.js';
 
 export interface UserRecord {
   id: string;
@@ -162,6 +163,7 @@ export interface DeviceHeartbeatIdentity extends CameraIdentity {
   lastSeenAt: Date | null;
   batteryPercent: number | null;
   batteryCharging: boolean | null;
+  thermalStatus: string | null;
 }
 
 export interface CameraAccess extends CameraIdentity {
@@ -554,6 +556,8 @@ export interface MilestoneStore {
     quietHours: { start: string; end: string; timeZone: string } | null;
   }): Promise<NotificationPreferenceRecord | null>;
   scanNotificationPresence(now: Date, graceSeconds: number): Promise<void>;
+  /** Raises one health alert (low battery, overheating) per episode (ADR 0093). */
+  scanNotificationHealth(now: Date): Promise<void>;
   claimNotificationDeliveries(
     now: Date,
     limit?: number,
@@ -868,7 +872,11 @@ export interface MilestoneStore {
   heartbeat(
     credentialHash: string,
     now: Date,
-    health?: { batteryPercent: number; batteryCharging: boolean },
+    health?: {
+      batteryCharging?: boolean;
+      batteryPercent?: number;
+      thermalStatus?: ThermalStatus;
+    },
   ): Promise<string | null>;
   revokeDevice(
     householdId: string,
