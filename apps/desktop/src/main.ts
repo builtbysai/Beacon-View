@@ -16,7 +16,12 @@ import {
   systemPreferences,
 } from 'electron';
 
-import { ALERT_BODY, parseDesktopAlert, RecentAlerts } from './alerts.js';
+import {
+  ALERT_BODY,
+  alertPath,
+  parseDesktopAlert,
+  RecentAlerts,
+} from './alerts.js';
 import {
   autostartSupported,
   getOpenAtLogin,
@@ -224,7 +229,7 @@ ipcMain.on('beacon:show-alert', (event, value: unknown) => {
   });
   notification.on('click', () => {
     const window = bringToFront();
-    void window.loadURL(appUrl(alert.route)).catch(() => undefined);
+    void window.loadURL(appUrl(alertPath(alert))).catch(() => undefined);
   });
   notification.show();
 });

@@ -540,6 +540,11 @@ export interface MilestoneStore {
     userId: string,
     householdId: string,
   ): Promise<NotificationPreferenceRecord[]>;
+  /** The category and camera an alert sent to this user was about. */
+  findNotificationEvent(
+    userId: string,
+    eventId: string,
+  ): Promise<{ category: string; publicCameraId: string | null } | null>;
   updateNotificationPreference(input: {
     userId: string;
     householdId: string;

@@ -223,6 +223,50 @@ describe.skipIf(!store)('notification transport persistence', () => {
     expect(state.rows[0]).toEqual({ revoked: true, terminal: true });
   });
 
+  it('tells an alert’s owner which camera it was about, and no one else', async () => {
+    const { device, now, owner, sessionId } = await fixture();
+    await store!.upsertNotificationSubscription({
+      channel: 'fcm',
+      consentedAt: now,
+      deviceLabel: 'Pixel test',
+      installationId: randomUUID(),
+      providerMaterial: 'provider-token-for-alert-lookup-testing',
+      sessionId,
+      userId: owner.id,
+    });
+    await store!.updateNotificationPreference({
+      userId: owner.id,
+      householdId: owner.householdId,
+      publicDeviceId: device.publicDeviceId,
+      motionEnabled: true,
+      offlineEnabled: false,
+      quietHours: null,
+    });
+    await store!.createMotionEvent({
+      credentialHash: hashSecret('notification-device-credential'),
+      publicCameraId: device.publicCameraId,
+      confidence: 0.8,
+      now,
+    });
+    const created = await store!.pool.query<{ id: string }>(
+      "SELECT id FROM notification_events WHERE category='motion'",
+    );
+    const eventId = created.rows[0]!.id;
+    expect(await store!.findNotificationEvent(owner.id, eventId)).toEqual({
+      category: 'motion',
+      publicCameraId: device.publicCameraId,
+    });
+    const stranger = await store!.createAccount(
+      'stranger@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    expect(await store!.findNotificationEvent(stranger.id, eventId)).toBeNull();
+    expect(
+      await store!.findNotificationEvent(owner.id, randomUUID()),
+    ).toBeNull();
+  });
+
   it('waits for the presence window plus grace, emits one offline transition, and recovers once', async () => {
     const { device, now, owner, sessionId } = await fixture();
     await store!.upsertNotificationSubscription({

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseDesktopAlert, RecentAlerts } from '../src/alerts.js';
+import { parseDesktopAlert, RecentAlerts, alertPath } from '../src/alerts.js';
 
 describe('desktop alerts', () => {
   it('accepts the generic payload the backend sends', () => {
@@ -37,5 +37,18 @@ describe('desktop alerts', () => {
     expect(recent.firstSighting('b')).toBe(true);
     expect(recent.firstSighting('c')).toBe(true);
     expect(recent.firstSighting('a')).toBe(true);
+  });
+
+  it('sends an activity alert’s click to its camera, and others to their page', () => {
+    expect(
+      alertPath({ category: 'motion', eventId: 'abc-123', route: '/activity' }),
+    ).toBe('/activity?alert=abc-123');
+    expect(
+      alertPath({
+        category: 'security',
+        eventId: 'abc-123',
+        route: '/settings',
+      }),
+    ).toBe('/settings');
   });
 });

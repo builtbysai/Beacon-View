@@ -36,6 +36,14 @@ export function parseDesktopAlert(value: unknown): DesktopAlert | null {
   return { category: category as AlertCategory, eventId, route };
 }
 
+/** Where clicking an alert goes. Activity alerts carry their opaque event
+ * ID so the app can open the camera they were about (ADR 0090). */
+export function alertPath(alert: DesktopAlert): string {
+  return alert.route === '/activity'
+    ? `/activity?alert=${alert.eventId}`
+    : alert.route;
+}
+
 /** The same event can arrive twice (a retried delivery after a reconnect);
  * the person should see it once. */
 export class RecentAlerts {

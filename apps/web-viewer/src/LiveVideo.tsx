@@ -24,6 +24,11 @@ import {
 } from './drive-recording';
 import { DriveReconnectNotice, RecordClipControl } from './RecordClipControl';
 import { randomUuid } from './random-id';
+import { PushToTalk } from './push-to-talk';
+import { ShortcutsHelp } from './ShortcutsHelp';
+import { useLiveShortcuts, type ShortcutAction } from './live-shortcuts';
+import { captureSnapshot, saveBlob, snapshotFileName } from './snapshot';
+import { useVideoZoom } from './video-zoom';
 
 import {
   type ConnectionFailure,
@@ -100,6 +105,7 @@ export function LiveVideo({
   drive = DRIVE_READY,
   canFlip = true,
   canPause = true,
+  onStep,
 }: {
   enabled?: boolean;
   camera: Camera;
@@ -128,6 +134,8 @@ export function LiveVideo({
   canFlip?: boolean;
   /** Whether this camera's grant allows toggling privacy mode. */
   canPause?: boolean;
+  /** Moves to the previous (-1) or next (1) camera (keyboard shortcut). */
+  onStep?: (direction: -1 | 1) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -161,6 +169,8 @@ export function LiveVideo({
   const qualityTimer = useRef<number | null>(null);
   const previousBytes = useRef<PreviousInboundBytes | null>(null);
   const stageRef = useRef<HTMLElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const fullscreenButton = useRef<HTMLButtonElement>(null);
   // Keep watching in a floating window while using other apps or tabs. Only
   // the full live view floats (and floats on its own when you leave), never
@@ -226,6 +236,106 @@ export function LiveVideo({
   useEffect(() => {
     if (pip.error) setControlError(pip.error);
   }, [pip.error]);
+
+  // Zoom and pan (ADR 0090): wheel, pinch, drag, double-click.
+  const zoom = useVideoZoom(frameRef, videoRef, {
+    enabled: !compact && enabled,
+    resetKey: camera.id,
+  });
+
+  function toggleFullscreen() {
+    setControlError('');
+    if (!stageRef.current?.requestFullscreen || !document.exitFullscreen) {
+      setControlError(
+        'Full screen is unavailable in this browser. You can keep watching here.',
+      );
+      return;
+    }
+    void (
+      fullscreen
+        ? document.exitFullscreen()
+        : stageRef.current.requestFullscreen()
+    ).catch(() =>
+      setControlError(
+        'Full screen could not open. You can keep watching here.',
+      ),
+    );
+  }
+
+  // The picture is saved on this device only; nothing is uploaded.
+  function takeSnapshot() {
+    const video = videoRef.current;
+    if (!video || privacyMode) return;
+    setControlError('');
+    void captureSnapshot(video).then(
+      (blob) => saveBlob(blob, snapshotFileName(camera.name, new Date())),
+      (error: unknown) =>
+        setControlError(
+          error instanceof Error
+            ? error.message
+            : 'The snapshot couldn’t be saved. Try again.',
+        ),
+    );
+  }
+
+  // One control for tap-to-toggle and hold-to-talk.
+  const talkStateRef = useRef(talkState);
+  talkStateRef.current = talkState;
+  const pushToTalk = useRef<PushToTalk | null>(null);
+  pushToTalk.current ??= new PushToTalk(
+    () =>
+      ['permission', 'connecting', 'speaking'].includes(talkStateRef.current),
+    () => void talkSession.current?.start(),
+    () => talkSession.current?.stop(),
+  );
+
+  const canTalkNow =
+    permissions.canTalk && !switching && !privacyBusy && !privacyMode;
+
+  function runShortcut(action: ShortcutAction) {
+    switch (action) {
+      case 'fullscreen':
+        toggleFullscreen();
+        break;
+      case 'pictureInPicture':
+        if (pip.supported && videoReady) pip.toggle();
+        break;
+      case 'listen':
+        if (permissions.canListen && cameraSound !== false)
+          setAudio(!listening);
+        break;
+      case 'talk':
+        if (canTalkNow) pushToTalk.current?.press();
+        break;
+      case 'snapshot':
+        if (videoReady) takeSnapshot();
+        break;
+      case 'zoomIn':
+        zoom.zoomIn();
+        break;
+      case 'zoomOut':
+        zoom.zoomOut();
+        break;
+      case 'zoomReset':
+        zoom.reset();
+        break;
+      case 'previousCamera':
+        if (zoom.zoomed) zoom.nudge(-0.1, 0);
+        else onStep?.(-1);
+        break;
+      case 'nextCamera':
+        if (zoom.zoomed) zoom.nudge(0.1, 0);
+        else onStep?.(1);
+        break;
+      case 'help':
+        setHelpOpen((open) => !open);
+        break;
+    }
+  }
+  useLiveShortcuts(
+    { on: runShortcut, talkRelease: () => pushToTalk.current?.release() },
+    !compact && enabled,
+  );
 
   // Clears a finished clip's status back to the plain "Record a short
   // clip" control a few seconds after it lands, the same pause the old
@@ -631,7 +741,8 @@ export function LiveVideo({
   const content = (
     <>
       <div
-        className="video-frame"
+        className={`video-frame${compact ? '' : ' is-zoomable'}`}
+        ref={frameRef}
         onFocus={!compact ? wakeControls : undefined}
         onPointerDown={!compact ? wakeControls : undefined}
         onPointerMove={!compact ? wakeControls : undefined}
@@ -785,12 +896,18 @@ export function LiveVideo({
                       talkState,
                     ))
                 }
-                onClick={() => {
-                  if (
-                    ['permission', 'connecting', 'speaking'].includes(talkState)
-                  )
-                    talkSession.current?.stop();
-                  else void talkSession.current?.start();
+                onPointerDown={(event) => {
+                  if (event.button === 0) pushToTalk.current?.press();
+                }}
+                onPointerUp={() => pushToTalk.current?.release()}
+                onPointerCancel={() => pushToTalk.current?.release()}
+                onPointerLeave={() => pushToTalk.current?.release()}
+                // Keyboard activation (Enter, Space) arrives as a click with
+                // no pointer: it toggles, like a tap.
+                onClick={(event) => {
+                  if (event.detail !== 0) return;
+                  pushToTalk.current?.press();
+                  pushToTalk.current?.release();
                 }}
                 type="button"
               >
@@ -851,6 +968,16 @@ export function LiveVideo({
                 onStart={startRecording}
               />
             )}
+            <button
+              className="video-control"
+              disabled={!videoReady || privacyMode}
+              onClick={takeSnapshot}
+              title="Save a snapshot to this device"
+              type="button"
+            >
+              <Icon name="snapshot" />
+              <span className="visually-hidden">Save snapshot</span>
+            </button>
             {pip.supported && (
               <button
                 aria-pressed={pip.active}
@@ -874,27 +1001,7 @@ export function LiveVideo({
               className="video-control"
               title={fullscreen ? 'Exit full screen' : 'Full screen'}
               ref={fullscreenButton}
-              onClick={() => {
-                setControlError('');
-                if (
-                  !stageRef.current?.requestFullscreen ||
-                  !document.exitFullscreen
-                ) {
-                  setControlError(
-                    'Full screen is unavailable in this browser. You can keep watching here.',
-                  );
-                  return;
-                }
-                void (
-                  fullscreen
-                    ? document.exitFullscreen()
-                    : stageRef.current.requestFullscreen()
-                ).catch(() =>
-                  setControlError(
-                    'Full screen could not open. You can keep watching here.',
-                  ),
-                );
-              }}
+              onClick={toggleFullscreen}
               type="button"
             >
               <Icon name={fullscreen ? 'minimize' : 'maximize'} />
@@ -903,6 +1010,15 @@ export function LiveVideo({
               </span>
             </button>
           </div>
+        )}
+        {!compact && zoom.zoomed && (
+          <button
+            className="video-zoom-chip"
+            onClick={zoom.reset}
+            type="button"
+          >
+            {zoom.state.scale.toFixed(1)}× · Reset zoom
+          </button>
         )}
         {!compact && (quality || othersWatching > 0) && (
           <button
@@ -973,6 +1089,7 @@ export function LiveVideo({
           </div>
         )}
       </div>
+      {helpOpen && <ShortcutsHelp onDismiss={() => setHelpOpen(false)} />}
       <p className="visually-hidden" role="status">
         Connection: {status}
       </p>
