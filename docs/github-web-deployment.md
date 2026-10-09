@@ -4,6 +4,17 @@ The repository can deploy a coordinated backend, migration, and web release to
 the Oracle private-alpha VM after a successful CI run on `main`. The workflow does
 not recreate persistent PostgreSQL data, Coturn, or Caddy volumes.
 
+## Current operational status — October 9, 2026
+
+The workflow is **disabled manually**, confirmed through the GitHub API. A merge
+does not deploy automatically. Keep it disabled unless the owner explicitly
+approves future automatic releases. For an authorized release, use the exact
+CI-validated merged `main` SHA and the manual
+[release-directory procedure](development-handoff.md#deploying-a-reviewed-commit).
+It uses the same migration, schema verification, backend/web replacement, and TLS
+health-check sequence described below. Do not use the historical `/opt/beacon/app`
+copy procedure.
+
 ## One-time GitHub setup
 
 Completed for the private alpha on September 12, 2026. The GitHub `production`
@@ -57,9 +68,12 @@ backend is restarted. Development releases do not create backups.
 
 ## How to deploy
 
-Merge reviewed web changes to `main`. After the `CI` workflow succeeds, the
-`Deploy Beacon to Oracle` workflow runs automatically. The deployment is serialized
-so two web releases cannot replace one another concurrently.
+Merge reviewed changes to `main` after PR CI passes, then wait for the merged
+commit's CI result. While automatic deployment is disabled, deploy that exact SHA
+manually through the release-directory procedure above. If the owner later enables
+the workflow, successful push CI on `main` triggers automatic deployment. Its
+concurrency group serializes those automatic releases; do not start a simultaneous
+manual release.
 
 For a safer first rollout, configure the `production` environment with required
 reviewers. A failed health check fails the workflow; inspect the remote web

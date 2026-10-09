@@ -89,8 +89,9 @@ project is not production-ready.
 For the recommended local/GitHub workflow, see the
 [development handoff](docs/development-handoff.md). GitHub is the source of
 truth; work on a `codex/*` feature branch, open a pull request, and merge to
-`main` only after CI passes. A successful merge to `main` deploys the web
-viewer to the Oracle private alpha automatically.
+`main` only after CI passes. Automatic Oracle deployment is currently disabled;
+an owner-authorized release deploys the exact validated merged commit using the
+[release-directory procedure](docs/github-web-deployment.md).
 
 ## Product surfaces
 
