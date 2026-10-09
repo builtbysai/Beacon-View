@@ -148,6 +148,7 @@ services:
       - backend
     environment:
       BEACON_DOMAIN: ${BEACON_DOMAIN}
+    networks: [default, edge]
     ports:
       - '80:80'
       - '443:443'
@@ -158,6 +159,12 @@ services:
       - caddy-config:/config
       # Published desktop installers (ADR 0083); see apps/desktop/README.md.
       - /opt/beacon/downloads:/srv/downloads:ro
+      # Non-secret, root-owned hostname routes for independently deployed products.
+      - /etc/beacon/products:/etc/caddy/products:ro
+
+networks:
+  edge:
+    name: beacon-edge
 
 volumes:
   caddy-config:
