@@ -70,6 +70,11 @@ const environmentSchema = z
     NOTIFICATION_FINGERPRINT_KEY: optionalNotificationText(notificationKey),
     FIREBASE_PROJECT_ID: optionalNotificationText(z.string().min(1)),
     GOOGLE_APPLICATION_CREDENTIALS: optionalNotificationText(z.string().min(1)),
+    // The Google Cast application ID registered for the receiver page (ADR 0097).
+    // Unset keeps "Cast to TV" hidden.
+    CAST_APP_ID: optionalNotificationText(
+      z.string().regex(/^[0-9A-Fa-f]{8}$/u),
+    ),
     WEB_PUSH_VAPID_PUBLIC_KEY: optionalNotificationText(z.string().min(20)),
     WEB_PUSH_VAPID_PRIVATE_KEY: optionalNotificationText(z.string().min(20)),
     WEB_PUSH_VAPID_SUBJECT: optionalNotificationText(z.string().url()),

@@ -19,6 +19,13 @@ export function GuestViewPage() {
   const [attempt, setAttempt] = useState(0);
   const [refreshError, setRefreshError] = useState(false);
 
+  // On a TV (Cast to TV, ADR 0097) there is no pointer: show the picture only.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('cast') !== '1') return;
+    document.documentElement.classList.add('cast-receiver');
+    return () => document.documentElement.classList.remove('cast-receiver');
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     setStatus('entering');

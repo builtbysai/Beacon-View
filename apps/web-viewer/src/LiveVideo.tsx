@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCastToTv } from './cast-sender';
 import { Icon } from './Icon';
 import { CameraFlipButton } from './CameraFlipButton';
 import { InlineRename } from './InlineRename';
@@ -115,6 +116,7 @@ export function LiveVideo({
   maxVideoKbps,
   onPictureInPictureChange,
   canEditZones = false,
+  canCast = false,
 }: {
   enabled?: boolean;
   camera: Camera;
@@ -155,6 +157,8 @@ export function LiveVideo({
   /** Household managers can draw motion zones over this camera's picture
    * (ADR 0092). Only Android cameras detect motion. */
   canEditZones?: boolean;
+  /** Owners and admins can send this camera to a TV (ADR 0097). */
+  canCast?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -205,6 +209,7 @@ export function LiveVideo({
   // Keep watching in a floating window while using other apps or tabs. Only
   // the full live view floats (and floats on its own when you leave), never
   // the small tiles on Home.
+  const cast = useCastToTv(camera.id, canCast && !compact);
   const pip = usePictureInPicture(videoRef, {
     auto: !compact,
     enabled: !compact && enabled,
@@ -1064,6 +1069,25 @@ export function LiveVideo({
               >
                 <Icon name="eyeOff" />
                 <span className="visually-hidden">Ignore areas</span>
+              </button>
+            )}
+            {cast.available && (
+              <button
+                aria-pressed={cast.casting}
+                className={`video-control${cast.casting ? ' is-active' : ''}`}
+                disabled={cast.busy || (!cast.casting && !videoReady)}
+                onClick={() => void (cast.casting ? cast.stop() : cast.start())}
+                title={
+                  cast.casting
+                    ? 'Stop showing this camera on the TV'
+                    : 'Show this camera on a TV'
+                }
+                type="button"
+              >
+                <Icon name="cast" />
+                <span className="visually-hidden">
+                  {cast.casting ? 'Stop casting' : 'Cast to TV'}
+                </span>
               </button>
             )}
             {pip.supported && (
