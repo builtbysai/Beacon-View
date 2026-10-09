@@ -27,11 +27,21 @@ lists 1,500 A1 OCPU-hours and 9,000 GB-hours monthly, equivalent to **2 OCPUs an
 12 GB**, plus **200 GB combined boot/block storage in the home region** and five
 volume backups. Older cached pages listing 4 OCPUs/24 GB must not guide resizing.
 
-The actual tenancy subscription, home region, shape, other allocated volumes,
-remaining quota, and billing eligibility have **not** been verified: OCI console
-requires sign-in, and no local OCI CLI configuration exists. No compute/storage
-change, account upgrade, or billable resource was made. Do not claim remaining
-storage is 140 GB solely from this host's 60 GiB boot disk.
+After the owner signed in, read-only OCI console inspection confirmed the tenancy
+is a **Free Tier account**, Ashburn is its **home region**, and the running
+`beacon-staging-1` instance uses **VM.Standard.A1.Flex, 2 OCPUs, 12 GB RAM**.
+The tenancy's Compute limits for AD-1 explicitly show `standard-a1-core-count`
+**2** and `standard-a1-memory-count` **12**. The instance-list banner still quotes
+the historical 4/24 allowance; the actual limit table and current official
+documentation agree on 2/12. No larger shape is justified or attempted.
+
+The Block Volume regional limits for the root tenancy show
+`total-free-storage-gb-regional`: **200 GB limit, 60 GB usage, 140 GB available**.
+Both backup-count limits show **5 limit, 0 usage, 5 available**. These values are
+from the console's completed usage table, not an inference from the Linux disk.
+The storage quota is shared across boot/block volumes; it is not additional
+filesystem capacity until provisioned. Existing free space is sufficient, so
+no volume, backup, compute change, account upgrade, or billable resource was made.
 
 The monitoring timer is running. Backup timers are not enabled; the prior handoff
 records an empty backup repository. A retained recovery point and current restore
