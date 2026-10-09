@@ -188,6 +188,9 @@ class BeaconApi(private val baseUrl: String) {
         val sensitivity: MotionSensitivity,
         val cooldownSeconds: Int,
         val quietHours: QuietHours?,
+        // Edited from the live view (ADR 0092); this app only carries them, and
+        // the server keeps them when a save omits them.
+        val ignoredZones: Set<Int> = emptySet(),
     )
 
     data class RecordingSummary(
@@ -1608,9 +1611,14 @@ class BeaconApi(private val baseUrl: String) {
                         timeZone = quiet.getString("timeZone"),
                     )
                 },
+                ignoredZones = item.optJSONArray("ignoredZones")?.let(::parseZones) ?: emptySet(),
             )
         }
     }
+
+    /** Motion-zone cells from the backend, ignoring anything off the grid. */
+    private fun parseZones(array: org.json.JSONArray): Set<Int> =
+        (0 until array.length()).map { array.getInt(it) }.filter { it in 0 until ZoneGrid.COUNT }.toSet()
 
     /** Returns the id of a recording the backend started for this motion
      * report -- see core-feature-completion-plan.md's recording foundation
@@ -1734,6 +1742,7 @@ class BeaconApi(private val baseUrl: String) {
                         timeZone = it.getString("timeZone"),
                     )
                 },
+            ignoredZones = value.optJSONArray("ignoredZones")?.let(::parseZones) ?: emptySet(),
         )
 
     private fun connection(path: String, method: String): HttpURLConnection =

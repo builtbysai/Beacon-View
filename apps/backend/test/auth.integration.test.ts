@@ -1312,7 +1312,53 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     expect(deviceRead.statusCode).toBe(200);
     expect(
       deviceRead.json<{ cameras: CameraMotionSettings[] }>().cameras,
-    ).toContainEqual({ cameraId: device.publicCameraId, ...settings });
+    ).toContainEqual({
+      cameraId: device.publicCameraId,
+      ...settings,
+      ignoredZones: [],
+    });
+    // Motion zones (ADR 0092): saved sorted and de-duplicated, kept when a
+    // later save omits them, replaced when sent, and validated.
+    const zonesResponse = await put(ownerSession, {
+      ...settings,
+      ignoredZones: [40, 3, 40 + 16],
+    });
+    expect(zonesResponse.statusCode).toBe(200);
+    expect(
+      zonesResponse.json<{ settings: CameraMotionSettings }>().settings
+        .ignoredZones,
+    ).toEqual([3, 40, 56]);
+    const omitted = await put(ownerSession, {
+      ...settings,
+      sensitivity: 'low',
+    });
+    expect(
+      omitted.json<{ settings: CameraMotionSettings }>().settings.ignoredZones,
+    ).toEqual([3, 40, 56]);
+    const deviceZones = await app!.inject({
+      method: 'GET',
+      url: '/api/device/motion-settings',
+      headers: { authorization: `Bearer ${credential}` },
+    });
+    expect(
+      deviceZones
+        .json<{ cameras: CameraMotionSettings[] }>()
+        .cameras.find((camera) => camera.cameraId === device.publicCameraId)
+        ?.ignoredZones,
+    ).toEqual([3, 40, 56]);
+    expect(
+      (await put(ownerSession, { ...settings, ignoredZones: [256] }))
+        .statusCode,
+    ).toBe(400);
+    expect(
+      (await put(ownerSession, { ...settings, ignoredZones: [5, 5] }))
+        .statusCode,
+    ).toBe(400);
+    expect(
+      (await put(ownerSession, { ...settings, ignoredZones: [] })).json<{
+        settings: CameraMotionSettings;
+      }>().settings.ignoredZones,
+    ).toEqual([]);
     const report = () =>
       app!.inject({
         method: 'POST',
@@ -1352,6 +1398,7 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       cameraId: device.publicCameraId,
       ...settings,
       enabled: true,
+      ignoredZones: [],
     });
     expect(
       afterSync.find((item) => item.cameraId !== device.publicCameraId)

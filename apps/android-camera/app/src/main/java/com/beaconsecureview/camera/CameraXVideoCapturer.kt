@@ -300,6 +300,7 @@ class CameraXVideoCapturer(
                 image.width,
                 image.height,
                 image.imageInfo.timestamp,
+                rotationDegrees = image.imageInfo.rotationDegrees,
             )?.let(onMotionDetected)
             // ADR 0074/0075: experimental, default-off, logged locally only -- never
             // sent to the backend or shown in any UI. See smartDetectorOrNull().

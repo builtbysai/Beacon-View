@@ -3,6 +3,7 @@ import type { Pool } from 'pg';
 import {
   isQuietHoursActive,
   minuteToTimeOfDay,
+  normalizeZones,
   timeOfDayToMinute,
   type CameraMotionSettings,
   type MotionSettings,
@@ -145,6 +146,7 @@ export class PostgresMotionRepository {
     const result = await this.pool.query<CameraMotionSettings>(
       `SELECT cs.public_camera_id AS "cameraId", cs.motion_enabled AS enabled,
               cs.motion_record_enabled AS "recordOnMotion",
+              cs.motion_ignored_zones AS "ignoredZones",
               cs.motion_sensitivity AS sensitivity, cs.motion_cooldown_seconds AS "cooldownSeconds",
               CASE WHEN cs.motion_quiet_hours_start_minute IS NULL THEN NULL ELSE jsonb_build_object('start', lpad((cs.motion_quiet_hours_start_minute / 60)::text, 2, '0') || ':' || lpad((cs.motion_quiet_hours_start_minute % 60)::text, 2, '0'), 'end', lpad((cs.motion_quiet_hours_end_minute / 60)::text, 2, '0') || ':' || lpad((cs.motion_quiet_hours_end_minute % 60)::text, 2, '0'), 'timeZone', cs.motion_quiet_hours_time_zone) END AS "quietHours"
        FROM camera_sources cs JOIN cameras d ON d.id = cs.device_id
@@ -166,13 +168,16 @@ export class PostgresMotionRepository {
       `UPDATE camera_sources cs SET motion_enabled = $3, motion_record_enabled = $4,
               motion_sensitivity = $5, motion_cooldown_seconds = $6,
               motion_quiet_hours_start_minute = $7, motion_quiet_hours_end_minute = $8,
-              motion_quiet_hours_time_zone = $9, updated_at = now()
+              motion_quiet_hours_time_zone = $9,
+              motion_ignored_zones = COALESCE($10::jsonb, cs.motion_ignored_zones),
+              updated_at = now()
        FROM cameras d WHERE cs.device_id = d.id AND d.household_id = $1
          AND cs.public_camera_id = $2 AND d.platform = 'android'
          AND cs.removed_at IS NULL AND d.revoked_at IS NULL
          AND EXISTS (SELECT 1 FROM device_credentials dc WHERE dc.camera_id = d.id AND dc.revoked_at IS NULL)
        RETURNING cs.public_camera_id AS "cameraId", cs.motion_enabled AS enabled,
                  cs.motion_record_enabled AS "recordOnMotion",
+                 cs.motion_ignored_zones AS "ignoredZones",
                  cs.motion_sensitivity AS sensitivity, cs.motion_cooldown_seconds AS "cooldownSeconds",
                  CASE WHEN cs.motion_quiet_hours_start_minute IS NULL THEN NULL ELSE jsonb_build_object('start', lpad((cs.motion_quiet_hours_start_minute / 60)::text, 2, '0') || ':' || lpad((cs.motion_quiet_hours_start_minute % 60)::text, 2, '0'), 'end', lpad((cs.motion_quiet_hours_end_minute / 60)::text, 2, '0') || ':' || lpad((cs.motion_quiet_hours_end_minute % 60)::text, 2, '0'), 'timeZone', cs.motion_quiet_hours_time_zone) END AS "quietHours"`,
       [
@@ -187,6 +192,9 @@ export class PostgresMotionRepository {
           : null,
         settings.quietHours ? timeOfDayToMinute(settings.quietHours.end) : null,
         settings.quietHours?.timeZone ?? null,
+        settings.ignoredZones
+          ? JSON.stringify(normalizeZones(settings.ignoredZones))
+          : null,
       ],
     );
     return result.rows[0] ?? null;

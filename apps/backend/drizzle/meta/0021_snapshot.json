@@ -109,12 +109,8 @@
           "name": "audit_events_user_id_users_id_fk",
           "tableFrom": "audit_events",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -122,12 +118,8 @@
           "name": "audit_events_household_id_households_id_fk",
           "tableFrom": "audit_events",
           "tableTo": "households",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["household_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -135,12 +127,8 @@
           "name": "audit_events_camera_id_cameras_id_fk",
           "tableFrom": "audit_events",
           "tableTo": "cameras",
-          "columnsFrom": [
-            "camera_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["camera_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -291,12 +279,8 @@
           "name": "browser_sessions_user_id_users_id_fk",
           "tableFrom": "browser_sessions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -304,12 +288,8 @@
           "name": "browser_sessions_household_id_households_id_fk",
           "tableFrom": "browser_sessions",
           "tableTo": "households",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["household_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -421,12 +401,8 @@
           "name": "camera_grants_household_id_households_id_fk",
           "tableFrom": "camera_grants",
           "tableTo": "households",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["household_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -434,12 +410,8 @@
           "name": "camera_grants_camera_source_id_camera_sources_id_fk",
           "tableFrom": "camera_grants",
           "tableTo": "camera_sources",
-          "columnsFrom": [
-            "camera_source_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["camera_source_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -447,14 +419,8 @@
           "name": "camera_grants_member_household_fk",
           "tableFrom": "camera_grants",
           "tableTo": "household_members",
-          "columnsFrom": [
-            "member_id",
-            "household_id"
-          ],
-          "columnsTo": [
-            "id",
-            "household_id"
-          ],
+          "columnsFrom": ["member_id", "household_id"],
+          "columnsTo": ["id", "household_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -646,12 +612,8 @@
           "name": "camera_sources_device_id_cameras_id_fk",
           "tableFrom": "camera_sources",
           "tableTo": "cameras",
-          "columnsFrom": [
-            "device_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["device_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -863,12 +825,8 @@
           "name": "cameras_household_id_households_id_fk",
           "tableFrom": "cameras",
           "tableTo": "households",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["household_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -876,12 +834,8 @@
           "name": "cameras_paired_by_user_id_users_id_fk",
           "tableFrom": "cameras",
           "tableTo": "users",
-          "columnsFrom": [
-            "paired_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["paired_by_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -975,12 +929,8 @@
           "name": "device_credentials_camera_id_cameras_id_fk",
           "tableFrom": "device_credentials",
           "tableTo": "cameras",
-          "columnsFrom": [
-            "camera_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["camera_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1078,12 +1028,8 @@
           "name": "email_verification_tokens_user_id_users_id_fk",
           "tableFrom": "email_verification_tokens",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1149,12 +1095,8 @@
           "name": "google_drive_connections_user_id_users_id_fk",
           "tableFrom": "google_drive_connections",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1304,12 +1246,8 @@
           "name": "household_invitations_household_id_households_id_fk",
           "tableFrom": "household_invitations",
           "tableTo": "households",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["household_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1317,12 +1255,8 @@
           "name": "household_invitations_invited_by_user_id_users_id_fk",
           "tableFrom": "household_invitations",
           "tableTo": "users",
-          "columnsFrom": [
-            "invited_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["invited_by_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1487,12 +1421,8 @@
           "name": "household_members_household_id_households_id_fk",
           "tableFrom": "household_members",
           "tableTo": "households",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["household_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1500,12 +1430,8 @@
           "name": "household_members_user_id_users_id_fk",
           "tableFrom": "household_members",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1600,12 +1526,8 @@
           "name": "households_owner_id_users_id_fk",
           "tableFrom": "households",
           "tableTo": "users",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1694,12 +1616,8 @@
           "name": "motion_events_camera_source_id_camera_sources_id_fk",
           "tableFrom": "motion_events",
           "tableTo": "camera_sources",
-          "columnsFrom": [
-            "camera_source_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["camera_source_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1793,12 +1711,8 @@
           "name": "notification_events_user_id_users_id_fk",
           "tableFrom": "notification_events",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1806,12 +1720,8 @@
           "name": "notification_events_device_id_cameras_id_fk",
           "tableFrom": "notification_events",
           "tableTo": "cameras",
-          "columnsFrom": [
-            "device_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["device_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1819,12 +1729,8 @@
           "name": "notification_events_camera_source_id_camera_sources_id_fk",
           "tableFrom": "notification_events",
           "tableTo": "camera_sources",
-          "columnsFrom": [
-            "camera_source_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["camera_source_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1959,12 +1865,8 @@
           "name": "notification_outbox_event_id_notification_events_id_fk",
           "tableFrom": "notification_outbox",
           "tableTo": "notification_events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1972,12 +1874,8 @@
           "name": "notification_outbox_subscription_id_notification_subscriptions_id_fk",
           "tableFrom": "notification_outbox",
           "tableTo": "notification_subscriptions",
-          "columnsFrom": [
-            "subscription_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["subscription_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2084,12 +1982,8 @@
           "name": "notification_preferences_user_id_users_id_fk",
           "tableFrom": "notification_preferences",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2097,12 +1991,8 @@
           "name": "notification_preferences_device_id_cameras_id_fk",
           "tableFrom": "notification_preferences",
           "tableTo": "cameras",
-          "columnsFrom": [
-            "device_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["device_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2164,12 +2054,8 @@
           "name": "notification_presence_state_device_id_cameras_id_fk",
           "tableFrom": "notification_presence_state",
           "tableTo": "cameras",
-          "columnsFrom": [
-            "device_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["device_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2177,12 +2063,8 @@
           "name": "notification_presence_state_offline_event_id_notification_events_id_fk",
           "tableFrom": "notification_presence_state",
           "tableTo": "notification_events",
-          "columnsFrom": [
-            "offline_event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["offline_event_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -2377,12 +2259,8 @@
           "name": "notification_subscriptions_user_id_users_id_fk",
           "tableFrom": "notification_subscriptions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2390,12 +2268,8 @@
           "name": "notification_subscriptions_session_id_browser_sessions_id_fk",
           "tableFrom": "notification_subscriptions",
           "tableTo": "browser_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2513,12 +2387,8 @@
           "name": "pairing_codes_household_id_households_id_fk",
           "tableFrom": "pairing_codes",
           "tableTo": "households",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["household_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2526,12 +2396,8 @@
           "name": "pairing_codes_camera_id_cameras_id_fk",
           "tableFrom": "pairing_codes",
           "tableTo": "cameras",
-          "columnsFrom": [
-            "camera_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["camera_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -2539,12 +2405,8 @@
           "name": "pairing_codes_created_by_user_id_users_id_fk",
           "tableFrom": "pairing_codes",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -2647,12 +2509,8 @@
           "name": "password_reset_tokens_user_id_users_id_fk",
           "tableFrom": "password_reset_tokens",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2827,12 +2685,8 @@
           "name": "recordings_household_id_households_id_fk",
           "tableFrom": "recordings",
           "tableTo": "households",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["household_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2840,12 +2694,8 @@
           "name": "recordings_camera_source_id_camera_sources_id_fk",
           "tableFrom": "recordings",
           "tableTo": "camera_sources",
-          "columnsFrom": [
-            "camera_source_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["camera_source_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2853,12 +2703,8 @@
           "name": "recordings_created_by_user_id_users_id_fk",
           "tableFrom": "recordings",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

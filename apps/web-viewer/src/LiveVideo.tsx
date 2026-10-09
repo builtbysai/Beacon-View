@@ -25,6 +25,7 @@ import {
 import { DriveReconnectNotice, RecordClipControl } from './RecordClipControl';
 import { randomUuid } from './random-id';
 import { PushToTalk } from './push-to-talk';
+import { MotionZoneEditor } from './MotionZoneEditor';
 import type { AnnounceRegistry } from './announce';
 import { DATA_SAVER_KBPS, limitVideoBitrate, useDataSaver } from './data-saver';
 import { ShortcutsHelp } from './ShortcutsHelp';
@@ -42,6 +43,8 @@ import './LiveVideo.css';
 
 interface Camera {
   id: string;
+  /** The camera's device, needed to edit motion zones (ADR 0092). */
+  deviceId?: string;
   name: string;
   /** A baby monitor opens with sound (ADR 0084). */
   useCase?: string;
@@ -111,6 +114,7 @@ export function LiveVideo({
   announce,
   maxVideoKbps,
   onPictureInPictureChange,
+  canEditZones = false,
 }: {
   enabled?: boolean;
   camera: Camera;
@@ -148,6 +152,9 @@ export function LiveVideo({
   maxVideoKbps?: number;
   /** Reports when the floating window opens or closes (ADR 0091). */
   onPictureInPictureChange?: (active: boolean) => void;
+  /** Household managers can draw motion zones over this camera's picture
+   * (ADR 0092). Only Android cameras detect motion. */
+  canEditZones?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -193,6 +200,7 @@ export function LiveVideo({
   const videoCapRef = useRef(videoCap);
   videoCapRef.current = videoCap;
   const [helpOpen, setHelpOpen] = useState(false);
+  const [zonesOpen, setZonesOpen] = useState(false);
   const fullscreenButton = useRef<HTMLButtonElement>(null);
   // Keep watching in a floating window while using other apps or tabs. Only
   // the full live view floats (and floats on its own when you leave), never
@@ -297,6 +305,12 @@ export function LiveVideo({
     enabled: !compact && enabled,
     resetKey: camera.id,
   });
+
+  useEffect(() => setZonesOpen(false), [camera.id]);
+  useEffect(() => {
+    if (zonesOpen) zoom.reset();
+    // Resetting once when the editor opens is enough.
+  }, [zonesOpen]);
 
   function toggleFullscreen() {
     setControlError('');
@@ -1040,6 +1054,18 @@ export function LiveVideo({
               <Icon name="snapshot" />
               <span className="visually-hidden">Save snapshot</span>
             </button>
+            {canEditZones && camera.deviceId && (
+              <button
+                aria-pressed={zonesOpen}
+                className={`video-control${zonesOpen ? ' is-active' : ''}`}
+                onClick={() => setZonesOpen((open) => !open)}
+                title="Choose areas of the picture where movement is ignored"
+                type="button"
+              >
+                <Icon name="eyeOff" />
+                <span className="visually-hidden">Ignore areas</span>
+              </button>
+            )}
             {pip.supported && (
               <button
                 aria-pressed={pip.active}
@@ -1072,6 +1098,15 @@ export function LiveVideo({
               </span>
             </button>
           </div>
+        )}
+        {!compact && zonesOpen && camera.deviceId && (
+          <MotionZoneEditor
+            cameraId={camera.id}
+            deviceId={camera.deviceId}
+            frameRef={frameRef}
+            onClose={() => setZonesOpen(false)}
+            videoRef={videoRef}
+          />
         )}
         {!compact && zoom.zoomed && (
           <button

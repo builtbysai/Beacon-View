@@ -1,0 +1,86 @@
+/* Motion zone editor (ADR 0092): a grid over the live picture. */
+.zone-editor {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  color: #fff;
+}
+
+.zone-grid {
+  position: absolute;
+  top: var(--zone-top, 0);
+  left: var(--zone-left, 0);
+  width: var(--zone-width, 100%);
+  height: var(--zone-height, 100%);
+  display: grid;
+  grid-template-columns: repeat(var(--zone-size), 1fr);
+  grid-template-rows: repeat(var(--zone-size), 1fr);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.zone-cell {
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18);
+}
+
+.zone-cell.is-ignored {
+  background: rgba(239, 68, 68, 0.5);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.35);
+}
+
+.zone-panel {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  display: grid;
+  gap: 8px;
+  max-width: 440px;
+  margin-inline: auto;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.zone-panel p {
+  margin: 0;
+}
+
+.zone-count {
+  color: #fca5a5;
+  font-weight: 650;
+}
+
+.zone-error {
+  color: #fecaca;
+}
+
+.zone-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.zone-actions button {
+  min-height: 40px;
+}
+
+.zone-actions .primary {
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  color: #04111f;
+  background: #7dd3fc;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.zone-actions .primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

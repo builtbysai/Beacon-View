@@ -169,6 +169,15 @@ Android, backend, PostgreSQL, and TURN are separate trust zones.
   share-link guests are not told about the owner's account state beyond
   "unavailable".
 
+## Motion zones (ADR 0092)
+
+- Zones only suppress motion detection. They add no capture, upload, or
+  analysis, and store at most 256 cell numbers per camera, never an image.
+- Only household owners and admins can change them, and each change is
+  audited. A zone can hide movement from alerts, so the editor always shows
+  how many areas are ignored.
+- A save that omits zones keeps them; clients can't clear them by accident.
+
 ## Residual risk and deferrals
 
 Production secret management, CA lifecycle, TURN abuse controls and capacity,
