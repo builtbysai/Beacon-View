@@ -27,8 +27,9 @@ immutable OIDC prefix is
 `repo:builtbysai@37721651/Beacon-View@1309277283`. Update the existing Tailscale
 trust subject to
 `repo:builtbysai@37721651/Beacon-View@1309277283:environment:production`
-before using that workflow. Preserve its audience, scopes, and network ACL.
-Tailscale admin sign-in is required; manual deployment over existing SSH works.
+before using that workflow. This update was completed and verified in the
+Tailscale admin console on October 9. Its audience, `auth_keys` scope and `tag:ci`
+were preserved; manual deployment over existing SSH also works.
 Do not enable automatic deployment as part of this rename.
 
 Google Cast's external console registration name and previously distributed

@@ -19,9 +19,11 @@ copy procedure.
 
 Completed for the private alpha on September 12, 2026. The GitHub `production`
 environment contains the required values, and the Tailscale OIDC trust credential
-is restricted to `repo:builtbysai/Beacon-SecureView:environment:production`, the
+is restricted to
+`repo:builtbysai@37721651/Beacon-View@1309277283:environment:production`, the
 `auth_keys` write scope, and `tag:ci`. Keep the following list as the rebuild and
-rotation checklist.
+rotation checklist. The subject was updated after the October 9 repository rename;
+the audience, scopes and tag were preserved. GitHub uses immutable subjects.
 
 Create a GitHub Environment named `production` and add these environment secrets:
 
