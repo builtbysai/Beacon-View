@@ -14,6 +14,7 @@ This repository contains Beacon SecureView, an Android-first system that turns a
 ## Working rules
 
 * Read `docs/product-build-brief.md` before planning or implementing work.
+* Follow `docs/testing-policy.md`: protect realistic regressions with the smallest useful suite; review nearby tests and report validation without test counts or coverage targets.
 * Work on one approved milestone at a time.
 * Do not begin a later milestone without explicit approval.
 * Do not work directly on `main`.

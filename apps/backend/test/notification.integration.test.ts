@@ -52,6 +52,234 @@ describe.skipIf(!store)('notification transport persistence', () => {
   beforeEach(async () => resetTestDatabase(store!.pool));
   afterAll(async () => store?.close());
 
+  it("keeps another manager's motion delivery active on the same camera", async () => {
+    const { device, now, owner } = await fixture();
+    const admin = await store!.createAccount(
+      'snooze-admin@example.com',
+      'test-hash',
+      '127.0.0.1',
+    );
+    await store!.pool.query(
+      "INSERT INTO household_members (household_id,user_id,role,status) VALUES ($1,$2,'admin','active')",
+      [owner.householdId, admin.id],
+    );
+    await store!.createSession({
+      userId: admin.id,
+      tokenHash: hashSecret('snooze-admin-session'),
+      csrfHash: hashSecret('snooze-admin-csrf'),
+      idleExpiresAt: new Date(now.getTime() + 86_400_000),
+      absoluteExpiresAt: new Date(now.getTime() + 86_400_000),
+    });
+    const session = await store!.pool.query<{ id: string }>(
+      'SELECT id FROM browser_sessions WHERE user_id=$1',
+      [admin.id],
+    );
+    await store!.upsertNotificationSubscription({
+      userId: admin.id,
+      sessionId: session.rows[0]!.id,
+      channel: 'fcm',
+      consentedAt: now,
+      deviceLabel: 'Admin phone',
+      installationId: randomUUID(),
+      providerMaterial: 'snooze-admin-token',
+    });
+    await store!.updateNotificationPreference({
+      userId: admin.id,
+      householdId: owner.householdId,
+      publicDeviceId: device.publicDeviceId,
+      motionEnabled: true,
+      offlineEnabled: true,
+      quietHours: null,
+    });
+    await store!.snoozeMotionAlerts({
+      userId: owner.id,
+      householdId: owner.householdId,
+      publicDeviceId: device.publicDeviceId,
+      minutes: 60,
+      now,
+    });
+    await store!.createMotionEvent({
+      credentialHash: hashSecret('notification-device-credential'),
+      publicCameraId: device.publicCameraId,
+      confidence: 0.8,
+      now,
+    });
+    expect(
+      (
+        await store!.pool.query(
+          "SELECT user_id FROM notification_events WHERE category='motion'",
+        )
+      ).rows,
+    ).toEqual([{ user_id: admin.id }]);
+  });
+
+  it('snoozes only personal motion alerts, preserves preferences/history, and resumes at the deadline without a backlog', async () => {
+    const { device, now, owner, sessionId } = await fixture();
+    await store!.upsertNotificationSubscription({
+      channel: 'fcm',
+      consentedAt: now,
+      deviceLabel: 'Snooze test',
+      installationId: randomUUID(),
+      providerMaterial: 'snooze-provider-token',
+      sessionId,
+      userId: owner.id,
+    });
+    const quietHours = { start: '22:00', end: '07:00', timeZone: 'UTC' };
+    await store!.updateNotificationPreference({
+      userId: owner.id,
+      householdId: owner.householdId,
+      publicDeviceId: device.publicDeviceId,
+      motionEnabled: true,
+      offlineEnabled: true,
+      quietHours,
+    });
+    const motion = (at: Date) =>
+      store!.createMotionEvent({
+        credentialHash: hashSecret('notification-device-credential'),
+        publicCameraId: device.publicCameraId,
+        confidence: 0.8,
+        now: at,
+      });
+    await motion(now);
+    await store!.pool.query(
+      'UPDATE notification_outbox SET next_attempt_at=$1',
+      [now],
+    );
+    const [inFlight] = await store!.claimNotificationDeliveries(now);
+    const until = new Date(now.getTime() + 15 * 60_000);
+    expect(
+      await store!.snoozeMotionAlerts({
+        userId: owner.id,
+        householdId: owner.householdId,
+        publicDeviceId: device.publicDeviceId,
+        minutes: 15,
+        now,
+      }),
+    ).toMatchObject({
+      motionEnabled: true,
+      offlineEnabled: true,
+      quietHours,
+      motionSnoozedUntil: until.toISOString(),
+    });
+    await motion(new Date(now.getTime() + 60_000));
+    // A provider failure that finishes after snooze must not resurrect its alert.
+    await store!.markNotificationFailed(
+      inFlight!.id,
+      inFlight!.subscriptionId,
+      now,
+      false,
+    );
+    await store!.recordSecurityEvent({
+      now,
+      securityEventType: 'sign_in',
+      userId: owner.id,
+    });
+    await store!.pool.query(
+      'UPDATE notification_outbox SET next_attempt_at=$1',
+      [now],
+    );
+    const deliveries = await store!.claimNotificationDeliveries(now);
+    expect(deliveries.map((item) => item.safePayload.category)).toEqual([
+      'security',
+    ]);
+    await store!.markNotificationDelivered(
+      deliveries[0]!.id,
+      deliveries[0]!.subscriptionId,
+      now,
+    );
+    const history = await store!.pool.query('SELECT id FROM motion_events');
+    expect(history.rowCount).toBe(2);
+    expect(
+      (
+        await store!.pool.query(
+          "SELECT id FROM notification_events WHERE category='motion'",
+        )
+      ).rowCount,
+    ).toBe(1);
+    // Old clients editing ordinary preferences must not cancel an active snooze.
+    expect(
+      await store!.updateNotificationPreference({
+        userId: owner.id,
+        householdId: owner.householdId,
+        publicDeviceId: device.publicDeviceId,
+        motionEnabled: true,
+        offlineEnabled: true,
+        quietHours,
+      }),
+    ).toMatchObject({ motionSnoozedUntil: until.toISOString() });
+    await motion(until);
+    await store!.pool.query(
+      'UPDATE notification_outbox SET next_attempt_at=$1',
+      [until],
+    );
+    expect(
+      (await store!.claimNotificationDeliveries(until)).map(
+        (item) => item.safePayload.category,
+      ),
+    ).toEqual(['motion']);
+    expect(
+      (
+        await store!.pool.query(
+          'SELECT count(*)::int AS count FROM notification_outbox WHERE terminal_at IS NOT NULL',
+        )
+      ).rows[0],
+    ).toEqual({ count: 1 });
+    expect(
+      await store!.snoozeMotionAlerts({
+        userId: owner.id,
+        householdId: owner.householdId,
+        publicDeviceId: device.publicDeviceId,
+        minutes: 0,
+        now: until,
+      }),
+    ).toMatchObject({ motionSnoozedUntil: null, quietHours });
+  });
+
+  it("cannot snooze a foreign or revoked camera or change another manager's preferences", async () => {
+    const { device, now, owner } = await fixture();
+    const other = await store!.createAccount(
+      'other-snooze@example.com',
+      'test-hash',
+      '127.0.0.1',
+    );
+    expect(
+      await store!.snoozeMotionAlerts({
+        userId: other.id,
+        householdId: other.householdId,
+        publicDeviceId: device.publicDeviceId,
+        minutes: 30,
+        now,
+      }),
+    ).toBeNull();
+    await store!.snoozeMotionAlerts({
+      userId: owner.id,
+      householdId: owner.householdId,
+      publicDeviceId: device.publicDeviceId,
+      minutes: 30,
+      now,
+    });
+    expect(
+      (
+        await store!.pool.query(
+          'SELECT user_id FROM notification_preferences WHERE motion_snoozed_until IS NOT NULL',
+        )
+      ).rows,
+    ).toEqual([{ user_id: owner.id }]);
+    await store!.pool.query(
+      'UPDATE cameras SET revoked_at=$1 WHERE public_device_id=$2',
+      [now, device.publicDeviceId],
+    );
+    expect(
+      await store!.snoozeMotionAlerts({
+        userId: owner.id,
+        householdId: owner.householdId,
+        publicDeviceId: device.publicDeviceId,
+        minutes: 30,
+        now,
+      }),
+    ).toBeNull();
+  });
+
   it('encrypts subscriptions, atomically deduplicates motion outbox rows, and revokes with the session', async () => {
     const { device, now, owner, sessionId } = await fixture();
     const providerToken = 'provider-token-that-must-not-be-stored-in-plaintext';

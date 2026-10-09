@@ -2,6 +2,12 @@
 
 ## Prerequisites
 
+Saved camera groups/wall layouts need no additional setup or migration. They use
+browser storage scoped to the signed-in account and household; deleting browser
+site data removes them, and a separate Electron profile has its own layouts.
+Formatter/linter scans exclude nested `.claude/worktrees` checkouts so local
+duplicate repositories are validated in their own checkout instead.
+
 - Node.js 22.13+ (Node 22 only) and pnpm 11.9.0
 - Docker with the Compose plugin
 - JDK 17 and Android SDK Platform 35 for Android
@@ -214,3 +220,43 @@ after shell, form, navigation or layout changes. Screenshots and measurements ar
 under ignored `.beacon-dev/responsive-audit/`. It requires Playwright with an installed
 browser; the Codex bundled runtime can be supplied through `BEACON_PLAYWRIGHT_MODULE`.
 It creates no real accounts, streams, emails or production data.
+
+## Activity filter preferences
+
+Activity camera/time/date preferences are local and scoped to the signed-in
+account and selected household (ADR 0100). Existing account-only preferences are
+not migrated; the first visit uses all cameras and the last 24 hours. No backend
+migration or environment change is needed. Since date uses the viewer's local
+midnight. Text search and event kinds filter loaded pages; Load more extends them.
+
+## Motion-alert snooze
+
+Apply migration 0037 before running the updated backend. Web/desktop notification
+settings offer personal 15/30/60-minute motion snooze and early resume. The server
+enforces deadlines while the viewer is closed; no timer worker or extra environment
+variable is required. Existing Android preference updates preserve the deadline.
+Native Android snooze controls are outside this milestone. See ADR 0101.
+
+## Connection troubleshooting report
+
+The existing manager-only Connection details page now builds an allowlisted
+local report with preview and clipboard copy (ADR 0102). No API migration or
+environment change is required. Clipboard availability depends on browser/OS
+permission; the readonly preview supports manual copy. Reports contain status
+snapshots, not media connectivity or notification-delivery evidence.
+
+## Setup health checks and clip bookmarks
+
+No additional services, migrations, or environment variables are required for
+these two features. In Connection details, choose **Check setup** to read existing
+authenticated connection, Drive, and personal alert preference status. Permissions
+must be reviewed on the camera device; media and delivery require deliberate
+manual tests. Failed services remain unknown. Leaving the household-scoped page
+cancels pending checks.
+
+In Clips, bookmark a clip and enable **Bookmarked only**. Bookmarks save only IDs
+under an account/household-specific browser key. Reload to verify persistence;
+switch accounts/households to verify separation. Check blocked browser storage
+and deletion/retention: bookmarks must never restore inaccessible clips. Load more
+searches older authorized pages. Existing playback and deletion permissions still
+apply. The [testing policy](testing-policy.md) governs new tests and maintenance.

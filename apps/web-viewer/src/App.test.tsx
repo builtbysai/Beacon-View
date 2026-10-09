@@ -866,7 +866,7 @@ describe('App', () => {
     });
     expect(await screen.findByText('Kitchen phone')).toBeVisible();
 
-    expect(window.localStorage.getItem('beacon_motion_filters_1:time')).toBe(
+    expect(window.localStorage.getItem('beacon_motion_filters_1_:time')).toBe(
       '24',
     );
     fireEvent.click(

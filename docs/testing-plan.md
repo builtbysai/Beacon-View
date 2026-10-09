@@ -1,5 +1,10 @@
 # Testing plan
 
+## Governing testing policy
+
+Follow [testing-policy.md](testing-policy.md) before adding or maintaining tests.
+The historical validation records below are evidence logs, not coverage targets.
+
 `pnpm check` runs formatting, ESLint, strict TypeScript, backend and web tests,
 and all TypeScript builds. Backend unit tests cover security primitives, rate
 windows, and the exact presence boundary.
@@ -293,3 +298,171 @@ web/PWA smoke pass covered 390x844, 768x1024, and 1440x900 layouts, a clean brow
 console with the local backend, the linked standalone manifest, all five manifest
 icons, and the service worker. Android was outside that integration pass because
 the candidate did not change its request/response contract.
+
+## Saved camera groups and wall layouts — October 9, 2026
+
+ADR 0098 adds local browser/desktop wall preferences. The full web suite passed
+341 tests across 68 files, including six saved-layout tests. Workspace typechecks
+and builds passed. Lint passed after excluding duplicate nested Claude worktrees;
+formatting was rechecked after removing the temporary preview harness. Vite emits
+a bundle-size warning; no new dependency was introduced.
+
+An isolated development browser preview used three fictional offline cameras.
+The actual editor was exercised at 390×844 and 1280×800: create, reorder, save,
+reopen/edit, and named selection worked. At narrow width the document content
+width matched its client width (375px after the scrollbar), with no horizontal
+page overflow. This proves UI behavior with fixtures, not live WebRTC or installed
+Electron acceptance. Temporary preview HTML/server were removed/stopped.
+
+Still required on real fixtures: load a group with online/offline/privacy cameras,
+change lenses, revoke a camera grant while viewing, stop/change Announce groups,
+and confirm account/household switching tears down prior streams. Repeat in the
+installed desktop app. Layouts stay local to the browser profile and do not sync.
+
+## Live-view sleep timer — October 9, 2026
+
+ADR 0099 adds Off/15/30/60-minute viewing deadlines. The final web suite passed
+347 tests across 69 files, including hook deadline/cancel/replace/wake/reset
+coverage, live socket/peer teardown with explicit resume, and disabling active
+PiP. Browser preview at 390×844 and 1280×800 confirmed the selected timer and
+countdown remain usable without horizontal overflow. The preview used a fictional
+camera and stub signaling, so it did not prove real capture, Talk, PiP or Cast.
+Temporary preview files/server were removed/stopped.
+
+Device acceptance still required: arm a timer while listening/talking, confirm
+microphone and viewer-count release, expire while parked in PiP, expire during a
+manual recording, stop a real Cast session, and suspend/wake the browser. Camera
+privacy/capture configuration must remain unchanged. A suspended page executes
+teardown only when the browser schedules it again; do not describe this as an
+unattended camera shutdown guarantee. Native Android timer is not included.
+
+## Activity date filters and search scope — October 9, 2026
+
+The final web suite passed 353 tests across 70 files. Workspace lint, formatting,
+typechecks, and production builds passed. Vite's existing large-chunk warning
+remains; no new dependency was added.
+
+ADR 0100 adds 30-day and Since date filters, reset, camera/source labels, and
+loaded-page search guidance. Coverage validates local-midnight conversion,
+invalid dates, exact query continuity across both histories and pagination,
+trimmed search with a next-page match, reset, and discarding household responses
+and closing details when household activity eligibility is removed. Existing
+tests retain abort/retry, clip labels, refresh, and deletion behavior.
+
+An isolated browser preview at 390×844 and 1280×800 exercised Since date, a
+search with zero loaded matches, Load more finding the next-page match, and
+reset. Neither viewport had horizontal overflow. Fictional event fixtures were
+used; this is UI evidence, not production-history or installed-Electron
+acceptance. Temporary preview HTML and server were removed/stopped.
+
+Repeat with real authorized histories: date-boundary events in multiple
+timezones, expired retention, mixed motion/household pagination, account and
+household switching, and permission revocation. Search and sorting cover loaded
+pages; server-side text search and an end-date bound remain out of scope.
+
+## Personal motion-alert snooze — October 9, 2026
+
+ADR 0101 introduces migration 0037 and manager-only, CSRF-protected personal
+15/30/60-minute motion snooze with early resume. The clean PostgreSQL 18 test
+database applied all 38 migrations, accepted a repeated migration run, and
+passed verification of 164 additive schema objects and the migration journal.
+All 309 backend tests passed with the dedicated database, including snooze
+expiry, metadata preservation, quiet-hour preservation through ordinary edits,
+foreign/revoked camera rejection, another manager's independent delivery,
+security delivery, queued-alert discard, and prevention of retry resurrection.
+Route tests cover allowed durations, strict bodies, session/role checks, and CSRF.
+
+Web tests cover snooze/resume autosave, confirmed-state rollback after failure,
+and wake/focus expiry without changing the motion-enabled flag. All 356 web
+tests passed across 70 files. Workspace lint, formatting, typechecks, and production builds passed;
+Vite's existing large-chunk warning remains. An isolated
+browser preview with a fictional camera passed at 390×844 and 1280×800, including
+early resume, extension, unchanged quiet hours, and no horizontal overflow.
+Temporary preview files/server were removed/stopped. These are fixture checks,
+not evidence of real FCM/Web Push/Electron delivery.
+
+Before release, apply migration 0037 and test real-channel snooze, browser closure,
+early resume, mixed quiet hours/Home mode, multiple managers, clock differences,
+household switching, and expiry during a provider retry. Already claimed delivery
+batches or provider-accepted alerts may still arrive. Snooze must never stop
+camera capture, remove event history, or silence problem/security categories.
+Android preferences preserve snooze but native snooze controls are not included.
+
+The temporary dedicated test database and role were dropped, its isolated
+PostgreSQL cluster was stopped, and the temporary credential script was removed.
+
+## Connection help and sanitized report — October 9, 2026
+
+The full web suite passed 362 tests across 71 files; the final focused report/view
+suite passed eight tests. Workspace lint, formatting, typechecks, and production builds
+passed. Vite's existing large-chunk warning remains. No backend schema or behavior
+changed in this milestone.
+
+ADR 0102 improves the existing manager-only Connection details page with refresh,
+snapshot time, practical device guidance, and local report preview/copy. Tests
+cover omission of identifiers/raw times/arbitrary extra fields, unexpected string
+values and viewer counts, missing/invalid/future heartbeat times, partial failure,
+successful copy, clipboard denial/manual fallback, refresh, and request abort on
+unmount. Account/household/role changes remount the view.
+
+A fictional local browser fixture passed at 390×844 and 1280×900 with no horizontal
+overflow. Preview, copy, and refresh were exercised. No real household information
+was copied. Temporary preview HTML/server were removed/stopped. This does not
+prove media connectivity, TURN fallback, or real notification delivery.
+
+Before release, repeat in the installed desktop app and supported mobile browsers,
+including clipboard denial, scoped-account switching, partial backend failure,
+and invalid viewer/device clocks. The report is a point-in-time backend snapshot;
+it intentionally omits identifying context and never uploads itself.
+
+## Convenience completion and testing policy — October 9, 2026
+
+Setup health checks (ADR 0103) and local clip bookmarks (ADR 0104) complete the
+currently approved convenience implementation queue. All changes remain local
+and undeployed on `codex/saved-camera-layouts`.
+
+Added setup workflow coverage for partial status failure without automatic capture
+and aborting requests on unmount. Extended the existing clip-library workflow
+suite for account/household storage separation, persistence, loaded-page filtering,
+authorized disappearance, and corrupt/blocked storage recovery. The tests use real
+components and the request helper with fictional HTTP responses; they do not prove
+server authorization. Existing playback-resource and deletion-permission tests
+were retained because they protect meaningful lifecycle and access behavior.
+No tests were deleted or merged; nearby tests were reviewed and remain useful.
+Existing test cleanup now resets local storage and restores storage spies so
+bookmark scenarios cannot contaminate other workflows. No separate tests were
+added for constants, copy, or simple rendering.
+
+The full web suite passed, followed by the affected setup/bookmark suites after
+final fixture and storage-bound changes. Workspace lint, formatting, typechecks,
+production builds, and diff whitespace checks passed. Initial lint failures in
+test fixture typing were corrected. Vite's existing large-chunk warning remains.
+Backend and Android code were unchanged by these two milestones; earlier snooze
+database validation remains recorded above.
+
+Browser review used a temporary local fixture with fictional connection, Drive,
+alert and clip data at 390×844 and 1280×900. Check setup, bookmark/filter, and reload
+persistence were exercised with no horizontal overflow. The fixture/server were
+removed/stopped and the viewport reset. Real capture, remote permissions, alert
+delivery, encrypted recording round trips, installed desktop and physical Android
+acceptance still require device validation. Nothing was recorded or uploaded.
+
+The owner testing policy is now a repository requirement in AGENTS.md and
+[testing-policy.md](testing-policy.md). Future changes must search existing coverage,
+identify realistic regressions, choose the strongest useful boundary, review
+nearby tests, and report validation without count or coverage targets.
+
+## Release CI schedule recovery — October 9, 2026
+
+The first PR release validation failed in the existing weekly Home/Away schedule
+workflow, after the schedule switch was clicked but before Save schedule appeared.
+The editor's initial passive synchronization could overwrite the newly enabled
+draft. Initial state already matches the saved schedule, so synchronization now
+only resets the draft when the saved server value changes. The existing workflow
+test is retained; no additional tiny unit test or weakened assertion was added.
+The first run's database, schema, migration-rerun, secret-scan and SBOM checks passed.
+The next release run passed the schedule workflow but exposed a test timing race
+in snooze expiry: it dispatched focus before the async-loaded preference row's
+effect registered the listener. That existing test now awaits the asynchronous
+React mount before focus; expiry, preference preservation, and no-mutation
+assertions are unchanged. No notification behavior or security boundary changed.

@@ -4,6 +4,12 @@
   them all")
 - Date: 2026-10-08
 
+October 9 follow-up: this ADR preserves the initial plan. ADR 0097 supersedes
+its C8 deferral with the implemented web Cast sender/custom receiver. C1–C18
+implementations are present; physical acceptance remains tracked in the roadmap.
+Location-based Home/Away was declined by the owner. ADR 0098 adds the subsequent
+approved saved camera groups/wall-layout milestone.
+
 ## Context
 
 After picture-in-picture (ADR 0088) the owner approved a batch of

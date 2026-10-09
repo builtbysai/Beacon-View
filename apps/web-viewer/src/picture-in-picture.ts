@@ -86,6 +86,7 @@ export function usePictureInPicture(
     const video = videoRef.current;
     if (!video || !enabled) {
       setSupported(false);
+      setActive(false);
       return;
     }
     setSupported(pictureInPictureSupported(video));

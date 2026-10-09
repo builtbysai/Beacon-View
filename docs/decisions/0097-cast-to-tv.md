@@ -39,8 +39,10 @@ a Chromecast runs only registered receiver applications. The earlier plan
 
 - No migration. One optional setting and one read-only endpoint.
 - The sender and receiver load Google scripts from `gstatic.com`. Nothing is
-  sent to Google beyond the Cast protocol itself; the video goes from
-  Beacon's server to the TV, not through Google.
+  sent to Google beyond the Cast protocol itself; live video uses the existing camera-to-TV WebRTC path, direct or TURN-relayed.
+  Beacon's backend handles authorization/signaling, not a new video relay.
+  This describes the intended media path, not a claim that Google SDKs collect
+  no telemetry or a verified end-to-end-encryption guarantee.
 - Not included: an Android-app sender (it needs the Cast SDK and Google Play
   services in the camera app) and a desktop-app sender (Electron has no Cast
   support). Both can reuse the same receiver and link flow later.

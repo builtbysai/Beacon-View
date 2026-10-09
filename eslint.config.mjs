@@ -10,6 +10,7 @@ export default tseslint.config(
       '**/build/**',
       '**/node_modules/**',
       '**/.beacon-dev/**',
+      '**/.claude/worktrees/**',
     ],
   },
   eslint.configs.recommended,

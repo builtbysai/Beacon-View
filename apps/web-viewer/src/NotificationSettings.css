@@ -333,3 +333,38 @@
     grid-column: 1;
   }
 }
+.notification-motion-snooze {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .notification-table-cell.notification-motion-cell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .notification-motion-cell .notification-motion-snooze {
+    grid-column: 1 / -1;
+  }
+}
+.notification-motion-snooze select {
+  width: 100%;
+  min-height: 44px;
+  padding: 6px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+.notification-motion-snooze button {
+  min-height: 44px;
+  font-size: 12px;
+}
+.notification-snooze-help,
+.notification-motion-snooze small {
+  color: var(--text-secondary);
+  font-size: 12px;
+}

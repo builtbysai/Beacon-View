@@ -155,3 +155,69 @@
     box-sizing: border-box;
   }
 }
+.diagnostics-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.diagnostics-actions p {
+  flex: 1 1 260px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.diagnostic-list .diagnostic-guidance {
+  grid-column: 1 / -1;
+  margin: 0;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.diagnostics-report > p,
+.diagnostics-report details {
+  margin: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.diagnostics-report > button {
+  margin: 0 14px 14px;
+  min-height: 44px;
+}
+.diagnostics-actions button,
+.diagnostics-report summary {
+  min-height: 44px;
+}
+.diagnostics-report summary {
+  cursor: pointer;
+}
+.diagnostics-report textarea {
+  display: block;
+  width: 100%;
+  min-height: 260px;
+  margin-top: 8px;
+  padding: 10px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.setup-health-check > p,
+.setup-health-check > button,
+.setup-health-check > ul {
+  margin: 12px 14px;
+}
+.setup-health-check p,
+.setup-health-check li {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.setup-health-check ul {
+  padding-left: 20px;
+}
+.setup-health-check li + li {
+  margin-top: 10px;
+}

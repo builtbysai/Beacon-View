@@ -209,6 +209,11 @@ is a user-owned cloud processor and recordings consume the user's quota.
 
 ## Camera use-case profiles — research and proposal
 
+Current status (October 9): Phase 1 Security, Baby monitor and Door camera
+profiles were approved/implemented in the desktop 0.2 batch (ADR 0084). The
+paragraph below preserves the earlier research proposal; it is not a statement
+that all profiles remain unimplemented. Later phases require their own approval.
+
 The owner is considering purpose-built camera profiles (e.g. doorbell: dormant
 until motion/button; car camera; baby monitor/nursery; the current always-on
 profile) rather than one undifferentiated camera behavior. See

@@ -217,6 +217,59 @@ export function registerNotificationRoutes(
     };
   });
 
+  app.put(
+    '/api/notification-preferences/:deviceId/motion-snooze',
+    async (request, reply) => {
+      const session = await authenticateHouseholdAdminStateChange(
+        request,
+        reply,
+      );
+      if (!session) return;
+      const parameters = preferenceParameterSchema.safeParse(request.params);
+      const body = z
+        .object({
+          minutes: z.union([
+            z.literal(0),
+            z.literal(15),
+            z.literal(30),
+            z.literal(60),
+          ]),
+        })
+        .strict()
+        .safeParse(request.body);
+      if (!parameters.success || !body.success)
+        return reply
+          .code(400)
+          .send({ error: 'Invalid notification preference' });
+      if (
+        !limiter.take(
+          `motion-snooze:${session.userId}:${request.ip}`,
+          60,
+          60 * 60 * 1_000,
+        )
+      )
+        return reply.code(429).send({ error: 'Too many notification changes' });
+      const preference = await store.snoozeMotionAlerts({
+        userId: session.userId,
+        householdId: session.householdId,
+        publicDeviceId: parameters.data.deviceId,
+        minutes: body.data.minutes,
+        now: new Date(),
+      });
+      if (!preference)
+        return reply.code(404).send({ error: 'Camera not found' });
+      await store.audit({
+        eventType: 'notification_preference_changed',
+        householdId: session.householdId,
+        ipAddress: request.ip,
+        success: true,
+        userId: session.userId,
+        metadata: { motionSnoozeMinutes: String(body.data.minutes) },
+      });
+      return { preference };
+    },
+  );
+
   app.put('/api/notification-preferences/:deviceId', async (request, reply) => {
     const session = await authenticateHouseholdAdminStateChange(request, reply);
     if (!session) return;

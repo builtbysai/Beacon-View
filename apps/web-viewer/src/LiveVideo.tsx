@@ -33,6 +33,7 @@ import { ShortcutsHelp } from './ShortcutsHelp';
 import { useLiveShortcuts, type ShortcutAction } from './live-shortcuts';
 import { captureSnapshot, saveBlob, snapshotFileName } from './snapshot';
 import { useVideoZoom } from './video-zoom';
+import { useSleepTimer, type SleepMinutes } from './sleep-timer';
 
 import {
   type ConnectionFailure,
@@ -94,7 +95,7 @@ function signalingUrl(cameraId: string, viewerSessionId: string): string {
 }
 
 export function LiveVideo({
-  enabled = true,
+  enabled: requestedEnabled = true,
   camera,
   compact = false,
   deviceName,
@@ -160,6 +161,8 @@ export function LiveVideo({
   /** Owners and admins can send this camera to a TV (ADR 0097). */
   canCast?: boolean;
 }) {
+  const sleep = useSleepTimer(camera.id);
+  const enabled = requestedEnabled && !sleep.expired;
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
@@ -231,7 +234,12 @@ export function LiveVideo({
   // user-facing "camera", so its name leads; the source's own name (e.g.
   // "Rear camera") is secondary and only shown when it actually differs.
   const primaryName = deviceName || camera.name;
-  const overlay = liveOverlay(status, videoReady, switching, retryDisplay);
+  const overlay = sleep.expired
+    ? {
+        title: 'Sleep timer finished',
+        detail: 'Live viewing stopped. Resume when you are ready.',
+      }
+    : liveOverlay(status, videoReady, switching, retryDisplay);
   // The backend's viewerCount includes this very session once its own
   // WebRTC connection is up, so "watching now" needs to subtract it back
   // out -- otherwise watching alone always misreports as "1 viewer".
@@ -427,9 +435,24 @@ export function LiveVideo({
   useEffect(() => {
     if (clip.state.status !== 'recording' || status === 'connected') return;
     clip.abort(
-      'Recording stopped because the connection to the camera was lost.',
+      sleep.expired
+        ? 'Recording stopped because the sleep timer finished.'
+        : 'Recording stopped because the connection to the camera was lost.',
     );
-  }, [clip, status]);
+  }, [clip, status, sleep.expired]);
+
+  const castRef = useRef(cast);
+  castRef.current = cast;
+  useEffect(() => {
+    if (sleep.expired)
+      void castRef.current
+        .stop()
+        .catch(() =>
+          setControlError(
+            'The TV could not be stopped. Stop casting from your TV or browser.',
+          ),
+        );
+  }, [sleep.expired]);
 
   useEffect(
     () => () => {
@@ -933,7 +956,7 @@ export function LiveVideo({
             <span>{overlay.detail}</span>
           </div>
         )}
-        {!compact && (
+        {!compact && !sleep.expired && (
           <div
             aria-label="Live view controls"
             className={`video-controls${controlsVisible ? ' is-visible' : ''}`}
@@ -1211,6 +1234,50 @@ export function LiveVideo({
         )}
       </div>
       {helpOpen && <ShortcutsHelp onDismiss={() => setHelpOpen(false)} />}
+      {!compact && (
+        <div className="live-sleep-timer">
+          <label>
+            Sleep timer
+            <select
+              className="input-field"
+              value={sleep.minutes}
+              disabled={sleep.expired || !requestedEnabled}
+              onChange={(event) =>
+                sleep.choose(Number(event.target.value) as SleepMinutes)
+              }
+            >
+              <option value="0">Off</option>
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="60">60 minutes</option>
+            </select>
+          </label>
+          {sleep.minutes > 0 && (
+            <span>
+              Viewing stops in {sleep.remaining}{' '}
+              {sleep.remaining === 1 ? 'minute' : 'minutes'}.
+            </span>
+          )}
+          {sleep.expired && (
+            <>
+              <p role="status">
+                Sleep timer finished. Camera capture settings are unchanged.
+              </p>
+              <button
+                className="secondary"
+                type="button"
+                disabled={!requestedEnabled || privacyMode}
+                onClick={() => {
+                  viewerSessionId.current = randomUuid();
+                  sleep.reset();
+                }}
+              >
+                Resume viewing
+              </button>
+            </>
+          )}
+        </div>
+      )}
       <p className="visually-hidden" role="status">
         Connection: {status}
       </p>

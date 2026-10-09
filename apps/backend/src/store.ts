@@ -462,6 +462,16 @@ export class PostgresStore implements MilestoneStore {
     return this.notifications.listPreferences(userId, householdId);
   }
 
+  async snoozeMotionAlerts(input: {
+    userId: string;
+    householdId: string;
+    publicDeviceId: string;
+    minutes: 0 | 15 | 30 | 60;
+    now: Date;
+  }): Promise<NotificationPreferenceRecord | null> {
+    return this.notifications.snoozeMotion(input);
+  }
+
   async findNotificationEvent(
     userId: string,
     eventId: string,

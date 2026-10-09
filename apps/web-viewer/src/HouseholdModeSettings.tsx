@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   DAY_LABELS,
@@ -91,7 +91,15 @@ function ScheduleEditor({
 }) {
   const saved = settings.schedule?.windows ?? null;
   const [draft, setDraft] = useState<ScheduleWindow[] | null>(saved);
-  useEffect(() => setDraft(saved), [saved]);
+  const previousSaved = useRef(saved);
+  useEffect(() => {
+    // Initial state already matches saved. A delayed mount effect must not
+    // overwrite a draft the user has just enabled or edited.
+    if (previousSaved.current !== saved) {
+      previousSaved.current = saved;
+      setDraft(saved);
+    }
+  }, [saved]);
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const valid =
