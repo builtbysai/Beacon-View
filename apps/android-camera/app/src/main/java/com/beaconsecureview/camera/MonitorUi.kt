@@ -1183,11 +1183,11 @@ internal fun MonitorHome(
                                 )
                             }
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text("Offline and recovery alerts", modifier = Modifier.weight(1f))
+                                Text("Camera problem alerts", modifier = Modifier.weight(1f))
                                 Switch(
                                     checked = preference.offlineEnabled,
                                     enabled = !notificationBusy,
-                                    modifier = Modifier.semantics { contentDescription = "Offline and recovery alerts for ${preference.deviceName}" },
+                                    modifier = Modifier.semantics { contentDescription = "Camera problem alerts for ${preference.deviceName}" },
                                     onCheckedChange = { checked ->
                                         val changed = preference.copy(offlineEnabled = checked)
                                         notificationPreferences = notificationPreferences.map { if (it.deviceId == changed.deviceId) changed else it }

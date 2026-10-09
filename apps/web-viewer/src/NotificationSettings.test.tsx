@@ -57,7 +57,7 @@ describe('NotificationSettings', () => {
     ).not.toBeChecked();
     expect(
       screen.getByRole('switch', {
-        name: 'Offline and recovery alerts for Hallway camera',
+        name: 'Camera problem alerts for Hallway camera',
       }),
     ).not.toBeChecked();
     expect(permission).not.toHaveBeenCalled();
@@ -144,7 +144,7 @@ describe('NotificationSettings', () => {
       name: 'Motion alerts for Hallway camera',
     });
     const offline = screen.getByRole('switch', {
-      name: 'Offline and recovery alerts for Hallway camera',
+      name: 'Camera problem alerts for Hallway camera',
     });
     fireEvent.click(motion);
     fireEvent.click(offline);

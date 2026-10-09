@@ -1493,10 +1493,22 @@ class BeaconApi(private val baseUrl: String) {
         )
     }
 
-    fun heartbeat(credential: String, batteryPercent: Int?, batteryCharging: Boolean?): Boolean {
+    fun heartbeat(
+        credential: String,
+        batteryPercent: Int?,
+        batteryCharging: Boolean?,
+        thermalStatus: String? = null,
+    ): Boolean {
         val connection = connection("/api/device/heartbeat", "POST")
         connection.setRequestProperty("Authorization", "Bearer $credential")
-        val payload = JSONObject().apply { if (batteryPercent != null && batteryCharging != null) { put("batteryPercent", batteryPercent); put("batteryCharging", batteryCharging) } }
+        val payload =
+            JSONObject().apply {
+                if (batteryPercent != null && batteryCharging != null) {
+                    put("batteryPercent", batteryPercent)
+                    put("batteryCharging", batteryCharging)
+                }
+                if (thermalStatus != null) put("thermalStatus", thermalStatus)
+            }
         connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
         responseBody(connection)
         return when (connection.responseCode) {

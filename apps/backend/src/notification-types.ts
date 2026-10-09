@@ -1,6 +1,6 @@
 export type NotificationChannel = 'fcm' | 'web_push' | 'desktop';
 export type NotificationCategory =
-  'motion' | 'offline' | 'recovered' | 'security';
+  'motion' | 'offline' | 'recovered' | 'security' | 'health';
 
 /** Security events cannot be silenced by camera-level preferences the way
  * motion/offline/recovered can -- there is no per-device row to disable

@@ -64,6 +64,7 @@ describe('runNotificationSweep', () => {
       markNotificationDelivered: markDelivered,
       markNotificationFailed: markFailed,
       scanNotificationPresence: () => Promise.resolve(),
+      scanNotificationHealth: () => Promise.resolve(),
     } as unknown as MilestoneStore;
     const info = vi.fn();
     const logger = { info } as unknown as FastifyBaseLogger;
@@ -113,6 +114,7 @@ describe('runNotificationSweep', () => {
     const store = {
       claimNotificationDeliveries: () => Promise.resolve([]),
       scanNotificationPresence: () => Promise.resolve(),
+      scanNotificationHealth: () => Promise.resolve(),
     } as unknown as MilestoneStore;
     const info = vi.fn();
     const logger = { info } as unknown as FastifyBaseLogger;
@@ -137,6 +139,7 @@ describe('runNotificationSweep', () => {
       markNotificationExpired: markExpired,
       markNotificationFailed: markFailed,
       scanNotificationPresence: () => Promise.resolve(),
+      scanNotificationHealth: () => Promise.resolve(),
     } as unknown as MilestoneStore;
     const sender = {
       send: () =>

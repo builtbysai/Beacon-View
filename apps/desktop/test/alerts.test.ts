@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseDesktopAlert, RecentAlerts, alertPath } from '../src/alerts.js';
+import {
+  ALERT_BODY,
+  alertPath,
+  parseDesktopAlert,
+  RecentAlerts,
+} from '../src/alerts.js';
 
 describe('desktop alerts', () => {
   it('accepts the generic payload the backend sends', () => {
@@ -15,6 +20,18 @@ describe('desktop alerts', () => {
       eventId: 'outbox-123',
       route: '/activity',
     });
+  });
+
+  it('knows health alerts, with copy that names no camera', () => {
+    const alert = parseDesktopAlert({
+      category: 'health',
+      eventId: 'outbox-456',
+      route: '/activity',
+    });
+    expect(alert).toMatchObject({ category: 'health' });
+    expect(ALERT_BODY.health).toBe(
+      'A Beacon camera has a battery or heat warning.',
+    );
   });
 
   it('rejects unknown categories, routes, and malformed IDs', () => {

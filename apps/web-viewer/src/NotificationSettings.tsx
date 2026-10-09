@@ -345,7 +345,7 @@ export function NotificationSettings({
             <div className="notification-table-head" role="row">
               <span role="columnheader">Camera</span>
               <span role="columnheader">Motion</span>
-              <span role="columnheader">Offline &amp; recovery</span>
+              <span role="columnheader">Camera problems</span>
               <span role="columnheader">Quiet hours</span>
             </div>
             {visiblePreferences.map((preference) => (
@@ -408,9 +408,9 @@ function NotificationCameraRow({
         />
       </span>
       <span className="notification-table-cell" role="cell">
-        <span className="notification-table-label">Offline &amp; recovery</span>
+        <span className="notification-table-label">Camera problems</span>
         <Switch
-          label={`Offline and recovery alerts for ${preference.deviceName}`}
+          label={`Camera problem alerts for ${preference.deviceName}`}
           checked={preference.offlineEnabled}
           onChange={(checked) =>
             onChange((item) => ({ ...item, offlineEnabled: checked }))

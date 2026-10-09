@@ -27,6 +27,7 @@ export async function runNotificationSweep(
   offlineGraceSeconds: number,
 ): Promise<void> {
   await store.scanNotificationPresence(now, offlineGraceSeconds);
+  await store.scanNotificationHealth(now);
   const deliveries = await store.claimNotificationDeliveries(now);
   let delivered = 0;
   let failedPermanent = 0;

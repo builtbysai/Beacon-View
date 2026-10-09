@@ -287,6 +287,8 @@ export const cameras = pgTable(
     privacyMode: boolean('privacy_mode').notNull().default(false),
     batteryPercent: integer('battery_percent'),
     batteryCharging: boolean('battery_charging'),
+    // Android's thermal status, reported with the heartbeat (ADR 0093).
+    thermalStatus: text('thermal_status'),
     healthReportedAt: timestamp('health_reported_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
@@ -789,6 +791,9 @@ export const notificationPresenceState = pgTable(
       { onDelete: 'set null' },
     ),
     offlineSince: timestamp('offline_since', { withTimezone: true }),
+    // Set while a health alert (ADR 0093) has been raised and not yet cleared.
+    lowBatterySince: timestamp('low_battery_since', { withTimezone: true }),
+    overheatingSince: timestamp('overheating_since', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

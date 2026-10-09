@@ -1486,6 +1486,39 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
         },
       ],
     });
+    // Thermal state (ADR 0093): stored with the heartbeat and validated.
+    expect(
+      (
+        await app!.inject({
+          method: 'POST',
+          url: '/api/device/heartbeat',
+          headers: { authorization: `Bearer ${credential}` },
+          payload: {
+            batteryPercent: 82,
+            batteryCharging: true,
+            thermalStatus: 'severe',
+          },
+        })
+      ).statusCode,
+    ).toBe(204);
+    expect(
+      (
+        await store!.pool.query<{ thermalStatus: string }>(
+          'SELECT thermal_status AS "thermalStatus" FROM cameras WHERE public_device_id = $1',
+          [device.publicDeviceId],
+        )
+      ).rows[0]?.thermalStatus,
+    ).toBe('severe');
+    expect(
+      (
+        await app!.inject({
+          method: 'POST',
+          url: '/api/device/heartbeat',
+          headers: { authorization: `Bearer ${credential}` },
+          payload: { thermalStatus: 'on-fire' },
+        })
+      ).statusCode,
+    ).toBe(400);
     expect(
       (
         await app!.inject({

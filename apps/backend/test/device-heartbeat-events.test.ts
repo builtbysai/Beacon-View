@@ -18,6 +18,7 @@ const identity = {
   lastSeenAt: new Date(),
   batteryPercent: 82,
   batteryCharging: true,
+  thermalStatus: null,
 };
 const findDeviceByCredential = vi.fn().mockResolvedValue(identity);
 const recordDeviceRecoveredIfOffline = vi.fn().mockResolvedValue(false);
