@@ -6,6 +6,7 @@ import { AccessHistory } from './AccessHistory';
 import { Avatar } from './Avatar';
 import { AudioSettings } from './AudioSettings';
 import { ViewingSettings } from './ViewingSettings';
+import { HouseholdModeSettings } from './HouseholdModeSettings';
 import { BrowserSessions } from './BrowserSessions';
 import { DesktopComputerSettings } from './DesktopComputerSettings';
 import { desktopSupportsAutostart } from './desktop-shell';
@@ -45,6 +46,7 @@ type SettingsSection =
   | 'computer'
   | 'audio'
   | 'viewing'
+  | 'modes'
   | 'notifications'
   | 'access'
   | 'data'
@@ -64,6 +66,7 @@ const sectionInfo: Record<SettingsSection, { label: string; icon: IconName }> =
     computer: { label: 'This computer', icon: 'browser' },
     audio: { label: 'Audio', icon: 'speaker' },
     viewing: { label: 'Viewing', icon: 'eye' },
+    modes: { label: 'Home & Away', icon: 'home' },
     notifications: { label: 'Notifications', icon: 'alert' },
     access: { label: 'People & access', icon: 'users' },
     data: { label: 'Data & storage', icon: 'cloud' },
@@ -102,7 +105,7 @@ export function SettingsPage({
       ...(desktopApp ? (['computer'] as const) : []),
       'audio',
       'viewing',
-      ...(manager ? (['notifications'] as const) : []),
+      ...(manager ? (['modes', 'notifications'] as const) : []),
       'access',
       'data',
       ...(manager ? (['security'] as const) : []),
@@ -277,6 +280,21 @@ export function SettingsPage({
             </SectionHead>
             <ViewingSettings />
           </section>
+
+          {manager && (
+            <section
+              id="modes"
+              className="settings-section"
+              ref={(element) => {
+                sectionRefs.current.modes = element;
+              }}
+            >
+              <SectionHead title="Home &amp; Away">
+                Quiet motion alerts and pause cameras while someone is home.
+              </SectionHead>
+              <HouseholdModeSettings />
+            </section>
+          )}
 
           {manager && (
             <section

@@ -429,7 +429,7 @@ export class PostgresDeviceRepository {
     enabled: boolean,
   ): Promise<string | null> {
     const result = await this.pool.query<{ deviceId: string }>(
-      `UPDATE cameras SET privacy_mode = $3, updated_at = now()
+      `UPDATE cameras SET privacy_mode = $3, paused_by_mode = false, updated_at = now()
        WHERE household_id = $1 AND public_device_id = $2
          AND platform = 'android' AND revoked_at IS NULL
        RETURNING id AS "deviceId"`,

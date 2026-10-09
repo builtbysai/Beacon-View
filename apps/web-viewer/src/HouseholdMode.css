@@ -1,0 +1,118 @@
+.mode-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-surface);
+}
+
+.mode-bar > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mode-bar span {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.mode-bar p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--status-danger, #b42318);
+  font-size: var(--text-sm);
+}
+
+.mode-choice button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.mode-schedule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.mode-schedule-summary,
+.mode-hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.mode-window {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.mode-window legend {
+  padding: 0 var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.mode-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.mode-days button {
+  min-width: 44px;
+  height: 36px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mode-days button[aria-pressed='true'] {
+  border-color: var(--accent-base);
+  background-color: var(--accent-subtle);
+  color: var(--accent-base);
+}
+
+.mode-times {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.mode-times label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.mode-zone {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.mode-schedule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

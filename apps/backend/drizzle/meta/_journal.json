@@ -253,6 +253,13 @@
       "when": 1791072000000,
       "tag": "0035_camera_health_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791158400000,
+      "tag": "0036_household_modes",
+      "breakpoints": true
     }
   ]
 }

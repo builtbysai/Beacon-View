@@ -12,6 +12,12 @@ import { PostgresPairingRepository } from './postgres-pairing-repository.js';
 import { PostgresSessionRepository } from './postgres-session-repository.js';
 import { PostgresNotificationRepository } from './postgres-notification-repository.js';
 import { PostgresSharingRepository } from './postgres-sharing-repository.js';
+import {
+  PostgresHouseholdModeRepository,
+  type HouseholdModeChange,
+  type HouseholdModeRecord,
+} from './postgres-household-mode-repository.js';
+import type { HouseholdMode, ModeSettings } from './home-away.js';
 import { NotificationCipher } from './notification-crypto.js';
 import { GoogleDriveTokenCipher } from './google-drive-crypto.js';
 import { GOOGLE_DRIVE_RECORDING_SCOPE } from './google-drive-client.js';
@@ -75,6 +81,7 @@ export class PostgresStore implements MilestoneStore {
   private readonly googleDrive: PostgresGoogleDriveRepository;
   private readonly recordings: PostgresRecordingRepository;
   private readonly accountRecovery: PostgresAccountRecoveryRepository;
+  private readonly householdModes: PostgresHouseholdModeRepository;
 
   constructor(
     databaseUrl: string,
@@ -115,6 +122,38 @@ export class PostgresStore implements MilestoneStore {
       this.notifications,
     );
     this.sharing = new PostgresSharingRepository(this.pool);
+    this.householdModes = new PostgresHouseholdModeRepository(this.pool);
+  }
+
+  getHouseholdMode(householdId: string): Promise<HouseholdModeRecord> {
+    return this.householdModes.get(householdId);
+  }
+
+  setHouseholdMode(
+    householdId: string,
+    mode: HouseholdMode,
+    userId: string,
+    now = new Date(),
+  ): Promise<HouseholdModeChange> {
+    return this.householdModes.setMode(
+      householdId,
+      mode,
+      userId,
+      'manual',
+      now,
+    );
+  }
+
+  saveHouseholdModeSettings(
+    householdId: string,
+    settings: ModeSettings,
+    now = new Date(),
+  ): Promise<HouseholdModeChange> {
+    return this.householdModes.saveSettings(householdId, settings, now);
+  }
+
+  scanHouseholdModeSchedules(now: Date): Promise<HouseholdModeChange[]> {
+    return this.householdModes.scanSchedules(now);
   }
 
   notificationsConfigured(): boolean {

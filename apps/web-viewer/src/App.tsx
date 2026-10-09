@@ -36,6 +36,8 @@ import { takePendingUseCase } from './pending-use-case';
 import { type DesktopAlert, desktopBridge } from './desktop-shell';
 import { PairingDialog } from './PairingDialog';
 import { SettingsPage } from './SettingsPage';
+import { HouseholdModeBar } from './HouseholdModeSettings';
+import { announceModeChange } from './household-mode';
 import {
   DesktopAuthReturnPage,
   MobileAuthReturnPage,
@@ -542,6 +544,7 @@ function AppShell() {
       ) {
         setMotionEventRevision((revision) => revision + 1);
       }
+      if (message.type === 'household-mode-changed') announceModeChange();
       if (message.type === 'household-membership-changed') {
         setMembershipRevision((revision) => revision + 1);
       }
@@ -1567,6 +1570,7 @@ function AppShell() {
 
             {page === 'cameras' && (
               <section className="camera-catalog" aria-label="Your cameras">
+                <HouseholdModeBar />
                 {groupCamerasByDevice(cameras).length > 1 && (
                   <div className="camera-catalog-tools">
                     <button

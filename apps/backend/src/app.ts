@@ -21,6 +21,7 @@ import {
 import { createSessionAuth } from './session-auth.js';
 import { registerSignaling } from './signaling-route.js';
 import { registerServiceRoutes } from './service-routes.js';
+import { registerHouseholdModeRoutes } from './home-away-routes.js';
 import { registerNotificationRoutes } from './notification-routes.js';
 import { registerRecordingRoutes } from './recording-routes.js';
 import { registerSharingRoutes } from './sharing-routes.js';
@@ -127,6 +128,12 @@ export function buildApp(
     store,
   });
   registerDeviceRuntimeRoutes(app, {
+    auth: sessionAuth,
+    householdEvents,
+    signaling,
+    store,
+  });
+  registerHouseholdModeRoutes(app, {
     auth: sessionAuth,
     householdEvents,
     signaling,

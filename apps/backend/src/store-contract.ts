@@ -1,3 +1,8 @@
+import type { HouseholdMode, ModeSettings } from './home-away.js';
+import type {
+  HouseholdModeChange,
+  HouseholdModeRecord,
+} from './postgres-household-mode-repository.js';
 import type {
   CameraMotionSettings,
   MotionSettings,
@@ -286,6 +291,8 @@ export const HOUSEHOLD_ACTIVITY_EVENT_TYPES = [
   'notification_preference_changed',
   'notification_subscription_created',
   'notification_subscription_revoked',
+  'household_mode_changed',
+  'household_mode_settings_changed',
 ] as const;
 
 export type HouseholdActivityEventType =
@@ -378,6 +385,19 @@ export type PairingRedemptionResult =
   PairedDeviceRecord | null | typeof DEVICE_REGISTRATION_RATE_LIMITED;
 
 export interface MilestoneStore {
+  getHouseholdMode(householdId: string): Promise<HouseholdModeRecord>;
+  setHouseholdMode(
+    householdId: string,
+    mode: HouseholdMode,
+    userId: string,
+    now?: Date,
+  ): Promise<HouseholdModeChange>;
+  saveHouseholdModeSettings(
+    householdId: string,
+    settings: ModeSettings,
+    now?: Date,
+  ): Promise<HouseholdModeChange>;
+  scanHouseholdModeSchedules(now: Date): Promise<HouseholdModeChange[]>;
   createRecordingRequest(input: {
     cameraSourceId: string;
     householdId: string;

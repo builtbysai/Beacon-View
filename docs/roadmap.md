@@ -372,7 +372,7 @@ Status values: **Planned**, **In progress**, **Done** (merged and deployed),
 
 | ID  | Feature                                        | Platforms                               | Milestone | Status  |
 | --- | ---------------------------------------------- | --------------------------------------- | --------- | ------- |
-| C13 | Home / Away modes (manual and scheduled)       | Server, web, Android                    | M4        | Planned |
+| C13 | Home / Away modes (manual and scheduled)       | Server, web, Android                    | M4        | Done    |
 | C14 | Camera health alerts: low battery, overheating | Server, web, Android                    | M4        | Planned |
 | C15 | Motion zones: ignore areas of the picture      | Server, web, Android                    | M4        | Planned |
 | C16 | Data saver: lower quality on request           | Web viewer, browser and desktop cameras | M3        | Planned |
