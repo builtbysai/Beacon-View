@@ -451,3 +451,13 @@ The owner testing policy is now a repository requirement in AGENTS.md and
 [testing-policy.md](testing-policy.md). Future changes must search existing coverage,
 identify realistic regressions, choose the strongest useful boundary, review
 nearby tests, and report validation without count or coverage targets.
+
+## Release CI schedule recovery — October 9, 2026
+
+The first PR release validation failed in the existing weekly Home/Away schedule
+workflow, after the schedule switch was clicked but before Save schedule appeared.
+The editor's initial passive synchronization could overwrite the newly enabled
+draft. Initial state already matches the saved schedule, so synchronization now
+only resets the draft when the saved server value changes. The existing workflow
+test is retained; no additional tiny unit test or weakened assertion was added.
+The first run's database, schema, migration-rerun, secret-scan and SBOM checks passed.
