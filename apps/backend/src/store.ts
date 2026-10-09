@@ -422,6 +422,13 @@ export class PostgresStore implements MilestoneStore {
     return this.notifications.listPreferences(userId, householdId);
   }
 
+  async findNotificationEvent(
+    userId: string,
+    eventId: string,
+  ): Promise<{ category: string; publicCameraId: string | null } | null> {
+    return this.notifications.findEventForUser(userId, eventId);
+  }
+
   async updateNotificationPreference(input: {
     userId: string;
     householdId: string;

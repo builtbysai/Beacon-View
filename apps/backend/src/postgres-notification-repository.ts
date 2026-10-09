@@ -109,6 +109,26 @@ export class PostgresNotificationRepository {
     );
   }
 
+  /** What an alert the user was sent is about, so opening it can go to the
+   * right camera. Scoped to the user, so an event ID guessed or shared
+   * reveals nothing (ADR 0090). */
+  async findEventForUser(
+    userId: string,
+    eventId: string,
+  ): Promise<{ category: string; publicCameraId: string | null } | null> {
+    const result = await this.pool.query<{
+      category: string;
+      publicCameraId: string | null;
+    }>(
+      `SELECT ne.category, cs.public_camera_id AS "publicCameraId"
+       FROM notification_events ne
+       LEFT JOIN camera_sources cs ON cs.id = ne.camera_source_id
+       WHERE ne.id = $1 AND ne.user_id = $2`,
+      [eventId, userId],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async listPreferences(
     userId: string,
     householdId: string,

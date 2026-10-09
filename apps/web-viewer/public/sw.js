@@ -91,12 +91,22 @@ self.addEventListener('push', (event) => {
   };
   if (!copy[payload.category]) return;
   const route = payload.route === 'settings' ? '/settings' : '/activity';
+  // Opening an alert asks the server which camera it was about (ADR 0090);
+  // the push itself carries only this opaque ID.
+  const alertId = /^[A-Za-z0-9_-]{1,128}$/.test(String(payload.eventId || ''))
+    ? String(payload.eventId)
+    : '';
   event.waitUntil(
     self.registration.showNotification('Beacon', {
       body: copy[payload.category],
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
-      data: { route },
+      data: {
+        route:
+          route === '/activity' && alertId
+            ? `${route}?alert=${alertId}`
+            : route,
+      },
       requireInteraction: payload.category === 'security',
       tag: `beacon-${String(payload.eventId || 'update')}`,
     }),

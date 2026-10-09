@@ -174,6 +174,38 @@ export function registerNotificationRoutes(
     },
   );
 
+  // Opening an alert (ADR 0090): the push itself stays generic (ADR 0044),
+  // so the app asks which camera it was about after the person taps it.
+  // Answers only for this user's own events, and only names a camera they
+  // can still access.
+  app.get('/api/notification-events/:eventId', async (request, reply) => {
+    const session = await auth.authenticate(request, reply);
+    if (!session) return;
+    const parameters = z
+      .object({ eventId: z.string().uuid() })
+      .safeParse(request.params);
+    if (!parameters.success)
+      return reply.code(404).send({ error: 'Alert unavailable' });
+    reply.header('Cache-Control', 'no-store');
+    const event = await store.findNotificationEvent(
+      session.userId,
+      parameters.data.eventId,
+    );
+    if (!event) return reply.code(404).send({ error: 'Alert unavailable' });
+    const camera = event.publicCameraId
+      ? await store.findAccessibleCamera(
+          session.householdId,
+          session.userId,
+          session.role,
+          event.publicCameraId,
+        )
+      : null;
+    return {
+      cameraId: camera ? event.publicCameraId : null,
+      category: event.category,
+    };
+  });
+
   app.get('/api/notification-preferences', async (request, reply) => {
     const session = await authenticateHouseholdAdmin(request, reply);
     if (!session) return;

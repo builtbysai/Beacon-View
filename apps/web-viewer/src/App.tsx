@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ApiError, request, SESSION_ENDED_EVENT } from './api';
 import { friendlyError } from './friendly-errors';
+import { alertDestination, resolveAlert, takeAlertId } from './alert-link';
 import { useDriveRecording } from './drive-recording';
 import { ErrorNotice } from './ErrorNotice';
 import { nextPairingState } from './lifecycle';
@@ -254,6 +255,31 @@ export function App() {
     }
     return cameraResult.cameras;
   }, []);
+
+  // Tapping an alert (ADR 0090) opens the camera it was about, or Activity
+  // when there is none. Waits for sign-in, so signing in first still works.
+  const alertHandled = useRef(false);
+  useEffect(() => {
+    if (!user || alertHandled.current) return;
+    alertHandled.current = true;
+    const eventId = takeAlertId();
+    if (!eventId) return;
+    void (async () => {
+      const target = await resolveAlert(eventId);
+      const list = await loadCameras().catch(() => [] as Camera[]);
+      const destination = alertDestination(
+        target,
+        list.map((camera) => camera.id),
+      );
+      if (destination === 'activity') {
+        navigate('events');
+        return;
+      }
+      const camera = list.find((item) => item.id === destination.cameraId);
+      if (camera) openCamera(camera);
+    })();
+    // openCamera and navigate only touch state setters and history.
+  }, [user]);
 
   // A household invitation link (/join?token=...) can be opened signed out,
   // so it can't accept on the spot the way pasting a code into Settings
@@ -1051,6 +1077,20 @@ export function App() {
     </ModalDialog>
   );
 
+  // Previous / next camera from the keyboard (ADR 0090): one stop per device.
+  function stepCamera(direction: -1 | 1) {
+    if (!selectedCamera) return;
+    const stops = groupCamerasByDevice(cameras).filter(
+      (camera) => camera.enabled && !camera.credentialRevoked,
+    );
+    const index = stops.findIndex(
+      (camera) => camera.deviceId === selectedCamera.deviceId,
+    );
+    if (stops.length < 2 || index < 0) return;
+    const next = stops[(index + direction + stops.length) % stops.length];
+    if (next) openCamera(next);
+  }
+
   if (selectedCamera) {
     const liveDevice = devices.find(
       (device) => device.id === selectedCamera.deviceId,
@@ -1093,6 +1133,7 @@ export function App() {
           drive={drive}
           canFlip={selectedCamera.canFlip ?? true}
           canPause={selectedCamera.canPause ?? true}
+          onStep={stepCamera}
         />
         {cameraSettingsOverlay}
         {pendingConfirm && (
