@@ -32,6 +32,10 @@ electron.contextBridge.exposeInMainWorld(
       if (typeof active === 'boolean')
         ipcRenderer.send('beacon:camera-activity', active ? 'live' : 'off');
     },
+    setTrayCameras(cameras: unknown): void {
+      if (Array.isArray(cameras))
+        ipcRenderer.send('beacon:tray-cameras', cameras);
+    },
     showAlert(alert: unknown): void {
       if (alert && typeof alert === 'object') {
         const { category, eventId, route } = alert as Record<string, unknown>;

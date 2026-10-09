@@ -1,7 +1,7 @@
 import type { CameraActivity } from './camera-power';
 
 export interface DesktopAlert {
-  category: 'motion' | 'offline' | 'recovered' | 'security';
+  category: 'motion' | 'offline' | 'recovered' | 'security' | 'health';
   eventId: string;
   route: '/activity' | '/settings';
 }
@@ -28,6 +28,8 @@ export interface BeaconDesktopBridge {
    * to stop resuming. */
   setCameraResume?(path: string | null): void;
   showAlert?(alert: DesktopAlert): void;
+  /** The favorite cameras to offer as tray shortcuts (ADR 0095). */
+  setTrayCameras?(cameras: { id: string; name: string }[]): void;
 }
 
 declare global {

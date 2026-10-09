@@ -58,6 +58,7 @@ import {
 import { isPermissionGranted } from './permissions.js';
 import { readPreferences, writePreferences } from './preferences.js';
 import { BeaconTray, type CameraActivity } from './tray.js';
+import { parseTrayCameras } from './tray-cameras.js';
 
 const appRoot = path.join(import.meta.dirname, '..');
 const assetsDirectory = path.join(appRoot, 'assets');
@@ -201,6 +202,12 @@ ipcMain.on('beacon:camera-resume', (event, value: unknown) => {
   if (preferences.cameraResumePath === resume) return;
   preferences.cameraResumePath = resume;
   savePreferences();
+});
+
+ipcMain.on('beacon:tray-cameras', (event, value: unknown) => {
+  if (!trustedSender(event)) return;
+  const cameras = parseTrayCameras(value);
+  if (cameras) tray?.setCameras(cameras);
 });
 
 ipcMain.handle('beacon:get-autostart', (event) =>
@@ -622,6 +629,11 @@ if (!app.requestSingleInstanceLock()) {
         set: setOpenAtLogin,
       },
       open: () => showWindow(),
+      openPath: (path) => {
+        void bringToFront()
+          .loadURL(appUrl(path))
+          .catch(() => undefined);
+      },
       quit: () => void quitFromTray(),
       reload: () => showWindow().webContents.reload(),
       version: app.getVersion(),
