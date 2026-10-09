@@ -25,6 +25,8 @@ import {
 import { DriveReconnectNotice, RecordClipControl } from './RecordClipControl';
 import { randomUuid } from './random-id';
 import { PushToTalk } from './push-to-talk';
+import type { AnnounceRegistry } from './announce';
+import { DATA_SAVER_KBPS, limitVideoBitrate, useDataSaver } from './data-saver';
 import { ShortcutsHelp } from './ShortcutsHelp';
 import { useLiveShortcuts, type ShortcutAction } from './live-shortcuts';
 import { captureSnapshot, saveBlob, snapshotFileName } from './snapshot';
@@ -106,6 +108,9 @@ export function LiveVideo({
   canFlip = true,
   canPause = true,
   onStep,
+  announce,
+  maxVideoKbps,
+  onPictureInPictureChange,
 }: {
   enabled?: boolean;
   camera: Camera;
@@ -136,6 +141,13 @@ export function LiveVideo({
   canPause?: boolean;
   /** Moves to the previous (-1) or next (1) camera (keyboard shortcut). */
   onStep?: (direction: -1 | 1) => void;
+  /** The camera wall's announce registry (ADR 0091): this camera's talk
+   * session joins it so "Announce" can reach it. */
+  announce?: AnnounceRegistry;
+  /** Asks the camera to send at most this much video (kilobits a second). */
+  maxVideoKbps?: number;
+  /** Reports when the floating window opens or closes (ADR 0091). */
+  onPictureInPictureChange?: (active: boolean) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -170,6 +182,16 @@ export function LiveVideo({
   const previousBytes = useRef<PreviousInboundBytes | null>(null);
   const stageRef = useRef<HTMLElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
+  const dataSaver = useDataSaver();
+  const videoCap = [maxVideoKbps, dataSaver ? DATA_SAVER_KBPS : undefined]
+    .filter((value): value is number => typeof value === 'number')
+    .reduce<number | undefined>(
+      (lowest, value) =>
+        lowest === undefined ? value : Math.min(lowest, value),
+      undefined,
+    );
+  const videoCapRef = useRef(videoCap);
+  videoCapRef.current = videoCap;
   const [helpOpen, setHelpOpen] = useState(false);
   const fullscreenButton = useRef<HTMLButtonElement>(null);
   // Keep watching in a floating window while using other apps or tabs. Only
@@ -236,6 +258,39 @@ export function LiveVideo({
   useEffect(() => {
     if (pip.error) setControlError(pip.error);
   }, [pip.error]);
+
+  const reportPip = useRef(onPictureInPictureChange);
+  reportPip.current = onPictureInPictureChange;
+  useEffect(() => {
+    reportPip.current?.(pip.active);
+  }, [pip.active]);
+
+  // Announce on all cameras (ADR 0091): join the wall's registry.
+  useEffect(() => {
+    if (!announce) return;
+    const target = () => ({
+      eligible:
+        permissions.canTalk &&
+        status === 'connected' &&
+        !privacyMode &&
+        !switching,
+      id: camera.id,
+      start: () => void talkSession.current?.start(),
+      state: talkState,
+      stop: () => talkSession.current?.stop(),
+    });
+    const leave = announce.register(target());
+    return leave;
+    // Re-registers when anything the target reports changes.
+  }, [
+    announce,
+    camera.id,
+    permissions.canTalk,
+    privacyMode,
+    status,
+    switching,
+    talkState,
+  ]);
 
   // Zoom and pan (ADR 0090): wheel, pinch, drag, double-click.
   const zoom = useVideoZoom(frameRef, videoRef, {
@@ -645,8 +700,15 @@ export function LiveVideo({
         for (const candidate of pendingIce.current.splice(0)) {
           await peer.addIceCandidate(candidate);
         }
-        const answer = await peer.createAnswer();
-        await peer.setLocalDescription(answer);
+        const created = await peer.createAnswer();
+        // Data saver and wall tiles ask the camera for less video.
+        const cap = videoCapRef.current;
+        if (!created.sdp)
+          throw new Error('The camera connection could not start.');
+        const answerSdp = cap
+          ? limitVideoBitrate(created.sdp, cap)
+          : created.sdp;
+        await peer.setLocalDescription({ sdp: answerSdp, type: 'answer' });
         setCameraSound(
           peer
             .getTransceivers()
@@ -661,7 +723,7 @@ export function LiveVideo({
         socket.send(
           JSON.stringify({
             connectionId: message.connectionId,
-            sdp: answer.sdp,
+            sdp: answerSdp,
             type: 'answer',
           }),
         );

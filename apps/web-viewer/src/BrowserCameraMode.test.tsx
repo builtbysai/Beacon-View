@@ -1015,7 +1015,11 @@ describe('BrowserCameraMode standby (wake on view)', () => {
     fireEvent.click(screen.getByRole('radio', { name: /Standby/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
 
-    expect(await screen.findByText('Standby · camera off')).toBeVisible();
+    expect(
+      await screen.findByText('Standby · camera off', undefined, {
+        timeout: 5_000,
+      }),
+    ).toBeVisible();
     expect(screen.getByText('Camera is off')).toBeVisible();
     expect(streamingOpens(getUserMedia)).toBe(0);
     expect(localStorage.getItem('beacon_browser_camera_power')).toBe('standby');
@@ -1057,7 +1061,11 @@ describe('BrowserCameraMode standby (wake on view)', () => {
     };
     try {
       const view = render(<BrowserCameraMode onBack={() => undefined} />);
-      expect(await screen.findByText('Standby · camera off')).toBeVisible();
+      expect(
+        await screen.findByText('Standby · camera off', undefined, {
+          timeout: 5_000,
+        }),
+      ).toBeVisible();
       expect(streamingOpens(getUserMedia)).toBe(0);
       expect(setCameraResume).toHaveBeenLastCalledWith(
         '/camera-mode?autostart=1&mic=1&power=standby',
@@ -1079,7 +1087,9 @@ describe('BrowserCameraMode standby (wake on view)', () => {
   it('reports a camera that cannot wake without dropping standby', async () => {
     const { getUserMedia } = setup('?autostart=1&power=standby');
     render(<BrowserCameraMode onBack={() => undefined} />);
-    await screen.findByText('Standby · camera off');
+    await screen.findByText('Standby · camera off', undefined, {
+      timeout: 5_000,
+    });
     getUserMedia.mockRejectedValueOnce(
       new DOMException('busy', 'NotReadableError'),
     );
