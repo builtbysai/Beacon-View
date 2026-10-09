@@ -1,12 +1,12 @@
 # Convenience private-alpha release — October 9, 2026
 
 The owner explicitly authorized commit, merge, GitHub push and Oracle deployment.
-[PR 94](https://github.com/builtbysai/Beacon-SecureView/pull/94) merged the completed
+[PR 94](https://github.com/builtbysai/Beacon-View/pull/94) merged the completed
 convenience roadmap and testing policy into main. Deployed source:
 `4d3bb30f9fe6e12d11951527a392db8d3695c919`.
 
-[Final PR CI](https://github.com/builtbysai/Beacon-SecureView/actions/runs/37973294063)
-and [merged-main CI](https://github.com/builtbysai/Beacon-SecureView/actions/runs/37973820439)
+[Final PR CI](https://github.com/builtbysai/Beacon-View/actions/runs/37973294063)
+and [merged-main CI](https://github.com/builtbysai/Beacon-View/actions/runs/37973820439)
 passed validation, PostgreSQL integration, clean/repeated migrations, schema
 verification, secret scanning and SBOM checks. Android was skipped because the
 change did not touch Android or CI configuration. Earlier CI failures exposed a

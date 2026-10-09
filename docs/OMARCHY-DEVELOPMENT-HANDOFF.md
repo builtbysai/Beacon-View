@@ -1,6 +1,6 @@
-# Beacon SecureView: Omarchy development handoff
+# Beacon View: Omarchy development handoff
 
-Updated 22 September 2026. GitHub: <https://github.com/builtbysai/Beacon-SecureView>. Read `AGENTS.md`, `docs/product-build-brief.md`, `docs/roadmap.md`, this file, and `docs/OMARCHY-SECRETS-HANDOFF.md` before editing. GitHub is the normal transfer source; the verified offline bundle is an emergency fallback.
+Updated 22 September 2026. GitHub: <https://github.com/builtbysai/Beacon-View>. Read `AGENTS.md`, `docs/product-build-brief.md`, `docs/roadmap.md`, this file, and `docs/OMARCHY-SECRETS-HANDOFF.md` before editing. GitHub is the normal transfer source; the verified offline bundle is an emergency fallback.
 
 ## State and branches
 
@@ -21,7 +21,7 @@ The intended next task is integrating the approved newer frontend design with ba
 ```sh
 mkdir -p ~/Code
 cd ~/Code
-git clone git@github.com:builtbysai/Beacon-SecureView.git
+git clone git@github.com:builtbysai/Beacon-View.git
 cd Beacon-SecureView
 git fetch --all --prune --tags
 git switch frontend-backend-integration

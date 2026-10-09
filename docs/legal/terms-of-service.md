@@ -1,11 +1,11 @@
-# Beacon SecureView Terms of Service
+# Beacon View Terms of Service
 
 Effective date: **[DATE]**
 
 > Draft only. This is not ready to accept or publish until the legal operator, notice
 > address, support contact, and final dispute terms are completed.
 
-These Terms govern your use of Beacon SecureView (the "Service"), operated by
+These Terms govern your use of Beacon View (the "Service"), operated by
 **[LEGAL ENTITY / INDIVIDUAL NAME]** ("Beacon," "we," "us"). By creating an account
 or using the Service, you agree to these Terms and the Privacy Policy.
 

@@ -323,7 +323,7 @@ export function Brand({
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label="Beacon"
+      aria-label="Beacon View"
       style={{ width: 'auto', height: '100%' }}
     >
       <defs>
@@ -377,7 +377,7 @@ export function Brand({
   return (
     <div className={`brand-lockup ${className}`}>
       {mark}
-      <span className="brand-word">Beacon</span>
+      <span className="brand-word">Beacon View</span>
     </div>
   );
 }

@@ -7,7 +7,7 @@ productName: Beacon
 # (@beacon/desktop) would otherwise become "@beacondesktop".
 extraMetadata:
   name: beacon
-copyright: Copyright © 2026 Beacon SecureView
+copyright: Copyright © 2026 Beacon View
 
 # Automatic updates (ADR 0085): each build writes latest*.yml next to its
 # installers; publishing them to /downloads/ on the Beacon server is the
@@ -83,7 +83,7 @@ mac:
 linux:
   icon: resources/icon.png
   category: Utility
-  maintainer: Beacon SecureView
+  maintainer: Beacon View
   synopsis: Turn any device into a secure camera and watch it live
   target:
     - target: AppImage

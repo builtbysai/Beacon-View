@@ -1,6 +1,6 @@
-# Beacon SecureView repository instructions
+# Beacon View repository instructions
 
-This repository contains Beacon SecureView, an Android-first system that turns an unused Android phone into a remotely accessible smart security camera.
+This repository contains Beacon View, an Android-first system that turns an unused Android phone into a remotely accessible smart security camera.
 
 ## Product priorities
 

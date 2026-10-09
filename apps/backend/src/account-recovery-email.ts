@@ -9,15 +9,15 @@ export async function deliverEmailVerificationEmail(
 ): Promise<void> {
   await deliverResendEmail(config, {
     from: config.RESEND_FROM!,
-    subject: 'Verify your Beacon SecureView email address',
+    subject: 'Verify your Beacon View email address',
     text: [
-      'Confirm this email address for your Beacon SecureView account.',
+      'Confirm this email address for your Beacon View account.',
       '',
       `${config.WEB_ORIGIN}/account/verify-email?token=${encodeURIComponent(input.token)}`,
       '',
       `This link expires ${input.expiresAt.toISOString()}.`,
       '',
-      'If you did not create a Beacon SecureView account, you can ignore this email.',
+      'If you did not create a Beacon View account, you can ignore this email.',
     ].join('\n'),
     to: input.to,
   });
@@ -29,9 +29,9 @@ export async function deliverPasswordResetEmail(
 ): Promise<void> {
   await deliverResendEmail(config, {
     from: config.RESEND_FROM!,
-    subject: 'Reset your Beacon SecureView password',
+    subject: 'Reset your Beacon View password',
     text: [
-      'A password reset was requested for this Beacon SecureView account.',
+      'A password reset was requested for this Beacon View account.',
       '',
       `${config.WEB_ORIGIN}/account/reset-password?token=${encodeURIComponent(input.token)}`,
       '',
@@ -49,7 +49,7 @@ export async function deliverGoogleOnlyPasswordResetEmail(
 ): Promise<void> {
   await deliverResendEmail(config, {
     from: config.RESEND_FROM!,
-    subject: 'Beacon SecureView password reset',
+    subject: 'Beacon View password reset',
     text: [
       'A password reset was requested for this email address, but this Beacon',
       'SecureView account signs in with Google and has no password to reset.',
@@ -67,9 +67,9 @@ export async function deliverAccountDeletedAlert(
 ): Promise<void> {
   await deliverResendEmail(config, {
     from: config.RESEND_FROM!,
-    subject: 'Your Beacon SecureView account was deleted',
+    subject: 'Your Beacon View account was deleted',
     text: [
-      'This Beacon SecureView account and its household were just deleted.',
+      'This Beacon View account and its household were just deleted.',
       '',
       'If this was not you, your email account may be compromised --',
       'secure it immediately. There is nothing further to recover here: the',
@@ -85,9 +85,9 @@ export async function deliverPasswordChangedAlert(
 ): Promise<void> {
   await deliverResendEmail(config, {
     from: config.RESEND_FROM!,
-    subject: 'Your Beacon SecureView password was changed',
+    subject: 'Your Beacon View password was changed',
     text: [
-      'Your Beacon SecureView account password was just changed and every',
+      'Your Beacon View account password was just changed and every',
       'other browser session was signed out.',
       '',
       'If this was not you, your email account may be compromised — reset your',

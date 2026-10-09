@@ -1,4 +1,4 @@
-# Beacon SecureView development handoff
+# Beacon View development handoff
 
 ## October 7, 2026 — Desktop 0.2: standby cameras, alerts, one-click setup, use cases
 
@@ -1226,8 +1226,8 @@ written because the current session is ending (usage limit). Read
 
 ### What happened this session
 
-1. PR [#72](https://github.com/builtbysai/Beacon-SecureView/pull/72) and PR
-   [#73](https://github.com/builtbysai/Beacon-SecureView/pull/73) were merged to
+1. PR [#72](https://github.com/builtbysai/Beacon-View/pull/72) and PR
+   [#73](https://github.com/builtbysai/Beacon-View/pull/73) were merged to
    `main` and manually deployed to production (`https://beacon.builtbysai.com`).
    They cover: Activity feed split from a Clips library with clip↔motion-event
    association, keyset pagination, per-camera-grant clip read access,
@@ -1391,7 +1391,7 @@ Tailscale. For Android Studio's bundled JDK on this machine, use
 shell does not expose `JAVA_HOME`.
 
 ```powershell
-git clone https://github.com/builtbysai/Beacon-SecureView.git C:\Dev\Beacon-SecureView
+git clone https://github.com/builtbysai/Beacon-View.git C:\Dev\Beacon-SecureView
 Set-Location C:\Dev\Beacon-SecureView
 pnpm install --frozen-lockfile
 .\Start-Beacon.ps1

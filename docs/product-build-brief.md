@@ -1,4 +1,4 @@
-You are acting as the founding software architect and senior engineer for a new product tentatively named **Beacon SecureView**.
+You are acting as the founding software architect and senior engineer for a new product tentatively named **Beacon View**.
 
 > **Status note:** This document preserves the original product brief and its
 > Milestone 0 assignment for historical context. The repository has progressed

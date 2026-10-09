@@ -7,7 +7,7 @@ ADR 0097, and Google's current registration instructions.
 
 - Owner reports Cast developer registration/payment and Google Play developer
   registration/payment complete.
-- Custom Receiver **Beacon SecureView** registered successfully with application
+- Custom Receiver **Beacon View** registered successfully with application
   ID `E850DDA7`, URL `https://beacon.builtbysai.com/cast/index.html`.
   Guest Mode and audio-only device support are off. Status: **Unpublished**.
 - Set `CAST_APP_ID=E850DDA7` in the existing restricted production environment
@@ -59,7 +59,7 @@ From **Applications**, choose **Add New Application**, then **Custom Receiver**.
 
 | Field                                  | Beacon value                                    |
 | -------------------------------------- | ----------------------------------------------- |
-| Name                                   | Beacon SecureView                               |
+| Name                                   | Beacon View                                     |
 | Receiver URL                           | `https://beacon.builtbysai.com/cast/index.html` |
 | Supports relay casting                 | Leave off for initial same-network testing      |
 | Supports casting to audio-only devices | Leave off; this receiver is video-only          |
