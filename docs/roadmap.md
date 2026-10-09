@@ -379,10 +379,10 @@ Status values: **Planned**, **In progress**, **Done** (merged and deployed),
 
 ### Track D: Engineering
 
-| ID  | Work                                                                 | Milestone | Status      |
-| --- | -------------------------------------------------------------------- | --------- | ----------- |
-| C17 | Split `MonitorHome` into per-page composables; lower the Gradle heap | M6        | Planned     |
-| C18 | Move CI actions off the deprecated Node 20 runtimes                  | M1        | In progress |
+| ID  | Work                                                                 | Milestone | Status |
+| --- | -------------------------------------------------------------------- | --------- | ------ |
+| C17 | Split `MonitorHome` into per-page composables; lower the Gradle heap | M6        | Done   |
+| C18 | Move CI actions off the deprecated Node 20 runtimes                  | M1        | Done   |
 
 ### Needs an owner decision before any work
 

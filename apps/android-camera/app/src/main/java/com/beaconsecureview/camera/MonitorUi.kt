@@ -137,70 +137,118 @@ internal fun MonitorHome(
     onLaunchTargetHandled: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    var session by remember { mutableStateOf(sessionStore.read()) }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var showPassword by rememberSaveable { mutableStateOf(false) }
-    var googleSignInAvailable by remember { mutableStateOf(true) }
-    var cameras by remember { mutableStateOf<List<BeaconApi.MonitorCamera>>(emptyList()) }
-    var devices by remember { mutableStateOf<List<BeaconApi.Device>>(emptyList()) }
-    var selectedCameraId by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedSettingsDeviceId by rememberSaveable { mutableStateOf<String?>(null) }
-    var addCameraChoiceOpen by rememberSaveable(session?.userId) { mutableStateOf(false) }
-    var pairAnotherDeviceOpen by rememberSaveable(session?.userId) { mutableStateOf(false) }
+    val sessionState = remember { mutableStateOf(sessionStore.read()) }
+    var session by sessionState
+    val emailState = remember { mutableStateOf("") }
+    var email by emailState
+    val passwordState = remember { mutableStateOf("") }
+    var password by passwordState
+    val showPasswordState = rememberSaveable { mutableStateOf(false) }
+    var showPassword by showPasswordState
+    val googleSignInAvailableState = remember { mutableStateOf(true) }
+    var googleSignInAvailable by googleSignInAvailableState
+    val camerasState = remember { mutableStateOf<List<BeaconApi.MonitorCamera>>(emptyList()) }
+    var cameras by camerasState
+    val devicesState = remember { mutableStateOf<List<BeaconApi.Device>>(emptyList()) }
+    var devices by devicesState
+    val selectedCameraIdState = rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedCameraId by selectedCameraIdState
+    val selectedSettingsDeviceIdState = rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedSettingsDeviceId by selectedSettingsDeviceIdState
+    val addCameraChoiceOpenState = rememberSaveable(session?.userId) { mutableStateOf(false) }
+    var addCameraChoiceOpen by addCameraChoiceOpenState
+    val pairAnotherDeviceOpenState = rememberSaveable(session?.userId) { mutableStateOf(false) }
+    var pairAnotherDeviceOpen by pairAnotherDeviceOpenState
     val favoritesStore = remember(context) { CameraFavoritesStore(context.applicationContext) }
     val orderStore = remember(context) { CameraOrderStore(context.applicationContext) }
-    var favoriteCameraIds by remember(session?.userId) {
+    val favoriteCameraIdsState = remember(session?.userId) {
         mutableStateOf(session?.let { favoritesStore.read(it.userId) } ?: emptySet())
     }
-    var hasSavedFavorites by remember(session?.userId) {
+    var favoriteCameraIds by favoriteCameraIdsState
+    val hasSavedFavoritesState = remember(session?.userId) {
         mutableStateOf(session?.let { favoritesStore.hasSaved(it.userId) } ?: false)
     }
-    var favoritesEditorOpen by rememberSaveable(session?.userId) { mutableStateOf(false) }
-    var cameraOrderIds by remember(session?.userId) {
+    var hasSavedFavorites by hasSavedFavoritesState
+    val favoritesEditorOpenState = rememberSaveable(session?.userId) { mutableStateOf(false) }
+    var favoritesEditorOpen by favoritesEditorOpenState
+    val cameraOrderIdsState = remember(session?.userId) {
         mutableStateOf(session?.let { orderStore.read(it.userId) } ?: emptyList())
     }
-    var cameraCatalogQuery by rememberSaveable(session?.userId) { mutableStateOf("") }
-    var cameraCatalogFilter by rememberSaveable(session?.userId) { mutableStateOf(CameraCatalogFilter.All) }
-    var monitorPage by rememberSaveable(session?.userId) { mutableStateOf(MonitorPage.Home) }
-    var eventsView by rememberSaveable(session?.userId) { mutableStateOf(MonitorEventsView.Activity) }
-    var navigationOpen by rememberSaveable(session?.userId) { mutableStateOf(false) }
-    var household by remember(session?.userId) { mutableStateOf<BeaconApi.HouseholdSummary?>(null) }
-    var accessEvents by remember(session?.userId) {
+    var cameraOrderIds by cameraOrderIdsState
+    val cameraCatalogQueryState = rememberSaveable(session?.userId) { mutableStateOf("") }
+    var cameraCatalogQuery by cameraCatalogQueryState
+    val cameraCatalogFilterState = rememberSaveable(session?.userId) { mutableStateOf(CameraCatalogFilter.All) }
+    var cameraCatalogFilter by cameraCatalogFilterState
+    val monitorPageState = rememberSaveable(session?.userId) { mutableStateOf(MonitorPage.Home) }
+    var monitorPage by monitorPageState
+    val eventsViewState = rememberSaveable(session?.userId) { mutableStateOf(MonitorEventsView.Activity) }
+    var eventsView by eventsViewState
+    val navigationOpenState = rememberSaveable(session?.userId) { mutableStateOf(false) }
+    var navigationOpen by navigationOpenState
+    val householdState = remember(session?.userId) { mutableStateOf<BeaconApi.HouseholdSummary?>(null) }
+    var household by householdState
+    val accessEventsState = remember(session?.userId) {
         mutableStateOf<List<BeaconApi.AccessEvent>>(emptyList())
     }
-    var accessHistoryLoaded by remember(session?.userId) { mutableStateOf(false) }
-    var accessHistoryPage by rememberSaveable(session?.userId) { mutableStateOf(0) }
-    var motionRetentionDays by remember(session?.userId) { mutableStateOf<Int?>(null) }
-    var savedMotionRetentionDays by remember(session?.userId) { mutableStateOf<Int?>(null) }
-    var savingMotionRetention by remember { mutableStateOf(false) }
-    var deviceControlBusy by remember { mutableStateOf(false) }
-    var deleteAccountOpen by rememberSaveable { mutableStateOf(false) }
-    var deletingAccount by remember { mutableStateOf(false) }
-    var deleteAccountError by remember { mutableStateOf("") }
-    var motionEvents by remember(session?.userId) {
+    var accessEvents by accessEventsState
+    val accessHistoryLoadedState = remember(session?.userId) { mutableStateOf(false) }
+    var accessHistoryLoaded by accessHistoryLoadedState
+    val accessHistoryPageState = rememberSaveable(session?.userId) { mutableStateOf(0) }
+    var accessHistoryPage by accessHistoryPageState
+    val motionRetentionDaysState = remember(session?.userId) { mutableStateOf<Int?>(null) }
+    var motionRetentionDays by motionRetentionDaysState
+    val savedMotionRetentionDaysState = remember(session?.userId) { mutableStateOf<Int?>(null) }
+    var savedMotionRetentionDays by savedMotionRetentionDaysState
+    val savingMotionRetentionState = remember { mutableStateOf(false) }
+    var savingMotionRetention by savingMotionRetentionState
+    val deviceControlBusyState = remember { mutableStateOf(false) }
+    var deviceControlBusy by deviceControlBusyState
+    val deleteAccountOpenState = rememberSaveable { mutableStateOf(false) }
+    var deleteAccountOpen by deleteAccountOpenState
+    val deletingAccountState = remember { mutableStateOf(false) }
+    var deletingAccount by deletingAccountState
+    val deleteAccountErrorState = remember { mutableStateOf("") }
+    var deleteAccountError by deleteAccountErrorState
+    val motionEventsState = remember(session?.userId) {
         mutableStateOf<List<BeaconApi.MotionEvent>>(emptyList())
     }
-    var motionEventsLoaded by remember(session?.userId) { mutableStateOf(false) }
-    var cameraMotionSettings by remember(selectedSettingsDeviceId) {
+    var motionEvents by motionEventsState
+    val motionEventsLoadedState = remember(session?.userId) { mutableStateOf(false) }
+    var motionEventsLoaded by motionEventsLoadedState
+    val cameraMotionSettingsState = remember(selectedSettingsDeviceId) {
         mutableStateOf<List<BeaconApi.CameraMotionSettings>>(emptyList())
     }
-    var cameraMotionSettingsLoaded by remember(selectedSettingsDeviceId) { mutableStateOf(false) }
-    var cameraMotionSettingsBusy by remember { mutableStateOf(false) }
-    var cameraMotionSettingsError by remember(selectedSettingsDeviceId) { mutableStateOf("") }
-    var cameraMotionSettingsNotice by remember(selectedSettingsDeviceId) { mutableStateOf("") }
-    var recordings by remember(session?.userId) {
+    var cameraMotionSettings by cameraMotionSettingsState
+    val cameraMotionSettingsLoadedState = remember(selectedSettingsDeviceId) { mutableStateOf(false) }
+    var cameraMotionSettingsLoaded by cameraMotionSettingsLoadedState
+    val cameraMotionSettingsBusyState = remember { mutableStateOf(false) }
+    var cameraMotionSettingsBusy by cameraMotionSettingsBusyState
+    val cameraMotionSettingsErrorState = remember(selectedSettingsDeviceId) { mutableStateOf("") }
+    var cameraMotionSettingsError by cameraMotionSettingsErrorState
+    val cameraMotionSettingsNoticeState = remember(selectedSettingsDeviceId) { mutableStateOf("") }
+    var cameraMotionSettingsNotice by cameraMotionSettingsNoticeState
+    val recordingsState = remember(session?.userId) {
         mutableStateOf<List<BeaconApi.RecordingSummary>>(emptyList())
     }
-    var recordingsLoaded by remember(session?.userId) { mutableStateOf(false) }
-    var recordingsCursor by remember(session?.userId) { mutableStateOf<String?>(null) }
-    var recordingBusyId by remember { mutableStateOf<String?>(null) }
-    var recordingsLoadingMore by remember { mutableStateOf(false) }
-    var recordingPlayback by remember { mutableStateOf<BeaconApi.PlaybackRecording?>(null) }
-    var recordingDeleteTarget by remember { mutableStateOf<BeaconApi.RecordingSummary?>(null) }
-    var recordingShareTarget by remember { mutableStateOf<BeaconApi.RecordingSummary?>(null) }
-    var message by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
+    var recordings by recordingsState
+    val recordingsLoadedState = remember(session?.userId) { mutableStateOf(false) }
+    var recordingsLoaded by recordingsLoadedState
+    val recordingsCursorState = remember(session?.userId) { mutableStateOf<String?>(null) }
+    var recordingsCursor by recordingsCursorState
+    val recordingBusyIdState = remember { mutableStateOf<String?>(null) }
+    var recordingBusyId by recordingBusyIdState
+    val recordingsLoadingMoreState = remember { mutableStateOf(false) }
+    var recordingsLoadingMore by recordingsLoadingMoreState
+    val recordingPlaybackState = remember { mutableStateOf<BeaconApi.PlaybackRecording?>(null) }
+    var recordingPlayback by recordingPlaybackState
+    val recordingDeleteTargetState = remember { mutableStateOf<BeaconApi.RecordingSummary?>(null) }
+    var recordingDeleteTarget by recordingDeleteTargetState
+    val recordingShareTargetState = remember { mutableStateOf<BeaconApi.RecordingSummary?>(null) }
+    var recordingShareTarget by recordingShareTargetState
+    val messageState = remember { mutableStateOf("") }
+    var message by messageState
+    val busyState = remember { mutableStateOf(false) }
+    var busy by busyState
     val scope = rememberCoroutineScope()
     LaunchedEffect(session) {
         if (session == null) {
@@ -208,11 +256,14 @@ internal fun MonitorHome(
                 .onSuccess { googleSignInAvailable = it }
         }
     }
-    var notificationConsent by remember { mutableStateOf(NotificationConsentStore(context).enabled) }
-    var notificationBusy by remember { mutableStateOf(false) }
-    var notificationPreferences by remember(session?.userId) {
+    val notificationConsentState = remember { mutableStateOf(NotificationConsentStore(context).enabled) }
+    var notificationConsent by notificationConsentState
+    val notificationBusyState = remember { mutableStateOf(false) }
+    var notificationBusy by notificationBusyState
+    val notificationPreferencesState = remember(session?.userId) {
         mutableStateOf<List<BeaconApi.NotificationPreference>>(emptyList())
     }
+    var notificationPreferences by notificationPreferencesState
     fun expireSession() {
         NotificationConsentStore(context).mute()
         notificationConsent = false
@@ -508,6 +559,79 @@ internal fun MonitorHome(
         }
     }
 
+    val state =
+        MonitorHomeState(
+            context = context,
+            scope = scope,
+            api = api,
+            sessionStore = sessionStore,
+            favoritesStore = favoritesStore,
+            orderStore = orderStore,
+            monitorScrollState = monitorScrollState,
+            settingsSectionOffsets = settingsSectionOffsets,
+            settingsSections = settingsSections,
+            navigationPreferences = navigationPreferences,
+            alertPermissionLauncher = alertPermissionLauncher,
+            onCameraMode = onCameraMode,
+            onSetUpThisDevice = onSetUpThisDevice,
+            onAccountDeleted = onAccountDeleted,
+            themePreference = themePreference,
+            onThemePreferenceChange = onThemePreferenceChange,
+            expireSession = ::expireSession,
+            enableNotifications = ::enableNotifications,
+            refreshCameras = ::refresh,
+            sessionState = sessionState,
+            emailState = emailState,
+            passwordState = passwordState,
+            showPasswordState = showPasswordState,
+            googleSignInAvailableState = googleSignInAvailableState,
+            camerasState = camerasState,
+            devicesState = devicesState,
+            selectedCameraIdState = selectedCameraIdState,
+            selectedSettingsDeviceIdState = selectedSettingsDeviceIdState,
+            addCameraChoiceOpenState = addCameraChoiceOpenState,
+            pairAnotherDeviceOpenState = pairAnotherDeviceOpenState,
+            favoriteCameraIdsState = favoriteCameraIdsState,
+            hasSavedFavoritesState = hasSavedFavoritesState,
+            favoritesEditorOpenState = favoritesEditorOpenState,
+            cameraOrderIdsState = cameraOrderIdsState,
+            cameraCatalogQueryState = cameraCatalogQueryState,
+            cameraCatalogFilterState = cameraCatalogFilterState,
+            monitorPageState = monitorPageState,
+            eventsViewState = eventsViewState,
+            navigationOpenState = navigationOpenState,
+            householdState = householdState,
+            accessEventsState = accessEventsState,
+            accessHistoryLoadedState = accessHistoryLoadedState,
+            accessHistoryPageState = accessHistoryPageState,
+            motionRetentionDaysState = motionRetentionDaysState,
+            savedMotionRetentionDaysState = savedMotionRetentionDaysState,
+            savingMotionRetentionState = savingMotionRetentionState,
+            deviceControlBusyState = deviceControlBusyState,
+            deleteAccountOpenState = deleteAccountOpenState,
+            deletingAccountState = deletingAccountState,
+            deleteAccountErrorState = deleteAccountErrorState,
+            motionEventsState = motionEventsState,
+            motionEventsLoadedState = motionEventsLoadedState,
+            cameraMotionSettingsState = cameraMotionSettingsState,
+            cameraMotionSettingsLoadedState = cameraMotionSettingsLoadedState,
+            cameraMotionSettingsBusyState = cameraMotionSettingsBusyState,
+            cameraMotionSettingsErrorState = cameraMotionSettingsErrorState,
+            cameraMotionSettingsNoticeState = cameraMotionSettingsNoticeState,
+            recordingsState = recordingsState,
+            recordingsLoadedState = recordingsLoadedState,
+            recordingsCursorState = recordingsCursorState,
+            recordingBusyIdState = recordingBusyIdState,
+            recordingsLoadingMoreState = recordingsLoadingMoreState,
+            recordingPlaybackState = recordingPlaybackState,
+            recordingDeleteTargetState = recordingDeleteTargetState,
+            recordingShareTargetState = recordingShareTargetState,
+            messageState = messageState,
+            busyState = busyState,
+            notificationConsentState = notificationConsentState,
+            notificationBusyState = notificationBusyState,
+            notificationPreferencesState = notificationPreferencesState,
+        )
     val activeSession = session
     val orderByCameraId = cameraOrderIds.withIndex().associate { it.value to it.index }
     val orderedCameras =
@@ -719,702 +843,10 @@ internal fun MonitorHome(
                     },
                 )
             } else when (monitorPage) {
-                MonitorPage.Home -> {
-                    val isHouseholdManager = currentSession.householdRole == "owner" || currentSession.householdRole == "admin"
-                    val hostCameras = monitorHostCameras(cameras)
-                    if (cameras.isEmpty()) {
-                        val loadFailed = message.startsWith("Cameras are temporarily unavailable.")
-                        Box(
-                            modifier = Modifier.fillMaxWidth()
-                                .heightIn(min = 520.dp)
-                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(BeaconRadii.Lg))
-                                .beaconDashedBorder(MaterialTheme.colorScheme.outlineVariant, BeaconRadii.Lg)
-                                .padding(28.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Xl),
-                            ) {
-                                Text(
-                                    if (loadFailed) "Cameras are temporarily unavailable"
-                                    else if (isHouseholdManager) "Add your first device" else "No cameras shared with you yet",
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                )
-                                Text(
-                                    if (loadFailed) message.removePrefix("Cameras are temporarily unavailable. ")
-                                    else if (isHouseholdManager) "Turn a spare phone, tablet, or computer into a camera."
-                                    else "Ask the household owner or an admin to grant you access to a camera from Settings → Household sharing.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                )
-                                if (loadFailed) {
-                                    OutlinedButton(onClick = { refresh(currentSession.token) }) { Text("Retry") }
-                                } else if (isHouseholdManager) {
-                                    Button(
-                                        onClick = { addCameraChoiceOpen = true },
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.surface),
-                                        shape = RoundedCornerShape(BeaconRadii.Md),
-                                    ) {
-                                        Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
-                                        Text("Add device", modifier = Modifier.padding(start = 6.dp), fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        // Mirrors the PWA's home-welcome: a plain h2 greeting plus a
-                        // small secondary-colored subtitle -- no card, no background.
-                        Text(homeGreeting(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Text(
-                            homeSubtitle(hostCameras),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 2.dp),
-                        )
-                        val attentionCameras = homeAttentionCameras(hostCameras)
-                        if (attentionCameras.isNotEmpty()) {
-                            BeaconPanel(modifier = Modifier.fillMaxWidth().padding(top = BeaconSpacing.Lg)) {
-                                Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Sm)) {
-                                    Icon(Icons.Outlined.Warning, null, tint = BeaconWarning)
-                                    Text(homeAttentionTitle(attentionCameras), fontWeight = FontWeight.Bold)
-                                    Text(homeAttentionDescription(attentionCameras), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                                    androidx.compose.material3.TextButton(onClick = {
-                                        if (attentionCameras.size == 1) selectedSettingsDeviceId = attentionCameras[0].deviceId
-                                        monitorPage = MonitorPage.Cameras
-                                    }) {
-                                        Text(if (attentionCameras.size == 1 && attentionCameras[0].needsPairing)
-                                            "Reconnect ${attentionCameras[0].deviceName} →"
-                                        else if (attentionCameras.size == 1) "Check status →"
-                                        else "Review ${attentionCameras.size} cameras →")
-                                    }
-                                }
-                            }
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = BeaconSpacing.Xl),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("Favorites", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            androidx.compose.material3.TextButton(onClick = { favoritesEditorOpen = true }) { Text("Edit") }
-                        }
-                        val favoriteCameras = homeFavoriteCameras(hostCameras, favoriteCameraIds, hasSavedFavorites)
-                        if (favoriteCameras.isEmpty()) {
-                            Column(
-                                modifier =
-                                    Modifier.fillMaxWidth()
-                                        .beaconDashedBorder(MaterialTheme.colorScheme.outlineVariant, BeaconRadii.Lg)
-                                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(BeaconRadii.Lg))
-                                        .padding(BeaconSpacing.Xxl),
-                                verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Md),
-                            ) {
-                                Text("No favorites chosen yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                OutlinedButton(onClick = { favoritesEditorOpen = true }) { Text("Choose favorites") }
-                            }
-                        } else {
-                            MonitorCameraGrid(
-                                cameras = favoriteCameras,
-                                onView = { selectedCameraId = it.id },
-                                onSettings = {
-                                    selectedSettingsDeviceId = it.deviceId
-                                    monitorPage = MonitorPage.Cameras
-                                },
-                                onRemoveFavorite = { camera ->
-                                    val currentIds = if (hasSavedFavorites) favoriteCameraIds
-                                        else favoriteCameras.map { it.id }.toSet()
-                                    val updated = currentIds - camera.id
-                                    favoritesStore.replace(currentSession.userId, updated)
-                                    favoriteCameraIds = updated
-                                    hasSavedFavorites = true
-                                },
-                            )
-                        }
-                        androidx.compose.material3.TextButton(
-                            onClick = { monitorPage = MonitorPage.Cameras },
-                            modifier = Modifier.align(Alignment.CenterHorizontally),
-                        ) { Text("View all ${hostCameras.size} device${if (hostCameras.size == 1) "" else "s"} →") }
-                    }
-                    if (cameras.isNotEmpty()) BeaconPanel(modifier = Modifier.fillMaxWidth().padding(top = BeaconSpacing.Lg)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("Latest activity", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            androidx.compose.material3.TextButton(onClick = {
-                                monitorPage = MonitorPage.Events
-                                eventsView = MonitorEventsView.Activity
-                            }) {
-                                Text("See all")
-                            }
-                        }
-                        when {
-                            !motionEventsLoaded -> Text("Loading activity…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            motionEvents.isEmpty() -> Text(
-                                "No recent activity.",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth().padding(vertical = BeaconSpacing.Xxl),
-                            )
-                            else -> motionEvents.take(3).forEach { event -> MotionEventPreviewRow(event) }
-                        }
-                        androidx.compose.material3.TextButton(
-                            onClick = {
-                                monitorPage = MonitorPage.Events
-                                eventsView = MonitorEventsView.Activity
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Open Activity") }
-                    }
-                    if (favoritesEditorOpen) {
-                        MonitorFavoritesEditor(
-                            cameras = hostCameras,
-                            selectedIds = if (hasSavedFavorites) favoriteCameraIds
-                                else homeFavoriteCameras(hostCameras, favoriteCameraIds).map { it.id }.toSet(),
-                            onToggle = { cameraId ->
-                                val currentIds = if (hasSavedFavorites) favoriteCameraIds
-                                    else homeFavoriteCameras(hostCameras, favoriteCameraIds).map { it.id }.toSet()
-                                val updated = toggledFavoriteIds(currentIds, cameraId)
-                                favoritesStore.replace(currentSession.userId, updated)
-                                favoriteCameraIds = updated
-                                hasSavedFavorites = true
-                            },
-                            onDismiss = { favoritesEditorOpen = false },
-                        )
-                    }
-                }
-                MonitorPage.Cameras -> {
-                    val settingsSources =
-                        selectedSettingsDeviceId?.let { deviceId ->
-                            cameras.filter { it.deviceId == deviceId }
-                        }.orEmpty()
-                    if (selectedSettingsDeviceId != null && settingsSources.isNotEmpty()) {
-                        MonitorDeviceSettings(
-                            api = api,
-                            sessionToken = currentSession.token,
-                            device = devices.find { it.id == selectedSettingsDeviceId },
-                            sources = settingsSources,
-                            canManageSettings = currentSession.householdRole in setOf("owner", "admin"),
-                            busy = deviceControlBusy,
-                            onBack = { selectedSettingsDeviceId = null },
-                            onView = { selectedCameraId = it.id },
-                            onActivate = { target ->
-                                deviceControlBusy = true
-                                scope.launch {
-                                    val result =
-                                        withContext(Dispatchers.IO) {
-                                            runCatching { api.activateCamera(currentSession.token, target.id) }
-                                        }
-                                    result.onSuccess {
-                                        delay(650)
-                                        refresh(currentSession.token, showLoading = false)
-                                        message = "${target.name} is now active."
-                                    }.onFailure {
-                                        message = it.userFacingMessage("Could not switch camera")
-                                    }
-                                    deviceControlBusy = false
-                                }
-                            },
-                            onPrivacyChange = { enabled ->
-                                val deviceId = settingsSources.first().deviceId
-                                deviceControlBusy = true
-                                scope.launch {
-                                    val result =
-                                        withContext(Dispatchers.IO) {
-                                            runCatching {
-                                                api.setDevicePrivacy(currentSession.token, deviceId, enabled)
-                                            }
-                                        }
-                                    result.onSuccess {
-                                        delay(400)
-                                        refresh(currentSession.token, showLoading = false)
-                                        message =
-                                            if (enabled) "Privacy mode enabled. Capture stopped."
-                                            else "Privacy mode disabled. Camera available again."
-                                    }.onFailure {
-                                        message = it.userFacingMessage("Could not change privacy mode")
-                                    }
-                                    deviceControlBusy = false
-                                }
-                            },
-                            onAuthorizationLost = ::expireSession,
-                            onChanged = { refresh(currentSession.token, showLoading = false) },
-                            motionContent = {
-                                if (currentSession.householdRole in setOf("owner", "admin")) {
-                                    AndroidMotionSettingsPanel(
-                                        sources = settingsSources,
-                                        settings = cameraMotionSettings,
-                                        loaded = cameraMotionSettingsLoaded,
-                                        busy = cameraMotionSettingsBusy,
-                                        error = cameraMotionSettingsError,
-                                        notice = cameraMotionSettingsNotice,
-                                        onChange = { changed ->
-                                            cameraMotionSettings =
-                                                cameraMotionSettings.map { if (it.cameraId == changed.cameraId) changed else it }
-                                            cameraMotionSettingsError = ""
-                                            cameraMotionSettingsNotice = ""
-                                        },
-                                        onSave = { changed ->
-                                            cameraMotionSettingsBusy = true
-                                            cameraMotionSettingsError = ""
-                                            cameraMotionSettingsNotice = ""
-                                            scope.launch {
-                                                val result =
-                                                    withContext(Dispatchers.IO) {
-                                                        runCatching { api.updateMonitorMotionSettings(currentSession.token, changed) }
-                                                    }
-                                                result.onSuccess { saved ->
-                                                    cameraMotionSettings =
-                                                        cameraMotionSettings.map { if (it.cameraId == saved.cameraId) saved else it }
-                                                    cameraMotionSettingsNotice =
-                                                        "Saved. Your phone applies the settings on its next connection check."
-                                                }.onFailure {
-                                                    if (it is AuthorizationLostException) {
-                                                        expireSession()
-                                                    } else {
-                                                        cameraMotionSettingsError =
-                                                            it.userFacingMessage("Changes could not be saved. Your edits are still here to retry.")
-                                                    }
-                                                }
-                                                cameraMotionSettingsBusy = false
-                                            }
-                                        },
-                                        onRetry = {
-                                            val deviceId = settingsSources.first().deviceId
-                                            cameraMotionSettingsLoaded = false
-                                            cameraMotionSettingsError = ""
-                                            scope.launch {
-                                                val result =
-                                                    withContext(Dispatchers.IO) {
-                                                        runCatching { api.monitorMotionSettings(currentSession.token, deviceId) }
-                                                    }
-                                                result.onSuccess { cameraMotionSettings = it }
-                                                    .onFailure {
-                                                        if (it is AuthorizationLostException) {
-                                                            expireSession()
-                                                        } else {
-                                                            cameraMotionSettingsError =
-                                                                it.userFacingMessage("Motion settings could not be loaded. Try again.")
-                                                        }
-                                                    }
-                                                cameraMotionSettingsLoaded = true
-                                            }
-                                        },
-                                    )
-                                }
-                            },
-                        )
-                    } else {
-                        if (busy) Text("Loading cameras…")
-                        if (!busy && orderedCameras.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 116.dp)
-                                    .beaconDashedBorder(MaterialTheme.colorScheme.outlineVariant, 12.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text("No cameras yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        } else if (!busy) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                OutlinedTextField(
-                                    value = cameraCatalogQuery,
-                                    onValueChange = { cameraCatalogQuery = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    placeholder = { Text("Find a camera or device") },
-                                    leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                                    singleLine = true,
-                                )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    CameraCatalogFilter.entries.forEach { filterOption ->
-                                        val count = orderedCameras.count { cameraCatalogMatchesFilter(it, filterOption) }
-                                        androidx.compose.material3.FilterChip(
-                                            selected = cameraCatalogFilter == filterOption,
-                                            onClick = { cameraCatalogFilter = filterOption },
-                                            label = { Text("${filterOption.label} $count") },
-                                            colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            ),
-                                        )
-                                    }
-                                }
-                                val visibleCameras = cameraCatalogVisible(orderedCameras, cameraCatalogFilter, cameraCatalogQuery)
-                                Text(
-                                    cameraCatalogResultsMessage(cameraCatalogQuery, visibleCameras.size, orderedCameras.size),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                if (visibleCameras.isEmpty()) {
-                                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                                        Column(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                        ) {
-                                            Text("No matching cameras", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                            Text(
-                                                "Try another name or choose a different status.",
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                            OutlinedButton(
-                                                onClick = {
-                                                    cameraCatalogQuery = ""
-                                                    cameraCatalogFilter = CameraCatalogFilter.All
-                                                },
-                                                modifier = Modifier.padding(top = 12.dp),
-                                            ) { Text("Clear filters") }
-                                        }
-                                    }
-                                } else {
-                                    MonitorCameraGrid(
-                                        cameras = visibleCameras,
-                                        onView = { selectedCameraId = it.id },
-                                        onSettings = { selectedSettingsDeviceId = it.deviceId },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                MonitorPage.Events -> {
-                    BeaconEventsViewSwitch(selected = eventsView, onSelect = { eventsView = it })
-                    if (eventsView == MonitorEventsView.Activity) {
-                        val isAdmin = currentSession.householdRole == "owner" || currentSession.householdRole == "admin"
-                        BeaconActivityFeed(
-                            api = api,
-                            sessionToken = currentSession.token,
-                            cameras = cameras,
-                            includeHouseholdActivity = isAdmin,
-                            canClearHistory = isAdmin,
-                            onOpenCamera = { id -> selectedCameraId = id },
-                            onViewClip = { eventsView = MonitorEventsView.Clips },
-                            onAuthorizationLost = ::expireSession,
-                        )
-                    } else {
-                        AndroidRecordingLibrary(
-                        api = api,
-                        sessionToken = currentSession.token,
-                        cameras = cameras,
-                        recordings = recordings,
-                        loaded = recordingsLoaded,
-                        loadingMore = recordingsLoadingMore,
-                        nextCursor = recordingsCursor,
-                        busyRecordingId = recordingBusyId,
-                        canDelete = currentSession.householdRole == "owner",
-                        playback = recordingPlayback,
-                        deleteTarget = recordingDeleteTarget,
-                        shareTarget = recordingShareTarget,
-                        onRefresh = {
-                            recordingsLoaded = false
-                            scope.launch {
-                                val result = withContext(Dispatchers.IO) { runCatching { api.recordings(currentSession.token) } }
-                                result.onSuccess {
-                                    recordings = it.recordings
-                                    recordingsCursor = it.nextCursor
-                                    message = ""
-                                }.onFailure { message = it.userFacingMessage("Clips are temporarily unavailable") }
-                                recordingsLoaded = true
-                            }
-                        },
-                        onLoadMore = {
-                            val cursor = recordingsCursor ?: return@AndroidRecordingLibrary
-                            recordingsLoadingMore = true
-                            scope.launch {
-                                val result = withContext(Dispatchers.IO) { runCatching { api.recordings(currentSession.token, cursor) } }
-                                result.onSuccess {
-                                    recordings = recordings + it.recordings
-                                    recordingsCursor = it.nextCursor
-                                }.onFailure { message = it.userFacingMessage("More clips could not be loaded") }
-                                recordingsLoadingMore = false
-                            }
-                        },
-                        onPlay = { recording ->
-                            recordingPlayback?.file?.delete()
-                            recordingPlayback = null
-                            recordingBusyId = recording.id
-                            scope.launch {
-                                val result =
-                                    withContext(Dispatchers.IO) {
-                                        runCatching {
-                                            api.downloadRecordingForPlayback(
-                                                currentSession.token,
-                                                recording.id,
-                                                context.cacheDir,
-                                            )
-                                        }
-                                    }
-                                result.onSuccess { recordingPlayback = it }
-                                    .onFailure { message = it.userFacingMessage("Clip could not be played") }
-                                recordingBusyId = null
-                            }
-                        },
-                        onRequestDelete = { recordingDeleteTarget = it },
-                        onConfirmDelete = {
-                            val target = recordingDeleteTarget ?: return@AndroidRecordingLibrary
-                            recordingBusyId = target.id
-                            scope.launch {
-                                val result = withContext(Dispatchers.IO) { runCatching { api.deleteRecording(currentSession.token, target.id) } }
-                                result.onSuccess {
-                                    recordings = recordings.filterNot { it.id == target.id }
-                                    recordingPlayback?.file?.delete()
-                                    recordingPlayback = null
-                                    recordingDeleteTarget = null
-                                }.onFailure { message = it.userFacingMessage("Clip could not be deleted") }
-                                recordingBusyId = null
-                            }
-                        },
-                        onCancelDelete = { recordingDeleteTarget = null },
-                        onClosePlayback = {
-                            recordingPlayback?.file?.delete()
-                            recordingPlayback = null
-                        },
-                        onRequestShare = { recordingShareTarget = it },
-                        onDismissShare = { recordingShareTarget = null },
-                        )
-                    }
-                }
-                MonitorPage.Settings -> {
-                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["Household"] = it.positionInParent().y.roundToInt() })
-                    BeaconHouseholdOverviewCard(household = household, cameraCount = cameras.size, api = api, sessionToken = currentSession.token)
-                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["Notifications"] = it.positionInParent().y.roundToInt() })
-                    BeaconSectionHeader("Notifications", "Control private alerts from this phone.")
-                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("Notifications", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Button(
-                            enabled = !notificationBusy,
-                            onClick = {
-                                if (notificationConsent) {
-                                    val active = session
-                                    NotificationConsentStore(context).mute()
-                                    notificationConsent = false
-                                    notificationBusy = true
-                                    scope.launch {
-                                        withContext(Dispatchers.IO) { disableAndroidNotifications(context, api, active) }
-                                        notificationBusy = false
-                                        message = "Notifications are off on this device."
-                                    }
-                                } else if (
-                                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                                ) {
-                                    alertPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                } else {
-                                    enableNotifications()
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                        ) { Text(if (notificationBusy) "Updating…" else if (notificationConsent) "Turn off notifications" else "Turn on notifications") }
-                        notificationPreferences.forEach { preference ->
-                            Text(preference.deviceName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text("Motion alerts", modifier = Modifier.weight(1f))
-                                Switch(
-                                    checked = preference.motionEnabled,
-                                    enabled = !notificationBusy,
-                                    modifier = Modifier.semantics { contentDescription = "Motion alerts for ${preference.deviceName}" },
-                                    onCheckedChange = { checked ->
-                                        val changed = preference.copy(motionEnabled = checked)
-                                        notificationPreferences = notificationPreferences.map { if (it.deviceId == changed.deviceId) changed else it }
-                                        notificationBusy = true
-                                        scope.launch {
-                                            val result = withContext(Dispatchers.IO) { runCatching { api.updateNotificationPreference(currentSession.token, changed) } }
-                                            result.onSuccess { saved -> notificationPreferences = notificationPreferences.map { if (it.deviceId == saved.deviceId) saved else it } }
-                                                .onFailure { message = it.userFacingMessage("Notification preferences could not be saved") }
-                                            notificationBusy = false
-                                        }
-                                    },
-                                )
-                            }
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text("Camera problem alerts", modifier = Modifier.weight(1f))
-                                Switch(
-                                    checked = preference.offlineEnabled,
-                                    enabled = !notificationBusy,
-                                    modifier = Modifier.semantics { contentDescription = "Camera problem alerts for ${preference.deviceName}" },
-                                    onCheckedChange = { checked ->
-                                        val changed = preference.copy(offlineEnabled = checked)
-                                        notificationPreferences = notificationPreferences.map { if (it.deviceId == changed.deviceId) changed else it }
-                                        notificationBusy = true
-                                        scope.launch {
-                                            val result = withContext(Dispatchers.IO) { runCatching { api.updateNotificationPreference(currentSession.token, changed) } }
-                                            result.onSuccess { saved -> notificationPreferences = notificationPreferences.map { if (it.deviceId == saved.deviceId) saved else it } }
-                                                .onFailure { message = it.userFacingMessage("Notification preferences could not be saved") }
-                                            notificationBusy = false
-                                        }
-                                    },
-                                )
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["People & access"] = it.positionInParent().y.roundToInt() })
-                    BeaconPeopleAccessPanel(
-                        api = api,
-                        sessionToken = currentSession.token,
-                        cameras = cameras,
-                        isAdmin = currentSession.householdRole == "owner" || currentSession.householdRole == "admin",
-                        onAuthorizationLost = ::expireSession,
-                    )
-                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["Data & storage"] = it.positionInParent().y.roundToInt() })
-                    BeaconSectionHeader("Data & storage", "Choose how long motion metadata is kept.")
-                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("Motion history", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        if (motionRetentionDays == null) {
-                            Text("Loading retention setting…", modifier = Modifier.padding(top = 12.dp))
-                        } else {
-                            Text("Keep motion history for", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 14.dp, bottom = 8.dp))
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                listOf(1, 7, 30, 90).chunked(2).forEach { options ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        options.forEach { days ->
-                                            androidx.compose.material3.FilterChip(
-                                                selected = motionRetentionDays == days,
-                                                enabled = !savingMotionRetention,
-                                                onClick = { motionRetentionDays = days },
-                                                label = { Text(if (days == 1) "1 day" else "$days days") },
-                                                modifier = Modifier.weight(1f),
-                                                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                ),
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            Button(
-                                enabled = !savingMotionRetention && motionRetentionDays != savedMotionRetentionDays,
-                                onClick = {
-                                    val days = motionRetentionDays ?: return@Button
-                                    savingMotionRetention = true
-                                    scope.launch {
-                                        val result = withContext(Dispatchers.IO) { runCatching { api.setMotionRetention(currentSession.token, days) } }
-                                        result.onSuccess {
-                                            motionRetentionDays = it
-                                            savedMotionRetentionDays = it
-                                            message = "Motion history setting saved."
-                                        }.onFailure { message = it.userFacingMessage("Motion history setting could not be saved") }
-                                        savingMotionRetention = false
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                            ) { Text(if (savingMotionRetention) "Saving…" else "Save changes") }
-                        }
-                        BeaconGoogleDriveCard(
-                            api = api,
-                            sessionToken = currentSession.token,
-                            onAuthorizationLost = ::expireSession,
-                        )
-                    }
-                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["Security"] = it.positionInParent().y.roundToInt() })
-                    BeaconSectionHeader("Security", "Review signed-in devices and camera access.")
-                    BeaconSignedInDevicesPanel(
-                        api = api,
-                        sessionToken = currentSession.token,
-                        onAuthorizationLost = ::expireSession,
-                    )
-                    Text("Recent access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp))
-                    if (!accessHistoryLoaded) Text("Loading…")
-                    if (accessHistoryLoaded && accessEvents.isEmpty()) {
-                        Text("No recent camera access.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (accessEvents.isNotEmpty()) {
-                        val pageSize = 5
-                        val pageCount = (accessEvents.size + pageSize - 1) / pageSize
-                        val page = accessHistoryPage.coerceIn(0, pageCount - 1)
-                        accessEvents.drop(page * pageSize).take(pageSize).forEach { event ->
-                            AccessEventRow(event, currentSession.email)
-                        }
-                        if (pageCount > 1) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                androidx.compose.material3.TextButton(
-                                    enabled = page > 0,
-                                    onClick = { accessHistoryPage = page - 1 },
-                                ) { Text("Previous") }
-                                Text("Page ${page + 1} of $pageCount", style = MaterialTheme.typography.labelLarge)
-                                androidx.compose.material3.TextButton(
-                                    enabled = page < pageCount - 1,
-                                    onClick = { accessHistoryPage = page + 1 },
-                                ) { Text("Next") }
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["Account"] = it.positionInParent().y.roundToInt() })
-                    BeaconSectionHeader("Account", "Manage your signed-in session and data.")
-                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        BeaconAccountProfileCard(
-                            api = api,
-                            sessionToken = currentSession.token,
-                            onAuthorizationLost = ::expireSession,
-                        )
-                    }
-                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("Delete account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(
-                            "Permanently removes your Beacon account, data and access.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        OutlinedButton(
-                            onClick = {
-                                deleteAccountError = ""
-                                deleteAccountOpen = true
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        ) { Text("Delete account") }
-                    }
-                    Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["Privacy"] = it.positionInParent().y.roundToInt() })
-                    BeaconSectionHeader("Privacy", "Understand the data Beacon keeps and where to find the full details.")
-                    BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-                        Text("Your privacy defaults", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(
-                            "The important parts are summarized here. Full technical details remain on Trust & privacy.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            BeaconPrivacyFact("Motion history", "Event time, camera and motion metadata follow your retention setting.")
-                            BeaconPrivacyFact("Security activity", "Session and access history is shown without a device fingerprint.")
-                            BeaconPrivacyFact("Cloud storage", "Google Drive is optional and recording is controlled separately.")
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Trust & privacy", fontWeight = FontWeight.Bold)
-                                Text(
-                                    "Capture, sharing, retention and account-data details.",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            OutlinedButton(
-                                onClick = {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BEACON_WEB_URL.trimEnd('/')}/trust")))
-                                },
-                            ) { Text("View details") }
-                        }
-                    }
-                }
+                MonitorPage.Home -> MonitorHomePage(state, currentSession)
+                MonitorPage.Cameras -> MonitorCamerasPage(state, currentSession)
+                MonitorPage.Events -> MonitorEventsPage(state, currentSession)
+                MonitorPage.Settings -> MonitorSettingsPage(state, currentSession)
             }
         }
             if (message.isNotBlank()) {
