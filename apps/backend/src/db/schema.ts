@@ -285,6 +285,8 @@ export const cameras = pgTable(
     softwareVersion: text('software_version'),
     enabled: boolean('enabled').notNull().default(true),
     privacyMode: boolean('privacy_mode').notNull().default(false),
+    // Paused by Home mode rather than by a person (ADR 0094).
+    pausedByMode: boolean('paused_by_mode').notNull().default(false),
     batteryPercent: integer('battery_percent'),
     batteryCharging: boolean('battery_charging'),
     // Android's thermal status, reported with the heartbeat (ADR 0093).
@@ -873,5 +875,38 @@ export const recordingShareLinks = pgTable(
   (table) => [
     uniqueIndex('recording_share_links_token_hash_unique').on(table.tokenHash),
     index('recording_share_links_recording_idx').on(table.recordingId),
+  ],
+);
+
+// Home and Away modes (ADR 0094). One row per household, created on first use.
+export const householdModes = pgTable(
+  'household_modes',
+  {
+    householdId: uuid('household_id')
+      .primaryKey()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    mode: text('mode').notNull().default('away'),
+    source: text('source').notNull().default('manual'),
+    // What the schedule last asked for, so a manual choice stands until the
+    // schedule next changes its mind.
+    scheduleMode: text('schedule_mode'),
+    settings: jsonb('settings').notNull(),
+    changedAt: timestamp('changed_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    changedBy: uuid('changed_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (table) => [
+    check('household_modes_mode_valid', sql`${table.mode} in ('home', 'away')`),
+    check(
+      'household_modes_source_valid',
+      sql`${table.source} in ('manual', 'schedule')`,
+    ),
+    check(
+      'household_modes_schedule_mode_valid',
+      sql`${table.scheduleMode} is null or ${table.scheduleMode} in ('home', 'away')`,
+    ),
   ],
 );

@@ -23,6 +23,9 @@ export type HouseholdEvent =
       type: 'device-management-changed';
     }
   | {
+      type: 'household-mode-changed';
+    }
+  | {
       cameraId: string;
       type: 'motion-event-created';
     }

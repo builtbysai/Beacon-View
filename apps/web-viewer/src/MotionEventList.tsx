@@ -120,6 +120,8 @@ const activityLabels: Record<string, string> = {
   notification_preference_changed: 'Notification preferences changed',
   notification_subscription_created: 'Notification delivery enabled',
   notification_subscription_revoked: 'Notification delivery disabled',
+  household_mode_changed: 'Home or Away mode changed',
+  household_mode_settings_changed: 'Home and Away settings changed',
 };
 
 function isMotionEvent(event: ActivityEvent): event is MotionEvent {

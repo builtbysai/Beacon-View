@@ -263,6 +263,8 @@ export class PostgresNotificationRepository {
          AND hm.role IN ('owner', 'admin') AND (hm.expires_at IS NULL OR hm.expires_at > $2)`,
       [input.deviceId, input.now],
     );
+    // Home mode can mute motion alerts; the motion event itself is still kept.
+    if (await this.#motionMuted(client, input.deviceId)) return;
     for (const setting of preference.rows) {
       if (!setting.motionEnabled) continue;
       if (
@@ -393,6 +395,18 @@ export class PostgresNotificationRepository {
     } finally {
       client.release();
     }
+  }
+
+  /** Home mode with motion alerts muted (ADR 0094). */
+  async #motionMuted(client: PoolClient, deviceId: string): Promise<boolean> {
+    const result = await client.query(
+      `SELECT 1 FROM cameras d
+       JOIN household_modes hm ON hm.household_id = d.household_id
+       WHERE d.id = $1 AND hm.mode = 'home'
+         AND COALESCE((hm.settings ->> 'muteMotionWhenHome')::boolean, true)`,
+      [deviceId],
+    );
+    return result.rows.length > 0;
   }
 
   async scanPresence(now: Date, graceSeconds: number): Promise<void> {
