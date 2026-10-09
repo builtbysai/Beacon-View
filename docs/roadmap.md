@@ -348,16 +348,16 @@ Status values: **Planned**, **In progress**, **Done** (merged and deployed),
 
 ### Track A: Viewing
 
-| ID  | Feature                                 | Platforms             | Milestone | Status   |
-| --- | --------------------------------------- | --------------------- | --------- | -------- |
-| C1  | Camera wall: live grid, tap to focus    | Web, desktop          | M3        | Planned  |
-| C2  | Keyboard shortcuts and help overlay     | Web, desktop          | M2        | Planned  |
-| C3  | Zoom and pan on live video              | Web, desktop, Android | M2, M5    | Done     |
-| C4  | Snapshot, saved on the device only      | Web, desktop, Android | M2, M5    | Done     |
-| C5  | Hold-to-talk                            | Web, desktop, Android | M2, M5    | Done     |
-| C6  | Mini-player that follows you in the app | Web, desktop          | M3        | Planned  |
-| C7  | Announce on all cameras                 | Web, desktop          | M3        | Planned  |
-| C8  | Cast to a TV                            | None yet              | n/a       | Deferred |
+| ID  | Feature                                 | Platforms             | Milestone | Status  |
+| --- | --------------------------------------- | --------------------- | --------- | ------- |
+| C1  | Camera wall: live grid, tap to focus    | Web, desktop          | M3        | Planned |
+| C2  | Keyboard shortcuts and help overlay     | Web, desktop          | M2        | Planned |
+| C3  | Zoom and pan on live video              | Web, desktop, Android | M2, M5    | Done    |
+| C4  | Snapshot, saved on the device only      | Web, desktop, Android | M2, M5    | Done    |
+| C5  | Hold-to-talk                            | Web, desktop, Android | M2, M5    | Done    |
+| C6  | Mini-player that follows you in the app | Web, desktop          | M3        | Planned |
+| C7  | Announce on all cameras                 | Web, desktop          | M3        | Planned |
+| C8  | Cast to a TV                            | None yet              | n/a       | Done    |
 
 ### Track B: Shortcuts and entry points
 

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Beacon</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        color: #e6edf3;
+        font-family: system-ui, sans-serif;
+      }
+      iframe {
+        border: 0;
+        width: 100%;
+        height: 100%;
+      }
+      #idle {
+        display: flex;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        font-size: 3vw;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="idle">Beacon is ready. Choose a camera to watch here.</div>
+    <iframe
+      id="camera"
+      title="Live camera"
+      allow="autoplay"
+      referrerpolicy="no-referrer"
+      hidden
+    ></iframe>
+    <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+    <script type="module" src="./receiver.js"></script>
+  </body>
+</html>

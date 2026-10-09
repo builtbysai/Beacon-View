@@ -164,6 +164,13 @@ const shapes = {
       <path d="M9 3H4v5m11-5h5v5M4 16v5h5m11-5v5h-5" />
     </>
   ),
+  cast: (
+    <>
+      <path d="M3 8V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" />
+      <path d="M3 12a8 8 0 0 1 8 8M3 16a4 4 0 0 1 4 4" />
+      <circle cx="3.5" cy="20" r="0.8" fill="currentColor" />
+    </>
+  ),
   pip: (
     <>
       <rect x="3" y="5" width="18" height="14" rx="2" />

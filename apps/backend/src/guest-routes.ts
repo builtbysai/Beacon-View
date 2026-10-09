@@ -198,6 +198,15 @@ export function registerGuestRoutes(
     };
   });
 
+  // Cast to TV (ADR 0097): the signed-in viewer asks which Cast application to
+  // use. Anyone signed in may ask; null keeps the button hidden.
+  app.get('/api/cast-config', async (request, reply) => {
+    const session = await auth.authenticate(request, reply);
+    if (!session) return;
+    reply.header('Cache-Control', 'no-store');
+    return { appId: config.CAST_APP_ID ?? null };
+  });
+
   app.post('/api/guest/exit', (_request, reply) => {
     reply.clearCookie(GUEST_LINK_COOKIE, { path: '/' });
     return reply.code(204).send();

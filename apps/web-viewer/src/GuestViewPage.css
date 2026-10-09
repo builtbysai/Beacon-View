@@ -128,3 +128,18 @@
     transition: none;
   }
 }
+
+/* Cast to TV (ADR 0097): the TV shows the picture only. */
+.cast-receiver,
+.cast-receiver body {
+  background: #000;
+  cursor: none;
+}
+
+.cast-receiver .video-controls {
+  display: none;
+}
+
+.cast-receiver .video-top-scrim button {
+  display: none;
+}

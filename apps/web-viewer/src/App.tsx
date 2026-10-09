@@ -1161,6 +1161,7 @@ function AppShell() {
             (household?.role === 'owner' || household?.role === 'admin') &&
             liveDevice?.platform === 'android'
           }
+          canCast={household?.role === 'owner' || household?.role === 'admin'}
         />
         {cameraSettingsOverlay}
         {pendingConfirm && (
