@@ -282,6 +282,13 @@ internal class AndroidViewerSession(
             if (!closed) emit(StreamingState.Failed)
         }
 
+        // The server ends a rejected or replaced connection by sending a close frame. OkHttp only
+        // reports onClosed after this side has answered, so answer here (V67); without it the close
+        // code was never seen and a revoked or offline camera looked like a network failure.
+        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            webSocket.close(code, null)
+        }
+
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             if (closed) return
             if (code == 4003) main.post(onAuthorizationLost) else emit(StreamingState.Offline)

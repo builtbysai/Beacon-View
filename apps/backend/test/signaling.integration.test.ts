@@ -347,12 +347,12 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
       `role=viewer&cameraId=${camera.publicCameraId}&viewerSessionId=${viewerSessionId}`,
       { Cookie: `beacon_session=${sessionToken}`, Origin: config!.WEB_ORIGIN },
     );
-    expect(await nextClose(attemptOne)).toBe(4003);
+    expect(await nextClose(attemptOne)).toBe(4004);
     const attemptTwo = connect(
       `role=viewer&cameraId=${camera.publicCameraId}&viewerSessionId=${viewerSessionId}`,
       { Cookie: `beacon_session=${sessionToken}`, Origin: config!.WEB_ORIGIN },
     );
-    expect(await nextClose(attemptTwo)).toBe(4003);
+    expect(await nextClose(attemptTwo)).toBe(4004);
 
     let forThisAttempt: AccessHistoryRecord[] = [];
     await waitForCondition(async () => {
@@ -376,7 +376,7 @@ describe.skipIf(!app || !store)('authorized WebSocket signaling', () => {
       Cookie: `beacon_session=${sessionToken}`,
       Origin: config!.WEB_ORIGIN,
     });
-    expect(await nextClose(unlabeled)).toBe(4003);
+    expect(await nextClose(unlabeled)).toBe(4004);
     let unlabeledRows: AccessHistoryRecord[] = [];
     await waitForCondition(async () => {
       const refreshed = (await store!.listAccessHistory(owner.householdId))

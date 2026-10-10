@@ -72,4 +72,20 @@ describe('household invitation email delivery', () => {
       status: 422,
     });
   });
+
+  it('gives up on a provider that does not answer (V23)', async () => {
+    const fetchMock = vi.fn<
+      (input: string | URL, init?: RequestInit) => Promise<Response>
+    >(() => Promise.resolve(new Response(null, { status: 202 })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await deliverHouseholdInvitation(config, {
+      expiresAt: new Date('2026-09-14T12:00:00.000Z'),
+      role: 'guest',
+      token: 'one-time-invitation-code',
+      to: 'guest@example.com',
+    });
+
+    expect(fetchMock.mock.calls[0]![1]!.signal).toBeInstanceOf(AbortSignal);
+  });
 });

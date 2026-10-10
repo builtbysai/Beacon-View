@@ -15,7 +15,11 @@ concurrency:
 
 jobs:
   deploy:
+    # Off unless the repository variable BEACON_AUTO_DEPLOY is 'true' (ADR 0106:
+    # production deployments are manual). The file used to rely on the workflow
+    # being disabled in the GitHub UI, which nothing in the repository showed.
     if: >-
+      vars.BEACON_AUTO_DEPLOY == 'true' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&

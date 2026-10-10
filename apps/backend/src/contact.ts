@@ -83,6 +83,8 @@ export async function deliverHouseholdInvitation(
   });
 }
 
+const EMAIL_REQUEST_TIMEOUT_MS = 10_000;
+
 export async function deliverResendEmail(
   config: ResendConfig,
   message: ResendMessage,
@@ -102,6 +104,8 @@ export async function deliverResendEmail(
       'Content-Type': 'application/json',
     },
     method: 'POST',
+    // A slow provider must not hold a request, or a background job, open.
+    signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as {

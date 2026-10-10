@@ -161,7 +161,9 @@ export class SignalingHub {
   ): boolean {
     const device = this.#devices.get(cameraId);
     if (!device) {
-      this.#reject(socket, 'camera_unavailable');
+      // Not 4003: the apps read that as "your authorization was lost" and sign
+      // the person out, but this camera is simply offline or paused (V67).
+      this.#reject(socket, 'camera_unavailable', 4004);
       return false;
     }
     // One camera phone can encode and upload only so many streams (V20).

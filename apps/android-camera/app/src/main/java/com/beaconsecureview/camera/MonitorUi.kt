@@ -416,7 +416,9 @@ internal fun MonitorHome(
         val active = session ?: return@LaunchedEffect
         while (session == active) {
             refresh(active.token)
-            delay(if (selectedCameraId == null) 15_000 else 1_000)
+            // Each refresh is two requests. Five seconds keeps viewer counts and camera status fresh
+            // enough while a camera is open without a request per second (V66).
+            delay(if (selectedCameraId == null) 15_000 else 5_000)
         }
     }
 
