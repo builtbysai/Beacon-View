@@ -143,6 +143,19 @@ const routes = {
     realtime: true,
     recordings: true,
   },
+  '/api/household/mode': {
+    mode: 'home',
+    source: 'manual',
+    changedAt: now,
+    canChange: true,
+    settings: {
+      muteMotionWhenHome: true,
+      pauseCamerasWhenHome: false,
+      resumeCamerasWhenAway: false,
+      schedule: null,
+    },
+  },
+  '/api/cast-config': { appId: null },
   '/api/account/households': {
     households: [
       { expiresAt: null, id: 'household-1', name: 'Home', role: 'owner' },
@@ -408,6 +421,21 @@ const report = [];
     });
     await visit('/cameras/camera-0', '.live-shell');
     await capture(`cameras-camera-0-${width}`, width >= 1280);
+    // The control bar keeps Audio, Talk and More; everything else is in the
+    // More menu, which opens upward inside the live surface and must fit.
+    await page.getByRole('button', { name: 'More', exact: true }).click();
+    await page.getByRole('menu').waitFor();
+    const menuBox = await page.getByRole('menu').boundingBox();
+    assert(
+      menuBox &&
+        menuBox.x >= 0 &&
+        menuBox.y >= 0 &&
+        menuBox.x + menuBox.width <= width &&
+        menuBox.y + menuBox.height <= page.viewportSize().height,
+      `live-more-${width}: the More menu leaves the screen ${JSON.stringify(menuBox)}`,
+    );
+    await capture(`live-more-${width}`);
+    await page.keyboard.press('Escape');
     if (width === 390 || width === 1280) {
       const livePath = new URL(page.url()).pathname;
       const liveShell = await page.locator('.live-shell').elementHandle();

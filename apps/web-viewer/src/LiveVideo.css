@@ -290,28 +290,32 @@
   color: var(--text-muted);
   font-size: 13px;
 }
-/* Optional local viewing deadline, also retained by the floating player. */
+/* Shown only once the viewing timer has finished. */
 .live-sleep-timer {
   position: absolute;
-  top: max(112px, calc(env(safe-area-inset-top) + 100px));
-  right: 16px;
+  left: 50%;
+  bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px));
+  transform: translateX(-50%);
   z-index: 25;
+  width: max-content;
   max-width: calc(100% - 32px);
-  border-radius: 12px;
-  background: rgba(12, 14, 17, 0.85);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   padding: 12px;
+  border-radius: 12px;
+  background: rgba(12, 14, 17, 0.85);
+  color: #fff;
 }
-.live-sleep-timer label {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+.live-sleep-timer p {
+  margin: 0;
 }
-.live-sleep-timer select,
 .live-sleep-timer button {
   min-height: 44px;
+}
+
+.video-frame.is-fill video {
+  object-fit: cover;
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCastToTv } from './cast-sender';
-import { Icon } from './Icon';
-import { CameraFlipButton } from './CameraFlipButton';
+import { Icon, type IconName } from './Icon';
+import { LiveViewerMenu, type ViewerMenuGroup } from './LiveViewerMenu';
 import { InlineRename } from './InlineRename';
 import { OverflowMenu } from './OverflowMenu';
 import { TalkSession, type TalkState } from './talk';
@@ -84,6 +84,22 @@ type ServerMessage =
       type: 'talk-state';
     }
   | { code: string; type: 'error' | 'peer-left' };
+
+const FILL_KEY = 'beacon.live.fill';
+function readFill(): boolean {
+  try {
+    return window.localStorage.getItem(FILL_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function writeFill(fill: boolean) {
+  try {
+    window.localStorage.setItem(FILL_KEY, fill ? '1' : '0');
+  } catch {
+    // Storage can be blocked; the choice then lasts for this visit only.
+  }
+}
 
 function signalingUrl(cameraId: string, viewerSessionId: string): string {
   const url = new URL('/api/signaling', window.location.href);
@@ -208,7 +224,10 @@ export function LiveVideo({
   videoCapRef.current = videoCap;
   const [helpOpen, setHelpOpen] = useState(false);
   const [zonesOpen, setZonesOpen] = useState(false);
-  const fullscreenButton = useRef<HTMLButtonElement>(null);
+  const moreButton = useRef<HTMLButtonElement>(null);
+  const menuOpen = useRef(false);
+  // How the picture fills the screen; remembered on this device.
+  const [fill, setFill] = useState(readFill);
   // Keep watching in a floating window while using other apps or tabs. Only
   // the full live view floats (and floats on its own when you leave), never
   // the small tiles on Home.
@@ -252,10 +271,11 @@ export function LiveVideo({
     setControlsVisible(true);
     if (hideControlsTimer.current !== null)
       window.clearTimeout(hideControlsTimer.current);
-    hideControlsTimer.current = window.setTimeout(
-      () => setControlsVisible(false),
-      3_000,
-    );
+    hideControlsTimer.current = window.setTimeout(() => {
+      // Never hide the controls from under an open menu.
+      if (menuOpen.current) wakeControls();
+      else setControlsVisible(false);
+    }, 3_000);
   }, []);
 
   const startRecording = useCallback(() => {
@@ -467,7 +487,7 @@ export function LiveVideo({
     const changed = () => {
       const expanded = document.fullscreenElement === stageRef.current;
       setFullscreen(expanded);
-      if (wasFullscreen && !expanded) fullscreenButton.current?.focus();
+      if (wasFullscreen && !expanded) moreButton.current?.focus();
       wasFullscreen = expanded;
     };
     document.addEventListener('fullscreenchange', changed);
@@ -842,10 +862,172 @@ export function LiveVideo({
       });
   }
 
+  const nextSource =
+    siblingCameras.length > 1
+      ? siblingCameras[
+          (siblingCameras.findIndex((source) => source.id === camera.id) + 1) %
+            siblingCameras.length
+        ]
+      : undefined;
+  const sleepNext: SleepMinutes =
+    sleep.minutes === 0
+      ? 15
+      : sleep.minutes === 15
+        ? 30
+        : sleep.minutes === 30
+          ? 60
+          : 0;
+  const cameraGroup: ViewerMenuGroup = {
+    id: 'camera',
+    label: 'Camera',
+    items: [
+      ...(onPrivacy && canPause
+        ? [
+            {
+              id: 'privacy',
+              icon: 'lock' as const,
+              label: privacyBusy
+                ? 'Updating privacy…'
+                : privacyMode
+                  ? 'Resume camera'
+                  : 'Pause camera',
+              pressed: privacyMode,
+              disabled: privacyBusy,
+              onSelect: () => {
+                talkSession.current?.stop();
+                setPrivacyBusy(true);
+                setControlError('');
+                void onPrivacy()
+                  .catch(() =>
+                    setControlError(
+                      'Privacy could not be changed. Check your connection and try again.',
+                    ),
+                  )
+                  .finally(() => setPrivacyBusy(false));
+              },
+            },
+          ]
+        : []),
+      ...(canFlip && nextSource
+        ? [
+            {
+              id: 'flip',
+              icon: 'flip' as const,
+              label: 'Switch camera',
+              ariaLabel: `Switch camera (currently ${camera.name}, switch to ${nextSource.name})`,
+              value: nextSource.name,
+              disabled: switching || privacyBusy || privacyMode,
+              onSelect: () => switchCamera(nextSource.id),
+            },
+          ]
+        : []),
+      ...(canEditZones && camera.deviceId
+        ? [
+            {
+              id: 'zones',
+              icon: 'eyeOff' as const,
+              label: 'Ignore areas',
+              pressed: zonesOpen,
+              onSelect: () => setZonesOpen((open) => !open),
+            },
+          ]
+        : []),
+    ],
+  };
+  const viewerGroup: ViewerMenuGroup = {
+    id: 'viewer',
+    label: 'Viewer options',
+    items: [
+      {
+        id: 'snapshot',
+        icon: 'snapshot',
+        label: 'Save snapshot',
+        disabled: !videoReady || privacyMode,
+        onSelect: takeSnapshot,
+      },
+      ...(cast.available
+        ? [
+            {
+              id: 'cast',
+              icon: 'cast' as const,
+              label: cast.casting ? 'Stop casting' : 'Cast to TV',
+              pressed: cast.casting,
+              disabled: cast.busy || (!cast.casting && !videoReady),
+              onSelect: () => void (cast.casting ? cast.stop() : cast.start()),
+            },
+          ]
+        : []),
+      ...(pip.supported
+        ? [
+            {
+              id: 'pip',
+              icon: 'pip' as const,
+              label: pip.active
+                ? 'Close floating window'
+                : 'Picture in picture',
+              pressed: pip.active,
+              disabled: !videoReady,
+              onSelect: pip.toggle,
+            },
+          ]
+        : []),
+      {
+        id: 'fullscreen',
+        icon: fullscreen ? 'minimize' : 'maximize',
+        label: fullscreen ? 'Exit full screen' : 'Full screen',
+        onSelect: toggleFullscreen,
+      },
+      {
+        id: 'fill',
+        icon: 'fit',
+        label: 'Picture fit',
+        value: fill ? 'Fill' : 'Fit',
+        keepOpen: true,
+        onSelect: () => {
+          setFill(!fill);
+          writeFill(!fill);
+        },
+      },
+      ...(quality || othersWatching > 0
+        ? [
+            {
+              id: 'details',
+              icon: (othersWatching > 0 ? 'eye' : 'signal') as IconName,
+              label: 'Stream details',
+              ariaLabel: `Stream details: ${othersWatching} other ${
+                othersWatching === 1 ? 'viewer' : 'viewers'
+              }${quality ? `, ${quality.path}` : ''}`,
+              value:
+                othersWatching > 0
+                  ? `${othersWatching} ${othersWatching === 1 ? 'viewer' : 'viewers'}`
+                  : undefined,
+              pressed: statsOpen,
+              onSelect: () => setStatsOpen((open) => !open),
+            },
+          ]
+        : []),
+      {
+        id: 'sleep',
+        icon: 'moon',
+        label: 'Sleep timer',
+        ariaLabel: `Sleep timer: ${
+          sleep.minutes === 0
+            ? 'off'
+            : `${sleep.remaining} ${sleep.remaining === 1 ? 'minute' : 'minutes'} left`
+        }. Choose ${sleepNext === 0 ? 'off' : `${sleepNext} minutes`}`,
+        value: sleep.minutes === 0 ? 'Off' : `${sleep.remaining} min left`,
+        keepOpen: true,
+        disabled: !requestedEnabled,
+        onSelect: () => sleep.choose(sleepNext),
+      },
+    ],
+  };
+  const menuGroups = [cameraGroup, viewerGroup];
+
   const content = (
     <>
       <div
-        className={`video-frame${compact ? '' : ' is-zoomable'}`}
+        className={`video-frame${compact ? '' : ' is-zoomable'}${fill && !compact ? ' is-fill' : ''}`}
         ref={frameRef}
         onFocus={!compact ? wakeControls : undefined}
         onPointerDown={!compact ? wakeControls : undefined}
@@ -1025,44 +1207,6 @@ export function LiveVideo({
                 </span>
               </button>
             )}
-            {canFlip && (
-              <CameraFlipButton
-                sources={siblingCameras}
-                activeId={camera.id}
-                busy={switching || privacyBusy || privacyMode}
-                className="video-control"
-                onSwitch={switchCamera}
-              />
-            )}
-            {onPrivacy && canPause && (
-              <button
-                aria-pressed={privacyMode}
-                className={`video-control${privacyMode ? ' is-active' : ''}`}
-                disabled={privacyBusy}
-                onClick={() => {
-                  talkSession.current?.stop();
-                  setPrivacyBusy(true);
-                  setControlError('');
-                  void onPrivacy()
-                    .catch(() =>
-                      setControlError(
-                        'Privacy could not be changed. Check your connection and try again.',
-                      ),
-                    )
-                    .finally(() => setPrivacyBusy(false));
-                }}
-                type="button"
-              >
-                <Icon name="lock" />
-                <span className="visually-hidden">
-                  {privacyBusy
-                    ? 'Updating privacy…'
-                    : privacyMode
-                      ? 'Resume'
-                      : 'Pause'}
-                </span>
-              </button>
-            )}
             {canRecord && (
               <RecordClipControl
                 className="video-control"
@@ -1072,78 +1216,14 @@ export function LiveVideo({
                 onStart={startRecording}
               />
             )}
-            <button
-              className="video-control"
-              disabled={!videoReady || privacyMode}
-              onClick={takeSnapshot}
-              title="Save a snapshot to this device"
-              type="button"
-            >
-              <Icon name="snapshot" />
-              <span className="visually-hidden">Save snapshot</span>
-            </button>
-            {canEditZones && camera.deviceId && (
-              <button
-                aria-pressed={zonesOpen}
-                className={`video-control${zonesOpen ? ' is-active' : ''}`}
-                onClick={() => setZonesOpen((open) => !open)}
-                title="Choose areas of the picture where movement is ignored"
-                type="button"
-              >
-                <Icon name="eyeOff" />
-                <span className="visually-hidden">Ignore areas</span>
-              </button>
-            )}
-            {cast.available && (
-              <button
-                aria-pressed={cast.casting}
-                className={`video-control${cast.casting ? ' is-active' : ''}`}
-                disabled={cast.busy || (!cast.casting && !videoReady)}
-                onClick={() => void (cast.casting ? cast.stop() : cast.start())}
-                title={
-                  cast.casting
-                    ? 'Stop showing this camera on the TV'
-                    : 'Show this camera on a TV'
-                }
-                type="button"
-              >
-                <Icon name="cast" />
-                <span className="visually-hidden">
-                  {cast.casting ? 'Stop casting' : 'Cast to TV'}
-                </span>
-              </button>
-            )}
-            {pip.supported && (
-              <button
-                aria-pressed={pip.active}
-                className="video-control"
-                disabled={!videoReady}
-                onClick={pip.toggle}
-                title={
-                  pip.active
-                    ? 'Back to this page'
-                    : 'Keep watching in a floating window'
-                }
-                type="button"
-              >
-                <Icon name="pip" />
-                <span className="visually-hidden">
-                  {pip.active ? 'Close floating window' : 'Picture in picture'}
-                </span>
-              </button>
-            )}
-            <button
-              className="video-control"
-              title={fullscreen ? 'Exit full screen' : 'Full screen'}
-              ref={fullscreenButton}
-              onClick={toggleFullscreen}
-              type="button"
-            >
-              <Icon name={fullscreen ? 'minimize' : 'maximize'} />
-              <span className="visually-hidden">
-                {fullscreen ? 'Exit full screen' : 'Full screen'}
-              </span>
-            </button>
+            <LiveViewerMenu
+              groups={menuGroups}
+              onOpenChange={(open) => {
+                menuOpen.current = open;
+                if (open) wakeControls();
+              }}
+              triggerRef={moreButton}
+            />
           </div>
         )}
         {!compact && zonesOpen && camera.deviceId && (
@@ -1162,26 +1242,6 @@ export function LiveVideo({
             type="button"
           >
             {zoom.state.scale.toFixed(1)}× · Reset zoom
-          </button>
-        )}
-        {!compact && (quality || othersWatching > 0) && (
-          <button
-            aria-expanded={statsOpen}
-            aria-label={`Stream details: ${othersWatching} other ${
-              othersWatching === 1 ? 'viewer' : 'viewers'
-            }${quality ? `, ${quality.path}` : ''}`}
-            className={`video-stats-toggle${
-              controlsVisible || statsOpen ? ' is-visible' : ''
-            }`}
-            onClick={() => setStatsOpen((open) => !open)}
-            type="button"
-          >
-            <Icon name={othersWatching > 0 ? 'eye' : 'signal'} />
-            <span>
-              {othersWatching > 0
-                ? `${othersWatching} other ${othersWatching === 1 ? 'viewer' : 'viewers'}`
-                : 'Stream details'}
-            </span>
           </button>
         )}
         {!compact && statsOpen && (
@@ -1234,48 +1294,22 @@ export function LiveVideo({
         )}
       </div>
       {helpOpen && <ShortcutsHelp onDismiss={() => setHelpOpen(false)} />}
-      {!compact && (
+      {!compact && sleep.expired && (
         <div className="live-sleep-timer">
-          <label>
-            Sleep timer
-            <select
-              className="input-field"
-              value={sleep.minutes}
-              disabled={sleep.expired || !requestedEnabled}
-              onChange={(event) =>
-                sleep.choose(Number(event.target.value) as SleepMinutes)
-              }
-            >
-              <option value="0">Off</option>
-              <option value="15">15 minutes</option>
-              <option value="30">30 minutes</option>
-              <option value="60">60 minutes</option>
-            </select>
-          </label>
-          {sleep.minutes > 0 && (
-            <span>
-              Viewing stops in {sleep.remaining}{' '}
-              {sleep.remaining === 1 ? 'minute' : 'minutes'}.
-            </span>
-          )}
-          {sleep.expired && (
-            <>
-              <p role="status">
-                Sleep timer finished. Camera capture settings are unchanged.
-              </p>
-              <button
-                className="secondary"
-                type="button"
-                disabled={!requestedEnabled || privacyMode}
-                onClick={() => {
-                  viewerSessionId.current = randomUuid();
-                  sleep.reset();
-                }}
-              >
-                Resume viewing
-              </button>
-            </>
-          )}
+          <p role="status">
+            Sleep timer finished. Camera capture settings are unchanged.
+          </p>
+          <button
+            className="secondary"
+            type="button"
+            disabled={!requestedEnabled || privacyMode}
+            onClick={() => {
+              viewerSessionId.current = randomUuid();
+              sleep.reset();
+            }}
+          >
+            Resume viewing
+          </button>
         </div>
       )}
       <p className="visually-hidden" role="status">

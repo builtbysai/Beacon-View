@@ -159,6 +159,12 @@ const shapes = {
       <path d="M16 9a4 4 0 0 1 1 2.5M19 6a8 8 0 0 1 1 6" />
     </>
   ),
+  fit: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <rect x="8" y="9" width="8" height="6" rx="1" />
+    </>
+  ),
   maximize: (
     <>
       <path d="M9 3H4v5m11-5h5v5M4 16v5h5m11-5v5h-5" />

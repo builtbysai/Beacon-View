@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -93,6 +94,13 @@ class FakePeer {
   close = vi.fn();
 }
 
+/** Secondary controls live in the "More" menu; open it before using one. */
+function openMore() {
+  const trigger = screen.getByRole('button', { name: 'More' });
+  if (trigger.getAttribute('aria-expanded') !== 'true')
+    fireEvent.click(trigger);
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -124,9 +132,8 @@ describe('LiveVideo', () => {
         peer.connectionState = 'connected';
         peer.onconnectionstatechange?.();
       });
-      fireEvent.change(screen.getByLabelText('Sleep timer'), {
-        target: { value: '15' },
-      });
+      openMore();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Sleep timer/ }));
       await act(async () => {
         vi.advanceTimersByTime(15 * 60_000);
         await Promise.resolve();
@@ -148,7 +155,10 @@ describe('LiveVideo', () => {
       expect(FakeWebSocket.instances).toHaveLength(count);
       fireEvent.click(screen.getByRole('button', { name: 'Resume viewing' }));
       expect(FakeWebSocket.instances).toHaveLength(count + 1);
-      expect(screen.getByLabelText('Sleep timer')).toHaveValue('0');
+      openMore();
+      expect(
+        screen.getByRole('menuitem', { name: /Sleep timer: off/ }),
+      ).toBeVisible();
     } finally {
       view.unmount();
       vi.useRealTimers();
@@ -169,8 +179,9 @@ describe('LiveVideo', () => {
       value: vi.fn(),
     });
     try {
+      openMore();
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Full screen' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Full screen' }));
         await Promise.resolve();
       });
       expect(requestFullscreen).toHaveBeenCalledOnce();
@@ -227,8 +238,9 @@ describe('LiveVideo', () => {
     expect(
       screen.queryByRole('button', { name: 'Reconnect' }),
     ).not.toBeInTheDocument();
+    openMore();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Resume camera' }));
       await Promise.resolve();
     });
     expect(onPrivacy).toHaveBeenCalledOnce();
@@ -256,14 +268,16 @@ describe('LiveVideo', () => {
         onSelectCamera={onSelectCamera}
       />,
     );
+    openMore();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Switch camera/ }));
+      fireEvent.click(screen.getByRole('menuitem', { name: /Switch camera/ }));
       await Promise.resolve();
     });
+    openMore();
     expect(
-      screen.getByRole('button', { name: /Switch camera/ }),
+      screen.getByRole('menuitem', { name: /Switch camera/ }),
     ).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: /Switch camera/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Switch camera/ }));
     expect(onSelectCamera).toHaveBeenCalledOnce();
     await act(async () => {
       reject(new Error('Offline'));
@@ -273,7 +287,10 @@ describe('LiveVideo', () => {
       'Your current view remains selected',
     );
     expect(screen.getByRole('heading', { name: 'Rear' })).toBeVisible();
-    expect(screen.getByRole('button', { name: /Switch camera/ })).toBeEnabled();
+    openMore();
+    expect(
+      screen.getByRole('menuitem', { name: /Switch camera/ }),
+    ).toBeEnabled();
   });
 
   it('starts muted and requires an explicit Listen action', () => {
@@ -733,9 +750,12 @@ describe('LiveVideo', () => {
       await Promise.resolve();
     });
 
-    const statsToggle = screen.getByRole('button', { name: /Stream details/ });
+    openMore();
+    const statsToggle = screen.getByRole('menuitem', {
+      name: /Stream details/,
+    });
     expect(statsToggle).toHaveAccessibleName('Stream details: 1 other viewer');
-    expect(statsToggle).toHaveTextContent('1 other viewer');
+    expect(statsToggle).toHaveTextContent('1 viewer');
     fireEvent.click(statsToggle);
     expect(screen.getByText('Watching now')).toBeVisible();
     expect(screen.getByText('You')).toBeVisible();
@@ -916,11 +936,13 @@ describe('LiveVideo', () => {
       peer.onconnectionstatechange?.();
       await Promise.resolve();
     });
-    expect(screen.getByRole('button', { name: /TURN relay/ })).toBeVisible();
+    openMore();
+    expect(screen.getByRole('menuitem', { name: /TURN relay/ })).toBeVisible();
     expect(screen.getByText('Starting secure video')).toBeVisible();
     fireEvent.loadedData(container.querySelector('video')!);
     expect(screen.queryByText('Starting secure video')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /TURN relay/ }));
+    openMore();
+    fireEvent.click(screen.getByRole('menuitem', { name: /TURN relay/ }));
     expect(screen.getByLabelText('Live stream quality')).toBeVisible();
     getStats.mockRejectedValueOnce(new Error('Peer closed'));
     await act(async () => {
@@ -928,8 +950,66 @@ describe('LiveVideo', () => {
       await Promise.resolve();
     });
     expect(screen.getByText('Connection: connected')).toBeInTheDocument();
+    openMore();
     expect(
-      screen.queryByRole('button', { name: /TURN relay/ }),
+      screen.queryByRole('menuitem', { name: /TURN relay/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps only the frequent controls on the bar and everything else in More', () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    render(
+      <LiveVideo
+        camera={{ id: 'camera', deviceId: 'device', name: 'Kitchen' }}
+        canEditZones
+        siblingCameras={[
+          { id: 'camera', name: 'Kitchen' },
+          { id: 'other', name: 'Porch' },
+        ]}
+      />,
+    );
+    const bar = screen.getByLabelText('Live view controls');
+    expect(
+      within(bar)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Listen', 'Talk', 'More']);
+    expect(
+      screen.queryByRole('menuitem', { name: 'Full screen' }),
+    ).not.toBeInTheDocument();
+    openMore();
+    for (const name of [
+      'Save snapshot',
+      'Full screen',
+      'Picture fit',
+      'Sleep timer',
+      'Ignore areas',
+    ])
+      expect(
+        screen.getByRole('menuitem', { name: new RegExp(name) }),
+      ).toBeVisible();
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  it('switches the picture between fit and fill and remembers the choice', () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    const { container } = render(
+      <LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} />,
+    );
+    const frame = container.querySelector('.video-frame')!;
+    expect(frame).not.toHaveClass('is-fill');
+    openMore();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Picture fit/ }));
+    expect(frame).toHaveClass('is-fill');
+    expect(screen.getByRole('menu')).toBeVisible();
+    expect(window.localStorage.getItem('beacon.live.fill')).toBe('1');
+    cleanup();
+    const again = render(
+      <LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} />,
+    );
+    expect(again.container.querySelector('.video-frame')).toHaveClass(
+      'is-fill',
+    );
+    window.localStorage.removeItem('beacon.live.fill');
   });
 });
