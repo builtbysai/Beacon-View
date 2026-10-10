@@ -30,6 +30,7 @@ import {
 } from './autostart.js';
 import {
   type CameraSetupRequest,
+  cameraSetupConfirmation,
   cameraSetupPath,
   validResumePath,
 } from './camera-setup.js';
@@ -275,9 +276,31 @@ async function completeGoogleSignIn(link: DesktopAuthLink): Promise<void> {
 
 // --- One-click camera setup (ADR 0083) --------------------------------------
 
-function startCameraSetup(request: CameraSetupRequest): void {
-  // A camera should come back after the computer restarts. The setup page
-  // says so; the tray menu and Settings can turn it off again.
+let cameraSetupPromptOpen = false;
+
+async function confirmCameraSetup(
+  request: CameraSetupRequest,
+): Promise<boolean> {
+  // A link, file or installer name can come from anywhere (V19): the camera
+  // and microphone are never enrolled without the person agreeing here.
+  if (cameraSetupPromptOpen) return false;
+  cameraSetupPromptOpen = true;
+  try {
+    const parent = mainWindow?.isVisible() ? mainWindow : undefined;
+    const options = cameraSetupConfirmation(request);
+    const { response } = parent
+      ? await dialog.showMessageBox(parent, options)
+      : await dialog.showMessageBox(options);
+    return response === 0;
+  } finally {
+    cameraSetupPromptOpen = false;
+  }
+}
+
+async function startCameraSetup(request: CameraSetupRequest): Promise<void> {
+  if (!(await confirmCameraSetup(request))) return;
+  // A camera should come back after the computer restarts. The dialog above
+  // said so; the tray menu and Settings can turn it off again.
   if (autostartSupported() && !getOpenAtLogin()) {
     setOpenAtLogin(true);
     tray?.refresh();
@@ -293,7 +316,7 @@ function startCameraSetup(request: CameraSetupRequest): void {
 function handleLaunchInput(input: LaunchInput | null): boolean {
   if (!input) return false;
   if (input.kind === 'auth') void completeGoogleSignIn(input.link);
-  else startCameraSetup(input.request);
+  else void startCameraSetup(input.request);
   return true;
 }
 

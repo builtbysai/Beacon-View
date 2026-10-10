@@ -1086,6 +1086,25 @@ describe('BrowserCameraMode standby (wake on view)', () => {
     }
   });
 
+  it('does not enroll from a link with a pairing code unless the desktop app has already asked (V19)', async () => {
+    const { getUserMedia } = setup(
+      '?autostart=1&code=ABCDEFGHJK&power=standby&mic=1',
+    );
+    render(<BrowserCameraMode onBack={() => undefined} standalone />);
+    // The normal setup screen waits for the person; nothing was registered.
+    expect(
+      await screen.findByRole('button', { name: 'Allow camera access' }),
+    ).toBeVisible();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(streamingOpens(getUserMedia)).toBe(0);
+    const calls = vi
+      .mocked(fetch)
+      .mock.calls.map((call) => String(call[0] as string));
+    expect(calls.some((url) => url.includes('/api/browser-devices'))).toBe(
+      false,
+    );
+  });
+
   it('reports a camera that cannot wake without dropping standby', async () => {
     const { getUserMedia } = setup('?autostart=1&power=standby');
     render(<BrowserCameraMode onBack={() => undefined} />);

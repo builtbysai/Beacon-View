@@ -161,9 +161,14 @@ export function BrowserCameraMode({
   wakeLockEnabledRef.current = wakeLockEnabled;
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Read once: the URL is cleaned up after the first render.
-  const [autoStart] = useState(() =>
-    readAutoStartRequest(window.location.search),
-  );
+  const [autoStart] = useState(() => {
+    const request = readAutoStartRequest(window.location.search);
+    // A link carrying a pairing code would join someone else's household with
+    // no one agreeing (V19). The desktop app asks first, before it opens this
+    // page; in a plain browser the person finishes setup themselves.
+    const carriesCode = new URLSearchParams(window.location.search).has('code');
+    return request && carriesCode && !desktopBridge() ? null : request;
+  });
   const autoStartPending = useRef(autoStart !== null);
   const [power, setPower] = useState<CameraPower>(
     () => autoStart?.power ?? loadCameraPower(),
