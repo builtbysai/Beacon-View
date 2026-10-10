@@ -336,8 +336,15 @@ internal fun MonitorHome(
         when {
             inbound.code != null && session == null -> {
                 busy = true
+                // The verifier was kept when sign-in started; without it (for example a link from another
+                // app) the code cannot be redeemed and the attempt simply fails.
+                val verifier = GoogleSignInPkce(context).take()
                 val result =
-                    withContext(Dispatchers.IO) { runCatching { api.exchangeGoogleSignIn(inbound.code) } }
+                    withContext(Dispatchers.IO) {
+                        runCatching {
+                            api.exchangeGoogleSignIn(inbound.code, verifier ?: error("No sign-in in progress"))
+                        }
+                    }
                 result.onSuccess {
                     sessionStore.save(it)
                     session = it

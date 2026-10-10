@@ -202,7 +202,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 withContext(Dispatchers.IO) {
                     runCatching { api.syncCameras(credential, enumerateCameraSources()) }
                 }
-            if (synchronization.exceptionOrNull() is AuthorizationLostException) {
+            if (synchronization.exceptionOrNull() is AuthorizationLostException && rejections.reject()) {
                 initializing = false
                 requirePairing()
                 return@launch
@@ -280,19 +280,28 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                     }
                 when (accepted) {
                     true -> {
+                        rejections.accept()
                         val settings = withContext(Dispatchers.IO) {
                             runCatching { api.motionSettings(credential) }
                         }
                         if (settings.exceptionOrNull() is AuthorizationLostException) {
-                            requirePairing()
-                            break
+                            if (rejections.reject()) {
+                                requirePairing()
+                                break
+                            }
                         }
                         settings.onSuccess { motionSettings = it }
                             .onFailure { Log.w(LOG_TAG, "event=motion_settings_sync_failed") }
                     }
                     false -> {
-                        requirePairing()
-                        break
+                        if (rejections.reject()) {
+                            requirePairing()
+                            break
+                        }
+                        signaling?.requestReconnect()
+                        CameraRuntime.update {
+                            it.copy(diagnostic = "Checking this device's connection")
+                        }
                     }
                     null -> {
                         signaling?.requestReconnect()
@@ -438,7 +447,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     }
 
     override fun onAuthorizationLost() {
-        requirePairing()
+        if (rejections.reject()) requirePairing() else signaling?.requestReconnect()
     }
 
     override fun onDestroy() {
@@ -483,6 +492,8 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
             )
         }
     }
+
+    private val rejections = RejectedCredentialTracker()
 
     private fun requirePairing() {
         CredentialStore(this).clear()
@@ -582,7 +593,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 runCatching { api.reportMotion(credential, cameraId, confidence) }
                     .onFailure { error ->
                         if (error is AuthorizationLostException) {
-                            withContext(Dispatchers.Main) { requirePairing() }
+                            if (rejections.reject()) withContext(Dispatchers.Main) { requirePairing() }
                         } else {
                             Log.w(LOG_TAG, "event=motion_report_failed")
                         }

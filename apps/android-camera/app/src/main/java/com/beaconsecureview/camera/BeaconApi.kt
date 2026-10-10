@@ -387,10 +387,12 @@ class BeaconApi(private val baseUrl: String) {
         }
     }
 
-    fun exchangeGoogleSignIn(code: String): AccountSession {
+    fun exchangeGoogleSignIn(code: String, verifier: String): AccountSession {
         val connection = connection("/api/mobile/auth/google", "POST")
         connection.outputStream.use {
-            it.write(JSONObject().put("code", code).toString().toByteArray(Charsets.UTF_8))
+            it.write(
+                JSONObject().put("code", code).put("verifier", verifier).toString().toByteArray(Charsets.UTF_8),
+            )
         }
         val body = responseBody(connection)
         if (connection.responseCode != HttpURLConnection.HTTP_OK) {
@@ -1525,9 +1527,9 @@ class BeaconApi(private val baseUrl: String) {
         responseBody(connection)
         return when (connection.responseCode) {
             HttpURLConnection.HTTP_NO_CONTENT -> true
-            HttpURLConnection.HTTP_UNAUTHORIZED,
-            HttpURLConnection.HTTP_FORBIDDEN,
-            -> false
+            // Only Beacon's own "unknown credential" answer counts as a rejection. A 403 comes from a proxy
+            // or network in between, never from Beacon, so it is treated as temporarily unavailable.
+            HttpURLConnection.HTTP_UNAUTHORIZED -> false
             else -> throw IllegalStateException("Heartbeat temporarily unavailable")
         }
     }
