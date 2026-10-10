@@ -397,7 +397,13 @@ export function registerRecordingRoutes(
     const tokenHash = hashSecret(parameters.data.token);
     const claim = await store.getRecordingShareLinkPlaybackClaim(tokenHash);
     if (!claim) return reply.code(404).send({ error: 'Link unavailable' });
-    void store.touchRecordingShareLinkAccess(claim.shareLinkId);
+    // A failure to count this view must never fail the relay, and an unhandled
+    // rejection would end the whole process.
+    void store
+      .touchRecordingShareLinkAccess(claim.shareLinkId)
+      .catch((error: unknown) =>
+        request.log.warn({ err: error }, 'Share link access was not recorded'),
+      );
     return relayRecordingPlayback(
       request,
       reply,

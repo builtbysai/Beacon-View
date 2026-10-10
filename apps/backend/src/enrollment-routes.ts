@@ -150,13 +150,24 @@ export function registerEnrollmentRoutes(
       .send({ code, expiresAt: expiresAt.toISOString(), id });
   });
 
+  /** Pairing attempts are limited by the caller's address and by the code
+   * being guessed. Neither key is chosen by the client (the installation id
+   * is, so it must not be a key), which keeps a script from getting a fresh
+   * allowance with every request. */
+  function allowPairingAttempt(ip: string, pairingCode: string): boolean {
+    const codeKey = hashSecret(pairingCode.toUpperCase());
+    return (
+      limiter.take(`pairing-redeem-ip:${ip}`, 20, FIFTEEN_MINUTES) &&
+      limiter.take(`pairing-redeem-code:${codeKey}`, 10, FIFTEEN_MINUTES)
+    );
+  }
+
   app.post('/api/devices/register', async (request, reply) => {
     const parsed = registerDeviceSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Unable to pair device' });
     }
-    const key = `${request.ip}:${parsed.data.installationId}`;
-    if (!limiter.take(`pairing-redeem:${key}`, 10, FIFTEEN_MINUTES)) {
+    if (!allowPairingAttempt(request.ip, parsed.data.pairingCode)) {
       return reply.code(429).send({ error: 'Too many requests' });
     }
     const credential = generateToken();
@@ -270,8 +281,7 @@ export function registerEnrollmentRoutes(
       .safeParse(request.body);
     if (!parsed.success)
       return reply.code(400).send({ error: 'Invalid browser camera details' });
-    const key = `${request.ip}:${parsed.data.installationId}`;
-    if (!limiter.take(`pairing-redeem:${key}`, 10, FIFTEEN_MINUTES))
+    if (!allowPairingAttempt(request.ip, parsed.data.pairingCode))
       return reply.code(429).send({ error: 'Too many requests' });
     const credential = generateToken();
     const result = await store.redeemPairingCode({

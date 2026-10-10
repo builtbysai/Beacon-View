@@ -960,6 +960,74 @@ describe.skipIf(!app || !store)('recording routes', () => {
     device.close();
   });
 
+  it('still plays a shared clip, without an unhandled rejection, when counting the view fails', async () => {
+    const owner = await registerAndSignIn(
+      'share-touch-owner@example.com',
+      '10.2.0.31',
+    );
+    const camera = await pairCamera(owner, 'Back door');
+    await connectDrive(owner.userId);
+    const device = connectDevice(camera.cameraId, camera.credential);
+    await nextMessage(device);
+    const headers = { cookie: owner.cookie, 'x-csrf-token': owner.csrf };
+    const created = await app!.inject({
+      headers,
+      method: 'POST',
+      payload: { cameraId: camera.cameraId },
+      url: '/api/recordings',
+    });
+    const recordingId = created.json<{ recording: { id: string } }>().recording
+      .id;
+    await app!.inject({
+      headers,
+      method: 'POST',
+      payload: {
+        byteSize: 2048,
+        checksumSha256: 'c'.repeat(64),
+        durationMs: 5_000,
+        mimeType: 'video/webm',
+        encryption,
+      },
+      url: `/api/recordings/${recordingId}/upload-session`,
+    });
+    await app!.inject({
+      headers,
+      method: 'POST',
+      payload: { providerFileId: 'drive-file-touch-1' },
+      url: `/api/recordings/${recordingId}/complete`,
+    });
+    const share = await app!.inject({
+      headers,
+      method: 'POST',
+      payload: { expiresInHours: 24 },
+      url: `/api/recordings/${recordingId}/share-links`,
+    });
+    const { token } = share.json<{ token: string }>();
+
+    // The route must attach a rejection handler to the fire-and-forget view
+    // count; without one, Node ends the whole process on the rejection.
+    const failedCount = Promise.reject(new Error('database unavailable'));
+    const handled = vi.spyOn(failedCount, 'catch');
+    const touch = vi
+      .spyOn(store!, 'touchRecordingShareLinkAccess')
+      .mockReturnValueOnce(failedCount);
+    vi.mocked(drive.downloadDriveRecordingFile).mockResolvedValueOnce(
+      new Response(Buffer.alloc(2048, 7)),
+    );
+    try {
+      const playback = await app!.inject({
+        method: 'GET',
+        url: `/api/shared-recordings/${token}/playback`,
+      });
+      expect(playback.statusCode).toBe(200);
+      expect(handled).toHaveBeenCalledOnce();
+    } finally {
+      touch.mockRestore();
+      failedCount.catch(() => undefined);
+      device.close();
+    }
+  });
+
   it('refuses a non-owner household member from creating or revoking a share link', async () => {
     const owner = await registerAndSignIn(
       'share-nonowner@example.com',

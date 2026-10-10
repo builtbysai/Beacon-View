@@ -1,4 +1,16 @@
+import { isIP } from 'node:net';
+
 import { z } from 'zod';
+
+function isAddressOrCidr(entry: string): boolean {
+  const [address = '', prefix, ...rest] = entry.split('/');
+  if (rest.length > 0) return false;
+  const family = isIP(address);
+  if (family === 0) return false;
+  if (prefix === undefined) return true;
+  const bits = Number(prefix);
+  return /^d{1,3}$/u.test(prefix) && bits <= (family === 4 ? 32 : 128);
+}
 
 const booleanFromEnvironment = z.preprocess(
   (value) => (value === 'true' ? true : value === 'false' ? false : value),
@@ -36,6 +48,25 @@ const environmentSchema = z
       .url()
       .default('ws://127.0.0.1:3000/api/signaling'),
     ALLOW_INSECURE_LOCAL_DEV: booleanFromEnvironment.default(false),
+    // Networks whose X-Forwarded-For header is believed (a comma-separated list
+    // of addresses or CIDR ranges). Empty means the socket address is the
+    // client. Production lists the private network Caddy connects from; the
+    // client is then the last forwarded address that is not on that list, so
+    // a visitor cannot choose the address used for rate limits and audit
+    // records.
+    TRUSTED_PROXY_CIDRS: z
+      .string()
+      .optional()
+      .transform((value) =>
+        (value ?? '')
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+      )
+      .refine((entries) => entries.every(isAddressOrCidr), {
+        message: 'TRUSTED_PROXY_CIDRS must be IP addresses or CIDR ranges',
+      })
+      .optional(),
     SESSION_COOKIE_NAME: z.string().min(1).default('beacon_session'),
     VIEWER_STUN_URL: z.string().url().default('stun:127.0.0.1:3478'),
     VIEWER_TURN_URL: z.string().url().default('turn:127.0.0.1:3478'),

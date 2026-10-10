@@ -68,6 +68,9 @@ export function buildApp(
       },
     },
     requestIdHeader: 'x-request-id',
+    trustProxy: config.TRUSTED_PROXY_CIDRS?.length
+      ? config.TRUSTED_PROXY_CIDRS
+      : false,
   });
   registerErrorHandling(app);
   const store = suppliedStore ?? createPostgresStore(config);

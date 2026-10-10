@@ -6,6 +6,7 @@ import { quietHoursSchema } from './motion-settings.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { SessionAuth } from './session-auth.js';
 import type { MilestoneStore } from './store.js';
+import { isPushServiceEndpoint } from './push-endpoint.js';
 
 const subscriptionSchema = z.discriminatedUnion('channel', [
   z
@@ -30,7 +31,7 @@ const subscriptionSchema = z.discriminatedUnion('channel', [
           endpoint: z
             .string()
             .url()
-            .refine((value) => new URL(value).protocol === 'https:'),
+            .refine(isPushServiceEndpoint, 'Unsupported push service'),
           expirationTime: z.number().nullable().optional(),
           keys: z
             .object({

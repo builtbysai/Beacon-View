@@ -43,6 +43,12 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   process.exitCode = 0;
 }
 
+// Background work is isolated from request handling: log a stray rejection
+// instead of ending every live camera session with the process.
+process.on('unhandledRejection', (reason) => {
+  app.log.error({ err: reason }, 'Unhandled promise rejection');
+});
+
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     void shutdown(signal).catch((error: unknown) => {

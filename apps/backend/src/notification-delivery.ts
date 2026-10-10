@@ -7,6 +7,7 @@ import type {
   NotificationDelivery,
   NotificationDeliveryOutcome,
 } from './notification-types.js';
+import { isPushServiceEndpoint } from './push-endpoint.js';
 
 const MAX_RETRY_AFTER_MS = 2 * 60 * 60 * 1_000;
 
@@ -155,6 +156,10 @@ export class NotificationSender {
       const subscription = JSON.parse(
         delivery.providerMaterial,
       ) as webPush.PushSubscription;
+      // Subscriptions saved before the allow-list existed are not called.
+      if (!isPushServiceEndpoint(subscription.endpoint)) {
+        return { permanent: true, success: false };
+      }
       await webPush.sendNotification(
         subscription,
         JSON.stringify(delivery.safePayload),
