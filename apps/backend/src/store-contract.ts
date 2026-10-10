@@ -773,6 +773,7 @@ export interface MilestoneStore {
   deleteAccount(userId: string): Promise<boolean>;
   audit(input: AuditInput): Promise<void>;
   purgeExpiredAuditEvents(now: Date): Promise<number>;
+  purgeExpiredCredentials(now: Date): Promise<Record<string, number>>;
   listAccessHistory(
     householdId: string,
     options?: AccessHistoryOptions,

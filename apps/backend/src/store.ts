@@ -828,6 +828,10 @@ export class PostgresStore implements MilestoneStore {
     return this.auditRepository.purgeExpired(now);
   }
 
+  async purgeExpiredCredentials(now: Date): Promise<Record<string, number>> {
+    return this.sessions.purgeExpired(now);
+  }
+
   async listAccessHistory(
     householdId: string,
     options?: AccessHistoryOptions,

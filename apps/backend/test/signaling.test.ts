@@ -13,7 +13,10 @@ class MockSocket extends EventEmitter {
     this.sent.push(JSON.parse(value));
   }
 
-  close(): void {
+  readonly closeCodes: (number | undefined)[] = [];
+
+  close(code?: number): void {
+    this.closeCodes.push(code);
     this.readyState = 3;
     this.emit('close');
   }
@@ -494,6 +497,61 @@ describe('SignalingHub', () => {
       enabled: false,
       type: 'privacy-mode',
     });
+    hub.close();
+  });
+
+  it('refuses a ninth viewer of one camera with a distinct close code (V20)', () => {
+    const servers = [{ urls: ['stun:localhost:3478'] }];
+    const hub = new SignalingHub(
+      () => servers,
+      () => servers,
+    );
+    hub.connectDevice('camera-1', 'public-camera-1', socket().ws);
+    for (let index = 0; index < 8; index += 1)
+      expect(
+        hub.connectViewer('camera-1', 'public-camera-1', socket().ws),
+      ).toBe(true);
+    const ninth = socket();
+    expect(hub.connectViewer('camera-1', 'public-camera-1', ninth.ws)).toBe(
+      false,
+    );
+    expect(ninth.mock.sent.at(-1)).toEqual({
+      code: 'camera_busy',
+      type: 'error',
+    });
+    // 4003 means "authorization lost" to the apps; a full camera must not look like that.
+    expect(ninth.mock.closeCodes).toEqual([4008]);
+    hub.close();
+  });
+
+  it('closes a peer that floods signaling messages, and one that sends an oversized message (V20)', () => {
+    const servers = [{ urls: ['stun:localhost:3478'] }];
+    const hub = new SignalingHub(
+      () => servers,
+      () => servers,
+    );
+    hub.connectDevice('camera-1', 'public-camera-1', socket().ws);
+    const viewer = socket();
+    hub.connectViewer('camera-1', 'public-camera-1', viewer.ws);
+    const ready = viewer.mock.sent.at(-1) as { connectionId: string };
+    for (let index = 0; index < 200; index += 1)
+      viewer.mock.message({
+        candidate: { candidate: `candidate:${index}` },
+        connectionId: ready.connectionId,
+        type: 'ice',
+      });
+    expect(viewer.mock.closeCodes).toEqual([]);
+    viewer.mock.message({
+      candidate: { candidate: 'one too many' },
+      connectionId: ready.connectionId,
+      type: 'ice',
+    });
+    expect(viewer.mock.closeCodes).toEqual([1008]);
+
+    const large = socket();
+    hub.connectViewer('camera-1', 'public-camera-1', large.ws);
+    large.mock.emit('message', Buffer.alloc(200_000, 97));
+    expect(large.mock.closeCodes).toEqual([1009]);
     hub.close();
   });
 });
