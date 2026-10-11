@@ -1,7 +1,7 @@
 {
   "name": "@beacon/desktop",
   "productName": "Beacon",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Beacon View desktop app for Windows, macOS, and Linux",
   "author": "Beacon View",
