@@ -78,6 +78,7 @@ type ServerMessage =
   | ReadyMessage
   | OfferMessage
   | IceMessage
+  | { connectionId: string; iceServers: RTCIceServer[]; type: 'ice-config' }
   | {
       active: boolean;
       connectionId: string;
@@ -728,6 +729,17 @@ export function LiveVideo({
             );
           } else if (peer.connectionState === 'disconnected') {
             if (disconnectGraceTimer === null) {
+              // Try to repair the same session first: the server answers with
+              // fresh relay credentials and the camera sends a restarting
+              // offer. The timer below still rebuilds everything if that does
+              // not bring the connection back (V65).
+              if (socket.readyState === WebSocket.OPEN)
+                socket.send(
+                  JSON.stringify({
+                    connectionId: connectionIdRef.current,
+                    type: 'ice-restart',
+                  }),
+                );
               disconnectGraceTimer = window.setTimeout(() => {
                 disconnectGraceTimer = null;
                 fail('signaling unavailable');
@@ -748,6 +760,13 @@ export function LiveVideo({
       }
       const peer = peerRef.current;
       if (!peer) return;
+      if (message.type === 'ice-config') {
+        peer.setConfiguration({
+          ...peer.getConfiguration(),
+          iceServers: message.iceServers,
+        });
+        return;
+      }
       if (message.type === 'offer') {
         await peer.setRemoteDescription({
           sdp: message.sdp,

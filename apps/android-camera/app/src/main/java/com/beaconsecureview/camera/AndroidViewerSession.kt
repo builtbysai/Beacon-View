@@ -154,7 +154,9 @@ internal class AndroidViewerSession(
         }
     }
 
-    private fun createPeer(message: JSONObject) {
+    private var relayOnly = false
+
+    private fun iceConfiguration(message: JSONObject): PeerConnection.RTCConfiguration {
         val servers = message.getJSONArray("iceServers").let { array ->
             (0 until array.length()).map { index ->
                 val item = array.getJSONObject(index)
@@ -167,19 +169,16 @@ internal class AndroidViewerSession(
                     .createIceServer()
             }
         }
-        peer =
-            factory.createPeerConnection(
-                PeerConnection.RTCConfiguration(servers).apply {
-                    iceTransportsType =
-                        if (message.optString("iceTransportPolicy") == "relay") {
-                            PeerConnection.IceTransportsType.RELAY
-                        } else {
-                            PeerConnection.IceTransportsType.ALL
-                        }
-                    sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
-                },
-                Observer(),
-            )
+        return PeerConnection.RTCConfiguration(servers).apply {
+            iceTransportsType =
+                if (relayOnly) PeerConnection.IceTransportsType.RELAY else PeerConnection.IceTransportsType.ALL
+            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
+        }
+    }
+
+    private fun createPeer(message: JSONObject) {
+        relayOnly = message.optString("iceTransportPolicy") == "relay"
+        peer = factory.createPeerConnection(iceConfiguration(message), Observer())
     }
 
     private fun applyOffer(message: JSONObject) {
@@ -259,6 +258,8 @@ internal class AndroidViewerSession(
                         }
                     }
                     "offer" -> applyOffer(message)
+                    // Fresh relay credentials for an ICE restart the camera is about to offer (V21, V65).
+                    "ice-config" -> peer?.setConfiguration(iceConfiguration(message))
                     "talk-state" ->
                         talkSession?.receive(
                             message.getBoolean("active"),
@@ -315,7 +316,11 @@ internal class AndroidViewerSession(
                     emit(StreamingState.Connected)
                     startQualityPolling()
                 }
-                PeerConnection.PeerConnectionState.DISCONNECTED -> emit(StreamingState.Reconnecting)
+                PeerConnection.PeerConnectionState.DISCONNECTED -> {
+                    // Try to repair this session before the app gives up and rebuilds it (V65).
+                    send("ice-restart")
+                    emit(StreamingState.Reconnecting)
+                }
                 PeerConnection.PeerConnectionState.FAILED,
                 PeerConnection.PeerConnectionState.CLOSED,
                 -> emit(StreamingState.Failed)

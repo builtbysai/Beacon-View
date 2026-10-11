@@ -66,7 +66,16 @@ class FakePeer {
     this.closed = true;
     this.connectionState = 'closed';
   }
-  createOffer() {
+  configurations: object[] = [];
+  offerOptions: object[] = [];
+  getConfiguration() {
+    return {};
+  }
+  setConfiguration(configuration: object) {
+    this.configurations.push(configuration);
+  }
+  createOffer(options?: object) {
+    this.offerOptions.push(options ?? {});
     return Promise.resolve({ sdp: 'sanitized-offer', type: 'offer' as const });
   }
   setLocalDescription() {
@@ -129,6 +138,40 @@ describe('BrowserProducer', () => {
     expect(FakePeer.instances[0]!.closed).toBe(true);
     expect(FakePeer.instances[1]!.closed).toBe(false);
     expect(states.at(-1)).toEqual(['streaming', 1]);
+    producer.stop();
+  });
+
+  it('offers again with fresh servers and an ICE restart when the viewer asks (V21, V65)', async () => {
+    vi.stubGlobal('WebSocket', FakeSocket);
+    vi.stubGlobal('RTCPeerConnection', FakePeer);
+    const producer = new BrowserProducer(
+      '00000000-0000-4000-8000-000000000001',
+      stream,
+      () => undefined,
+    );
+    producer.start();
+    const socket = FakeSocket.instances[0]!;
+    socket.open();
+    const connectionId = '00000000-0000-4000-8000-000000000011';
+    socket.emit({
+      connectionId,
+      iceServers: [],
+      iceTransportPolicy: 'all',
+      type: 'viewer-ready',
+    });
+    await vi.waitFor(() => expect(FakePeer.instances).toHaveLength(1));
+    socket.emit({
+      connectionId,
+      iceServers: [{ urls: 'turn:fresh' }],
+      type: 'ice-restart',
+    });
+    const peer = FakePeer.instances[0]!;
+    await vi.waitFor(() => expect(peer.offerOptions).toHaveLength(2));
+    expect(peer.offerOptions[1]).toEqual({ iceRestart: true });
+    expect(peer.configurations).toEqual([
+      { iceServers: [{ urls: 'turn:fresh' }] },
+    ]);
+    expect(socket.sent.at(-1)).toMatchObject({ connectionId, type: 'offer' });
     producer.stop();
   });
 
