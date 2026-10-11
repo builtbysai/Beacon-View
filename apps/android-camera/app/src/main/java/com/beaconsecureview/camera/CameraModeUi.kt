@@ -457,6 +457,8 @@ internal fun CameraHome(
     monitorSignedIn: Boolean,
 ) {
     var settingsOpen by remember { mutableStateOf(false) }
+    val qualityStore = CaptureQualityStore(androidx.compose.ui.platform.LocalContext.current)
+    var quality by remember { mutableStateOf(qualityStore.read()) }
     var disconnectConfirmationOpen by remember { mutableStateOf(false) }
     val permissionPrompt =
         cameraPermissionPrompt(
@@ -552,6 +554,22 @@ internal fun CameraHome(
                         onClick = {
                             settingsOpen = false
                             onMonitor()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text("Video: ${quality.label}")
+                                Text(
+                                    "Applies when the camera next starts. HD uses more battery and heat.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        },
+                        leadingIcon = { Icon(Icons.Outlined.Videocam, null) },
+                        onClick = {
+                            quality = if (quality == CaptureQuality.Standard) CaptureQuality.Hd else CaptureQuality.Standard
+                            qualityStore.save(quality)
                         },
                     )
                     DropdownMenuItem(

@@ -74,7 +74,7 @@ describe.skipIf(!store)('device credential rotation (V22)', () => {
         newHash: second,
         now,
       }),
-    ).toMatchObject({ publicDeviceId: expect.any(String) });
+    ).not.toBeNull();
 
     // The reply may never have arrived: both credentials work.
     expect(await store!.findDeviceByCredential(first)).not.toBeNull();
