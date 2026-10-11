@@ -16,7 +16,11 @@ export function MotionSettingsPanel({
   driveState,
 }: {
   deviceId: string;
-  cameras: { id: string; name: string }[];
+  cameras: {
+    id: string;
+    name: string;
+    capabilities?: Record<string, boolean | number | string> | undefined;
+  }[];
   /** Whether clips can be saved right now; when they cannot, record on
    * motion looks set up but produces nothing, so say so (V63). */
   driveState?:
@@ -231,6 +235,14 @@ export function MotionSettingsPanel({
             <span>
               <strong>Record on motion</strong>
               <small>Save a short clip when motion is detected.</small>
+              {active.recordOnMotion &&
+                cameras.find((camera) => camera.id === active.cameraId)
+                  ?.capabilities?.clipRecording === false && (
+                  <small role="alert">
+                    This phone’s camera can’t record clips while it streams, so
+                    none will be saved from it.
+                  </small>
+                )}
               {active.recordOnMotion &&
                 (driveState === 'not_connected' ||
                   driveState === 'expired' ||

@@ -1564,6 +1564,8 @@ class BeaconApi(private val baseUrl: String) {
     fun syncCameras(
         credential: String,
         sources: List<CameraSource>,
+        // Reported once capture has started, so the owner can be told when this phone cannot record clips (V72).
+        clipRecording: Boolean? = null,
     ): CameraSynchronization {
         val connection = connection("/api/device/cameras", "PUT")
         connection.setRequestProperty("Authorization", "Bearer $credential")
@@ -1577,7 +1579,12 @@ class BeaconApi(private val baseUrl: String) {
                                 JSONObject()
                                     .put("sourceKey", source.sourceKey)
                                     .put("name", source.name)
-                                    .put("facing", source.facing),
+                                    .put("facing", source.facing)
+                                    .apply {
+                                        if (clipRecording != null) {
+                                            put("capabilities", JSONObject().put("clipRecording", clipRecording))
+                                        }
+                                    },
                             )
                         }
                     },

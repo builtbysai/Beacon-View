@@ -81,6 +81,10 @@ class CameraMediaSource(
      * capturer already driving this source's live preview/analysis, whose
      * 3rd concurrent Recorder use case may or may not be available on this
      * device's camera HAL. */
+    /** False when this phone's camera cannot run the extra stream clip recording needs (V72). */
+    val clipRecordingAvailable: Boolean
+        get() = capturer.clipRecordingAvailable
+
     fun startClipRecording(
         outputFile: File,
         maxDurationMs: Long,
