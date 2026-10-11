@@ -9,7 +9,7 @@ function isAddressOrCidr(entry: string): boolean {
   if (family === 0) return false;
   if (prefix === undefined) return true;
   const bits = Number(prefix);
-  return /^d{1,3}$/u.test(prefix) && bits <= (family === 4 ? 32 : 128);
+  return /^\d{1,3}$/u.test(prefix) && bits <= (family === 4 ? 32 : 128);
 }
 
 const booleanFromEnvironment = z.preprocess(

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../src/app.js';
+import { parseConfig } from '../src/config.js';
 import type { AppConfig } from '../src/config.js';
 
 const baseConfig: AppConfig = {
@@ -73,5 +74,30 @@ describe('client address behind a reverse proxy (F1)', () => {
     );
     // A different real client is not locked out by the first one.
     expect((await register(app, '203.0.113.8')).statusCode).toBe(400);
+  });
+
+  it('parses the ranges production Compose sets, and rejects malformed ones', () => {
+    const base = {
+      ALLOW_INSECURE_LOCAL_DEV: 'true',
+      DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/test',
+      NODE_ENV: 'test',
+      TURN_SHARED_SECRET: 'test-shared-secret-with-at-least-32-bytes',
+    };
+    expect(
+      parseConfig({
+        ...base,
+        TRUSTED_PROXY_CIDRS: '172.16.0.0/12,10.0.0.0/8,192.168.0.0/16',
+      }).TRUSTED_PROXY_CIDRS,
+    ).toEqual(['172.16.0.0/12', '10.0.0.0/8', '192.168.0.0/16']);
+    expect(
+      parseConfig({ ...base, TRUSTED_PROXY_CIDRS: '127.0.0.1, ::1, fc00::/7' })
+        .TRUSTED_PROXY_CIDRS,
+    ).toEqual(['127.0.0.1', '::1', 'fc00::/7']);
+    expect(parseConfig(base).TRUSTED_PROXY_CIDRS).toBeUndefined();
+    for (const bad of ['10.0.0.0/33', 'nonsense', '10.0.0.0/x', '10.0.0.0/8/8'])
+      expect(
+        () => parseConfig({ ...base, TRUSTED_PROXY_CIDRS: bad }),
+        bad,
+      ).toThrow('TRUSTED_PROXY_CIDRS');
   });
 });
