@@ -1400,6 +1400,17 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       ...settings,
       ignoredZones: [],
     });
+    // An unchanged answer is a bare 304; a changed one is a full answer with a
+    // new ETag (V49).
+    const etag = deviceRead.headers.etag as string;
+    expect(etag).toMatch(/^"[0-9a-f]{32}"$/u);
+    const notModified = await app!.inject({
+      method: 'GET',
+      url: '/api/device/motion-settings',
+      headers: { authorization: `Bearer ${credential}`, 'if-none-match': etag },
+    });
+    expect(notModified.statusCode).toBe(304);
+    expect(notModified.body).toBe('');
     // Motion zones (ADR 0092): saved sorted and de-duplicated, kept when a
     // later save omits them, replaced when sent, and validated.
     const zonesResponse = await put(ownerSession, {
