@@ -1445,6 +1445,29 @@ class BeaconApi(private val baseUrl: String) {
         }
     }
 
+    /**
+     * Confirms the password for a sensitive action (deleting the account asks for a sign-in within ten
+     * minutes). A Google-only account has no password to confirm, so it must sign in again instead (V73).
+     */
+    fun reauthenticate(sessionToken: String, password: String) {
+        val connection = connection("/api/account/reauth", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $sessionToken")
+        connection.outputStream.use {
+            it.write(JSONObject().put("password", password).toString().toByteArray(Charsets.UTF_8))
+        }
+        responseBody(connection)
+        when (connection.responseCode) {
+            HttpURLConnection.HTTP_NO_CONTENT -> Unit
+            HttpURLConnection.HTTP_UNAUTHORIZED -> throw IllegalStateException("That password isn't right.")
+            HttpURLConnection.HTTP_CONFLICT ->
+                throw IllegalStateException(
+                    "This account signs in with Google. Sign out, sign in with Google again, then delete the account within 10 minutes.",
+                )
+            429 -> throw IllegalStateException("Too many attempts. Wait a few minutes, then try again.")
+            else -> throw IllegalStateException("Your password could not be checked. Try again.")
+        }
+    }
+
     fun deleteAccount(sessionToken: String) {
         val connection = connection("/api/account", "DELETE")
         connection.setRequestProperty("Authorization", "Bearer $sessionToken")

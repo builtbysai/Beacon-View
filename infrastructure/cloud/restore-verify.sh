@@ -59,4 +59,26 @@ if [ "$migration_count" -eq 0 ] || [ "$public_table_count" -eq 0 ]; then
   echo "Restore completed without the expected migration or application schema." >&2
   exit 65
 fi
-echo "Restore verification completed for $RESTORE_TARGET_DATABASE (migration rows: $migration_count; public tables: $public_table_count)."
+# The schema being present proves little: an empty restore has it too. Compare the data that matters with the
+# live database (V74). A backup is a day old, so the restored copy may hold fewer rows than the live one, but
+# never none of them.
+row_count() {
+  PGPASSWORD="$POSTGRES_PASSWORD" psql --host=postgres --username="$POSTGRES_USER" \
+    --dbname="$1" --tuples-only --no-align --set=ON_ERROR_STOP=1 \
+    --command "SELECT count(*) FROM public.$2"
+}
+summary=""
+for table in users households cameras recordings; do
+  restored=$(row_count "$RESTORE_TARGET_DATABASE" "$table")
+  live=$(row_count "$POSTGRES_DB" "$table")
+  if [ "$live" -gt 0 ] && [ "$restored" -eq 0 ]; then
+    echo "Restore produced no rows in $table, but the live database has $live." >&2
+    exit 65
+  fi
+  if [ "$restored" -gt "$live" ]; then
+    echo "Restored $table holds more rows ($restored) than the live database ($live); is this the right database?" >&2
+    exit 65
+  fi
+  summary="$summary $table $restored/$live"
+done
+echo "Restore verification completed for $RESTORE_TARGET_DATABASE (migration rows: $migration_count; public tables: $public_table_count; rows restored/live:$summary)."

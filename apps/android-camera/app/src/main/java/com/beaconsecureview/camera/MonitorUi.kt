@@ -884,6 +884,9 @@ internal fun MonitorHome(
             )
         }
         if (deleteAccountOpen && session != null) {
+            // The server wants a sign-in within the last ten minutes; when it says so, ask for the password (V73).
+            var deletePassword by remember { mutableStateOf("") }
+            var passwordRequired by remember { mutableStateOf(false) }
             AlertDialog(
                 onDismissRequest = { if (!deletingAccount) deleteAccountOpen = false },
                 title = { Text("Sorry to see you go") },
@@ -896,6 +899,20 @@ internal fun MonitorHome(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        if (passwordRequired) {
+                            androidx.compose.material3.OutlinedTextField(
+                                value = deletePassword,
+                                onValueChange = { deletePassword = it },
+                                label = { Text("Password") },
+                                singleLine = true,
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                keyboardOptions =
+                                    androidx.compose.foundation.text.KeyboardOptions(
+                                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                                    ),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                         if (deleteAccountError.isNotBlank()) {
                             Text(deleteAccountError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                         }
@@ -916,7 +933,13 @@ internal fun MonitorHome(
                             deletingAccount = true
                             deleteAccountError = ""
                             scope.launch {
-                                val result = withContext(Dispatchers.IO) { runCatching { api.deleteAccount(token) } }
+                                val result =
+                                    withContext(Dispatchers.IO) {
+                                        runCatching {
+                                            if (passwordRequired && deletePassword.isNotEmpty()) api.reauthenticate(token, deletePassword)
+                                            api.deleteAccount(token)
+                                        }
+                                    }
                                 result.onSuccess {
                                     withContext(Dispatchers.IO) {
                                         runCatching { disableAndroidNotifications(context, api, null) }
@@ -931,7 +954,12 @@ internal fun MonitorHome(
                                     message = "Your Beacon account and its data were deleted."
                                     onAccountDeleted()
                                 }.onFailure {
-                                    deleteAccountError = it.userFacingMessage("Your account could not be deleted.")
+                                    if (it.message?.startsWith("Sign in again") == true) {
+                                        passwordRequired = true
+                                        deleteAccountError = "For your security, enter your password to confirm."
+                                    } else {
+                                        deleteAccountError = it.userFacingMessage("Your account could not be deleted.")
+                                    }
                                 }
                                 deletingAccount = false
                             }
