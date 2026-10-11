@@ -10,10 +10,13 @@ export interface QuietHours {
 
 export function isIanaTimeZone(timeZone: string): boolean {
   try {
-    return (
-      timeZone === 'UTC' ||
-      Intl.supportedValuesOf('timeZone').includes(timeZone)
-    );
+    if (timeZone === 'UTC') return true;
+    // The canonical list leaves out older names that browsers and phones still
+    // report (Asia/Calcutta, America/Buenos_Aires); ask the runtime itself (V64).
+    if (Intl.supportedValuesOf('timeZone').includes(timeZone)) return true;
+    if (!/^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+){1,2}$/u.test(timeZone)) return false;
+    new Intl.DateTimeFormat('en-US', { timeZone });
+    return true;
   } catch {
     return false;
   }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isIanaTimeZone,
   isQuietHoursActive,
   motionSettingsSchema,
   normalizeZones,
@@ -134,5 +135,12 @@ describe('motion settings validation', () => {
     it('stores zones one way, whatever order they arrive in', () => {
       expect(normalizeZones([9, 2, 9, 5])).toEqual([2, 5, 9]);
     });
+  });
+
+  it('accepts older time zone names that phones and browsers still report (V64)', () => {
+    for (const timeZone of ['Asia/Calcutta', 'America/Buenos_Aires', 'UTC'])
+      expect(isIanaTimeZone(timeZone), timeZone).toBe(true);
+    for (const timeZone of ['Eastern Time', 'Mars/Olympus_Mons', '', '../etc'])
+      expect(isIanaTimeZone(timeZone), timeZone).toBe(false);
   });
 });

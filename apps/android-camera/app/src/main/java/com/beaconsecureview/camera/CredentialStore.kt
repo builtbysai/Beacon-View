@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -38,6 +39,9 @@ class CredentialStore(private val context: Context) : DeviceCredentialRepository
                 cipher.doFinal(Base64.decode(ciphertext, Base64.NO_WRAP)),
                 Charsets.UTF_8,
             )
+        }.onFailure {
+            // A lost or invalidated keystore key looks like "never paired"; leave a trace, never the secret (V57).
+            Log.w("BeaconCredentials", "event=credential_read_failed class=${it::class.java.simpleName}")
         }.getOrNull()
     }
 

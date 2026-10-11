@@ -145,6 +145,11 @@ internal fun BeaconGoogleDriveCard(
         !loaded -> Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
         current == null -> Unit
         !current.configured -> Text("Google Drive is not configured on this Beacon server.", modifier = Modifier.padding(top = 6.dp))
+        current.expired -> Text(
+            "Google stopped accepting this connection. Reconnect Google Drive from the web app so clips can be saved again.",
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 6.dp),
+        )
         !current.connected -> Text(
             "Not connected. Connect Google Drive from the web app to enable it here too.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,

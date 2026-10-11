@@ -29,9 +29,22 @@ export function AuthScreen({
   const [resetError, setResetError] = useState('');
   const [localBusy, setLocalBusy] = useState(false);
 
-  const googleResult = new URLSearchParams(window.location.search).get(
-    'googleSignIn',
+  // Read once, then cleared from the address bar so a reload does not repeat the
+  // alert (V76).
+  const [googleResult] = useState(() =>
+    new URLSearchParams(window.location.search).get('googleSignIn'),
   );
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('googleSignIn')) return;
+    params.delete('googleSignIn');
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      '',
+      window.location.pathname + (query ? '?' + query : ''),
+    );
+  }, []);
 
   const confirmMismatch =
     view === 'register' &&
@@ -86,7 +99,13 @@ export function AuthScreen({
       : '/api/auth/google';
 
   const onBack = () => {
-    window.history.back();
+    // History.back() leaves the site when this page was opened directly (V76).
+    if (
+      window.history.length > 1 &&
+      document.referrer.startsWith(window.location.origin)
+    )
+      window.history.back();
+    else window.location.assign('/');
   };
 
   const authAction = (

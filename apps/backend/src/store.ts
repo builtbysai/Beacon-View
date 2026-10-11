@@ -827,6 +827,7 @@ export class PostgresStore implements MilestoneStore {
     now: Date,
   ): Promise<{
     householdId: string;
+    expiresAt: Date;
     cameras: AccessibleCameraRecord[];
   } | null> {
     return this.sharing.listGuestAccessibleCameras(tokenHash, now);

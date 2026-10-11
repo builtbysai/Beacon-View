@@ -784,7 +784,11 @@ export interface MilestoneStore {
   listGuestAccessibleCameras(
     tokenHash: string,
     now: Date,
-  ): Promise<{ householdId: string; cameras: AccessibleCameraRecord[] } | null>;
+  ): Promise<{
+    householdId: string;
+    expiresAt: Date;
+    cameras: AccessibleCameraRecord[];
+  } | null>;
   revokeBrowserSession(userId: string, sessionId: string): Promise<boolean>;
   deleteAccount(userId: string): Promise<boolean>;
   audit(input: AuditInput): Promise<void>;
