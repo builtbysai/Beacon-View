@@ -6,12 +6,67 @@ document. This extends [code-review-findings-2026-10-09.md](code-review-findings
 whose findings **F1–F13** still stand. The index in section 3 lists every open
 finding in one place.
 
-**No code, configuration or branch was changed.** The only files written are the
-two audit documents. Build output went to ignored directories.
+**The audit itself changed no code.** Fixes began on October 10, 2026 on branch
+`claude/audit-fixes-live-viewer` (cut from `origin/main` `c42c277`); section 0 says
+what is fixed, with the commit, and what is not. The rest of this document is the
+audit as written, so a fixed finding still reads as it did.
 
 Severity: **High** fix before wider release; **Medium** fix soon; **Low** improve.
 Status: **Confirmed** = read in code/config; **Verify** = plausible, needs a runtime
 check before acting.
+
+## 0. Fix status (October 10, 2026)
+
+Branch `claude/audit-fixes-live-viewer`, nothing pushed, merged or deployed. "Verified"
+below means the stated test or build ran here; no fix has been run on a device, in the installed desktop
+app, or in production.
+
+| Finding                                             | Status                                                                                                                                                                                | How it was verified                                                                                             | Commit           |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
+| V19 desktop enrollment                              | **Fixed.** Native confirmation (Cancel by default) before a link, file or installer enrolls the camera or enables open-at-login; a code link no longer auto-starts in a plain browser | desktop and web tests, red then green                                                                           | 579f2c2          |
+| V19b Android pairing                                | **Fixed.** A link or QR code only fills in the code; pairing needs a tap                                                                                                              | compiles, unit tests, lint; not run on a device                                                                 | b31a9e3          |
+| V1 Android PKCE                                     | **Fixed.** Challenge and verifier like desktop; Android sign-in without a challenge is refused (needs the app and server released together)                                           | backend integration tests, Android unit test of the RFC 7636 vector                                             | b31a9e3          |
+| V40 credential erase                                | **Fixed.** Cleared only after three rejections over at least a minute; a 403 never counts                                                                                             | Android unit tests                                                                                              | b31a9e3          |
+| F1, V9 client address, pairing limits               | **Fixed.** `TRUSTED_PROXY_CIDRS`; pairing limited by address and code                                                                                                                 | backend tests, red then green                                                                                   | fd35699          |
+| V3 floating promise                                 | **Fixed** with a process-level rejection logger                                                                                                                                       | integration test, red then green                                                                                | fd35699          |
+| V8 push endpoint                                    | **Fixed.** Browser push services only                                                                                                                                                 | unit test                                                                                                       | fd35699          |
+| F2 security headers                                 | **Fixed in config, CSP report-only.** Enforce after a console pass                                                                                                                    | Caddy validates the file                                                                                        | 2f30967          |
+| F3 TURN                                             | **Config changed, not proven.** Private peers denied, quotas added; the invalid `no-loopback-peers` removed                                                                           | coturn parses the file; **no relay test between real devices**                                                  | 2f30967          |
+| V4, V5 sessions                                     | **Fixed.** No write per read; hourly purge                                                                                                                                            | integration tests                                                                                               | afbb7de          |
+| V20 viewer caps                                     | **Fixed.** Eight viewers per camera, message-rate and size limits                                                                                                                     | unit tests                                                                                                      | afbb7de          |
+| V67 close codes, V66 polling                        | **Fixed.** Android answers close frames; offline camera closes 4004; poll every 5 s                                                                                                   | backend tests; Android compiles and passes unit tests                                                           | 1dcf969          |
+| V68 monitoring                                      | **Fixed.** Disabled or never-run backups reported, daily repeat, safe JSON, web container watched                                                                                     | script test, shellcheck                                                                                         | 1dcf969          |
+| V23, V31, V10                                       | **Fixed.** Email timeout and non-blocking reset mail; recording key in the env template; deploy workflow needs `BEACON_AUTO_DEPLOY`                                                   | tests                                                                                                           | 1dcf969          |
+| V29 reconnect, and the unreachable Reconnect button | **Fixed.** Keeps retrying at a bounded pace; Reconnect shows whenever the stream is down                                                                                              | web tests, red then green                                                                                       | 3158ce3          |
+| V69 reset message                                   | **Fixed**                                                                                                                                                                             | web tests                                                                                                       | 3158ce3          |
+| V59, V44, V78 clips and cache                       | **Fixed.** Upload steps retried; separate cache prefixes; stale files swept                                                                                                           | Android unit tests                                                                                              | 82fe8c7          |
+| V42 Drive files on delete                           | **Fixed for account deletion.** Clip and thumbnail files removed before the Drive token is revoked; retention and ownership transfer remain                                           | integration test                                                                                                | 82fe8c7          |
+| F4 container                                        | **Fixed.** Runs as `node`; migrate, schema check and server were run in the built image                                                                                               | image run against a database                                                                                    | fddab44          |
+| V16 dependencies                                    | **Fixed for production.** Fastify 5.12.5; `pnpm audit --prod` is clean                                                                                                                | all suites after the update                                                                                     | fddab44          |
+| F7, V24 Android release                             | **Partly fixed.** Versioning and signing from environment; an unsigned bundle builds. R8, per-ABI, device test and Play steps remain (`docs/android-release.md`)                      | `bundleRelease` builds                                                                                          | fddab44          |
+| V25, V27, V45, V46, V48                             | **Fixed**                                                                                                                                                                             | tests                                                                                                           | 8500a26          |
+| V21 TURN lifetime                                   | **Partly fixed.** Default one hour; credential renewal and ICE restart remain                                                                                                         | config tests                                                                                                    | 8500a26          |
+| Live viewer redesign (request of October 10)        | **Done on web and Android.** Four controls and a More menu; sleep timer and stream details moved; Fit or Fill added                                                                   | web: tests plus the responsive harness at five widths; Android: compiles, tests, lint, **not seen on a device** | 819cfa3, ff3316f |
+
+**Not fixed, and why**
+
+- **V2 unsigned desktop updates:** needs a code-signing certificate (owner purchase and decision).
+- **V6 server-visible keys, V7 envelope AAD, V30 chunked clips, V60:** design changes that alter stored data;
+  each needs an ADR and a migration plan before code.
+- **V32 viewer default, V41 local pause:** owner decisions.
+- **V22 credential rotation, V43 viewer alerts, V61 motion quality, V62 MediaPipe, V63 to V65, V70 to V72:**
+  larger product or protocol work, or field data first.
+- **V11 backups exclude keys:** the env template now says so; keeping the keys is an owner routine.
+- The remaining Low items stay as listed in section 2.3 unless named above.
+
+**New findings made while fixing**
+
+- The web live view's **Reconnect button was never rendered** in the normal failure case.
+- coturn 4.6.3 rejects `no-loopback-peers` as a bad option (it was silently ignored).
+- Fastify's numeric `trustProxy` did not read `X-Forwarded-For` in the version in use; ranges are used.
+- A reused-secret check (V27) showed an existing test configured one key for three secrets.
+- A new `UPDATE` with an untyped timestamp parameter failed only against PostgreSQL, which the
+  integration suite caught.
 
 ## 1. Scope, method and limits
 
