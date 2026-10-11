@@ -67,6 +67,7 @@ import {
   type HouseholdEvent,
 } from './use-household-events';
 import { disableWebNotifications } from './NotificationSettings';
+import { useVisiblePolling } from './use-visible-polling';
 import { FavoriteCameraCard } from './FavoriteCameraCard';
 import { FavoritesEditor } from './FavoritesEditor';
 import { LatestActivityPreview } from './LatestActivityPreview';
@@ -585,6 +586,14 @@ function AppShell() {
     onRefreshNeeded: handleRefreshNeeded,
     onSessionEnded: handleSessionEnded,
   });
+  // Viewers have no realtime channel (owners and admins do), so refresh their
+  // cameras while the page is visible (V43).
+  useVisiblePolling(
+    () => void loadCameras().catch(() => undefined),
+    20_000,
+    user !== null &&
+      (household?.role === 'viewer' || household?.role === 'guest'),
+  );
 
   async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
