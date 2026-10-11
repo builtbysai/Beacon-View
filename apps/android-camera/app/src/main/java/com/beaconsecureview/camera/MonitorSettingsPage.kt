@@ -249,7 +249,7 @@ internal fun ColumnScope.MonitorSettingsPage(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     BeaconPrivacyFact("Motion history", "Event time, camera and motion metadata follow your retention setting.")
-                    BeaconPrivacyFact("Security activity", "Session and access history is shown without a device fingerprint.")
+                    BeaconPrivacyFact("Security activity", "Your session list shows each browser or app by name and when it was last used. IP addresses are not shown.")
                     BeaconPrivacyFact("Cloud storage", "Google Drive is optional and recording is controlled separately.")
                 }
                 Row(

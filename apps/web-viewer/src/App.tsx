@@ -1096,6 +1096,7 @@ function AppShell() {
           canManageSettings={
             household?.role === 'owner' || household?.role === 'admin'
           }
+          driveState={drive.state}
         />
       </section>
     </ModalDialog>
