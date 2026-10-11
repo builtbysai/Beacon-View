@@ -1,0 +1,36 @@
+name: Dependency audit
+
+# Weekly full audit, development and build tools included (V16). CI audits only
+# production dependencies at high severity, so advisories in tooling were never
+# reported. This does not block merges; a failure here is a reminder to update.
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # High severity and above across every workspace dependency (one moderate
+      # advisory, sprintf-js, has no patched release yet).
+      - run: pnpm audit --audit-level high
