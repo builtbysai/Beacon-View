@@ -130,4 +130,62 @@ describe.skipIf(!store)('household invitation acceptance', () => {
     );
     expect(accessible).toHaveLength(0);
   });
+
+  it('gives a viewer only the cameras the inviter selected (V32)', async () => {
+    const owner = await store!.createAccount(
+      'scope-owner@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    const publicIds: string[] = [];
+    for (const name of ['Nursery', 'Garage']) {
+      const code = `SCOPE${name.toUpperCase()}`;
+      await store!.createPairingCode(
+        owner.householdId,
+        hashSecret(code),
+        new Date(Date.now() + 60_000),
+      );
+      const device = await store!.redeemPairingCode({
+        codeHash: hashSecret(code),
+        credentialHash: hashSecret(`credential-${name}`),
+        installationId: randomUUID(),
+        ipAddress: '127.0.0.1',
+        name,
+        now: new Date(),
+      });
+      if (!device || typeof device === 'string')
+        throw new Error('Expected device');
+      publicIds.push(device.publicCameraId);
+    }
+    const member = await store!.createAccount(
+      'scope-member@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    await store!.createHouseholdInvitation({
+      cameraPublicIds: [publicIds[1]!],
+      cameraScope: 'selected',
+      defaultCanListen: true,
+      expiresAt: new Date(Date.now() + 60_000),
+      householdId: owner.householdId,
+      invitedByUserId: owner.id,
+      invitedEmail: 'scope-member@example.com',
+      role: 'viewer',
+      tokenHash: hashSecret('SCOPE-TOKEN'),
+    });
+    await store!.acceptHouseholdInvitation({
+      email: 'scope-member@example.com',
+      now: new Date(),
+      tokenHash: hashSecret('SCOPE-TOKEN'),
+      userId: member.id,
+    });
+    const accessible = await store!.listAccessibleCameras(
+      owner.householdId,
+      member.id,
+      'viewer',
+    );
+    expect(accessible.map((camera) => camera.publicCameraId)).toEqual([
+      publicIds[1],
+    ]);
+  });
 });

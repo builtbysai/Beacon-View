@@ -201,6 +201,7 @@ describe('HouseholdSharingSettings', () => {
     // showing; Listen defaults on, flip this test's picks explicitly.
     fireEvent.click(screen.getByLabelText('Talk'));
     fireEvent.click(screen.getByLabelText('Flip'));
+    fireEvent.click(screen.getByLabelText('All cameras'));
     fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
 
     await waitFor(() =>
@@ -214,11 +215,62 @@ describe('HouseholdSharingSettings', () => {
             defaultCanTalk: true,
             defaultCanFlip: true,
             defaultCanPause: false,
+            cameraAccess: 'all',
           }),
           method: 'POST',
         }),
       ),
     );
+  });
+
+  it('makes the owner choose cameras for a viewer, and sends only the ones picked (V32)', async () => {
+    vi.mocked(request).mockImplementation((path, options) => {
+      if (path === '/api/household/sharing')
+        return Promise.resolve({ invitations: [], members: [] });
+      if (path === '/api/household/invitations' && options?.method === 'POST')
+        return Promise.resolve({
+          expiresAt: '2026-09-14T12:00:00.000Z',
+          token: 'one-time-secret-code',
+        });
+      if (path === '/api/household/guest-links' && !options?.method)
+        return Promise.resolve({ guestLinks: [] });
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+    render(<HouseholdSharingSettings cameras={[camera]} role="owner" />);
+    await screen.findByText('No household members.');
+    fireEvent.click(screen.getByRole('button', { name: 'Invite person' }));
+    fireEvent.change(await screen.findByLabelText('Email'), {
+      target: { value: 'viewer@example.com' },
+    });
+    // Nothing is chosen for them: sending is refused until the owner picks.
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Choose which cameras this person can see.',
+    );
+    fireEvent.click(screen.getByLabelText('Only selected cameras'));
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Pick at least one camera.',
+    );
+    expect(request).not.toHaveBeenCalledWith(
+      '/api/household/invitations',
+      expect.anything(),
+    );
+    fireEvent.click(screen.getByLabelText(camera.deviceName || camera.name));
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
+    await waitFor(() => {
+      const call = vi
+        .mocked(request)
+        .mock.calls.find(
+          ([path, options]) =>
+            path === '/api/household/invitations' && options?.method === 'POST',
+        );
+      expect(call).toBeDefined();
+      const sent = JSON.parse(call![1]!.body as string) as {
+        cameraAccess: unknown;
+      };
+      expect(sent.cameraAccess).toEqual({ cameraIds: [camera.id] });
+    });
   });
 
   it('creates a guest link scoped to the checked cameras and permissions', async () => {

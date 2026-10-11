@@ -94,6 +94,7 @@ async function inviteAndAccept(
       email,
       role,
       ...(role === 'guest' ? { expiresInHours: 24 } : {}),
+      ...(role === 'viewer' ? { cameraAccess: 'all' } : {}),
       ...defaults,
     },
     url: '/api/household/invitations',

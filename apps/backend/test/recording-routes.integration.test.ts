@@ -274,7 +274,11 @@ describe.skipIf(!app || !store)('recording routes', () => {
     const invite = await app!.inject({
       headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
       method: 'POST',
-      payload: { email: 'viewer-role@example.com', role: 'viewer' },
+      payload: {
+        cameraAccess: 'all',
+        email: 'viewer-role@example.com',
+        role: 'viewer',
+      },
       url: '/api/household/invitations',
     });
     const token = invite.json<{ token: string }>().token;
@@ -328,7 +332,11 @@ describe.skipIf(!app || !store)('recording routes', () => {
     const invite = await app!.inject({
       headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
       method: 'POST',
-      payload: { email: 'grant-playback-viewer@example.com', role: 'viewer' },
+      payload: {
+        cameraAccess: 'all',
+        email: 'grant-playback-viewer@example.com',
+        role: 'viewer',
+      },
       url: '/api/household/invitations',
     });
     const token = invite.json<{ token: string }>().token;
@@ -1103,7 +1111,11 @@ describe.skipIf(!app || !store)('recording routes', () => {
     const invite = await app!.inject({
       headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
       method: 'POST',
-      payload: { email: 'share-viewer@example.com', role: 'viewer' },
+      payload: {
+        cameraAccess: 'all',
+        email: 'share-viewer@example.com',
+        role: 'viewer',
+      },
       url: '/api/household/invitations',
     });
     const token = invite.json<{ token: string }>().token;

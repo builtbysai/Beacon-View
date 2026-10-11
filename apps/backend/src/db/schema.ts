@@ -202,6 +202,14 @@ export const householdInvitations = pgTable(
     defaultCanTalk: boolean('default_can_talk').notNull().default(false),
     defaultCanFlip: boolean('default_can_flip').notNull().default(false),
     defaultCanPause: boolean('default_can_pause').notNull().default(false),
+    // Which cameras a 'viewer' sees on acceptance, chosen when inviting (V32):
+    // 'all' or 'selected' (then only the cameras in cameraPublicIds). Invitations
+    // created before this existed stay 'all'.
+    cameraScope: text('camera_scope').notNull().default('all'),
+    cameraPublicIds: text('camera_public_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     ...timestamps,
   },
   (table) => [
@@ -213,6 +221,10 @@ export const householdInvitations = pgTable(
     index('household_invitations_email_pending_idx')
       .on(table.invitedEmail, table.expiresAt)
       .where(sql`${table.acceptedAt} is null and ${table.revokedAt} is null`),
+    check(
+      'household_invitations_camera_scope_valid',
+      sql`${table.cameraScope} in ('all', 'selected')`,
+    ),
     check(
       'household_invitations_role_valid',
       sql`${table.role} in ('admin', 'viewer', 'guest')`,

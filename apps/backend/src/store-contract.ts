@@ -96,6 +96,9 @@ export interface HouseholdInvitationRecord {
   defaultCanTalk: boolean;
   defaultCanFlip: boolean;
   defaultCanPause: boolean;
+  /** Which cameras a viewer sees on acceptance (V32). */
+  cameraScope: 'all' | 'selected';
+  cameraPublicIds: string[];
 }
 
 export interface GoogleDriveConnectionRecord {
@@ -704,6 +707,8 @@ export interface MilestoneStore {
     defaultCanTalk?: boolean;
     defaultCanFlip?: boolean;
     defaultCanPause?: boolean;
+    cameraScope?: 'all' | 'selected';
+    cameraPublicIds?: string[];
   }): Promise<string>;
   acceptHouseholdInvitation(input: {
     tokenHash: string;

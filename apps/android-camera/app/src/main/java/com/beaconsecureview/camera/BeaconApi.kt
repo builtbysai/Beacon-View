@@ -1237,12 +1237,19 @@ class BeaconApi(private val baseUrl: String) {
         sessionToken: String,
         email: String,
         role: String,
+        // For a viewer the owner must choose (V32): null means every camera, otherwise only these ids.
+        cameraIds: List<String>? = null,
     ): CreatedInvitation {
         val connection = connection("/api/household/invitations", "POST")
         connection.setRequestProperty("Authorization", "Bearer $sessionToken")
-        connection.outputStream.use {
-            it.write(JSONObject().put("email", email).put("role", role).toString().toByteArray(Charsets.UTF_8))
+        val payload = JSONObject().put("email", email).put("role", role)
+        if (role == "viewer") {
+            payload.put(
+                "cameraAccess",
+                if (cameraIds == null) "all" else JSONObject().put("cameraIds", org.json.JSONArray(cameraIds)),
+            )
         }
+        connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
         val body = responseBody(connection)
         if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
         if (connection.responseCode != HttpURLConnection.HTTP_CREATED) {

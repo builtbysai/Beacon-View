@@ -705,6 +705,12 @@ export class PostgresStore implements MilestoneStore {
     tokenHash: string;
     invitedByUserId: string;
     expiresAt: Date;
+    defaultCanListen?: boolean;
+    defaultCanTalk?: boolean;
+    defaultCanFlip?: boolean;
+    defaultCanPause?: boolean;
+    cameraScope?: 'all' | 'selected';
+    cameraPublicIds?: string[];
   }): Promise<string> {
     return this.sharing.createInvitation(input);
   }
