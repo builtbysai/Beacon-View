@@ -971,11 +971,15 @@ class BeaconApi(private val baseUrl: String) {
             }
 
             cacheDirectory.mkdirs()
-            cacheDirectory.listFiles { file -> file.name.startsWith("beacon-thumb-") }
+            // Only this clip's earlier thumbnail is replaced, so rows loading in parallel do not delete
+            // each other's pictures (V78); anything older than an hour is swept.
+            val thumbnailPrefix = "beacon-thumb-${recordingId.filter { it.isLetterOrDigit() || it == '-' }}-"
+            cacheDirectory.listFiles { file -> file.name.startsWith(thumbnailPrefix) }
                 ?.forEach { it.delete() }
-            val encryptedFile = File.createTempFile("beacon-thumb-", ".encrypted", cacheDirectory)
+            deleteStaleCacheFiles(cacheDirectory, "beacon-thumb-", olderThanMs = 60 * 60_000L)
+            val encryptedFile = File.createTempFile(thumbnailPrefix, ".encrypted", cacheDirectory)
             val extension = if (mimeType == "image/webp") ".webp" else ".jpg"
-            val imageFile = File.createTempFile("beacon-thumb-", extension, cacheDirectory)
+            val imageFile = File.createTempFile(thumbnailPrefix, extension, cacheDirectory)
             return try {
                 val digest = MessageDigest.getInstance("SHA-256")
                 var bytes = 0L

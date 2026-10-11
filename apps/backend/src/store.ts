@@ -322,6 +322,12 @@ export class PostgresStore implements MilestoneStore {
     return this.recordings.beginAvailableDeletion(householdId, recordingId);
   }
 
+  async listRecordingDriveFiles(
+    householdId: string,
+  ): Promise<{ userId: string; providerFileId: string }[]> {
+    return this.recordings.listDriveFiles(householdId);
+  }
+
   async finishRecordingDeletion(
     householdId: string,
     recordingId: string,
