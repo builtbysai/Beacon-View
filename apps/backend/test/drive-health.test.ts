@@ -85,6 +85,25 @@ describe('Drive health', () => {
     expect(store.markGoogleDriveConnectionExpired).not.toHaveBeenCalled();
   });
 
+  it('reuses an access token for a while, but never after a disconnect (V53)', async () => {
+    let now = 1_000;
+    const store = fakeStore();
+    const health = new DriveHealth(store as never, config, () => now);
+    await health.recordingAccessToken('user');
+    await health.recordingAccessToken('user');
+    expect(google.calls).toBe(1);
+    store.disconnect();
+    health.forget('user');
+    await expect(health.recordingAccessToken('user')).rejects.toThrow();
+    expect(google.calls).toBe(1);
+    now += 31 * 60_000;
+    const other = new DriveHealth(fakeStore() as never, config, () => now);
+    await other.recordingAccessToken('user');
+    now += 31 * 60_000;
+    await other.recordingAccessToken('user');
+    expect(google.calls).toBe(3);
+  });
+
   it('refreshes at most hourly, but notices a disconnect at once', async () => {
     let now = 1_000;
     const store = fakeStore();

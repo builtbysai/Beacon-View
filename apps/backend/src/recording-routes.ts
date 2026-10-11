@@ -879,6 +879,7 @@ export function registerRecordingRoutes(
           byteSize: claim.byteSize,
           mimeType: 'application/octet-stream',
           origin: config.WEB_ORIGIN,
+          part: 'thumbnail',
           recordingId: claim.recordingId,
         });
         reply.header('Cache-Control', 'no-store');
@@ -1107,6 +1108,7 @@ export function registerRecordingRoutes(
           accessToken,
           byteSize: claim.byteSize,
           mimeType: 'application/octet-stream',
+          part: 'thumbnail',
           recordingId: claim.recordingId,
         });
         reply.header('Cache-Control', 'no-store');

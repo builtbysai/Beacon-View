@@ -99,6 +99,33 @@ describe('Google Drive OAuth client', () => {
     expect(options.body).not.toContain('private-access-token');
   });
 
+  it('names a thumbnail upload apart from its clip (V53)', async () => {
+    const location =
+      'https://www.googleapis.com/upload/drive/v3/files?upload_id=x';
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(new Response(null, { headers: { location } }));
+    vi.stubGlobal('fetch', fetch);
+    await initiateDriveRecordingUpload({
+      accessToken: 'token',
+      byteSize: 10,
+      mimeType: 'application/octet-stream',
+      part: 'thumbnail',
+      recordingId: '8aedbca1-6d5a-47b6-8c31-d20da64eb670',
+    });
+    const body = JSON.parse(String(fetch.mock.calls[0]![1]?.body)) as {
+      appProperties: Record<string, string>;
+      name: string;
+    };
+    expect(body.name).toBe(
+      'Beacon-thumbnail-8aedbca1-6d5a-47b6-8c31-d20da64eb670.beacon',
+    );
+    expect(body.appProperties).toMatchObject({
+      beacon: 'recording',
+      part: 'thumbnail',
+    });
+  });
+
   it('accepts only the Drive file created for the expected recording', async () => {
     vi.stubGlobal(
       'fetch',
