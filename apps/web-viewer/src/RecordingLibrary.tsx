@@ -197,6 +197,19 @@ export function RecordingLibrary({
         append ? [...(current ?? []), ...result.recordings] : result.recordings,
       );
       setCursor(result.nextCursor ?? null);
+      // Once the whole list is loaded, forget bookmarks for clips that no
+      // longer exist (expired or deleted elsewhere) so they cannot pile up.
+      // An empty list is left alone: it may only mean access changed.
+      if (!result.nextCursor && result.recordings.length > 0) {
+        const present = new Set(
+          (append
+            ? [...(recordings ?? []), ...result.recordings]
+            : result.recordings
+          ).map((item) => item.id),
+        );
+        const kept = bookmarks.filter((id) => present.has(id));
+        if (kept.length !== bookmarks.length) saveBookmarks(kept);
+      }
     } catch {
       setError('Your clips couldn’t be loaded. Try again.');
       setRecordings((current) => current ?? []);
