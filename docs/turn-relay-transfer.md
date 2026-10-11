@@ -17,12 +17,17 @@ View relay is unchanged**: it keeps using `/etc/beacon-remote/turn-relay.overrid
 
 ## What the tests showed (2026-10-11, local containers, coturn 4.13.0)
 
-- With **today's live config**, a client could ask the relay to reach another private address on the
-  server's network and it worked (the F3 finding is real).
-- With the **hardened config**, the same request got nothing back, while a peer at the relay's own address
-  still worked. That exception comes from the new entrypoint (`--allowed-peer-ip=<container address>`).
-  Without it, two relayed sessions on this one server (a camera and a viewer that both need the relay) would
-  look like a private peer and be refused.
+Probing used `turnutils_uclient` against a throwaway server. Note that its `-y` flag makes two clients talk
+to each other through their relays and ignores `-e`, so it can only prove relay-to-relay traffic; asking for a
+specific peer address needs a run without `-y`.
+
+- With **today's live config**, a client could ask the relay to reach another private address (a container on
+  the same network, or an address on a different private subnet) and the data came back. The F3 finding is real.
+  (Loopback is already refused by coturn's default.)
+- With the **hardened config and the repository entrypoint**, both private peers were refused.
+- Two relayed sessions on this one server (a camera and a viewer that both need the relay) still work with the
+  entrypoint, because it leaves one address open: the container's own. Without that hole the same pair is
+  refused. coturn's `allowed-peer-ip` was tried for the hole and is not used.
 - coturn 4.13.0 reports `no-cli` as deprecated; the CLI is off by default, so the line was removed.
 
 ## Before the window
@@ -43,8 +48,8 @@ Let `R=/opt/beacon/releases/web-<sha>` and
    `sudo cp /etc/beacon/production.env /etc/beacon/production.env.before-turn-transfer`
 2. Put a new random value in `TURN_SHARED_SECRET` in `/etc/beacon/production.env` (`openssl rand -hex 32`).
    Never print it in a terminal that is logged.
-3. Stop and keep the old relay: `sudo docker stop beacon-secureview-cloud-coturn-1 &&
-sudo docker rename beacon-secureview-cloud-coturn-1 beacon-secureview-cloud-coturn-old`
+3. Stop the old relay: `sudo docker stop beacon-secureview-cloud-coturn-1`. Do not rename it to keep it: compose
+   treats a renamed container of the same project as the service and removes it when it recreates coturn.
 4. Start the new one and the backend that issues credentials for it, together:
    `$C up -d --no-deps coturn backend`
 5. Check it came up: `sudo docker logs --tail 20 beacon-secureview-cloud-coturn-1` shows no errors, and
@@ -57,14 +62,16 @@ sudo docker rename beacon-secureview-cloud-coturn-1 beacon-secureview-cloud-cotu
 
 ## Rollback (any time before cleanup)
 
+Restore the previous environment file and recreate the relay the old way (the override and entrypoint files in
+`/etc/beacon-remote/` must still exist, which is why cleanup comes last):
+
 `sudo cp /etc/beacon/production.env.before-turn-transfer /etc/beacon/production.env`, then
-`sudo docker rm -f beacon-secureview-cloud-coturn-1 && sudo docker rename beacon-secureview-cloud-coturn-old
-beacon-secureview-cloud-coturn-1 && sudo docker start beacon-secureview-cloud-coturn-1`, then
-`$C up -d --no-deps backend`. The old container still carries its original command line and mounts.
+`sudo docker compose --project-name beacon-secureview-cloud --env-file /etc/beacon/production.env
+--file /opt/beacon/app/infrastructure/cloud/compose.yaml --file /etc/beacon-remote/turn-relay.override.yaml
+up -d --no-deps coturn backend`.
 
 ## Cleanup (after the proof passes)
 
-- `sudo docker rm beacon-secureview-cloud-coturn-old`
 - Ask Codex to remove `/etc/beacon-remote/turn-relay.override.yaml` and
   `/etc/beacon-remote/turn-relay-entrypoint.sh` if Remote no longer needs them.
 - Delete `/etc/beacon/production.env.before-turn-transfer` (it holds the old secret).
