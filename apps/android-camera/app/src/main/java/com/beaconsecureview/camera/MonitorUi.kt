@@ -816,10 +816,15 @@ internal fun MonitorHome(
                     scope.launch {
                         val result = withContext(Dispatchers.IO) { runCatching { api.createAccount(email, password) } }
                         result.onSuccess {
-                            sessionStore.save(it)
                             password = ""
-                            session = it
-                            message = ""
+                            if (it == null) {
+                                // Email is set up: the new account signs in only after its link is opened (V26).
+                                message = "We sent a link to ${email.trim()}. Open it to finish creating your account, then sign in."
+                            } else {
+                                sessionStore.save(it)
+                                session = it
+                                message = ""
+                            }
                         }.onFailure { message = it.userFacingMessage("Account could not be created") }
                         busy = false
                     }

@@ -77,6 +77,43 @@ function tokenFromEmail(body: string): string {
   return decodeURIComponent(match[1]!);
 }
 
+let registrations = 0;
+
+/** Email is configured here, so a password account must verify before it can
+ * sign in (V26): register, follow the emailed link, then sign in. */
+async function registerVerified(
+  email: string,
+  password = 'first password value',
+): Promise<{ cookie: string; csrf: string }> {
+  const mail = stubResend();
+  const remoteAddress = `127.0.2.${(registrations += 1)}`;
+  const registration = await app!.inject({
+    method: 'POST',
+    payload: { email, password },
+    remoteAddress,
+    url: '/api/auth/register',
+  });
+  expect(registration.statusCode).toBe(202);
+  const confirm = await app!.inject({
+    method: 'POST',
+    payload: { token: tokenFromEmail(mail.calls[0]!) },
+    url: '/api/account/email/verify/confirm',
+  });
+  expect(confirm.statusCode).toBe(204);
+  const login = await app!.inject({
+    method: 'POST',
+    payload: { email, password },
+    remoteAddress,
+    url: '/api/auth/login',
+  });
+  expect(login.statusCode).toBe(200);
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(new Response(null, { status: 200 }))),
+  );
+  return sessionCookies(login.headers);
+}
+
 describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
   beforeEach(async () => {
     await resetTestDatabase(store!.pool);
@@ -97,12 +134,7 @@ describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
   });
 
   it('resets a password by email token and revokes every existing session', async () => {
-    const registration = await app!.inject({
-      method: 'POST',
-      payload: { email: 'reset@example.com', password: 'first password value' },
-      url: '/api/auth/register',
-    });
-    const originalSession = sessionCookies(registration.headers);
+    const originalSession = await registerVerified('reset@example.com');
     const secondLogin = await app!.inject({
       method: 'POST',
       payload: { email: 'reset@example.com', password: 'first password value' },
@@ -270,7 +302,7 @@ describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
     expect(tokens.rows[0]!.count).toBe(0);
   });
 
-  it('sends a verification email automatically on registration', async () => {
+  it('mails a verification link at sign-up and refuses sign-in until it is used (V26)', async () => {
     const resend = stubResend();
     const registration = await app!.inject({
       method: 'POST',
@@ -279,35 +311,151 @@ describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
         password: 'first password value',
       },
       // A distinct address so this doesn't share the register rate-limit
-      // bucket with every other registration call in this file (which are
-      // already right at the 5-per-hour limit on the shared default IP).
+      // bucket with other registration calls in this file.
       remoteAddress: '127.0.0.90',
       url: '/api/auth/register',
     });
-    expect(registration.statusCode).toBe(201);
+    expect(registration.statusCode).toBe(202);
+    expect(registration.json()).toEqual({
+      email: 'auto-verify@example.com',
+      verificationRequired: true,
+    });
+    // No session was issued.
+    expect(String(registration.headers['set-cookie'] ?? '')).not.toContain(
+      'beacon_session=',
+    );
     expect(resend.calls).toHaveLength(1);
-    const token = tokenFromEmail(resend.calls[0]!);
+
+    const signIn = () =>
+      app!.inject({
+        method: 'POST',
+        payload: {
+          email: 'auto-verify@example.com',
+          password: 'first password value',
+        },
+        remoteAddress: '127.0.0.90',
+        url: '/api/auth/login',
+      });
+    const refused = await signIn();
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({ code: 'email_not_verified' });
+    expect(String(refused.headers['set-cookie'] ?? '')).not.toContain(
+      'beacon_session=',
+    );
+    // The attempt mailed a fresh link, so a lost first email is recoverable.
+    expect(resend.calls).toHaveLength(2);
+    // A wrong password still says nothing about the account.
+    const wrong = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'auto-verify@example.com',
+        password: 'not the password',
+      },
+      remoteAddress: '127.0.0.90',
+      url: '/api/auth/login',
+    });
+    expect(wrong.statusCode).toBe(401);
 
     const confirm = await app!.inject({
       method: 'POST',
-      payload: { token },
+      payload: { token: tokenFromEmail(resend.calls[1]!) },
       url: '/api/account/email/verify/confirm',
     });
     expect(confirm.statusCode).toBe(204);
+    expect((await signIn()).statusCode).toBe(200);
+  });
+
+  it('applies the same rule to the Android sign-up and sign-in (V26)', async () => {
+    const resend = stubResend();
+    const credentials = {
+      email: 'mobile-verify@example.com',
+      password: 'first password value',
+    };
+    const registration = await app!.inject({
+      method: 'POST',
+      payload: credentials,
+      remoteAddress: '127.0.0.94',
+      url: '/api/mobile/auth/register',
+    });
+    expect(registration.statusCode).toBe(202);
+    expect(registration.json()).toEqual({
+      email: credentials.email,
+      verificationRequired: true,
+    });
+    const refused = await app!.inject({
+      method: 'POST',
+      payload: credentials,
+      remoteAddress: '127.0.0.94',
+      url: '/api/mobile/auth/login',
+    });
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({ code: 'email_not_verified' });
+    expect(refused.body).not.toContain('sessionToken');
+    const confirm = await app!.inject({
+      method: 'POST',
+      payload: { token: tokenFromEmail(resend.calls.at(-1)!) },
+      url: '/api/account/email/verify/confirm',
+    });
+    expect(confirm.statusCode).toBe(204);
+    const allowed = await app!.inject({
+      method: 'POST',
+      payload: credentials,
+      remoteAddress: '127.0.0.94',
+      url: '/api/mobile/auth/login',
+    });
+    expect(allowed.statusCode).toBe(200);
+    expect(allowed.json<{ sessionToken: string }>().sessionToken).toBeTruthy();
+  });
+
+  it('counts a completed password reset as proof of the email address (V26)', async () => {
+    const resend = stubResend();
+    await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'reset-proves@example.com',
+        password: 'first password value',
+      },
+      remoteAddress: '127.0.0.93',
+      url: '/api/auth/register',
+    });
+    await app!.inject({
+      method: 'POST',
+      payload: { email: 'reset-proves@example.com' },
+      remoteAddress: '127.0.0.93',
+      url: '/api/auth/password-reset/request',
+    });
+    const resetMail = resend.calls.find((call) =>
+      (JSON.parse(call) as { subject: string }).subject.includes('eset'),
+    )!;
+    const confirm = await app!.inject({
+      method: 'POST',
+      payload: {
+        password: 'brand new password value',
+        token: tokenFromEmail(resetMail),
+      },
+      remoteAddress: '127.0.0.93',
+      url: '/api/auth/password-reset/confirm',
+    });
+    expect(confirm.statusCode).toBe(204);
+    const login = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'reset-proves@example.com',
+        password: 'brand new password value',
+      },
+      remoteAddress: '127.0.0.93',
+      url: '/api/auth/login',
+    });
+    expect(login.statusCode).toBe(200);
   });
 
   it('lets only an account with a verified email send invitations (V47)', async () => {
+    const owner = await registerVerified('unverified-inviter@example.com');
+    // A session that predates the verification rule, for an unverified address.
+    await store!.pool.query(
+      "UPDATE users SET email_verified_at = NULL WHERE email = 'unverified-inviter@example.com'",
+    );
     const resend = stubResend();
-    const registration = await app!.inject({
-      method: 'POST',
-      payload: {
-        email: 'unverified-inviter@example.com',
-        password: 'first password value',
-      },
-      remoteAddress: '127.0.0.91',
-      url: '/api/auth/register',
-    });
-    const owner = sessionCookies(registration.headers);
     const invite = () =>
       app!.inject({
         headers: {
@@ -325,8 +473,14 @@ describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
     const refused = await invite();
     expect(refused.statusCode).toBe(403);
     expect(refused.json()).toMatchObject({ code: 'email_not_verified' });
-    // Nothing was mailed to the stranger: only the verification email went out.
-    expect(resend.calls).toHaveLength(1);
+    // Nothing was mailed to the stranger.
+    expect(resend.calls).toHaveLength(0);
+    const requestLink = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      url: '/api/account/email/verify/request',
+    });
+    expect(requestLink.statusCode).toBe(202);
     const confirm = await app!.inject({
       method: 'POST',
       payload: { token: tokenFromEmail(resend.calls[0]!) },
@@ -337,15 +491,10 @@ describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
   });
 
   it('verifies an email address through an emailed token, idempotently', async () => {
-    const registration = await app!.inject({
-      method: 'POST',
-      payload: {
-        email: 'verify@example.com',
-        password: 'first password value',
-      },
-      url: '/api/auth/register',
-    });
-    const session = sessionCookies(registration.headers);
+    const session = await registerVerified('verify@example.com');
+    await store!.pool.query(
+      "UPDATE users SET email_verified_at = NULL WHERE email = 'verify@example.com'",
+    );
     const resend = stubResend();
 
     const request = await app!.inject({
@@ -373,15 +522,7 @@ describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
   });
 
   it('reauthenticates a password session without a fresh login', async () => {
-    const registration = await app!.inject({
-      method: 'POST',
-      payload: {
-        email: 'reauth@example.com',
-        password: 'first password value',
-      },
-      url: '/api/auth/register',
-    });
-    const session = sessionCookies(registration.headers);
+    const session = await registerVerified('reauth@example.com');
 
     const wrong = await app!.inject({
       headers: { cookie: session.cookie, 'x-csrf-token': session.csrf },
@@ -401,15 +542,7 @@ describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
   });
 
   it('refuses password reauthentication for a Google-only session', async () => {
-    const registration = await app!.inject({
-      method: 'POST',
-      payload: {
-        email: 'google-session@example.com',
-        password: 'first password value',
-      },
-      url: '/api/auth/register',
-    });
-    const session = sessionCookies(registration.headers);
+    const session = await registerVerified('google-session@example.com');
     const user = await store!.findUserByEmail('google-session@example.com');
     await store!.pool.query(
       `UPDATE users SET password_hash = NULL, google_subject = 'simulated-google-subject' WHERE id = $1`,

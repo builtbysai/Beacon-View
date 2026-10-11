@@ -143,33 +143,58 @@ export function registerAuthenticationRoutes(
   ) {
     const passwordHash = await hashPassword(password);
     const user = await store.createAccount(email, passwordHash, ipAddress);
-    // Best-effort: the account exists either way, and the user can always
-    // request another verification email from Settings if this one never
-    // lands (e.g. delivery is misconfigured or the address bounces).
-    if (config.RESEND_API_KEY && config.RESEND_FROM) {
-      const verificationToken = generateToken();
-      const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL);
-      await store
-        .createEmailVerificationToken({
-          expiresAt,
-          tokenHash: hashSecret(verificationToken),
-          userId: user.id,
-        })
-        .then(() =>
-          deliverEmailVerificationEmail(config, {
-            expiresAt,
-            to: email,
-            token: verificationToken,
-          }),
-        )
-        .catch((deliveryError: unknown) =>
-          app.log.warn(
-            { err: deliveryError },
-            'registration verification email delivery failed',
-          ),
-        );
-    }
+    await sendVerificationEmail(user.id, email);
     return user;
+  }
+
+  // With email configured, a password account must prove it owns its address
+  // before it can sign in (V26): otherwise anyone could register for someone
+  // else's address and sit on it.
+  const emailVerificationRequired = Boolean(
+    config.RESEND_API_KEY && config.RESEND_FROM,
+  );
+
+  // Best-effort: the account exists either way, and a sign-in attempt sends a
+  // fresh link if this one never lands (delivery misconfigured, address bounces).
+  async function sendVerificationEmail(userId: string, email: string) {
+    if (!emailVerificationRequired) return;
+    const verificationToken = generateToken();
+    const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL);
+    await store
+      .createEmailVerificationToken({
+        expiresAt,
+        tokenHash: hashSecret(verificationToken),
+        userId,
+      })
+      .then(() =>
+        deliverEmailVerificationEmail(config, {
+          expiresAt,
+          to: email,
+          token: verificationToken,
+        }),
+      )
+      .catch((deliveryError: unknown) =>
+        app.log.warn(
+          { err: deliveryError },
+          'verification email delivery failed',
+        ),
+      );
+  }
+
+  // Refuses an unverified password account and mails it a new link (at most a
+  // few an hour). Returns true when the sign-in must stop here.
+  async function refuseUnverified(
+    user: { id: string; email: string; emailVerifiedAt: Date | null },
+    reply: FastifyReply,
+  ): Promise<boolean> {
+    if (!emailVerificationRequired || user.emailVerifiedAt) return false;
+    if (limiter.take(`verify-resend:${user.id}`, 3, HOUR))
+      await sendVerificationEmail(user.id, user.email);
+    void reply.code(403).send({
+      code: 'email_not_verified',
+      error: 'Verify your email address to sign in',
+    });
+    return true;
   }
 
   async function sendRegistrationConflict(
@@ -213,6 +238,10 @@ export function registerAuthenticationRoutes(
         parsed.data.password,
         request.ip,
       );
+      if (emailVerificationRequired)
+        return reply
+          .code(202)
+          .send({ email: user.email, verificationRequired: true });
       await issueSession(reply, user.id, true, request.headers['user-agent']);
       return reply.code(201).send({ user: { email: user.email, id: user.id } });
     } catch (error) {
@@ -235,6 +264,10 @@ export function registerAuthenticationRoutes(
         parsed.data.password,
         request.ip,
       );
+      if (emailVerificationRequired)
+        return reply
+          .code(202)
+          .send({ email: user.email, verificationRequired: true });
       const token = await issueSession(
         reply,
         user.id,
@@ -285,6 +318,7 @@ export function registerAuthenticationRoutes(
     if (!valid || !user) {
       return reply.code(401).send({ error: 'Invalid email or password' });
     }
+    if (await refuseUnverified(user, reply)) return;
     await recordSignIn(user.id);
     await issueSession(reply, user.id, true, request.headers['user-agent']);
     const googleLinked = await completePendingGoogleLink(request, reply, user);
@@ -876,6 +910,7 @@ export function registerAuthenticationRoutes(
       });
       return reply.code(401).send({ error: 'Invalid email or password' });
     }
+    if (await refuseUnverified(user, reply)) return;
     await store.audit({
       eventType: 'mobile_login_succeeded',
       householdId: user.householdId,

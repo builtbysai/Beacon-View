@@ -70,12 +70,19 @@ export class PostgresAccountRecoveryRepository {
     );
     const userId = result.rows[0]?.userId ?? null;
     // Other reset links sent earlier must not outlive the one just used (V46).
-    if (userId)
+    if (userId) {
       await this.pool.query(
         `UPDATE password_reset_tokens SET consumed_at = $2
          WHERE user_id = $1 AND consumed_at IS NULL`,
         [userId, now],
       );
+      // Opening a link sent to the address proves the person controls it (V26).
+      await this.pool.query(
+        `UPDATE users SET email_verified_at = $2
+         WHERE id = $1 AND email_verified_at IS NULL`,
+        [userId, now],
+      );
+    }
     return userId;
   }
 }
