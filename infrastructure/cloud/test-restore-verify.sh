@@ -16,6 +16,12 @@ case "$*" in
   *"table_schema NOT IN"*) printf '%s\n' "${MOCK_TARGET_TABLE_COUNT:-0}" ;;
   *"drizzle.__drizzle_migrations"*) printf '28\n' ;;
   *"table_schema = 'public'"*) printf '23\n' ;;
+  *"FROM public."*)
+    # restored rows per table; MOCK_RESTORED_ROWS and MOCK_LIVE_ROWS pick the database.
+    case "$*" in
+      *"--dbname=$RESTORE_TARGET_DATABASE"*) printf '%s\n' "${MOCK_RESTORED_ROWS:-5}" ;;
+      *) printf '%s\n' "${MOCK_LIVE_ROWS:-9}" ;;
+    esac ;;
   *) echo "Unexpected psql call: $*" >&2; exit 1 ;;
 esac
 MOCK
@@ -68,5 +74,11 @@ if run_restore beacon_live >"$test_dir/live.out" 2>&1; then
 fi
 grep --quiet --fixed-strings 'Refusing to overwrite the live database' "$test_dir/live.out"
 test ! -e "$test_dir/state/restic-called"
+
+if MOCK_RESTORED_ROWS=0 run_restore beacon_restore_verify >"$test_dir/empty.out" 2>&1; then
+  echo 'Expected an empty restore of a populated database to fail.' >&2
+  exit 1
+fi
+grep --quiet --fixed-strings 'Restore produced no rows' "$test_dir/empty.out"
 
 echo 'Beacon restore verifier safety checks passed.'
