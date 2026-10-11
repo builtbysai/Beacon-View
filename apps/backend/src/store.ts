@@ -1123,6 +1123,15 @@ export class PostgresStore implements MilestoneStore {
     return this.devices.findByCredential(credentialHash);
   }
 
+  async rotateDeviceCredential(input: {
+    currentHash: string;
+    maxAgeMs: number;
+    newHash: string;
+    now: Date;
+  }): Promise<{ publicDeviceId: string; householdId: string } | null> {
+    return this.devices.rotateCredential(input);
+  }
+
   async findCameraForDeviceCredential(
     credentialHash: string,
     publicCameraId: string,

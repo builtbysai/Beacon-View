@@ -275,7 +275,7 @@ export class PostgresRecordingRepository {
            encryption_data_key_iv=$9, updated_at=now()
        FROM camera_sources cs, cameras d, device_credentials dc
        WHERE r.id=$2 AND r.camera_source_id=cs.id AND cs.device_id=d.id
-         AND dc.camera_id=d.id AND dc.credential_hash=$1
+         AND dc.camera_id=d.id AND $1 IN (dc.credential_hash, dc.previous_credential_hash)
          AND dc.revoked_at IS NULL AND d.revoked_at IS NULL
          AND d.enabled=true AND d.privacy_mode=false AND cs.enabled=true
          AND cs.removed_at IS NULL AND r.deleted_at IS NULL
@@ -364,7 +364,7 @@ export class PostgresRecordingRepository {
        JOIN camera_sources cs ON cs.id = r.camera_source_id
        JOIN cameras d ON d.id = cs.device_id
        JOIN device_credentials dc ON dc.camera_id = d.id
-       WHERE r.id = $2 AND dc.credential_hash = $1 AND dc.revoked_at IS NULL
+       WHERE r.id = $2 AND $1 IN (dc.credential_hash, dc.previous_credential_hash) AND dc.revoked_at IS NULL
          AND r.status = 'uploading' AND r.deleted_at IS NULL
          AND r.byte_size IS NOT NULL AND r.mime_type IS NOT NULL`,
       [credentialHash, recordingId],
@@ -403,7 +403,7 @@ export class PostgresRecordingRepository {
       `UPDATE recordings r SET status='failed', updated_at=now()
        FROM camera_sources cs, cameras d, device_credentials dc
        WHERE r.id=$2 AND r.camera_source_id=cs.id AND cs.device_id=d.id
-         AND dc.camera_id=d.id AND dc.credential_hash=$1
+         AND dc.camera_id=d.id AND $1 IN (dc.credential_hash, dc.previous_credential_hash)
          AND dc.revoked_at IS NULL AND d.revoked_at IS NULL
          AND r.status IN ('requested', 'recording', 'uploading', 'failed')
          AND r.deleted_at IS NULL`,
@@ -618,7 +618,7 @@ export class PostgresRecordingRepository {
            thumbnail_encryption_data_key_iv=$8, updated_at=now()
        FROM camera_sources cs, cameras d, device_credentials dc
        WHERE r.id=$2 AND r.camera_source_id=cs.id AND cs.device_id=d.id
-         AND dc.camera_id=d.id AND dc.credential_hash=$1
+         AND dc.camera_id=d.id AND $1 IN (dc.credential_hash, dc.previous_credential_hash)
          AND dc.revoked_at IS NULL AND d.revoked_at IS NULL
          AND d.enabled=true AND d.privacy_mode=false AND cs.enabled=true
          AND cs.removed_at IS NULL AND r.deleted_at IS NULL
@@ -669,7 +669,7 @@ export class PostgresRecordingRepository {
        JOIN camera_sources cs ON cs.id = r.camera_source_id
        JOIN cameras d ON d.id = cs.device_id
        JOIN device_credentials dc ON dc.camera_id = d.id
-       WHERE r.id = $2 AND dc.credential_hash = $1 AND dc.revoked_at IS NULL
+       WHERE r.id = $2 AND $1 IN (dc.credential_hash, dc.previous_credential_hash) AND dc.revoked_at IS NULL
          AND r.deleted_at IS NULL AND r.thumbnail_provider_file_id IS NULL
          AND r.thumbnail_byte_size IS NOT NULL
          AND r.thumbnail_mime_type IS NOT NULL`,

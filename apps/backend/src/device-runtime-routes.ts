@@ -8,10 +8,13 @@ import {
   motionEventSchema,
   privacyModeSchema,
 } from './http-schemas.js';
-import { hashSecret } from './security.js';
+import { generateToken, hashSecret } from './security.js';
 import { unauthorized, type SessionAuth } from './session-auth.js';
 import type { SignalingHub } from './signaling.js';
 import type { MilestoneStore } from './store.js';
+
+/** A camera swaps its credential once it is this old (V22). */
+const CREDENTIAL_ROTATION_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 
 interface DeviceRuntimeRouteDependencies {
   auth: SessionAuth;
@@ -65,6 +68,36 @@ export function registerDeviceRuntimeRoutes(
       type: 'device-credential-revoked',
     });
     return reply.code(204).send();
+  });
+
+  // A camera swaps its credential about monthly (V22). The device presents its
+  // current credential; the answer is the new one, or 204 when none is due.
+  app.post('/api/device/credential/rotate', async (request, reply) => {
+    const authorization = request.headers.authorization;
+    const token = authorization?.startsWith('Bearer ')
+      ? authorization.slice('Bearer '.length)
+      : '';
+    if (!token) return unauthorized(reply);
+    const currentHash = hashSecret(token);
+    const identity = await store.findDeviceByCredential(currentHash);
+    if (!identity) return unauthorized(reply);
+    const replacement = generateToken();
+    const rotated = await store.rotateDeviceCredential({
+      currentHash,
+      maxAgeMs: CREDENTIAL_ROTATION_AGE_MS,
+      newHash: hashSecret(replacement),
+      now: new Date(),
+    });
+    if (!rotated) return reply.code(204).send();
+    await store.audit({
+      eventType: 'device_credential_rotated',
+      householdId: rotated.householdId,
+      ipAddress: request.ip,
+      metadata: { deviceId: rotated.publicDeviceId },
+      success: true,
+    });
+    reply.header('Cache-Control', 'no-store');
+    return reply.code(201).send({ credential: replacement });
   });
 
   app.post('/api/device/heartbeat', async (request, reply) => {

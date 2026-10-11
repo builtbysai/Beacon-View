@@ -1599,6 +1599,23 @@ class BeaconApi(private val baseUrl: String) {
         }
     }
 
+    /**
+     * Asks for a replacement device credential (about monthly, V22). Returns the new credential, or null when
+     * none is due. The old one keeps working until the new one is first used, so a failure here is harmless.
+     */
+    fun rotateCredential(credential: String): String? {
+        val connection = connection("/api/device/credential/rotate", "POST")
+        connection.setRequestProperty("Authorization", "Bearer $credential")
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        val body = responseBody(connection)
+        return when (connection.responseCode) {
+            HttpURLConnection.HTTP_CREATED -> JSONObject(body).getString("credential")
+            HttpURLConnection.HTTP_NO_CONTENT -> null
+            HttpURLConnection.HTTP_UNAUTHORIZED -> throw AuthorizationLostException()
+            else -> throw IllegalStateException("Credential rotation is unavailable.")
+        }
+    }
+
     fun syncCameras(
         credential: String,
         sources: List<CameraSource>,

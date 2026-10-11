@@ -98,6 +98,8 @@ export function SettingsPage({
   onUserChanged,
 }: SettingsPageProps) {
   const manager = household.role === 'owner' || household.role === 'admin';
+  // Viewers can ask for alerts about the cameras they were given (V43).
+  const canReceiveAlerts = manager || household.role === 'viewer';
   const [desktopApp] = useState(desktopSupportsAutostart);
   const sections: SettingsSection[] = useMemo(
     () => [
@@ -105,14 +107,15 @@ export function SettingsPage({
       ...(desktopApp ? (['computer'] as const) : []),
       'audio',
       'viewing',
-      ...(manager ? (['modes', 'notifications'] as const) : []),
+      ...(manager ? (['modes'] as const) : []),
+      ...(canReceiveAlerts ? (['notifications'] as const) : []),
       'access',
       'data',
       ...(manager ? (['security'] as const) : []),
       'account',
       'privacy',
     ],
-    [desktopApp, manager],
+    [desktopApp, manager, canReceiveAlerts],
   );
 
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -296,7 +299,7 @@ export function SettingsPage({
             </section>
           )}
 
-          {manager && (
+          {canReceiveAlerts && (
             <section
               id="notifications"
               className="settings-section"

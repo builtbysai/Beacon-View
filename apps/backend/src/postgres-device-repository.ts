@@ -133,7 +133,7 @@ export class PostgresDeviceRepository {
         `SELECT d.id AS "deviceId"
          FROM cameras d
          JOIN device_credentials dc ON dc.camera_id = d.id
-         WHERE dc.credential_hash = $1 AND dc.revoked_at IS NULL
+         WHERE $1 IN (dc.credential_hash, dc.previous_credential_hash) AND dc.revoked_at IS NULL
            AND d.revoked_at IS NULL
          FOR UPDATE`,
         [credentialHash],
@@ -365,7 +365,7 @@ export class PostgresDeviceRepository {
          thermal_status = COALESCE($5::text, thermal_status),
          health_reported_at = CASE WHEN $3::int IS NULL AND $5::text IS NULL THEN health_reported_at ELSE $2 END
        FROM device_credentials dc
-       WHERE dc.camera_id = c.id AND dc.credential_hash = $1
+       WHERE dc.camera_id = c.id AND $1 IN (dc.credential_hash, dc.previous_credential_hash)
          AND dc.revoked_at IS NULL AND c.revoked_at IS NULL
        RETURNING c.id`,
       [
@@ -519,9 +519,55 @@ export class PostgresDeviceRepository {
          WHERE device_id = d.id
          ORDER BY created_at LIMIT 1
        ) cs ON true
-       WHERE dc.credential_hash = $1 AND dc.revoked_at IS NULL
+       WHERE $1 IN (dc.credential_hash, dc.previous_credential_hash) AND dc.revoked_at IS NULL
          AND d.revoked_at IS NULL`,
       [credentialHash],
+    );
+    const identity = result.rows[0] ?? null;
+    if (identity) await this.#recordCredentialUse(credentialHash);
+    return identity;
+  }
+
+  /**
+   * Notes that a credential was used, at most every ten minutes. The first use
+   * of a freshly rotated credential also retires the one it replaced (V22).
+   */
+  async #recordCredentialUse(credentialHash: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE device_credentials
+       SET last_used_at = now(),
+           previous_credential_hash = CASE WHEN credential_hash = $1 THEN NULL ELSE previous_credential_hash END
+       WHERE (credential_hash = $1 OR previous_credential_hash = $1) AND revoked_at IS NULL
+         AND (last_used_at IS NULL OR last_used_at < now() - interval '10 minutes'
+              OR (credential_hash = $1 AND previous_credential_hash IS NOT NULL))`,
+      [credentialHash],
+    );
+  }
+
+  /**
+   * Issues a replacement credential when the current one is older than
+   * `maxAgeMs`. The old hash stays valid until the new one is first used, so a
+   * reply that never arrives cannot lock the camera out. Returns false when no
+   * rotation is due (or the credential is not recognised).
+   */
+  async rotateCredential(input: {
+    currentHash: string;
+    maxAgeMs: number;
+    newHash: string;
+    now: Date;
+  }): Promise<{ publicDeviceId: string; householdId: string } | null> {
+    const result = await this.pool.query<{
+      publicDeviceId: string;
+      householdId: string;
+    }>(
+      `UPDATE device_credentials dc
+       SET previous_credential_hash = $1, credential_hash = $2, rotated_at = $3
+       FROM cameras d
+       WHERE d.id = dc.camera_id AND dc.revoked_at IS NULL AND d.revoked_at IS NULL
+         AND $1 IN (dc.credential_hash, dc.previous_credential_hash)
+         AND coalesce(dc.rotated_at, dc.created_at) <= $3::timestamptz - ($4 * interval '1 millisecond')
+       RETURNING d.public_device_id AS "publicDeviceId", d.household_id AS "householdId"`,
+      [input.currentHash, input.newHash, input.now, input.maxAgeMs],
     );
     return result.rows[0] ?? null;
   }
@@ -538,7 +584,7 @@ export class PostgresDeviceRepository {
        FROM camera_sources cs
        JOIN cameras d ON d.id = cs.device_id
        JOIN device_credentials dc ON dc.camera_id = d.id
-       WHERE dc.credential_hash = $1 AND dc.revoked_at IS NULL
+       WHERE $1 IN (dc.credential_hash, dc.previous_credential_hash) AND dc.revoked_at IS NULL
          AND d.revoked_at IS NULL AND cs.removed_at IS NULL
          AND cs.public_camera_id = $2`,
       [credentialHash, publicCameraId],

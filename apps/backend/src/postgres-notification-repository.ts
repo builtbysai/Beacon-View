@@ -20,6 +20,13 @@ import {
   offlineGraceElapsed,
 } from './notification-presence.js';
 
+/** Who may receive alerts about a camera: owners and admins, and viewers granted it (V43). */
+function canBeAlertedAbout(member: string, camera: string): string {
+  return `(${member}.role IN ('owner', 'admin') OR (${member}.role = 'viewer' AND EXISTS (
+    SELECT 1 FROM camera_grants cg JOIN camera_sources gs ON gs.id = cg.camera_source_id
+    WHERE cg.member_id = ${member}.id AND gs.device_id = ${camera}.id)))`;
+}
+
 /** A camera this low on battery, and not charging, needs attention. */
 export const LOW_BATTERY_PERCENT = 15;
 /** It counts as recovered once it is charging or back above this. */
@@ -177,8 +184,10 @@ export class PostgresNotificationRepository {
               np.quiet_start_minute AS "quietStartMinute",
               np.quiet_end_minute AS "quietEndMinute", np.quiet_time_zone AS "quietTimeZone"
        FROM cameras d
+       JOIN household_members hm ON hm.household_id = d.household_id AND hm.user_id = $1
+         AND hm.status = 'active' AND (hm.expires_at IS NULL OR hm.expires_at > now())
        LEFT JOIN notification_preferences np ON np.user_id = $1 AND np.device_id = d.id
-       WHERE d.household_id = $2 AND d.revoked_at IS NULL
+       WHERE d.household_id = $2 AND d.revoked_at IS NULL AND ${canBeAlertedAbout('hm', 'd')}
        ORDER BY d.created_at, d.id`,
       [userId, householdId],
     );
@@ -211,7 +220,10 @@ export class PostgresNotificationRepository {
       `INSERT INTO notification_preferences
        (user_id, device_id, motion_enabled, offline_enabled, quiet_start_minute, quiet_end_minute, quiet_time_zone)
        SELECT $1, d.id, $4, $5, $6, $7, $8 FROM cameras d
+       JOIN household_members hm ON hm.household_id = d.household_id AND hm.user_id = $1
+         AND hm.status = 'active' AND (hm.expires_at IS NULL OR hm.expires_at > now())
        WHERE d.public_device_id = $3 AND d.household_id = $2 AND d.revoked_at IS NULL
+         AND ${canBeAlertedAbout('hm', 'd')}
        ON CONFLICT (user_id, device_id) DO UPDATE SET motion_enabled = excluded.motion_enabled,
          offline_enabled = excluded.offline_enabled, quiet_start_minute = excluded.quiet_start_minute,
          quiet_end_minute = excluded.quiet_end_minute, quiet_time_zone = excluded.quiet_time_zone,
@@ -259,7 +271,10 @@ export class PostgresNotificationRepository {
       const result = await client.query<{ id: string }>(
         `INSERT INTO notification_preferences (user_id, device_id, motion_snoozed_until)
          SELECT $1, d.id, $4 FROM cameras d
+         JOIN household_members hm ON hm.household_id = d.household_id AND hm.user_id = $1
+           AND hm.status = 'active' AND (hm.expires_at IS NULL OR hm.expires_at > now())
          WHERE d.public_device_id = $3 AND d.household_id = $2 AND d.revoked_at IS NULL
+           AND ${canBeAlertedAbout('hm', 'd')}
          ON CONFLICT (user_id, device_id) DO UPDATE SET motion_snoozed_until = excluded.motion_snoozed_until,
            updated_at = $5 RETURNING device_id AS id`,
         [
@@ -317,7 +332,7 @@ export class PostgresNotificationRepository {
        JOIN cameras d ON d.id = np.device_id
        JOIN household_members hm ON hm.household_id = d.household_id AND hm.user_id = np.user_id
        WHERE np.device_id = $1 AND d.revoked_at IS NULL AND hm.status = 'active'
-         AND hm.role IN ('owner', 'admin') AND (hm.expires_at IS NULL OR hm.expires_at > $2)
+         AND ${canBeAlertedAbout('hm', 'd')} AND (hm.expires_at IS NULL OR hm.expires_at > $2)
          AND (np.motion_snoozed_until IS NULL OR np.motion_snoozed_until <= $2)`,
       [input.deviceId, input.now],
     );
@@ -390,7 +405,7 @@ export class PostgresNotificationRepository {
          WHERE np.offline_enabled = true AND d.enabled = true AND d.revoked_at IS NULL
            AND d.health_reported_at IS NOT NULL
            AND d.health_reported_at > $1::timestamptz - interval '10 minutes'
-           AND hm.status = 'active' AND hm.role IN ('owner', 'admin')
+           AND hm.status = 'active' AND ${canBeAlertedAbout('hm', 'd')}
            AND (hm.expires_at IS NULL OR hm.expires_at > $1)
            AND EXISTS (SELECT 1 FROM device_credentials dc WHERE dc.camera_id = d.id AND dc.revoked_at IS NULL)
          FOR UPDATE OF d`,
@@ -499,7 +514,7 @@ export class PostgresNotificationRepository {
          LEFT JOIN notification_presence_state nps ON nps.device_id = d.id AND nps.user_id = np.user_id
          WHERE np.offline_enabled = true AND d.last_seen_at IS NOT NULL AND d.enabled = true
            AND d.privacy_mode = false AND d.revoked_at IS NULL
-           AND hm.status = 'active' AND hm.role IN ('owner', 'admin')
+           AND hm.status = 'active' AND ${canBeAlertedAbout('hm', 'd')}
            AND (hm.expires_at IS NULL OR hm.expires_at > $1)
            AND EXISTS (SELECT 1 FROM device_credentials dc WHERE dc.camera_id = d.id AND dc.revoked_at IS NULL)
          FOR UPDATE OF d`,
@@ -636,7 +651,7 @@ export class PostgresNotificationRepository {
              SELECT 1 FROM cameras d
              JOIN household_members hm ON hm.household_id = d.household_id AND hm.user_id = ne.user_id
              WHERE d.id = ne.device_id AND d.revoked_at IS NULL AND hm.status = 'active'
-               AND hm.role IN ('owner', 'admin')
+               AND ${canBeAlertedAbout('hm', 'd')}
                AND (hm.expires_at IS NULL OR hm.expires_at > $1)
            ))
          ORDER BY no.next_attempt_at, no.id FOR UPDATE OF no SKIP LOCKED LIMIT $2
