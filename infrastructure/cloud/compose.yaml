@@ -124,7 +124,9 @@ services:
     logging: *bounded-logs
 
   coturn:
-    image: coturn/coturn:4.6.3-r3
+    # The version and digest the relay already runs; View owns this service (ADR 0114).
+    image: coturn/coturn:4.13.0@sha256:ad82d29a60c549878ca5a062220cab737518f56814b806fac5bcb4b366b7f974
+    entrypoint: [/bin/sh, /usr/local/bin/beacon-turn-relay]
     command:
       [
         '-c',
@@ -143,6 +145,7 @@ services:
     logging: *bounded-logs
     volumes:
       - ../cloud/turnserver.conf:/etc/coturn/turnserver.conf:ro
+      - ../cloud/turn-relay-entrypoint.sh:/usr/local/bin/beacon-turn-relay:ro
 
   web:
     build:

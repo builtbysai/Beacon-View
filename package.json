@@ -14,7 +14,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
-    "test": "pnpm --recursive --if-present test && bash infrastructure/cloud/test-beacon-monitor.sh && bash infrastructure/cloud/test-restore-verify.sh",
+    "test": "pnpm --recursive --if-present test && bash infrastructure/cloud/test-beacon-monitor.sh && bash infrastructure/cloud/test-restore-verify.sh && bash infrastructure/cloud/test-turn-relay-entrypoint.sh",
     "typecheck": "pnpm --recursive --if-present typecheck"
   },
   "devDependencies": {
