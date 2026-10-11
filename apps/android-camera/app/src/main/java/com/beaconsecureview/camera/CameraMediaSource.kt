@@ -74,7 +74,8 @@ class CameraMediaSource(
         capturer.initialize(null, context, source.capturerObserver)
         // Camera mode is intentionally capture-ready even with no remote viewer. This powers the
         // visible local preview and avoids a cold CameraX start whenever an authorized viewer joins.
-        capturer.startCapture(640, 480, 24)
+        val quality = CaptureQualityStore(context).read()
+        capturer.startCapture(quality.width, quality.height, quality.framerate)
     }
 
     /** See CameraXVideoCapturer.startClipRecording -- forwards to the same

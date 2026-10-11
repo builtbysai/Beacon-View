@@ -274,6 +274,13 @@
       "when": 1791688528916,
       "tag": "0038_invitation_camera_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1791740404538,
+      "tag": "0039_device_credential_rotation",
+      "breakpoints": true
     }
   ]
 }

@@ -912,6 +912,107 @@ describe.skipIf(!store)('notification transport persistence', () => {
     ).toBe(1);
   });
 
+  it('lets a viewer opt in to alerts for the cameras they were granted, and nothing else (V43)', async () => {
+    const { device, now, owner } = await fixture();
+    const viewer = await store!.createAccount(
+      'notifications-viewer@example.com',
+      'irrelevant-test-hash',
+      '127.0.0.3',
+    );
+    const member = await store!.pool.query<{ id: string }>(
+      `INSERT INTO household_members (household_id, user_id, role)
+       VALUES ($1, $2, 'viewer') RETURNING id`,
+      [owner.householdId, viewer.id],
+    );
+    await store!.createSession({
+      absoluteExpiresAt: new Date(now.getTime() + 86_400_000),
+      csrfHash: hashSecret('notification-viewer-csrf'),
+      idleExpiresAt: new Date(now.getTime() + 86_400_000),
+      tokenHash: hashSecret('notification-viewer-session'),
+      userId: viewer.id,
+    });
+    const viewerSession = await store!.pool.query<{ id: string }>(
+      'SELECT id FROM browser_sessions WHERE user_id=$1',
+      [viewer.id],
+    );
+    await store!.upsertNotificationSubscription({
+      channel: 'web_push',
+      consentedAt: now,
+      deviceLabel: 'Viewer browser',
+      installationId: randomUUID(),
+      providerMaterial: JSON.stringify({
+        endpoint: 'https://push.example/viewer',
+      }),
+      sessionId: viewerSession.rows[0]!.id,
+      userId: viewer.id,
+    });
+    const preference = {
+      userId: viewer.id,
+      householdId: owner.householdId,
+      publicDeviceId: device.publicDeviceId,
+      motionEnabled: true,
+      offlineEnabled: false,
+      quietHours: null,
+    };
+
+    // No grant yet: the camera is not theirs to hear about.
+    expect(
+      await store!.listNotificationPreferences(viewer.id, owner.householdId),
+    ).toEqual([]);
+    expect(await store!.updateNotificationPreference(preference)).toBeNull();
+
+    const source = await store!.pool.query<{ id: string }>(
+      'SELECT cs.id FROM camera_sources cs JOIN cameras d ON d.id = cs.device_id WHERE d.public_device_id = $1',
+      [device.publicDeviceId],
+    );
+    await store!.pool.query(
+      `INSERT INTO camera_grants (household_id, member_id, camera_source_id)
+       VALUES ($1, $2, $3)`,
+      [owner.householdId, member.rows[0]!.id, source.rows[0]!.id],
+    );
+    expect(
+      await store!.listNotificationPreferences(viewer.id, owner.householdId),
+    ).toEqual([
+      expect.objectContaining({
+        deviceId: device.publicDeviceId,
+        motionEnabled: false,
+      }),
+    ]);
+    expect(await store!.updateNotificationPreference(preference)).toEqual(
+      expect.objectContaining({ motionEnabled: true }),
+    );
+    await store!.createMotionEvent({
+      credentialHash: hashSecret('notification-device-credential'),
+      publicCameraId: device.publicCameraId,
+      confidence: 0.8,
+      now,
+    });
+    const events = await store!.pool.query(
+      'SELECT id FROM notification_events WHERE user_id = $1',
+      [viewer.id],
+    );
+    expect(events.rowCount).toBe(1);
+
+    // Removing the grant stops further alerts at once.
+    await store!.pool.query('DELETE FROM camera_grants WHERE member_id = $1', [
+      member.rows[0]!.id,
+    ]);
+    await store!.createMotionEvent({
+      credentialHash: hashSecret('notification-device-credential'),
+      publicCameraId: device.publicCameraId,
+      confidence: 0.8,
+      now: new Date(now.getTime() + 10 * 60_000),
+    });
+    expect(
+      (
+        await store!.pool.query(
+          'SELECT id FROM notification_events WHERE user_id = $1',
+          [viewer.id],
+        )
+      ).rowCount,
+    ).toBe(1);
+  });
+
   it('records a security event that reaches no subscriber without error', async () => {
     const { now, owner } = await fixture();
     await expect(

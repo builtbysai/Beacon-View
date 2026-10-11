@@ -542,6 +542,11 @@ export const deviceCredentials = pgTable(
       .notNull()
       .references(() => cameras.id, { onDelete: 'cascade' }),
     credentialHash: text('credential_hash').notNull(),
+    // Rotation (V22): the credential this one replaced stays valid until the
+    // new one is first used, so a lost reply cannot lock the camera out.
+    previousCredentialHash: text('previous_credential_hash'),
+    rotatedAt: timestamp('rotated_at', { withTimezone: true }),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -550,6 +555,9 @@ export const deviceCredentials = pgTable(
   (table) => [
     uniqueIndex('device_credentials_camera_unique').on(table.cameraId),
     uniqueIndex('device_credentials_hash_unique').on(table.credentialHash),
+    uniqueIndex('device_credentials_previous_hash_unique').on(
+      table.previousCredentialHash,
+    ),
   ],
 );
 

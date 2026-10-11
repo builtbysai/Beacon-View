@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
@@ -75,8 +75,36 @@ export function registerNotificationRoutes(
   },
 ): void {
   const { auth, config, limiter, store } = dependencies;
-  const { authenticateHouseholdAdmin, authenticateHouseholdAdminStateChange } =
-    auth;
+  // Alerts are open to owners, admins and viewers (V43); the store limits a
+  // viewer to cameras they were granted, and a guest has no alerts at all.
+  const authenticateMember = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ) => {
+    const session = await auth.authenticate(request, reply);
+    if (!session) return null;
+    if (session.role === 'guest') {
+      void reply
+        .code(403)
+        .send({ error: 'Alerts are not available to guests' });
+      return null;
+    }
+    return session;
+  };
+  const authenticateMemberStateChange = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ) => {
+    const session = await auth.authenticateStateChange(request, reply);
+    if (!session) return null;
+    if (session.role === 'guest') {
+      void reply
+        .code(403)
+        .send({ error: 'Alerts are not available to guests' });
+      return null;
+    }
+    return session;
+  };
 
   app.get('/api/notification-config/web-push-key', async (request, reply) => {
     const session = await auth.authenticate(request, reply);
@@ -208,7 +236,7 @@ export function registerNotificationRoutes(
   });
 
   app.get('/api/notification-preferences', async (request, reply) => {
-    const session = await authenticateHouseholdAdmin(request, reply);
+    const session = await authenticateMember(request, reply);
     if (!session) return;
     return {
       preferences: await store.listNotificationPreferences(
@@ -221,10 +249,7 @@ export function registerNotificationRoutes(
   app.put(
     '/api/notification-preferences/:deviceId/motion-snooze',
     async (request, reply) => {
-      const session = await authenticateHouseholdAdminStateChange(
-        request,
-        reply,
-      );
+      const session = await authenticateMemberStateChange(request, reply);
       if (!session) return;
       const parameters = preferenceParameterSchema.safeParse(request.params);
       const body = z
@@ -272,7 +297,7 @@ export function registerNotificationRoutes(
   );
 
   app.put('/api/notification-preferences/:deviceId', async (request, reply) => {
-    const session = await authenticateHouseholdAdminStateChange(request, reply);
+    const session = await authenticateMemberStateChange(request, reply);
     if (!session) return;
     const parameters = preferenceParameterSchema.safeParse(request.params);
     const body = preferenceSchema.safeParse(request.body);

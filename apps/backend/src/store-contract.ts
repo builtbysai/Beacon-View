@@ -939,6 +939,12 @@ export interface MilestoneStore {
   findDeviceByCredential(
     credentialHash: string,
   ): Promise<DeviceHeartbeatIdentity | null>;
+  rotateDeviceCredential(input: {
+    currentHash: string;
+    maxAgeMs: number;
+    newHash: string;
+    now: Date;
+  }): Promise<{ publicDeviceId: string; householdId: string } | null>;
   findCameraForDeviceCredential(
     credentialHash: string,
     publicCameraId: string,

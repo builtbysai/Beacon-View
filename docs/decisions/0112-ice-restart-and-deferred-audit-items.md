@@ -28,7 +28,7 @@ which the audit asked for. Treat the repair as unproven until that test is done.
 ## Findings left open, with the reason
 
 - V30, V60 (chunked clip format): changes the stored format on every platform.
-- V43 (alerts for viewers and guests): needs a product decision.
+- V43, V22, V70, V71: decided on 2026-10-11 (ADR 0113).
 - V22 (device credential rotation): a lost reply would lock a camera out; needs a two-step design and a
   real-phone test.
 - V61, V70, V71: need field data or a device matrix.

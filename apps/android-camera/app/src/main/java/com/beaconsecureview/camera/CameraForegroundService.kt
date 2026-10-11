@@ -14,6 +14,7 @@ import android.hardware.camera2.CameraManager
 import android.os.Build
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.camera.view.PreviewView
 import androidx.core.app.NotificationCompat
@@ -200,6 +201,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         }
         initializing = true
         lifecycleScope.launch {
+            withContext(Dispatchers.IO) { rotateCredentialIfDue() }
             val privacyVersion = privacyGate.version
             val synchronization =
                 withContext(Dispatchers.IO) {
@@ -316,10 +318,32 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                         }
                     }
                 }
+                // A camera that never restarts still swaps its credential about monthly. Wait for a moment with
+                // no live viewers, because the signaling connection is rebuilt with the new credential (V22).
+                if (SystemClock.elapsedRealtime() - lastRotationCheck > ROTATION_CHECK_INTERVAL_MS && sessions.isEmpty()) {
+                    lastRotationCheck = SystemClock.elapsedRealtime()
+                    if (withContext(Dispatchers.IO) { rotateCredentialIfDue() }) {
+                        signaling?.disconnect(emptyList())
+                        signaling = null
+                        startSignaling()
+                    }
+                }
                 delay(30_000)
             }
         }
         return START_STICKY
+    }
+
+    private var lastRotationCheck = SystemClock.elapsedRealtime()
+
+    /** Saves a replacement credential before using it; any failure leaves the working one in place. */
+    private fun rotateCredentialIfDue(): Boolean {
+        val replacement = runCatching { api.rotateCredential(credential) }.getOrNull() ?: return false
+        return runCatching {
+            CredentialStore(this).save(replacement)
+            credential = replacement
+            true
+        }.getOrDefault(false)
     }
 
     private fun batteryPercent(): Int? =
@@ -866,6 +890,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     }
 
     companion object {
+        private const val ROTATION_CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
         private const val CHANNEL_ID = "beacon_camera_status"
         private const val NOTIFICATION_ID = 1001
         private const val ACTION_SELECT_CAMERA = "com.beaconsecureview.camera.SELECT_CAMERA"

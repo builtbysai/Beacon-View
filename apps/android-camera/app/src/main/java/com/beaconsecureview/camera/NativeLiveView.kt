@@ -163,7 +163,7 @@ internal fun AndroidLiveView(
                 val saved =
                     withContext(Dispatchers.IO) { SnapshotSaver.save(context, bitmap, camera.name) }
                 snapshotNotice =
-                    if (saved) "Snapshot saved to Pictures/Beacon on this device."
+                    if (saved) "Saved to Pictures/Beacon. Other apps and your photo backup can see it."
                     else "The snapshot could not be saved."
             }
         }

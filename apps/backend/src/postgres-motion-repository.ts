@@ -261,7 +261,7 @@ export class PostgresMotionRepository {
         `SELECT d.id AS "deviceId", d.household_id AS "householdId", h.owner_id AS "userId"
          FROM cameras d JOIN households h ON h.id = d.household_id
          JOIN device_credentials dc ON dc.camera_id = d.id
-         WHERE dc.credential_hash = $1 AND dc.revoked_at IS NULL
+         WHERE $1 IN (dc.credential_hash, dc.previous_credential_hash) AND dc.revoked_at IS NULL
            AND d.revoked_at IS NULL AND d.enabled = true AND d.privacy_mode = false
          FOR UPDATE OF d`,
         [input.credentialHash],
@@ -289,7 +289,7 @@ export class PostgresMotionRepository {
          JOIN device_credentials dc ON dc.camera_id = cs.device_id
          WHERE cs.device_id = $1 AND cs.public_camera_id = $2
            AND cs.enabled = true AND cs.removed_at IS NULL
-           AND dc.credential_hash = $3 AND dc.revoked_at IS NULL
+           AND $3 IN (dc.credential_hash, dc.previous_credential_hash) AND dc.revoked_at IS NULL
          FOR UPDATE OF cs FOR SHARE OF dc`,
         [device.deviceId, input.publicCameraId, input.credentialHash],
       );

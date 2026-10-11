@@ -104,7 +104,7 @@ it('requires a current manager session and CSRF for cookie requests', async () =
       })
     ).statusCode,
   ).toBe(401);
-  findSession.mockResolvedValueOnce({ ...session, role: 'viewer' });
+  findSession.mockResolvedValueOnce({ ...session, role: 'guest' });
   expect(
     (
       await app.inject({
