@@ -34,6 +34,13 @@ import /etc/caddy/products/*.caddy
 		-Server
 	}
 
+	# The Cast receiver shows a guest link in a frame on this same origin, which
+	# X-Frame-Options DENY would block; same-origin framing is allowed for guest
+	# pages only. (When the policy is enforced, frame-ancestors needs the same
+	# exception for /g/*.)
+	@guestpage path /g/*
+	header @guestpage >X-Frame-Options "SAMEORIGIN"
+
 	import beacon_api
 
 	# Desktop app downloads (ADR 0083), published to /opt/beacon/downloads on

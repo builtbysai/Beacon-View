@@ -69,9 +69,7 @@ export function GetBeaconSection({ onOpenWeb }: { onOpenWeb: () => void }) {
     );
   }
 
-  const android = manifest?.files.find(
-    (file) => (file.platform as string) === 'android',
-  );
+  const android = manifest?.files.find((file) => file.platform === 'android');
   const cards: PlatformCard[] = [
     {
       body: desktop(

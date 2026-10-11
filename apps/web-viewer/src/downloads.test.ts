@@ -56,6 +56,30 @@ describe('downloads', () => {
     expect(await loadDownloads()).toBeNull();
   });
 
+  it('accepts the Android app as a published download', async () => {
+    const android: DownloadFile = {
+      arch: 'universal',
+      bytes: 67_000_000,
+      file: 'Beacon-android-0.1.0-alpha9.apk',
+      kind: 'apk',
+      platform: 'android',
+      sha256: 'def',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            files: [windows, android],
+            publishedAt: '2026-10-11',
+            version: '0.4.1',
+          }),
+        ok: true,
+      }),
+    );
+    expect((await loadDownloads())?.files).toEqual([windows, android]);
+  });
+
   it('prefers the x64 installer for the platform', () => {
     const manifest = {
       files: [{ ...windows, arch: 'arm64' as const }, windows],
