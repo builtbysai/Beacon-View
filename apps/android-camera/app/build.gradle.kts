@@ -149,6 +149,8 @@ android {
         getByName("main") {
             assets.srcDir(smartDetectionModelDir)
         }
+        // The MediaPipe-backed detector is compiled only for the controlled test build (V62).
+        getByName("main").java.srcDir(if (smartDetectionEnabled) "src/smartOn/java" else "src/smartOff/java")
     }
 
     buildFeatures {
@@ -192,10 +194,16 @@ dependencies {
     implementation("io.github.webrtc-sdk:android:144.7559.08")
     // ADR 0074/0075: smart-detection experiment runtime. The model asset is
     // fetched separately by downloadSmartDetectionModel, not bundled here.
-    implementation("com.google.mediapipe:tasks-vision:1.0.0")
+    if (smartDetectionEnabled) implementation("com.google.mediapipe:tasks-vision:1.0.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation(kotlin("test"))
     // The android.jar used by unit tests only stubs org.json; this is the reference implementation.
     testImplementation("org.json:json:20240303")
 }
+
+// Pin and record the shipped dependency versions so the weekly OSV scan (.github/workflows/dependency-audit.yml)
+// can read them (V24). Refresh with: ./gradlew :app:dependencies --write-locks
+configurations
+    .matching { it.name == "releaseRuntimeClasspath" }
+    .configureEach { resolutionStrategy.activateDependencyLocking() }

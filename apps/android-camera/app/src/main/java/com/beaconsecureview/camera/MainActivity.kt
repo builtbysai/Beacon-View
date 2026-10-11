@@ -224,7 +224,7 @@ private fun BeaconCameraApp(
             val result =
                 withContext(Dispatchers.IO) {
                     runCatching {
-                        api.register(installationId, "Android Camera", normalized)
+                        api.register(installationId, defaultDeviceName(), normalized)
                     }
                 }
             result.onSuccess {
@@ -263,7 +263,7 @@ private fun BeaconCameraApp(
                 withContext(Dispatchers.IO) {
                     runCatching {
                         val code = api.createPairingCode(sessionToken)
-                        api.register(installationId, "Android Camera", code)
+                        api.register(installationId, defaultDeviceName(), code)
                     }
                 }
             result.onSuccess {
@@ -564,3 +564,12 @@ private fun BeaconTheme(
         content = content,
     )
 }
+
+/** The phone's own model makes several paired devices tell apart in the viewer; the owner can rename it. */
+private fun defaultDeviceName(): String =
+    listOf(Build.MANUFACTURER, Build.MODEL)
+        .filter { it.isNotBlank() }
+        .joinToString(" ")
+        .replaceFirstChar { it.uppercase() }
+        .take(100)
+        .ifBlank { "Android Camera" }

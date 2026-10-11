@@ -32,6 +32,8 @@ interface CameraSignalingListener {
 
     fun onAnswer(connectionId: String, sdp: String)
 
+    fun onIceRestart(connectionId: String, iceServers: List<SignalingIceServer>)
+
     fun onIce(connectionId: String, candidate: IceCandidate)
 
     fun onPeerLeft(connectionId: String)
@@ -355,6 +357,10 @@ class CameraSignalingClient(
                         message.optBoolean("canListen", true),
                     )
                 }
+            }
+            "ice-restart" -> {
+                val servers = message.getJSONArray("iceServers").toIceServers()
+                handler.post { listener.onIceRestart(message.getString("connectionId"), servers) }
             }
             "answer" ->
                 handler.post {

@@ -73,6 +73,50 @@ describe('SignalingHub', () => {
     hub.close();
   });
 
+  it('hands both ends fresh ICE servers on a viewer ICE restart, rate limited (V21, V65)', () => {
+    let issued = 0;
+    const hub = new SignalingHub(
+      () => [{ urls: ['turn:viewer'], username: String(++issued) }],
+      () => [{ urls: ['turn:device'], username: String(++issued) }],
+    );
+    const device = socket();
+    const viewer = socket();
+    hub.connectDevice('camera-1', 'public-camera-1', device.ws);
+    hub.connectViewer('camera-1', 'public-camera-1', viewer.ws);
+    const ready = viewer.mock.sent.at(-1) as { connectionId: string };
+
+    device.mock.message({
+      connectionId: ready.connectionId,
+      type: 'ice-restart',
+    });
+    expect(device.mock.sent.at(-1)).toEqual({
+      code: 'invalid_message',
+      type: 'error',
+    });
+
+    viewer.mock.message({
+      connectionId: ready.connectionId,
+      type: 'ice-restart',
+    });
+    expect(viewer.mock.sent.at(-1)).toMatchObject({
+      iceServers: [{ urls: ['turn:viewer'] }],
+      type: 'ice-config',
+    });
+    expect(device.mock.sent.at(-1)).toMatchObject({
+      connectionId: ready.connectionId,
+      iceServers: [{ urls: ['turn:device'] }],
+      type: 'ice-restart',
+    });
+
+    const sentBefore = viewer.mock.sent.length;
+    viewer.mock.message({
+      connectionId: ready.connectionId,
+      type: 'ice-restart',
+    });
+    expect(viewer.mock.sent).toHaveLength(sentBefore);
+    hub.close();
+  });
+
   it('cleans up an unanswered negotiation after its deterministic timeout', async () => {
     const hub = new SignalingHub(
       () => [{ urls: ['stun:localhost:3478'] }],

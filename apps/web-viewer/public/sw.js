@@ -7,6 +7,8 @@
 //   - the /api/events WebSocket upgrade (not interceptable anyway)
 //   - WebRTC signaling / media, which never goes through fetch()
 const CACHE_VERSION = 'beacon-shell-v1';
+// Hashed build assets accumulate across releases; keep only the newest.
+const MAX_CACHED_ASSETS = 80;
 const APP_SHELL = ['/', '/manifest.webmanifest', '/favicon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -32,6 +34,20 @@ self.addEventListener('activate', (event) => {
       .then(() => self.clients.claim()),
   );
 });
+
+// Cache keys come back oldest first, so drop from the front.
+function trimAssets(cache) {
+  return cache.keys().then((keys) => {
+    const assets = keys.filter((key) =>
+      new URL(key.url).pathname.startsWith('/assets/'),
+    );
+    return Promise.all(
+      assets
+        .slice(0, Math.max(0, assets.length - MAX_CACHED_ASSETS))
+        .map((key) => cache.delete(key)),
+    );
+  });
+}
 
 function isApiRequest(url) {
   return url.pathname.startsWith('/api/');
@@ -66,7 +82,9 @@ self.addEventListener('fetch', (event) => {
               const copy = response.clone();
               void caches
                 .open(CACHE_VERSION)
-                .then((cache) => cache.put(request, copy));
+                .then((cache) =>
+                  cache.put(request, copy).then(() => trimAssets(cache)),
+                );
             }
             return response;
           }),

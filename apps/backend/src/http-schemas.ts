@@ -19,8 +19,14 @@ export const cameraSourceSchema = z.object({
   sourceKey: z.string().trim().min(1).max(200),
   name: z.string().trim().min(1).max(100),
   facing: z.enum(['front', 'rear', 'external', 'unknown']),
+  // Bounded so a client cannot store an arbitrarily large blob (V56). Unknown
+  // top-level fields stay accepted: older apps in the field send extras.
   capabilities: z
-    .record(z.string(), z.union([z.boolean(), z.number(), z.string()]))
+    .record(
+      z.string().max(64),
+      z.union([z.boolean(), z.number(), z.string().max(200)]),
+    )
+    .refine((value) => Object.keys(value).length <= 32)
     .optional(),
 });
 export const syncCameraSourcesSchema = z.object({
@@ -37,13 +43,13 @@ export const motionEventParameterSchema = z.object({
   motionEventId: z.string().uuid(),
 });
 export const updateDeviceSchema = z
-  .object({
+  .strictObject({
     enabled: z.boolean().optional(),
     name: z.string().trim().min(1).max(100).optional(),
   })
   .refine((value) => value.enabled !== undefined || value.name !== undefined);
 export const updateCameraSchema = z
-  .object({
+  .strictObject({
     enabled: z.boolean().optional(),
     name: z.string().trim().min(1).max(100).optional(),
   })

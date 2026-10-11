@@ -234,3 +234,32 @@ it('hides delete controls for a viewer without delete access, but still allows p
     screen.getByRole('button', { name: 'Download clip' }),
   ).toBeInTheDocument();
 });
+
+it('forgets bookmarks for clips that no longer exist once the whole list is loaded', async () => {
+  localStorage.setItem('prune-bookmarks', '["clip","gone"]');
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          recordings: [
+            {
+              id: 'clip',
+              cameraName: 'Door',
+              deviceName: 'Phone',
+              status: 'available',
+              createdAt: '2026-09-24T12:00:00Z',
+            },
+          ],
+          nextCursor: null,
+        }),
+        { status: 200 },
+      ),
+    ),
+  );
+  render(<RecordingLibrary bookmarkStorageKey="prune-bookmarks" />);
+  await screen.findByRole('button', { name: 'Remove bookmark' });
+  await waitFor(() =>
+    expect(localStorage.getItem('prune-bookmarks')).toBe('["clip"]'),
+  );
+});

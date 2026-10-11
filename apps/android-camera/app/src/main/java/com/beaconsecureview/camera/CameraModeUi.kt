@@ -157,7 +157,7 @@ internal fun PairingScreen(
                 modifier = Modifier.padding(top = 14.dp),
             )
             Text(
-                "In your signed-in Beacon viewer, open this camera and choose Reconnect. Then scan the new code here.",
+                "In your signed-in Beacon viewer, choose Add camera (or Reconnect on an offline camera) to show a pairing code. Then scan it here.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp, bottom = 14.dp),
             )

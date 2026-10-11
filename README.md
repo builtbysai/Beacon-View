@@ -15,43 +15,13 @@ Google Drive, notification transport, household sharing, and an Electron desktop
 client. Trained object detection remains experimental foundation work.
 The [roadmap](docs/roadmap.md) records the remaining release acceptance gates.
 
-Web/desktop Camera wall supports named camera groups and saved tile order/columns
-on the current browser, scoped to account and household (ADR 0098). Open Camera
-wall, choose **New group / layout**, select/reorder cameras, then save. Layouts do
-not sync across installations. Browser storage failures are explained in the UI.
-
 <p align="center">
   <img src="assets/architecture.svg" width="900" alt="Beacon View system architecture: Android camera client, Fastify backend, React web viewer">
 </p>
 
-Activity supports 24-hour, 7-day, 30-day, all-time, and local-calendar Since date
-filters with a reset action. Camera/date filters query saved history; text search,
-event kinds, counts, and sorting cover loaded pages. Load more extends those
-results. Preferences stay local to the account and household.
-
-Connection details provides manual refresh, device connection guidance, and a
-local troubleshooting report you can preview and copy. The report omits names,
-identifiers, credentials, and raw connection data. It describes a backend status
-snapshot; video, audio, and notification delivery require separate checks.
-Choose **Check setup** for read-only camera, Drive, and alert-preference checks,
-with explicit manual permission and delivery steps. It never starts capture.
-
-Clips offers **Bookmark clip** and **Bookmarked only**. Bookmarks save identifiers
-in this browser for the account and household; they do not bypass access or keep
-clips past retention. Load more extends the clips searched by these filters.
 Development follows the [testing policy](docs/testing-policy.md): protect realistic
-regressions with the smallest useful suite.
-
-Web/desktop notification settings offer personal per-camera motion-alert snooze
-for 15/30/60 minutes and early resume. Server deadlines work while the viewer is
-closed. Camera capture and history continue; quiet hours and Home/Away rules still
-apply, and problem/security alerts keep their usual behavior. Migration 0037 is
-required before rolling out this API change.
-
-Full web/desktop live views offer an optional 15/30/60-minute sleep timer.
-Expiry stops this viewing session (including Talk, PiP and Cast), with an explicit
-Resume viewing button. It does not pause camera capture and cannot execute while
-the browser or computer is suspended; it checks expiry on wake (ADR 0099).
+regressions with the smallest useful suite. Per-feature behaviour notes live in
+[docs/feature-notes.md](docs/feature-notes.md).
 
 ## Repository layout
 

@@ -119,6 +119,7 @@ internal fun ColumnScope.MonitorSettingsPage(
                 sessionToken = currentSession.token,
                 cameras = cameras,
                 isAdmin = currentSession.householdRole == "owner" || currentSession.householdRole == "admin",
+                isOwner = currentSession.householdRole == "owner",
                 onAuthorizationLost = expireSession,
             )
             Spacer(Modifier.height(1.dp).onGloballyPositioned { settingsSectionOffsets["Data & storage"] = it.positionInParent().y.roundToInt() })

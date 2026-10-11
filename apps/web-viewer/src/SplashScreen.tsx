@@ -124,7 +124,7 @@ export function SplashScreen({ onContinue }: { onContinue: () => void }) {
                     <div className="scene-vignette"></div>
                   </div>
                   <div className="feed-topline" aria-hidden="true">
-                    <span className="feed-quality">HD · 1080p</span>
+                    <span className="feed-quality">Live</span>
                     <span className="feed-secure">
                       <Icon name="lock" />
                       Encrypted

@@ -125,14 +125,14 @@ private fun BeaconHouseholdStat(label: String, value: String, detail: String) {
  * list state up to MonitorHome, since nothing else in that already-large
  * function needs to observe or reset this panel's state.
  *
- * Scope note: per-camera grant editing (PUT .../members/:id/grants) is not
- * implemented here -- this covers membership (invite/accept/revoke) only. */
+ * Covers membership (invite/accept/revoke) and per-camera grants for viewers and guests. */
 @Composable
 internal fun BeaconPeopleAccessPanel(
     api: BeaconApi,
     sessionToken: String,
     cameras: List<BeaconApi.MonitorCamera>,
     isAdmin: Boolean,
+    isOwner: Boolean = false,
     onAuthorizationLost: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -185,7 +185,8 @@ internal fun BeaconPeopleAccessPanel(
                             grantCount = member.grants.size,
                             busy = busyId == member.id,
                             canManageGrants = member.role == "viewer" || member.role == "guest",
-                            canRemove = member.role != "owner",
+                            // The server lets only the owner remove an admin; do not offer a button it will refuse.
+                            canRemove = member.role != "owner" && (isOwner || member.role != "admin"),
                             onManage = { manageMemberId = member.id },
                             onRemove = { confirmRevokeMemberId = member.id },
                         )

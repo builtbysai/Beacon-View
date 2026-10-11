@@ -105,6 +105,8 @@ export async function initiateDriveRecordingUpload(input: {
   byteSize: number;
   mimeType: 'application/octet-stream';
   origin?: string;
+  /** A thumbnail gets its own file name and marker so it is not mistaken for the clip in the owner's Drive. */
+  part?: 'thumbnail';
   recordingId: string;
 }): Promise<string> {
   const parameters = new URLSearchParams({
@@ -115,9 +117,13 @@ export async function initiateDriveRecordingUpload(input: {
     `https://www.googleapis.com/upload/drive/v3/files?${parameters.toString()}`,
     {
       body: JSON.stringify({
-        appProperties: { beacon: 'recording', recordingId: input.recordingId },
+        appProperties: {
+          beacon: 'recording',
+          ...(input.part ? { part: input.part } : {}),
+          recordingId: input.recordingId,
+        },
         mimeType: input.mimeType,
-        name: `Beacon-recording-${input.recordingId}.beacon`,
+        name: `Beacon-${input.part ?? 'recording'}-${input.recordingId}.beacon`,
       }),
       headers: {
         Authorization: `Bearer ${input.accessToken}`,

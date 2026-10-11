@@ -34,6 +34,10 @@ const messageSchema = z.discriminatedUnion('type', [
   z.object({ connectionId: z.string().uuid(), type: z.literal('disconnect') }),
   z.object({
     connectionId: z.string().uuid(),
+    type: z.literal('ice-restart'),
+  }),
+  z.object({
+    connectionId: z.string().uuid(),
     type: z.literal('talk-request'),
   }),
   z.object({
@@ -50,6 +54,8 @@ type PeerRole = 'device' | 'viewer';
 const MAX_VIEWERS_PER_CAMERA = 8;
 const MAX_MESSAGE_BYTES = 131_072;
 const MESSAGE_WINDOW_MS = 10_000;
+/** A viewer may ask for an ICE restart this often (V21, V65). */
+const MIN_ICE_RESTART_INTERVAL_MS = 5_000;
 const MAX_MESSAGES_PER_WINDOW = 200;
 
 interface DevicePeer {
@@ -68,6 +74,7 @@ interface ActiveSession {
   householdId?: string | undefined;
   publicCameraId: string;
   sessionId?: string | undefined;
+  lastIceRestartAt: number;
   startedAt: number;
   timeout: NodeJS.Timeout | null;
   viewer: WebSocket;
@@ -184,6 +191,7 @@ export class SignalingHub {
       householdId: device.householdId,
       publicCameraId,
       sessionId,
+      lastIceRestartAt: 0,
       startedAt: Date.now(),
       timeout: null,
       viewer: socket,
@@ -379,6 +387,31 @@ export class SignalingHub {
       (role === 'viewer' && session.viewer !== socket)
     ) {
       this.#send(socket, { code: 'invalid_connection', type: 'error' });
+      return;
+    }
+    if (message.type === 'ice-restart') {
+      // The viewer's network changed or its relay credentials are running
+      // out. Hand both ends fresh ICE servers; the camera answers by sending a
+      // new offer with ICE restart, which the viewer treats like any offer.
+      if (role !== 'viewer') {
+        this.#send(socket, { code: 'invalid_message', type: 'error' });
+        return;
+      }
+      // A flapping network may ask repeatedly; extra requests are dropped
+      // quietly because an error would end the session.
+      const now = Date.now();
+      if (now - session.lastIceRestartAt < MIN_ICE_RESTART_INTERVAL_MS) return;
+      session.lastIceRestartAt = now;
+      this.#send(session.viewer, {
+        connectionId: session.connectionId,
+        iceServers: this.createViewerIceServers(),
+        type: 'ice-config',
+      });
+      this.#send(session.device, {
+        connectionId: session.connectionId,
+        iceServers: this.createDeviceIceServers(),
+        type: 'ice-restart',
+      });
       return;
     }
     if (message.type === 'talk-request' || message.type === 'talk-release') {

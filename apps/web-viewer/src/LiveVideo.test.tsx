@@ -86,6 +86,8 @@ class FakePeer {
   constructor() {
     FakePeer.instances.push(this);
   }
+  setConfiguration = vi.fn();
+  getConfiguration = () => ({});
   getTransceivers = () => [this.transceiver];
   getStats = () => Promise.resolve(new Map());
   setRemoteDescription = () => Promise.resolve();
@@ -907,6 +909,24 @@ describe('LiveVideo', () => {
         peer.connectionState = 'disconnected';
         peer.onconnectionstatechange?.();
         vi.advanceTimersByTime(7_999);
+      });
+      // The viewer asks the camera to restart ICE before giving up (V65) and
+      // applies the fresh relay credentials the server sends back (V21).
+      expect(socket.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          connectionId: 'connection-a',
+          type: 'ice-restart',
+        }),
+      );
+      act(() => {
+        socket.message({
+          connectionId: 'connection-a',
+          iceServers: [{ urls: 'turn:fresh' }],
+          type: 'ice-config',
+        });
+      });
+      expect(peer.setConfiguration).toHaveBeenCalledWith({
+        iceServers: [{ urls: 'turn:fresh' }],
       });
       expect(socket.close).not.toHaveBeenCalled();
       expect(FakeWebSocket.instances).toHaveLength(1);

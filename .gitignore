@@ -39,3 +39,6 @@ artifacts/dev-ca/
 
 # Desktop app installers and unpacked builds
 apps/desktop/release/
+
+# Remote tool attachments (not part of this project)
+.codex-remote-attachments/

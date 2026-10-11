@@ -18,6 +18,11 @@ type ProducerMessage =
       type: 'ice';
     }
   | { code: string; connectionId?: string; type: 'peer-left' | 'error' }
+  | {
+      connectionId: string;
+      iceServers: RTCIceServer[];
+      type: 'ice-restart';
+    }
   | { cameraId: string; type: 'switch-source' }
   | { active: boolean; connectionId: string; type: 'talk-state' }
   | { type: 'device-ready' };
@@ -188,6 +193,24 @@ export class BrowserProducer {
         }
       };
       const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      this.#send({
+        connectionId: message.connectionId,
+        sdp: offer.sdp,
+        type: 'offer',
+      });
+      return;
+    }
+    if (message.type === 'ice-restart') {
+      // The viewer's network changed or its relay credentials ran out: use the
+      // fresh servers and offer again with new ICE credentials (V21, V65).
+      const peer = this.#peers.get(message.connectionId);
+      if (!peer) return;
+      peer.setConfiguration({
+        ...peer.getConfiguration(),
+        iceServers: message.iceServers,
+      });
+      const offer = await peer.createOffer({ iceRestart: true });
       await peer.setLocalDescription(offer);
       this.#send({
         connectionId: message.connectionId,

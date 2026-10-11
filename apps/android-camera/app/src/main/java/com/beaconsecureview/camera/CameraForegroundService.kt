@@ -366,6 +366,10 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         sessions[connectionId]?.setAnswer(sdp)
     }
 
+    override fun onIceRestart(connectionId: String, iceServers: List<SignalingIceServer>) {
+        sessions[connectionId]?.restartIce(iceServers)
+    }
+
     override fun onIce(connectionId: String, candidate: IceCandidate) {
         sessions[connectionId]?.addIce(candidate)
     }

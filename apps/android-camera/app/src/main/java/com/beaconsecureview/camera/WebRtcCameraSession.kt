@@ -15,7 +15,7 @@ import org.webrtc.SessionDescription
 class WebRtcCameraSession(
     private val media: CameraMediaSource,
     servers: List<SignalingIceServer>,
-    relayOnly: Boolean,
+    private val relayOnly: Boolean,
     private val connectionId: String,
     private val signaling: CameraSignalingClient,
     private val canListen: Boolean = true,
@@ -29,27 +29,10 @@ class WebRtcCameraSession(
     private val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 70)
 
     init {
-        val iceServers =
-            servers.map {
-                PeerConnection.IceServer.builder(it.urls)
-                    .setUsername(it.username ?: "")
-                    .setPassword(it.credential ?: "")
-                    .createIceServer()
-            }
         peer =
             requireNotNull(
                 media.factory.createPeerConnection(
-                    PeerConnection.RTCConfiguration(iceServers).apply {
-                        iceTransportsType =
-                            if (relayOnly) {
-                                PeerConnection.IceTransportsType.RELAY
-                            } else {
-                                PeerConnection.IceTransportsType.ALL
-                            }
-                        sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
-                        continualGatheringPolicy =
-                            PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
-                    },
+                    configuration(servers),
                     Observer(),
                 ),
             )
@@ -82,6 +65,36 @@ class WebRtcCameraSession(
         onState(StreamingState.Connecting)
         media.acquire()
         acquired = true
+        offer(MediaConstraints())
+    }
+
+    /**
+     * The viewer's network changed or its relay credentials ran out: take the fresh servers and offer again with
+     * new ICE credentials, keeping the same media session (V21, V65).
+     */
+    fun restartIce(servers: List<SignalingIceServer>) {
+        if (closed) return
+        peer.setConfiguration(configuration(servers))
+        offer(
+            MediaConstraints().apply {
+                mandatory.add(MediaConstraints.KeyValuePair("IceRestart", "true"))
+            },
+        )
+    }
+
+    private fun configuration(servers: List<SignalingIceServer>) =
+        PeerConnection.RTCConfiguration(servers.toIceServers()).apply {
+            iceTransportsType =
+                if (relayOnly) {
+                    PeerConnection.IceTransportsType.RELAY
+                } else {
+                    PeerConnection.IceTransportsType.ALL
+                }
+            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
+            continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
+        }
+
+    private fun offer(constraints: MediaConstraints) {
         peer.createOffer(
             object : SimpleSdpObserver() {
                 override fun onCreateSuccess(description: SessionDescription) {
@@ -105,7 +118,7 @@ class WebRtcCameraSession(
                     onState(StreamingState.Failed)
                 }
             },
-            MediaConstraints(),
+            constraints,
         )
     }
 
@@ -200,3 +213,11 @@ open class SimpleSdpObserver : SdpObserver {
     override fun onCreateFailure(error: String) = Unit
     override fun onSetFailure(error: String) = Unit
 }
+
+private fun List<SignalingIceServer>.toIceServers(): List<PeerConnection.IceServer> =
+    map {
+        PeerConnection.IceServer.builder(it.urls)
+            .setUsername(it.username ?: "")
+            .setPassword(it.credential ?: "")
+            .createIceServer()
+    }
