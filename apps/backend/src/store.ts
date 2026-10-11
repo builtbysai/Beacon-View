@@ -322,6 +322,17 @@ export class PostgresStore implements MilestoneStore {
     return this.recordings.beginAvailableDeletion(householdId, recordingId);
   }
 
+  async rewrapRecordingKeys(
+    transform: (row: {
+      recordingId: string;
+      purpose: 'clip' | 'thumbnail';
+      ciphertext: Buffer;
+      iv: Buffer;
+    }) => { ciphertext: Buffer; iv: Buffer } | null,
+  ): Promise<number> {
+    return this.recordings.rewrapKeys(transform);
+  }
+
   async listRecordingDriveFiles(
     householdId: string,
   ): Promise<{ userId: string; providerFileId: string }[]> {
@@ -705,6 +716,12 @@ export class PostgresStore implements MilestoneStore {
     tokenHash: string;
     invitedByUserId: string;
     expiresAt: Date;
+    defaultCanListen?: boolean;
+    defaultCanTalk?: boolean;
+    defaultCanFlip?: boolean;
+    defaultCanPause?: boolean;
+    cameraScope?: 'all' | 'selected';
+    cameraPublicIds?: string[];
   }): Promise<string> {
     return this.sharing.createInvitation(input);
   }

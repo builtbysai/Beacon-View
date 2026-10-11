@@ -158,6 +158,15 @@ export function HouseholdSharingSettings({
                 defaultCanTalk: formData.get('defaultCanTalk') === 'on',
                 defaultCanFlip: formData.get('defaultCanFlip') === 'on',
                 defaultCanPause: formData.get('defaultCanPause') === 'on',
+                // The owner chooses at invite time; there is no silent default.
+                cameraAccess:
+                  formData.get('cameraScope') === 'selected'
+                    ? {
+                        cameraIds: formData
+                          .getAll('inviteCameraIds')
+                          .map(String),
+                      }
+                    : 'all',
               }
             : {}),
         }),
@@ -755,6 +764,10 @@ function InvitePersonDialog({
   const [inviteRole, setInviteRole] = useState<'admin' | 'viewer' | 'guest'>(
     'viewer',
   );
+  // Starts unset on purpose: the owner must pick (V32).
+  const [viewerScope, setViewerScope] = useState<'all' | 'selected' | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<
@@ -767,6 +780,17 @@ function InvitePersonDialog({
     event.preventDefault();
     if (busy) return;
     const data = new FormData(event.currentTarget);
+    if (mode === 'invite' && inviteRole === 'viewer') {
+      const scope = data.get('cameraScope');
+      if (scope !== 'all' && scope !== 'selected') {
+        setError('Choose which cameras this person can see.');
+        return;
+      }
+      if (scope === 'selected' && data.getAll('inviteCameraIds').length === 0) {
+        setError('Pick at least one camera.');
+        return;
+      }
+    }
     setBusy(true);
     setError('');
     try {
@@ -943,8 +967,52 @@ function InvitePersonDialog({
                   </label>
                 )}
                 {inviteRole === 'viewer' && (
+                  <fieldset className="form-group">
+                    <legend className="form-label">Cameras they can see</legend>
+                    <div className="permission-pills">
+                      <label className="sharing-permission-toggle">
+                        <input
+                          checked={viewerScope === 'all'}
+                          name="cameraScope"
+                          onChange={() => setViewerScope('all')}
+                          type="radio"
+                          value="all"
+                        />
+                        All cameras
+                      </label>
+                      <label className="sharing-permission-toggle">
+                        <input
+                          checked={viewerScope === 'selected'}
+                          name="cameraScope"
+                          onChange={() => setViewerScope('selected')}
+                          type="radio"
+                          value="selected"
+                        />
+                        Only selected cameras
+                      </label>
+                    </div>
+                    {viewerScope === 'selected' && (
+                      <div className="permission-pills">
+                        {cameras.map((camera) => (
+                          <label
+                            key={camera.id}
+                            className="sharing-permission-toggle"
+                          >
+                            <input
+                              name="inviteCameraIds"
+                              type="checkbox"
+                              value={camera.id}
+                            />
+                            {camera.deviceName || camera.name}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </fieldset>
+                )}
+                {inviteRole === 'viewer' && (
                   <div className="form-group">
-                    <span className="form-label">Default camera access</span>
+                    <span className="form-label">What they can do</span>
                     <div className="permission-pills">
                       <label className="sharing-permission-toggle">
                         <input

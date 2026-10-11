@@ -24,8 +24,27 @@ const invitationSchema = z
     defaultCanTalk: z.boolean().optional(),
     defaultCanFlip: z.boolean().optional(),
     defaultCanPause: z.boolean().optional(),
+    // Required for a viewer (V32): 'all' cameras, or exactly these cameras. The
+    // owner decides at invite time; there is no silent default.
+    cameraAccess: z
+      .union([
+        z.literal('all'),
+        z
+          .object({
+            cameraIds: z.array(z.string().uuid()).min(1).max(100),
+          })
+          .strict(),
+      ])
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) => value.role !== 'viewer' || value.cameraAccess !== undefined,
+    {
+      message: 'Choose which cameras a viewer can see',
+      path: ['cameraAccess'],
+    },
+  );
 const invitationParameterSchema = z.object({ invitationId: z.string().uuid() });
 const invitationAcceptanceSchema = z
   .object({ token: z.string().min(32).max(512) })
@@ -110,11 +129,28 @@ export function registerSharingRoutes(
       return reply
         .code(403)
         .send({ error: 'You cannot invite that household role' });
+    const selected =
+      body.data.cameraAccess && body.data.cameraAccess !== 'all'
+        ? [...new Set(body.data.cameraAccess.cameraIds)]
+        : null;
+    if (selected) {
+      const known = new Set(
+        (await store.listCameras(session.householdId)).map(
+          (camera) => camera.publicCameraId,
+        ),
+      );
+      if (!selected.every((id) => known.has(id)))
+        return reply
+          .code(400)
+          .send({ error: 'Choose cameras in this household' });
+    }
     const token = generateToken();
     const expiresAt = new Date(
       Date.now() + (body.data.expiresInHours ?? 48) * HOUR,
     );
     const id = await store.createHouseholdInvitation({
+      cameraPublicIds: selected ?? [],
+      cameraScope: selected ? 'selected' : 'all',
       defaultCanFlip: body.data.defaultCanFlip ?? false,
       defaultCanListen: body.data.defaultCanListen ?? false,
       defaultCanPause: body.data.defaultCanPause ?? false,
@@ -191,6 +227,8 @@ export function registerSharingRoutes(
       const token = generateToken();
       const expiresAt = new Date(Date.now() + 48 * HOUR);
       const id = await store.createHouseholdInvitation({
+        cameraPublicIds: pending.cameraPublicIds,
+        cameraScope: pending.cameraScope,
         defaultCanFlip: pending.defaultCanFlip,
         defaultCanListen: pending.defaultCanListen,
         defaultCanPause: pending.defaultCanPause,

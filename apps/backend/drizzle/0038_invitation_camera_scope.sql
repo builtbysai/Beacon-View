@@ -1,0 +1,3 @@
+ALTER TABLE "household_invitations" ADD COLUMN "camera_scope" text DEFAULT 'all' NOT NULL;--> statement-breakpoint
+ALTER TABLE "household_invitations" ADD COLUMN "camera_public_ids" text[] DEFAULT '{}'::text[] NOT NULL;--> statement-breakpoint
+ALTER TABLE "household_invitations" ADD CONSTRAINT "household_invitations_camera_scope_valid" CHECK ("household_invitations"."camera_scope" in ('all', 'selected'));

@@ -68,7 +68,8 @@ export class PostgresSharingRepository {
       `SELECT id, invited_email AS "invitedEmail", role, expires_at AS "expiresAt",
               created_at AS "createdAt", default_can_listen AS "defaultCanListen",
               default_can_talk AS "defaultCanTalk", default_can_flip AS "defaultCanFlip",
-              default_can_pause AS "defaultCanPause"
+              default_can_pause AS "defaultCanPause",
+              camera_scope AS "cameraScope", camera_public_ids AS "cameraPublicIds"
        FROM household_invitations
        WHERE household_id = $1 AND accepted_at IS NULL AND revoked_at IS NULL
          AND expires_at > $2 ORDER BY created_at DESC, id DESC`,
@@ -88,6 +89,8 @@ export class PostgresSharingRepository {
     defaultCanTalk?: boolean;
     defaultCanFlip?: boolean;
     defaultCanPause?: boolean;
+    cameraScope?: 'all' | 'selected';
+    cameraPublicIds?: string[];
   }): Promise<string> {
     const client = await this.pool.connect();
     try {
@@ -101,8 +104,9 @@ export class PostgresSharingRepository {
       const result = await client.query<{ id: string }>(
         `INSERT INTO household_invitations
          (household_id, invited_email, role, token_hash, invited_by_user_id, expires_at,
-          default_can_listen, default_can_talk, default_can_flip, default_can_pause)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+          default_can_listen, default_can_talk, default_can_flip, default_can_pause,
+          camera_scope, camera_public_ids)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
         [
           input.householdId,
           input.invitedEmail,
@@ -114,6 +118,8 @@ export class PostgresSharingRepository {
           input.defaultCanTalk ?? false,
           input.defaultCanFlip ?? false,
           input.defaultCanPause ?? false,
+          input.cameraScope ?? 'all',
+          input.cameraPublicIds ?? [],
         ],
       );
       await client.query('COMMIT');
@@ -144,10 +150,13 @@ export class PostgresSharingRepository {
         defaultCanTalk: boolean;
         defaultCanFlip: boolean;
         defaultCanPause: boolean;
+        cameraScope: string;
+        cameraPublicIds: string[];
       }>(
         `SELECT id, household_id AS "householdId", role, expires_at AS "expiresAt",
                 default_can_listen AS "defaultCanListen", default_can_talk AS "defaultCanTalk",
-                default_can_flip AS "defaultCanFlip", default_can_pause AS "defaultCanPause"
+                default_can_flip AS "defaultCanFlip", default_can_pause AS "defaultCanPause",
+                camera_scope AS "cameraScope", camera_public_ids AS "cameraPublicIds"
          FROM household_invitations
          WHERE token_hash = $1 AND invited_email = $2 AND accepted_at IS NULL
            AND revoked_at IS NULL AND expires_at > $3 FOR UPDATE`,
@@ -178,12 +187,10 @@ export class PostgresSharingRepository {
         await client.query('ROLLBACK');
         return null;
       }
-      // A viewer is meant to see the whole household by default -- camera
-      // access is something an admin *restricts* for them afterward, not
-      // something granted one-by-one before it does anything. Which
-      // controls come with that default view is whatever the inviter chose
-      // when creating the invitation. Guests stay opt-in per camera: their
-      // access is meant to be narrow and deliberate.
+      // What a viewer sees is what the inviter chose when inviting (V32): every
+      // current camera, or only the cameras they picked. Which controls come
+      // with that view is also the inviter's choice. Guests stay opt-in per
+      // camera: their access is meant to be narrow and deliberate.
       if (pending.role === 'viewer') {
         await client.query(
           `INSERT INTO camera_grants
@@ -192,6 +199,7 @@ export class PostgresSharingRepository {
            JOIN cameras d ON d.id = cs.device_id
            WHERE d.household_id = $1 AND cs.enabled = true
              AND cs.removed_at IS NULL AND d.revoked_at IS NULL
+             AND ($7::text = 'all' OR cs.public_camera_id::text = ANY($8::text[]))
            ON CONFLICT (member_id, camera_source_id) DO NOTHING`,
           [
             pending.householdId,
@@ -200,6 +208,8 @@ export class PostgresSharingRepository {
             pending.defaultCanTalk,
             pending.defaultCanFlip,
             pending.defaultCanPause,
+            pending.cameraScope,
+            pending.cameraPublicIds,
           ],
         );
       }

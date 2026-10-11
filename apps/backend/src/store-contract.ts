@@ -96,6 +96,9 @@ export interface HouseholdInvitationRecord {
   defaultCanTalk: boolean;
   defaultCanFlip: boolean;
   defaultCanPause: boolean;
+  /** Which cameras a viewer sees on acceptance (V32). */
+  cameraScope: 'all' | 'selected';
+  cameraPublicIds: string[];
 }
 
 export interface GoogleDriveConnectionRecord {
@@ -472,6 +475,14 @@ export interface MilestoneStore {
     cameraSourceIds: string[],
   ): Promise<RecordingThumbnailPlaybackClaim | null>;
   deleteRecording(householdId: string, recordingId: string): Promise<boolean>;
+  rewrapRecordingKeys(
+    transform: (row: {
+      recordingId: string;
+      purpose: 'clip' | 'thumbnail';
+      ciphertext: Buffer;
+      iv: Buffer;
+    }) => { ciphertext: Buffer; iv: Buffer } | null,
+  ): Promise<number>;
   listRecordingDriveFiles(
     householdId: string,
   ): Promise<{ userId: string; providerFileId: string }[]>;
@@ -704,6 +715,8 @@ export interface MilestoneStore {
     defaultCanTalk?: boolean;
     defaultCanFlip?: boolean;
     defaultCanPause?: boolean;
+    cameraScope?: 'all' | 'selected';
+    cameraPublicIds?: string[];
   }): Promise<string>;
   acceptHouseholdInvitation(input: {
     tokenHash: string;

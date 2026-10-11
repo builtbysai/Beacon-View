@@ -36,6 +36,10 @@ vi.mock('../src/google-drive-client.js', async (importOriginal) => {
 });
 
 const { buildApp } = await import('../src/app.js');
+const { runRecordingKeyRewrap } =
+  await import('../src/recording-key-rewrap.js');
+const { RecordingKeyCipher, recordingKeyContext } =
+  await import('../src/recording-crypto.js');
 const { PostgresStore } = await import('../src/store.js');
 const drive = await import('../src/google-drive-client.js');
 const { GOOGLE_DRIVE_RECORDING_SCOPE, GOOGLE_DRIVE_SCOPE } = drive;
@@ -274,7 +278,11 @@ describe.skipIf(!app || !store)('recording routes', () => {
     const invite = await app!.inject({
       headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
       method: 'POST',
-      payload: { email: 'viewer-role@example.com', role: 'viewer' },
+      payload: {
+        cameraAccess: 'all',
+        email: 'viewer-role@example.com',
+        role: 'viewer',
+      },
       url: '/api/household/invitations',
     });
     const token = invite.json<{ token: string }>().token;
@@ -328,7 +336,11 @@ describe.skipIf(!app || !store)('recording routes', () => {
     const invite = await app!.inject({
       headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
       method: 'POST',
-      payload: { email: 'grant-playback-viewer@example.com', role: 'viewer' },
+      payload: {
+        cameraAccess: 'all',
+        email: 'grant-playback-viewer@example.com',
+        role: 'viewer',
+      },
       url: '/api/household/invitations',
     });
     const token = invite.json<{ token: string }>().token;
@@ -1094,6 +1106,90 @@ describe.skipIf(!app || !store)('recording routes', () => {
     );
   });
 
+  it('moves a clip key wrapped the old way onto the recording-bound form, and playback still works (V7)', async () => {
+    const owner = await registerAndSignIn(
+      'rewrap-owner@example.com',
+      '10.2.0.33',
+    );
+    const camera = await pairCamera(owner, 'Attic');
+    await connectDrive(owner.userId);
+    const device = connectDevice(camera.cameraId, camera.credential);
+    await nextMessage(device);
+    const headers = { cookie: owner.cookie, 'x-csrf-token': owner.csrf };
+    const created = await app!.inject({
+      headers,
+      method: 'POST',
+      payload: { cameraId: camera.cameraId },
+      url: '/api/recordings',
+    });
+    const recordingId = created.json<{ recording: { id: string } }>().recording
+      .id;
+    await app!.inject({
+      headers,
+      method: 'POST',
+      payload: {
+        byteSize: 2048,
+        checksumSha256: 'e'.repeat(64),
+        durationMs: 5_000,
+        mimeType: 'video/webm',
+        encryption,
+      },
+      url: `/api/recordings/${recordingId}/upload-session`,
+    });
+    await app!.inject({
+      headers,
+      method: 'POST',
+      payload: { providerFileId: 'drive-file-rewrap' },
+      url: `/api/recordings/${recordingId}/complete`,
+    });
+    // Put the row back in the form older releases wrote: no binding.
+    const cipher = new RecordingKeyCipher(recordingKey);
+    const legacy = cipher.wrap(Buffer.from(encryption.dataKey, 'base64url'));
+    await store!.pool.query(
+      `UPDATE recordings SET encryption_data_key_ciphertext=$2,
+              encryption_data_key_iv=$3 WHERE id=$1`,
+      [recordingId, legacy.ciphertext, legacy.iv],
+    );
+    const logger = { error: vi.fn(), info: vi.fn(), warn: vi.fn() };
+    await runRecordingKeyRewrap(store!, cipher, logger as never);
+    expect(logger.info).toHaveBeenCalledWith(
+      { rewritten: 1, unreadable: 0 },
+      'Recording keys checked',
+    );
+    const row = await store!.pool.query<{ c: Buffer; i: Buffer }>(
+      `SELECT encryption_data_key_ciphertext AS c, encryption_data_key_iv AS i
+       FROM recordings WHERE id=$1`,
+      [recordingId],
+    );
+    const stored = { ciphertext: row.rows[0]!.c, iv: row.rows[0]!.i };
+    // Now only the right recording and purpose can open it.
+    expect(
+      cipher.unwrapDetailed(stored, recordingKeyContext(recordingId, 'clip'))
+        .current,
+    ).toBe(true);
+    expect(() =>
+      cipher.unwrap(stored, recordingKeyContext(recordingId, 'thumbnail')),
+    ).toThrow();
+    // Running it again changes nothing.
+    await runRecordingKeyRewrap(store!, cipher, logger as never);
+    expect(logger.info).toHaveBeenLastCalledWith(
+      { rewritten: 0, unreadable: 0 },
+      'Recording keys checked',
+    );
+    // And the clip still plays back through the route.
+    vi.mocked(drive.downloadDriveRecordingFile).mockResolvedValueOnce(
+      new Response(Buffer.alloc(2048, 3)),
+    );
+    const playback = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: `/api/recordings/${recordingId}/playback`,
+    });
+    expect(playback.statusCode).toBe(200);
+    expect(playback.headers['x-beacon-recording-key']).toBe(encryption.dataKey);
+    device.close();
+  });
+
   it('refuses a non-owner household member from creating or revoking a share link', async () => {
     const owner = await registerAndSignIn(
       'share-nonowner@example.com',
@@ -1103,7 +1199,11 @@ describe.skipIf(!app || !store)('recording routes', () => {
     const invite = await app!.inject({
       headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
       method: 'POST',
-      payload: { email: 'share-viewer@example.com', role: 'viewer' },
+      payload: {
+        cameraAccess: 'all',
+        email: 'share-viewer@example.com',
+        role: 'viewer',
+      },
       url: '/api/household/invitations',
     });
     const token = invite.json<{ token: string }>().token;

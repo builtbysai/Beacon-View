@@ -107,8 +107,19 @@ which the web container mounts read-only at `/downloads/`.
 2. Put every OS's installers, `.blockmap` files, and `latest*.yml` update
    feeds in one folder, then run
    `node scripts/build-desktop-manifest.mjs <folder> <version>`.
-3. Copy the installers and blockmaps, then the `latest*.yml` files, and
-   finally `manifest.json` to `/opt/beacon/downloads`.
+3. Sign every update feed (ADR 0110). Installed apps ignore a `latest*.yml`
+   without a valid `.sig` beside it:
+
+   ```bash
+   BEACON_UPDATE_SIGNING_KEY=/path/to/update-signing-key.pem \n     node scripts/sign-update-feed.mjs <folder>/latest*.yml
+   ```
+
+   The private key lives only on the owner's computer, never in the repository.
+   `node scripts/generate-update-key.mjs <file>` creates one; paste the public key it
+   prints into `src/update-signature.ts` and release a new app.
+
+4. Copy the installers and blockmaps, then the `latest*.yml` files **and their
+   `.sig` files**, and finally `manifest.json` to `/opt/beacon/downloads`.
 
 ## Automatic updates
 

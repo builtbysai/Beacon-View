@@ -4,6 +4,8 @@ import { config as loadEnvironment } from 'dotenv';
 import { buildApp, createPostgresStore } from './app.js';
 import { startAuditRetentionJob } from './audit-retention.js';
 import { startCredentialRetentionJob } from './credential-retention.js';
+import { RecordingKeyCipher } from './recording-crypto.js';
+import { startRecordingKeyRewrapJob } from './recording-key-rewrap.js';
 import { parseConfig } from './config.js';
 import { startHouseholdModeJob } from './household-mode-job.js';
 import { startMotionRetentionJob } from './motion-retention.js';
@@ -25,6 +27,7 @@ let shuttingDown = false;
 let stopRetentionJob: (() => void) | undefined;
 let stopAuditRetentionJob: (() => void) | undefined;
 let stopCredentialRetentionJob: (() => void) | undefined;
+let stopRecordingKeyRewrapJob: (() => void) | undefined;
 let stopNotificationJob: (() => void) | undefined;
 let stopPresenceActivityJob: (() => void) | undefined;
 let stopRecordingRecoveryJob: (() => void) | undefined;
@@ -36,6 +39,7 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   stopRetentionJob?.();
   stopAuditRetentionJob?.();
   stopCredentialRetentionJob?.();
+  stopRecordingKeyRewrapJob?.();
   stopNotificationJob?.();
   stopPresenceActivityJob?.();
   stopRecordingRecoveryJob?.();
@@ -66,6 +70,15 @@ try {
   stopRetentionJob = startMotionRetentionJob(store, app.log);
   stopAuditRetentionJob = startAuditRetentionJob(store, app.log);
   stopCredentialRetentionJob = startCredentialRetentionJob(store, app.log);
+  if (config.RECORDING_ENCRYPTION_KEY)
+    stopRecordingKeyRewrapJob = startRecordingKeyRewrapJob(
+      store,
+      new RecordingKeyCipher(
+        config.RECORDING_ENCRYPTION_KEY,
+        config.RECORDING_ENCRYPTION_KEY_PREVIOUS ?? [],
+      ),
+      app.log,
+    );
   stopNotificationJob = startNotificationJob(
     store,
     config,

@@ -267,6 +267,13 @@
       "when": 1791566630616,
       "tag": "0037_motion_alert_snooze",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791688528916,
+      "tag": "0038_invitation_camera_scope",
+      "breakpoints": true
     }
   ]
 }

@@ -231,7 +231,11 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
         'x-csrf-token': ownerCredentials.csrf,
       },
       method: 'POST',
-      payload: { email: 'viewer@example.com', role: 'viewer' },
+      payload: {
+        cameraAccess: 'all',
+        email: 'viewer@example.com',
+        role: 'viewer',
+      },
       url: '/api/household/invitations',
     });
     expect(invitation.statusCode).toBe(201);
@@ -427,7 +431,11 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
         'x-csrf-token': ownerCredentials.csrf,
       },
       method: 'POST',
-      payload: { email: 'resend-guest@example.com', role: 'viewer' },
+      payload: {
+        cameraAccess: 'all',
+        email: 'resend-guest@example.com',
+        role: 'viewer',
+      },
       url: '/api/household/invitations',
     });
     expect(invitation.statusCode).toBe(201);
@@ -504,7 +512,11 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
         'x-csrf-token': ownerCredentials.csrf,
       },
       method: 'POST',
-      payload: { email: 'admin-check-viewer@example.com', role: 'viewer' },
+      payload: {
+        cameraAccess: 'all',
+        email: 'admin-check-viewer@example.com',
+        role: 'viewer',
+      },
       url: '/api/household/invitations',
     });
     expect(invitation.statusCode).toBe(201);
@@ -558,7 +570,11 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       app!.inject({
         headers: viewerAuthHeaders,
         method: 'POST',
-        payload: { email: 'someone-else@example.com', role: 'viewer' },
+        payload: {
+          cameraAccess: 'all',
+          email: 'someone-else@example.com',
+          role: 'viewer',
+        },
         url: '/api/household/invitations',
       }),
       app!.inject({
@@ -943,6 +959,57 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       });
       expect(bad.statusCode, query).toBe(400);
     }
+  });
+
+  it('makes the owner choose which cameras a viewer sees when inviting (V32)', async () => {
+    const registration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'choose-cameras@example.com',
+        password: 'correct horse battery staple',
+      },
+      remoteAddress: '127.0.0.77',
+      url: '/api/auth/register',
+    });
+    const owner = sessionCookies(registration.headers);
+    const invite = (payload: object) =>
+      app!.inject({
+        headers: {
+          cookie: owner.cookie,
+          origin: config!.WEB_ORIGIN,
+          'x-csrf-token': owner.csrf,
+        },
+        method: 'POST',
+        payload,
+        url: '/api/household/invitations',
+      });
+    // No silent default: a viewer invitation without a choice is refused.
+    expect(
+      (await invite({ email: 'v1@example.com', role: 'viewer' })).statusCode,
+    ).toBe(400);
+    // Cameras that are not in this household are refused.
+    expect(
+      (
+        await invite({
+          cameraAccess: { cameraIds: [randomUUID()] },
+          email: 'v2@example.com',
+          role: 'viewer',
+        })
+      ).statusCode,
+    ).toBe(400);
+    // Admins and guests are unaffected.
+    expect(
+      (await invite({ email: 'g1@example.com', role: 'guest' })).statusCode,
+    ).toBe(201);
+    expect(
+      (
+        await invite({
+          cameraAccess: 'all',
+          email: 'v3@example.com',
+          role: 'viewer',
+        })
+      ).statusCode,
+    ).toBe(201);
   });
 
   it('records a removed camera source with its display names', async () => {

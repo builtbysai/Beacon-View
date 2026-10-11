@@ -218,6 +218,7 @@ internal fun BeaconPeopleAccessPanel(
     if (inviteOpen) {
         InvitePersonDialog(
             api = api,
+            cameras = cameras,
             sessionToken = sessionToken,
             onDismiss = { inviteOpen = false },
             onCreated = { refresh() },
@@ -358,6 +359,7 @@ private fun BeaconInvitationRow(
 @Composable
 private fun InvitePersonDialog(
     api: BeaconApi,
+    cameras: List<BeaconApi.MonitorCamera>,
     sessionToken: String,
     onDismiss: () -> Unit,
     onCreated: () -> Unit,
@@ -366,6 +368,9 @@ private fun InvitePersonDialog(
     val clipboard = LocalClipboardManager.current
     var email by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("viewer") }
+    // Starts unset on purpose: the owner must choose which cameras a viewer sees (V32).
+    var cameraScope by remember { mutableStateOf<String?>(null) }
+    var pickedCameras by remember { mutableStateOf(setOf<String>()) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     var created by remember { mutableStateOf<BeaconApi.CreatedInvitation?>(null) }
@@ -414,6 +419,33 @@ private fun InvitePersonDialog(
                             ) { Text(label) }
                         }
                     }
+                    if (role == "viewer") {
+                        Text("Cameras they can see", style = MaterialTheme.typography.labelMedium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("all" to "All cameras", "selected" to "Only selected").forEach { (value, label) ->
+                                OutlinedButton(
+                                    onClick = { cameraScope = value; error = "" },
+                                    colors =
+                                        ButtonDefaults.outlinedButtonColors(
+                                            containerColor = if (cameraScope == value) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+                                        ),
+                                ) { Text(label) }
+                            }
+                        }
+                        if (cameraScope == "selected") {
+                            cameras.forEach { camera ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    androidx.compose.material3.Checkbox(
+                                        checked = camera.id in pickedCameras,
+                                        onCheckedChange = { checked ->
+                                            pickedCameras = if (checked) pickedCameras + camera.id else pickedCameras - camera.id
+                                        },
+                                    )
+                                    Text(camera.deviceName.ifBlank { camera.name })
+                                }
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -422,9 +454,18 @@ private fun InvitePersonDialog(
                 Button(
                     enabled = email.isNotBlank() && !busy,
                     onClick = {
+                        if (role == "viewer" && cameraScope == null) {
+                            error = "Choose which cameras this person can see."
+                            return@Button
+                        }
+                        if (role == "viewer" && cameraScope == "selected" && pickedCameras.isEmpty()) {
+                            error = "Pick at least one camera."
+                            return@Button
+                        }
                         busy = true
                         scope.launch {
-                            val result = withContext(Dispatchers.IO) { runCatching { api.createHouseholdInvitation(sessionToken, email.trim(), role) } }
+                            val ids = if (role == "viewer" && cameraScope == "selected") pickedCameras.toList() else null
+                            val result = withContext(Dispatchers.IO) { runCatching { api.createHouseholdInvitation(sessionToken, email.trim(), role, ids) } }
                             result.onSuccess {
                                 created = it
                                 onCreated()
