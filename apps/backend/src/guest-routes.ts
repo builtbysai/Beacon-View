@@ -141,14 +141,15 @@ export function registerGuestRoutes(
   // viewing session (a cookie) -- there's no CSRF cookie to check yet since
   // nothing was authenticated before this call, same as login.
   app.post('/api/guest/enter', async (request, reply) => {
-    if (!limiter.take(`guest-enter:${request.ip}`, 30, HOUR))
+    // Per address only. The link itself is a 256-bit random value, so guessing is
+    // not the risk; limiting entries per link locked a whole family out when a TV or
+    // a few phones opened the same link within an hour (V51).
+    if (!limiter.take(`guest-enter:${request.ip}`, 120, HOUR))
       return reply.code(429).send({ error: 'Too many attempts' });
     const body = guestEnterSchema.safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ error: 'This link is not valid' });
     const tokenHash = hashSecret(body.data.token);
-    if (!limiter.take(`guest-enter:${tokenHash}`, 10, HOUR))
-      return reply.code(429).send({ error: 'Too many attempts' });
     const access = await store.listGuestAccessibleCameras(
       tokenHash,
       new Date(),
@@ -161,9 +162,13 @@ export function registerGuestRoutes(
       });
       return reply.code(404).send({ error: 'This link is not valid' });
     }
+    // The cookie never outlives the link itself (F10).
+    const secondsLeft = Math.floor(
+      (access.expiresAt.getTime() - Date.now()) / 1_000,
+    );
     reply.setCookie(GUEST_LINK_COOKIE, body.data.token, {
       httpOnly: true,
-      maxAge: THIRTY_DAYS_SECONDS,
+      maxAge: Math.max(1, Math.min(THIRTY_DAYS_SECONDS, secondsLeft)),
       path: '/',
       sameSite: 'lax',
       secure: config.NODE_ENV === 'production',

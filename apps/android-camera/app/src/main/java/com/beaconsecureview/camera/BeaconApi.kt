@@ -92,6 +92,8 @@ class BeaconApi(private val baseUrl: String) {
         val configured: Boolean,
         val recordingsConnected: Boolean,
         val providerEmail: String?,
+        // Google stopped accepting the connection, so it must be connected again (V87).
+        val expired: Boolean = false,
     )
 
     data class MonitorCamera(
@@ -1126,6 +1128,7 @@ class BeaconApi(private val baseUrl: String) {
             configured = json.getBoolean("configured"),
             recordingsConnected = json.getBoolean("recordingsConnected"),
             providerEmail = nullableApiText(json.optString("providerEmail")),
+            expired = json.optBoolean("expired", false),
         )
     }
 

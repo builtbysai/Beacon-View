@@ -520,16 +520,19 @@ export class PostgresSharingRepository {
     now: Date,
   ): Promise<{
     householdId: string;
+    expiresAt: Date;
     cameras: AccessibleCameraRecord[];
   } | null> {
     const link = await this.pool.query<{
       householdId: string;
+      expiresAt: Date;
       canListen: boolean;
       canTalk: boolean;
       canFlip: boolean;
       canPause: boolean;
     }>(
-      `SELECT household_id AS "householdId", can_listen AS "canListen",
+      `SELECT household_id AS "householdId", expires_at AS "expiresAt",
+              can_listen AS "canListen",
               can_talk AS "canTalk", can_flip AS "canFlip", can_pause AS "canPause"
        FROM guest_links
        WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > $2`,
@@ -560,6 +563,7 @@ export class PostgresSharingRepository {
     );
     return {
       householdId: found.householdId,
+      expiresAt: found.expiresAt,
       cameras: cameras.rows.map((camera) => ({
         ...camera,
         canFlip: found.canFlip,

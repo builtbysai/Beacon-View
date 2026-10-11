@@ -242,6 +242,49 @@ describe.skipIf(!app || !store)('anonymous guest links', () => {
     ]);
   });
 
+  it('lets a shared link be opened many times, and never keeps its cookie past the link (F10, V51)', async () => {
+    const owner = await registerAndSignIn(
+      'guest-link-cookie-owner@example.com',
+      '10.1.0.9',
+    );
+    const camera = await pairCamera(owner, 'Playroom');
+    const created = await app!.inject({
+      headers: { cookie: owner.cookie, 'x-csrf-token': owner.csrf },
+      method: 'POST',
+      payload: {
+        cameraIds: [camera.cameraId],
+        canFlip: false,
+        canListen: true,
+        canPause: false,
+        canTalk: false,
+        expiresInHours: 1,
+      },
+      url: '/api/household/guest-links',
+    });
+    expect(created.statusCode).toBe(201);
+    const { token } = created.json<{ token: string }>();
+    // A family on one network, a TV that reloads: well past the old ten per hour.
+    for (let index = 0; index < 25; index += 1) {
+      const entered = await app!.inject({
+        method: 'POST',
+        payload: { token },
+        remoteAddress: '10.1.9.9',
+        url: '/api/guest/enter',
+      });
+      expect(entered.statusCode, 'entry ' + index).toBe(200);
+      if (index === 0) {
+        const raw = entered.headers['set-cookie'];
+        const header = (Array.isArray(raw) ? raw : [raw]).find((value) =>
+          String(value).startsWith('beacon_guest_link='),
+        );
+        const maxAge = Number(/Max-Age=(\d+)/u.exec(String(header))?.[1]);
+        // The link lasts one hour; the cookie must not last thirty days.
+        expect(maxAge).toBeGreaterThan(0);
+        expect(maxAge).toBeLessThanOrEqual(3_600);
+      }
+    }
+  });
+
   it('rejects an invalid or already-revoked link token', async () => {
     const owner = await registerAndSignIn(
       'guest-link-bad-owner@example.com',

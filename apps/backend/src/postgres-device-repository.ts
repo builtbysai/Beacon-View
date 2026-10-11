@@ -472,6 +472,18 @@ export class PostgresDeviceRepository {
     return result.rows[0]?.cameraId ?? null;
   }
 
+  /** Camera sources the household removed. Their clips still sit in Drive, so
+   * managers must still be able to list, play and delete them (V52). */
+  async listRemovedSourceIds(householdId: string): Promise<string[]> {
+    const result = await this.pool.query<{ id: string }>(
+      `SELECT cs.id FROM camera_sources cs
+       JOIN cameras d ON d.id = cs.device_id
+       WHERE d.household_id = $1 AND cs.removed_at IS NOT NULL`,
+      [householdId],
+    );
+    return result.rows.map((row) => row.id);
+  }
+
   async deleteCamera(
     householdId: string,
     publicCameraId: string,

@@ -707,9 +707,13 @@ private fun MonitorCameraCard(
                 }, style = MaterialTheme.typography.bodySmall,
                     color = if (needsAttention) BeaconWarning else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f).padding(start = 6.dp))
-                Text(if (available) "Open live ›" else "Review ›", color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable(onClick = if (available) onView else (onSettings ?: onView)))
+                // An unavailable camera can be reviewed only where there is somewhere to review it; otherwise
+                // the link would open a live view that cannot connect (V86).
+                if (available || onSettings != null) {
+                    Text(if (available) "Open live ›" else "Review ›", color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable(onClick = if (available) onView else onSettings!!))
+                }
             }
         }
     }

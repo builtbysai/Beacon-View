@@ -1190,6 +1190,69 @@ describe.skipIf(!app || !store)('recording routes', () => {
     device.close();
   });
 
+  it('keeps the clips of a removed camera listable and playable for the owner (V52)', async () => {
+    const owner = await registerAndSignIn(
+      'removed-camera-owner@example.com',
+      '10.2.0.34',
+    );
+    const camera = await pairCamera(owner, 'Old porch');
+    await connectDrive(owner.userId);
+    const device = connectDevice(camera.cameraId, camera.credential);
+    await nextMessage(device);
+    const headers = { cookie: owner.cookie, 'x-csrf-token': owner.csrf };
+    const created = await app!.inject({
+      headers,
+      method: 'POST',
+      payload: { cameraId: camera.cameraId },
+      url: '/api/recordings',
+    });
+    const recordingId = created.json<{ recording: { id: string } }>().recording
+      .id;
+    await app!.inject({
+      headers,
+      method: 'POST',
+      payload: {
+        byteSize: 2048,
+        checksumSha256: 'f'.repeat(64),
+        durationMs: 5_000,
+        mimeType: 'video/webm',
+        encryption,
+      },
+      url: `/api/recordings/${recordingId}/upload-session`,
+    });
+    await app!.inject({
+      headers,
+      method: 'POST',
+      payload: { providerFileId: 'drive-file-removed-camera' },
+      url: `/api/recordings/${recordingId}/complete`,
+    });
+    device.close();
+    const user = await store!.findUserByEmail(
+      'removed-camera-owner@example.com',
+    );
+    expect(await store!.deleteCamera(user!.householdId, camera.cameraId)).toBe(
+      true,
+    );
+
+    const list = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: '/api/recordings',
+    });
+    expect(
+      list.json<{ recordings: { id: string }[] }>().recordings.map((r) => r.id),
+    ).toContain(recordingId);
+    vi.mocked(drive.downloadDriveRecordingFile).mockResolvedValueOnce(
+      new Response(Buffer.alloc(2048, 5)),
+    );
+    const playback = await app!.inject({
+      headers: { cookie: owner.cookie },
+      method: 'GET',
+      url: `/api/recordings/${recordingId}/playback`,
+    });
+    expect(playback.statusCode).toBe(200);
+  });
+
   it('refuses a non-owner household member from creating or revoking a share link', async () => {
     const owner = await registerAndSignIn(
       'share-nonowner@example.com',
