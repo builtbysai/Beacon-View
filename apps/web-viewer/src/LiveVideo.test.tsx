@@ -164,6 +164,42 @@ describe('LiveVideo', () => {
       vi.useRealTimers();
     }
   });
+  it('keeps reconnecting after the quick attempts and says why it is not live (V29)', async () => {
+    vi.useFakeTimers();
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    const view = render(
+      <LiveVideo camera={{ id: 'camera', name: 'Kitchen' }} />,
+    );
+    try {
+      for (let drop = 0; drop < 9; drop += 1) {
+        const socket = FakeWebSocket.instances.at(-1)!;
+        const before = FakeWebSocket.instances.length;
+        await act(async () => {
+          (socket.onclose as unknown as (event: { code: number }) => void)({
+            code: 1006,
+          });
+          // The longest wait between attempts is about twenty seconds.
+          await vi.advanceTimersByTimeAsync(25_000);
+        });
+        expect(FakeWebSocket.instances.length, 'drop ' + drop).toBe(before + 1);
+      }
+      // Past the quick attempts the overlay names the problem instead of
+      // pretending to retry, and a Reconnect button is offered.
+      act(() => {
+        (
+          FakeWebSocket.instances.at(-1)!.onclose as unknown as (event: {
+            code: number;
+          }) => void
+        )({ code: 1006 });
+      });
+      expect(screen.getByText('signaling unavailable')).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Reconnect' })).toBeVisible();
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
   it('requests fullscreen for the surface containing all controls and explains rejection', async () => {
     vi.stubGlobal('WebSocket', FakeWebSocket);
     const { container } = render(

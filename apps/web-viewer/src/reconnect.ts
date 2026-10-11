@@ -1,4 +1,6 @@
-export const MAX_AUTOMATIC_RETRIES = 5;
+/** After this many quick attempts the screen says why it is not live (for
+ * example "camera offline") instead of "retrying", but Beacon keeps trying. */
+export const FAST_RETRIES = 5;
 
 export type ConnectionFailure =
   | 'authorization lost'
@@ -22,8 +24,11 @@ export function retryDelay(
   return Math.round(exponential * (0.75 + boundedJitter * 0.5));
 }
 
-export function mayRetry(failure: ConnectionFailure, attempt: number): boolean {
-  return attempt < MAX_AUTOMATIC_RETRIES && failure !== 'authorization lost';
+/** Everything except lost authorization is worth another try, indefinitely
+ * and at a bounded pace (V29): a router restart, a phone that was unplugged or
+ * a long Wi-Fi gap should heal itself, not leave a dead page that needs a tap. */
+export function mayRetry(failure: ConnectionFailure): boolean {
+  return failure !== 'authorization lost';
 }
 
 export class RetryGeneration {

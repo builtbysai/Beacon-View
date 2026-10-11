@@ -37,6 +37,7 @@ import { useSleepTimer, type SleepMinutes } from './sleep-timer';
 
 import {
   type ConnectionFailure,
+  FAST_RETRIES,
   mayRetry,
   RetryGeneration,
   retryDelay,
@@ -613,10 +614,10 @@ export function LiveVideo({
       completed = true;
       cleanup();
       const nextRetry = retryCount.current;
-      if (mayRetry(reason, nextRetry)) {
+      if (mayRetry(reason)) {
         retryCount.current += 1;
         setRetryDisplay(retryCount.current);
-        setStatus('reconnecting');
+        setStatus(nextRetry < FAST_RETRIES ? 'reconnecting' : reason);
         retryTimer.current = window.setTimeout(
           () => setAttempt((value) => value + 1),
           retryDelay(nextRetry, Math.random()),
@@ -1023,6 +1024,14 @@ export function LiveVideo({
     ],
   };
   const menuGroups = [cameraGroup, viewerGroup];
+  // Offered whenever the stream is down (not while it is still trying) so a
+  // person does not have to wait out the automatic retry delay.
+  const canReconnect =
+    enabled &&
+    !privacyMode &&
+    status !== 'connected' &&
+    status !== 'connecting' &&
+    status !== 'reconnecting';
 
   const content = (
     <>
@@ -1318,7 +1327,7 @@ export function LiveVideo({
       {!compact && canRecord && (
         <DriveReconnectNotice className="on-video" clip={clip} drive={drive} />
       )}
-      {!compact && (controlError || talkState !== 'idle') && (
+      {!compact && (controlError || talkState !== 'idle' || canReconnect) && (
         <div className="live-footer">
           {controlError && (
             <p role="alert">
@@ -1346,13 +1355,7 @@ export function LiveVideo({
               {talkStatusText(talkState)}
             </p>
           )}
-          {enabled &&
-            !privacyMode &&
-            status !== 'connected' &&
-            status !== 'connecting' &&
-            status !== 'reconnecting' && (
-              <button onClick={reconnect}>Reconnect</button>
-            )}
+          {canReconnect && <button onClick={reconnect}>Reconnect</button>}
         </div>
       )}
       {compact && (

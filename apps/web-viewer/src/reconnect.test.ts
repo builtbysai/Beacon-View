@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  MAX_AUTOMATIC_RETRIES,
+  FAST_RETRIES,
   mayRetry,
   RetryGeneration,
   retryDelay,
@@ -14,14 +14,13 @@ describe('viewer reconnect policy', () => {
     expect(retryDelay(20, 1)).toBe(20_000);
   });
 
-  it('retries transient offline states but never retries lost authorization', () => {
-    expect(mayRetry('signaling unavailable', 0)).toBe(true);
-    expect(mayRetry('signaling unavailable', MAX_AUTOMATIC_RETRIES)).toBe(
-      false,
-    );
-    expect(mayRetry('authorization lost', 0)).toBe(false);
-    expect(mayRetry('camera offline', 0)).toBe(true);
-    expect(mayRetry('camera offline', MAX_AUTOMATIC_RETRIES)).toBe(false);
+  it('keeps retrying transient failures but never retries lost authorization', () => {
+    expect(FAST_RETRIES).toBe(5);
+    expect(mayRetry('signaling unavailable')).toBe(true);
+    expect(mayRetry('camera offline')).toBe(true);
+    expect(mayRetry('connection timed out')).toBe(true);
+    expect(mayRetry('ICE failed')).toBe(true);
+    expect(mayRetry('authorization lost')).toBe(false);
   });
 
   it('invalidates stale sockets and scheduled retries', () => {
