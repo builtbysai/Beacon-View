@@ -16,7 +16,11 @@ import {
   recordingHistoryCursor,
 } from './recording-history.js';
 import type { RecordingRecord } from './recording-types.js';
-import { RecordingKeyCipher } from './recording-crypto.js';
+import {
+  RecordingKeyCipher,
+  recordingKeyContext,
+  type RecordingKeyPurpose,
+} from './recording-crypto.js';
 import type { RateLimiter } from './rate-limit.js';
 import { generateToken, hashSecret } from './security.js';
 import { unauthorized, type SessionAuth } from './session-auth.js';
@@ -126,7 +130,10 @@ export function registerRecordingRoutes(
 ): void {
   const { auth, config, driveHealth, limiter, signaling, store } = dependencies;
   const recordingKeyCipher = config.RECORDING_ENCRYPTION_KEY
-    ? new RecordingKeyCipher(config.RECORDING_ENCRYPTION_KEY)
+    ? new RecordingKeyCipher(
+        config.RECORDING_ENCRYPTION_KEY,
+        config.RECORDING_ENCRYPTION_KEY_PREVIOUS ?? [],
+      )
     : null;
   const recordingAccessToken = (userId: string): Promise<string> =>
     driveHealth.recordingAccessToken(userId);
@@ -222,16 +229,20 @@ export function registerRecordingRoutes(
     /** Who is watching: the signed-in user, or null for a share link. Only
      * the Drive's owner can reconnect it, so only they are asked to. */
     viewerUserId: string | null,
+    purpose: RecordingKeyPurpose,
   ) => {
     if (!recordingKeyCipher)
       return reply
         .code(503)
         .send({ error: 'Encrypted recording storage is unavailable' });
     try {
-      const dataKey = recordingKeyCipher.unwrap({
-        ciphertext: claim.encryptionDataKeyCiphertext,
-        iv: claim.encryptionDataKeyIv,
-      });
+      const dataKey = recordingKeyCipher.unwrap(
+        {
+          ciphertext: claim.encryptionDataKeyCiphertext,
+          iv: claim.encryptionDataKeyIv,
+        },
+        recordingKeyContext(recordingId, purpose),
+      );
       if (
         claim.encryptionIv.length !== 12 ||
         claim.byteSize > 250 * 1024 * 1024
@@ -317,6 +328,7 @@ export function registerRecordingRoutes(
       claim,
       parameters.data.recordingId,
       session.userId,
+      'clip',
     );
   });
 
@@ -456,6 +468,7 @@ export function registerRecordingRoutes(
       claim,
       claim.recordingId,
       null,
+      'clip',
     );
   });
 
@@ -601,6 +614,7 @@ export function registerRecordingRoutes(
           .send({ error: 'Encrypted recording storage is unavailable' });
       const wrappedDataKey = recordingKeyCipher.wrap(
         Buffer.from(body.data.encryption.dataKey, 'base64url'),
+        recordingKeyContext(parameters.data.recordingId, 'clip'),
       );
       const claim = await store.beginOwnerRecordingUpload({
         byteSize: body.data.byteSize,
@@ -833,6 +847,7 @@ export function registerRecordingRoutes(
           .send({ error: 'Encrypted recording storage is unavailable' });
       const wrappedDataKey = recordingKeyCipher.wrap(
         Buffer.from(body.data.encryption.dataKey, 'base64url'),
+        recordingKeyContext(parameters.data.recordingId, 'thumbnail'),
       );
       const claim = await store.beginOwnerThumbnailUpload({
         byteSize: body.data.byteSize,
@@ -927,6 +942,7 @@ export function registerRecordingRoutes(
       claim,
       parameters.data.recordingId,
       session.userId,
+      'thumbnail',
     );
   });
 
@@ -1001,6 +1017,7 @@ export function registerRecordingRoutes(
           .send({ error: 'Encrypted recording storage is unavailable' });
       const wrappedDataKey = recordingKeyCipher.wrap(
         Buffer.from(body.data.encryption.dataKey, 'base64url'),
+        recordingKeyContext(parameters.data.recordingId, 'clip'),
       );
       const claim = await store.beginRecordingUpload({
         byteSize: body.data.byteSize,
@@ -1065,6 +1082,7 @@ export function registerRecordingRoutes(
           .send({ error: 'Encrypted recording storage is unavailable' });
       const wrappedDataKey = recordingKeyCipher.wrap(
         Buffer.from(body.data.encryption.dataKey, 'base64url'),
+        recordingKeyContext(parameters.data.recordingId, 'thumbnail'),
       );
       const claim = await store.beginThumbnailUploadByCredential({
         byteSize: body.data.byteSize,

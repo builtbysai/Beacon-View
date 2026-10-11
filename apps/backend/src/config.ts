@@ -98,6 +98,28 @@ const environmentSchema = z
     GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY:
       optionalNotificationText(notificationKey),
     RECORDING_ENCRYPTION_KEY: optionalNotificationText(notificationKey),
+    // Older recording keys, comma-separated, kept so that rotating the main key
+    // does not strand clips wrapped with the old one. The rewrap job moves every
+    // clip to the main key, after which the old key can be removed.
+    RECORDING_ENCRYPTION_KEY_PREVIOUS: z
+      .string()
+      .optional()
+      .transform((value) =>
+        (value ?? '')
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+      )
+      .refine(
+        (entries) =>
+          entries.length <= 3 &&
+          entries.every((entry) => notificationKey.safeParse(entry).success),
+        {
+          message:
+            'RECORDING_ENCRYPTION_KEY_PREVIOUS must hold up to three 32-byte base64url keys',
+        },
+      )
+      .optional(),
     CONTACT_EMAIL_TO: z.string().email().optional(),
     RESEND_API_KEY: z.string().min(1).optional(),
     RESEND_FROM: z.string().min(3).max(320).optional(),
@@ -189,6 +211,10 @@ const environmentSchema = z
         config.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY,
       ],
       ['RECORDING_ENCRYPTION_KEY', config.RECORDING_ENCRYPTION_KEY],
+      ...(config.RECORDING_ENCRYPTION_KEY_PREVIOUS ?? []).map(
+        (value, index) =>
+          [`RECORDING_ENCRYPTION_KEY_PREVIOUS[${index}]`, value] as const,
+      ),
       ['NOTIFICATION_ENCRYPTION_KEY', config.NOTIFICATION_ENCRYPTION_KEY],
       ['NOTIFICATION_FINGERPRINT_KEY', config.NOTIFICATION_FINGERPRINT_KEY],
     ] as const;

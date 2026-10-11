@@ -203,7 +203,11 @@ export function PublicTrustPage({
                 </div>
                 <div>
                   <h2>Live, not archived</h2>
-                  <p>Beacon does not store your live video or audio.</p>
+                  <p>
+                    Beacon does not store your live video or audio. Clips exist
+                    only if you turn them on, and they go to your own Google
+                    Drive.
+                  </p>
                 </div>
               </article>
               <article className="commitment">
@@ -252,7 +256,8 @@ export function PublicTrustPage({
                 <h3>Video & audio</h3>
                 <p>
                   Live media is streamed for viewing and is not stored by
-                  Beacon.
+                  Beacon. Optional clips are encrypted and saved to your own
+                  Google Drive, not to Beacon.
                 </p>
               </article>
               <article className="fact">
@@ -281,7 +286,8 @@ export function PublicTrustPage({
                 <h2 className="big">A short list, on purpose.</h2>
                 <p className="section-intro">
                   Beacon needs some information to operate your account and
-                  cameras. Live media is not part of that stored data.
+                  cameras. Live media is not part of that stored data, and clip
+                  files stay in your Google Drive.
                 </p>
               </div>
             </div>
@@ -291,13 +297,18 @@ export function PublicTrustPage({
                 <p>
                   Account settings, camera names, camera settings, and
                   motion-event metadata such as timestamps without images, for
-                  the configured retention period.
+                  the configured retention period. If you use clips, Beacon also
+                  keeps a record of each clip (time and length) and the keys
+                  that unlock it.
                 </p>
               </article>
               <article>
                 <h3>Beacon does not keep</h3>
                 <p>
-                  Video streams, audio clips, thumbnails, or facial identities.
+                  Video streams, the clip files themselves, or facial
+                  identities. Clips are encrypted before they reach your Google
+                  Drive, but Beacon’s server can unlock them to play them back
+                  to you, so clips are not end-to-end encrypted.
                 </p>
               </article>
             </div>
@@ -316,8 +327,10 @@ export function PublicTrustPage({
               <details>
                 <summary>Does Beacon record my live video?</summary>
                 <p>
-                  No. Beacon's stated design is live viewing without storing the
-                  video stream.
+                  Not unless you turn on clips. Live viewing is not stored. If
+                  you record a clip, it is encrypted and saved to your own
+                  Google Drive, and Beacon's server can unlock it to play it
+                  back to you. Clips are not end-to-end encrypted.
                 </p>
               </details>
               <details>
@@ -331,8 +344,10 @@ export function PublicTrustPage({
                 <summary>What information does Beacon retain?</summary>
                 <p>
                   Account and camera settings, camera names, and motion-event
-                  metadata may be retained. Live video, audio, thumbnails, and
-                  facial identities are not.
+                  metadata may be retained, along with a record of each clip and
+                  the keys that unlock it. Live video, audio, and facial
+                  identities are not retained; clip files and their thumbnails
+                  live in your Google Drive.
                 </p>
               </details>
               <details>

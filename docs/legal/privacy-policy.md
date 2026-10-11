@@ -12,8 +12,10 @@ us at **[PRIVACY CONTACT EMAIL]**.
 
 ## At a glance
 
-- Beacon is a live-viewing service. We do not provide cloud recording, upload camera
-  video or audio for storage, perform facial recognition, or sell personal information.
+- Beacon is a live-viewing service. We do not store live video or audio, perform facial
+  recognition, or sell personal information. If the household owner turns on clips,
+  short clips are encrypted and saved to the owner’s own Google Drive, not to our
+  servers (see "Clips saved to your Google Drive").
 - Live media is sent using WebRTC. A connection may be direct between your devices or
   pass through our TURN relay when a direct route is unavailable. We do not configure
   the relay to record media.
@@ -49,6 +51,18 @@ route is not possible, our TURN relay forwards encrypted packets. A relay can ob
 connection endpoints, timing, and traffic volume; it is not configured to decrypt or
 record the media. This architecture is not a claim of application-level end-to-end
 encryption.
+
+## Clips saved to your Google Drive
+
+Clips are optional and off until the household owner connects Google Drive and records a
+clip or turns on record-on-motion. The camera device encrypts each clip with a fresh key
+before uploading it to a file in the owner’s Drive (and a small thumbnail in the same way).
+We keep a record of each clip (camera, time, length, size, status) and the encryption key
+for each clip, wrapped with a key held by our server, so that we can play a clip back to
+an authorized household member. Google cannot read the clip; our server can. This is
+not end-to-end encryption. Deleting a clip, or deleting the account, deletes the files
+from the owner’s Drive where the Drive connection still works; revoking Beacon’s access
+in your Google account stops Beacon from reaching them.
 
 ## How we use and disclose information
 

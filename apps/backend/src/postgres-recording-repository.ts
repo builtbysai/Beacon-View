@@ -129,6 +129,75 @@ export class PostgresRecordingRepository {
     return (result.rowCount ?? 0) === 1;
   }
 
+  /**
+   * Gives each stored wrapped clip or thumbnail key to `transform`, and saves the
+   * replacement it returns (null leaves the row alone). Used to move keys onto
+   * the current server key and the recording-bound form (V7). Returns how many
+   * were rewritten.
+   */
+  async rewrapKeys(
+    transform: (row: {
+      recordingId: string;
+      purpose: 'clip' | 'thumbnail';
+      ciphertext: Buffer;
+      iv: Buffer;
+    }) => { ciphertext: Buffer; iv: Buffer } | null,
+  ): Promise<number> {
+    const rows = await this.pool.query<{
+      id: string;
+      clipCiphertext: Buffer | null;
+      clipIv: Buffer | null;
+      thumbCiphertext: Buffer | null;
+      thumbIv: Buffer | null;
+    }>(
+      `SELECT id, encryption_data_key_ciphertext AS "clipCiphertext",
+              encryption_data_key_iv AS "clipIv",
+              thumbnail_encryption_data_key_ciphertext AS "thumbCiphertext",
+              thumbnail_encryption_data_key_iv AS "thumbIv"
+       FROM recordings
+       WHERE encryption_data_key_ciphertext IS NOT NULL
+          OR thumbnail_encryption_data_key_ciphertext IS NOT NULL`,
+    );
+    let rewritten = 0;
+    for (const row of rows.rows) {
+      if (row.clipCiphertext && row.clipIv) {
+        const next = transform({
+          recordingId: row.id,
+          purpose: 'clip',
+          ciphertext: row.clipCiphertext,
+          iv: row.clipIv,
+        });
+        if (next) {
+          await this.pool.query(
+            `UPDATE recordings SET encryption_data_key_ciphertext=$2,
+                    encryption_data_key_iv=$3
+             WHERE id=$1 AND encryption_data_key_ciphertext=$4`,
+            [row.id, next.ciphertext, next.iv, row.clipCiphertext],
+          );
+          rewritten += 1;
+        }
+      }
+      if (row.thumbCiphertext && row.thumbIv) {
+        const next = transform({
+          recordingId: row.id,
+          purpose: 'thumbnail',
+          ciphertext: row.thumbCiphertext,
+          iv: row.thumbIv,
+        });
+        if (next) {
+          await this.pool.query(
+            `UPDATE recordings SET thumbnail_encryption_data_key_ciphertext=$2,
+                    thumbnail_encryption_data_key_iv=$3
+             WHERE id=$1 AND thumbnail_encryption_data_key_ciphertext=$4`,
+            [row.id, next.ciphertext, next.iv, row.thumbCiphertext],
+          );
+          rewritten += 1;
+        }
+      }
+    }
+    return rewritten;
+  }
+
   /** Every Drive file a household's clips and thumbnails occupy, with the
    * user whose Drive holds it, so account deletion can remove them (V42). */
   async listDriveFiles(

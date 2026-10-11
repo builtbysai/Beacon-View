@@ -342,8 +342,9 @@ export function RecordingLibrary({
       <section className="page-heading">
         <div className="page-heading-inner">
           <p>
-            Clips your cameras recorded, encrypted in your connected Google
-            Drive. Playback and download happen only on this device.
+            Clips your cameras recorded, encrypted before they reach your
+            connected Google Drive. Beacon's server can unlock them to play them
+            back to you; Google cannot read them.
           </p>
         </div>
         <button
