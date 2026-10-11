@@ -44,12 +44,12 @@ export function VerifyEmailPage() {
         <p className="trust-lead" role="status">
           {state === 'pending' && 'One moment while we confirm your address.'}
           {state === 'confirmed' &&
-            'This address can now be used to recover your account.'}
+            'You can sign in now. This address can also be used to recover your account.'}
           {state === 'failed' &&
-            'Verification links expire after 24 hours and can only be used once. Request a new one from Settings.'}
+            'Verification links expire after 24 hours and can only be used once. Try signing in and we will send you a new one.'}
         </p>
-        <a className="secondary button-link" href="/settings">
-          Go to Settings
+        <a className="secondary button-link" href="/">
+          Go to Beacon
         </a>
       </section>
     </main>

@@ -81,6 +81,8 @@ const SERVER_MESSAGES: Record<string, string> = {
   'Invitation email could not be delivered': `The invitation was created, but the email couldn’t be sent. Copy the invite link to share it another way.`,
   'Too many invitation attempts': `Too many invitation attempts. ${WAIT}`,
   'Too many invitation changes': `Too many invitation changes. ${WAIT}`,
+  'Verify your email address to sign in':
+    'Check your email: we sent a new verification link. Open it, then sign in.',
   'Verify your email address before inviting people':
     'Verify your email address first (Settings → Account), then send the invitation.',
   'Choose which cameras a viewer can see':

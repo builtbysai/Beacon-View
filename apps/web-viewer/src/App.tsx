@@ -104,6 +104,7 @@ function AppShell() {
     }
   });
   const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [authNotice, setAuthNotice] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
   const [error, setError] = useState('');
   // Beacon couldn't be reached while opening (not the same as signed out).
@@ -602,16 +603,28 @@ function AppShell() {
     setError('');
     const form = new FormData(event.currentTarget);
     try {
-      const login = await request<{ googleLinked?: boolean; user: User }>(
-        `/api/auth/${mode}`,
-        {
-          body: JSON.stringify({
-            email: form.get('email'),
-            password: form.get('password'),
-          }),
-          method: 'POST',
-        },
-      );
+      const login = await request<{
+        email?: string;
+        googleLinked?: boolean;
+        user: User;
+        verificationRequired?: boolean;
+      }>(`/api/auth/${mode}`, {
+        body: JSON.stringify({
+          email: form.get('email'),
+          password: form.get('password'),
+        }),
+        method: 'POST',
+      });
+      // With email set up, a new account must open the link we send before it
+      // can sign in (V26): there is no session yet.
+      if (login.verificationRequired) {
+        setAuthNotice(
+          `We sent a link to ${login.email ?? 'your email'}. Open it to finish creating your account, then sign in.`,
+        );
+        setMode('login');
+        return;
+      }
+      setAuthNotice('');
       const result = await request<{
         household: HouseholdSession;
         user: User;
@@ -1065,10 +1078,12 @@ function AppShell() {
         mode={mode}
         busy={authBusy}
         error={error}
+        notice={authNotice}
         googleAvailable={capabilities?.auth.google !== false}
         onSubmit={(event) => void authenticate(event)}
         onMode={() => {
           setError('');
+          setAuthNotice('');
           setMode(mode === 'login' ? 'register' : 'login');
         }}
       />

@@ -8,6 +8,7 @@ export function AuthScreen({
   mode: initialMode,
   busy,
   error,
+  notice = '',
   googleAvailable = true,
   onSubmit,
   onMode,
@@ -15,6 +16,8 @@ export function AuthScreen({
   mode: 'login' | 'register';
   busy: boolean;
   error: string;
+  /** A non-error message, such as "check your email" after sign-up. */
+  notice?: string;
   googleAvailable?: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onMode: () => void;
@@ -144,6 +147,12 @@ export function AuthScreen({
             {googleResult === 'failed' && view !== 'forgot-password' && (
               <div className="auth-alert auth-error-block" role="alert">
                 Google sign-in could not be completed. Please try again.
+              </div>
+            )}
+
+            {notice && view !== 'forgot-password' && (
+              <div className="auth-alert" role="status">
+                {notice}
               </div>
             )}
 

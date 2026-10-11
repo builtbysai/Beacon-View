@@ -327,6 +327,11 @@ class BeaconApi(private val baseUrl: String) {
             throw IllegalStateException(
                 if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
                     "Email or password is incorrect"
+                } else if (connection.responseCode == HttpURLConnection.HTTP_FORBIDDEN &&
+                    runCatching { JSONObject(body).optString("code") }.getOrNull() == "email_not_verified"
+                ) {
+                    // The server mailed a fresh link just now (V26).
+                    "Check your email: we sent a new verification link. Open it, then sign in."
                 } else {
                     "Beacon could not sign in. Check the connection and try again."
                 },
@@ -341,7 +346,8 @@ class BeaconApi(private val baseUrl: String) {
         )
     }
 
-    fun createAccount(email: String, password: String): AccountSession {
+    /** Null when the server wants the email address verified first (V26): no session exists until the link is opened. */
+    fun createAccount(email: String, password: String): AccountSession? {
         val connection = connection("/api/mobile/auth/register", "POST")
         connection.outputStream.use {
             it.write(
@@ -350,6 +356,7 @@ class BeaconApi(private val baseUrl: String) {
             )
         }
         val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_ACCEPTED) return null
         if (connection.responseCode != HttpURLConnection.HTTP_CREATED) {
             val error = runCatching { JSONObject(body).optString("error") }.getOrNull()
             throw IllegalStateException(

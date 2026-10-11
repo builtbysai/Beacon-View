@@ -139,6 +139,22 @@ it.each([
     expect(screen.queryByText(/If an account exists/i)).not.toBeInTheDocument();
   },
 );
+it('shows the check-your-email notice without treating it as an error (V26)', () => {
+  render(
+    <AuthScreen
+      busy={false}
+      error=""
+      notice="We sent a link to new@example.com. Open it to finish creating your account, then sign in."
+      mode="login"
+      onMode={vi.fn()}
+      onSubmit={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'We sent a link to new@example.com',
+  );
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
 it('replaces the Google link when the backend reports authentication unavailable', () => {
   render(
     <AuthScreen
