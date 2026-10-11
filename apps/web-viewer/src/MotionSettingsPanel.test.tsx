@@ -227,4 +227,67 @@ describe('MotionSettingsPanel', () => {
     const firstRequest = fetch.mock.calls[0]![1] as RequestInit;
     expect(firstRequest.signal?.aborted).toBe(true);
   });
+
+  it.each([
+    ['not_connected', /Google Drive is not connected/],
+    ['expired', /needs to be reconnected/],
+    ['unavailable', /not available on this Beacon server/],
+  ] as const)(
+    'warns that no clips will be saved when record on motion is on and Drive is %s (V63)',
+    async (driveState, message) => {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValue(
+            response({ cameras: [{ ...rear, recordOnMotion: true }] }),
+          ),
+      );
+      render(
+        <MotionSettingsPanel
+          cameras={[cameras[0]!]}
+          deviceId="device"
+          driveState={driveState}
+        />,
+      );
+      expect(await screen.findByRole('alert')).toHaveTextContent(message);
+      expect(
+        screen.getByRole('link', { name: 'Open Google Drive settings' }),
+      ).toHaveAttribute('href', '/settings?section=storage');
+    },
+  );
+
+  it('says nothing about Drive when it is ready, or when record on motion is off', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          response({ cameras: [{ ...rear, recordOnMotion: true }] }),
+        ),
+    );
+    const ready = render(
+      <MotionSettingsPanel
+        cameras={[cameras[0]!]}
+        deviceId="device"
+        driveState="ready"
+      />,
+    );
+    await screen.findByText('Record on motion');
+    expect(screen.queryByRole('alert')).toBeNull();
+    ready.unmount();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(response({ cameras: [rear] })),
+    );
+    render(
+      <MotionSettingsPanel
+        cameras={[cameras[0]!]}
+        deviceId="device"
+        driveState="not_connected"
+      />,
+    );
+    await screen.findByText('Record on motion');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
 });

@@ -297,12 +297,20 @@ export function registerActivityRoutes(
       ? await store.findDeviceByCredential(hashSecret(token))
       : null;
     if (!identity) return unauthorized(reply);
-    return {
+    const body = {
       cameras: await store.listMotionSettings(
         identity.householdId,
         identity.publicDeviceId,
       ),
     };
+    // The phone asks every 30 seconds and the settings rarely change, so an
+    // unchanged answer is a tiny 304 (V49).
+    const etag = `"${hashSecret(JSON.stringify(body)).slice(0, 32)}"`;
+    reply.header('ETag', etag);
+    reply.header('Cache-Control', 'no-store');
+    if (request.headers['if-none-match'] === etag)
+      return reply.code(304).send();
+    return body;
   });
 
   app.get('/api/motion-events', async (request, reply) => {

@@ -1626,15 +1626,23 @@ class BeaconApi(private val baseUrl: String) {
         return JSONObject(body).getBoolean("privacyMode")
     }
 
+    // The last answer and its ETag, so an unchanged answer costs a 304 instead of a full body (V49).
+    private var cachedMotionSettings: Triple<String, String, Map<String, MotionSettings>>? = null
+
     fun motionSettings(credential: String): Map<String, MotionSettings> {
         val connection = connection("/api/device/motion-settings", "GET")
         connection.setRequestProperty("Authorization", "Bearer $credential")
+        val cached = cachedMotionSettings?.takeIf { it.first == credential }
+        if (cached != null) connection.setRequestProperty("If-None-Match", cached.second)
         val body = responseBody(connection)
+        if (connection.responseCode == HttpURLConnection.HTTP_NOT_MODIFIED && cached != null) return cached.third
         if (connection.responseCode in listOf(HttpURLConnection.HTTP_UNAUTHORIZED, HttpURLConnection.HTTP_FORBIDDEN)) {
             throw AuthorizationLostException()
         }
         if (connection.responseCode != HttpURLConnection.HTTP_OK) throw IllegalStateException("Motion settings unavailable")
-        return parseMotionSettingsResponse(body)
+        val parsed = parseMotionSettingsResponse(body)
+        connection.getHeaderField("ETag")?.let { cachedMotionSettings = Triple(credential, it, parsed) }
+        return parsed
     }
 
     /** Returns the id of a recording the backend started for this motion

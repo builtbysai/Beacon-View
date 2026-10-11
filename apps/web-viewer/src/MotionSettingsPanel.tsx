@@ -13,9 +13,14 @@ interface MotionSettings {
 export function MotionSettingsPanel({
   deviceId,
   cameras,
+  driveState,
 }: {
   deviceId: string;
   cameras: { id: string; name: string }[];
+  /** Whether clips can be saved right now; when they cannot, record on
+   * motion looks set up but produces nothing, so say so (V63). */
+  driveState?:
+    'checking' | 'ready' | 'not_connected' | 'expired' | 'unavailable';
 }) {
   const [settings, setSettings] = useState<MotionSettings[] | null>(null);
   const [selected, setSelected] = useState('');
@@ -226,6 +231,21 @@ export function MotionSettingsPanel({
             <span>
               <strong>Record on motion</strong>
               <small>Save a short clip when motion is detected.</small>
+              {active.recordOnMotion &&
+                (driveState === 'not_connected' ||
+                  driveState === 'expired' ||
+                  driveState === 'unavailable') && (
+                  <small role="alert">
+                    {driveState === 'unavailable'
+                      ? 'Clips are not available on this Beacon server, so none will be saved.'
+                      : driveState === 'expired'
+                        ? 'Google Drive needs to be reconnected, or no clips will be saved.'
+                        : 'Google Drive is not connected, so no clips will be saved.'}{' '}
+                    <a href="/settings?section=storage">
+                      Open Google Drive settings
+                    </a>
+                  </small>
+                )}
             </span>
             <label className="camera-settings-switch-label">
               <input

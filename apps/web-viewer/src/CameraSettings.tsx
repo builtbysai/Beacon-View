@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ComponentProps, useState } from 'react';
 
 import { CameraFlipButton } from './CameraFlipButton';
 import { CameraTile } from './CameraTile';
@@ -28,6 +28,7 @@ export function CameraSettings({
   onSwitchSource,
   onReconnect,
   canManageSettings,
+  driveState,
 }: {
   cameras: Camera[];
   device: Device | undefined;
@@ -44,6 +45,7 @@ export function CameraSettings({
   onSwitchSource: (camera: Camera) => void;
   onReconnect?: (device: Device) => void;
   canManageSettings: boolean;
+  driveState?: ComponentProps<typeof MotionSettingsPanel>['driveState'];
 }) {
   // Bumped when a use-case preset changes motion settings, so the motion
   // panel reloads what the server now has.
@@ -349,6 +351,7 @@ export function CameraSettings({
               key={motionRevision}
               deviceId={device.id}
               cameras={cameras}
+              {...(driveState ? { driveState } : {})}
             />
           )}
 

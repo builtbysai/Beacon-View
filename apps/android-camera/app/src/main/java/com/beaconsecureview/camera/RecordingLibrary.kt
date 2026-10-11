@@ -46,7 +46,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
@@ -327,7 +326,7 @@ private fun ShareClipDialog(
     onDismiss: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val clipboard = LocalClipboardManager.current
+    val sensitiveContext = LocalContext.current
     var checking by remember(recordingId) { mutableStateOf(true) }
     var activeLink by remember(recordingId) { mutableStateOf<BeaconApi.ActiveRecordingShareLink?>(null) }
     var hours by remember(recordingId) { mutableStateOf(24) }
@@ -365,7 +364,7 @@ private fun ShareClipDialog(
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             TextButton(onClick = {
-                                clipboard.setText(AnnotatedString(link.url))
+                                copySensitiveText(sensitiveContext, link.url)
                                 copied = true
                             }) { Text(if (copied) "Copied" else "Copy") }
                         }

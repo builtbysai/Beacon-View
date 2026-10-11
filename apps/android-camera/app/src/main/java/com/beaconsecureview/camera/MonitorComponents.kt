@@ -49,7 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -85,7 +85,7 @@ internal fun MonitorDeviceSettings(
     motionContent: @Composable () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
-    val clipboard = LocalClipboardManager.current
+    val sensitiveContext = LocalContext.current
     val activeSource = sources.firstOrNull { it.available } ?: sources.first()
     val online = sources.any { it.online }
     val privacyMode = sources.any { it.privacyMode }
@@ -441,7 +441,7 @@ internal fun MonitorDeviceSettings(
                         Text("Enter this code on the camera phone within 10 minutes:")
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(code, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { clipboard.setText(AnnotatedString(code)); reconnectCopied = true }) { Text(if (reconnectCopied) "Copied" else "Copy") }
+                            TextButton(onClick = { copySensitiveText(sensitiveContext, code); reconnectCopied = true }) { Text(if (reconnectCopied) "Copied" else "Copy") }
                         }
                     }
                 }
