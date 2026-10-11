@@ -83,7 +83,7 @@ app, or in production.
 - **V22 credential rotation:** a rotation that loses its reply would lock a camera out; it needs a two-step design and an Android test on a real phone.
 - **V61 sustained-motion filter, V70 snapshot location, V71 video size:** need field data or a device matrix.
 - **V50 resume after reboot:** Android 14 limits starting a camera service at boot; needs a device check.
-- **F3 TURN hardening:** the coturn container is shared with Beacon Remote, which is off limits until the owner says.
+- **F3 TURN hardening:** the coturn container is shared with Beacon Remote. Plan in ADR 0114; waits for Codex to separate Remote's relay.
 - **F5, V14, V58 in-process limits and handoff codes:** correct while one backend instance runs; they move to PostgreSQL before a second instance.
 - **F8, V35, V36, V37, V79:** large refactors with no user-visible change; done when the files are next touched.
 - **V11 backups exclude keys:** the env template now says so; keeping the keys is an owner routine.

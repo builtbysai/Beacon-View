@@ -33,7 +33,7 @@ which the audit asked for. Treat the repair as unproven until that test is done.
   real-phone test.
 - V61, V70, V71: need field data or a device matrix.
 - V50: Android 14 restricts starting the camera service from boot; needs a device check.
-- F3: the coturn container is shared with Beacon Remote and stays untouched until the owner says.
+- F3: the coturn container is shared with Beacon Remote and stays untouched; the plan is ADR 0114.
 - F5, V14, V58: in-process limits and one-time codes are correct for one backend instance; move them to
   PostgreSQL before running a second.
 - F8, V35, V36, V37, V79: refactors with no user-visible change.
