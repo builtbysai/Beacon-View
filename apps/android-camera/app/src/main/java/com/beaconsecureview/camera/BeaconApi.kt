@@ -825,15 +825,23 @@ class BeaconApi(private val baseUrl: String) {
         if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthorizationLostException()
         if (connection.responseCode != HttpURLConnection.HTTP_ACCEPTED) {
             val serverMessage = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            // The machine-readable code is what the server promises to keep; the wording below is a fallback (V33).
+            val serverCode = runCatching { JSONObject(body).optString("code") }.getOrNull()
             throw IllegalStateException(
-                when (serverMessage) {
-                    "Connect Google Drive for recordings first" ->
+                when {
+                    serverCode == "drive_reconnect_required" ->
+                        "Google Drive needs to be reconnected from Beacon Settings before recording."
+                    serverCode == "drive_not_connected" ->
                         "Connect Google Drive for recordings from Beacon Settings first."
-                    "Camera is offline", "Camera is unavailable" ->
-                        "The camera must be online before recording."
-                    "Household owner access required" ->
-                        "Only the household owner can record clips."
-                    else -> "Recording could not be started. Try again."
+                    else -> when (serverMessage) {
+                        "Connect Google Drive for recordings first" ->
+                            "Connect Google Drive for recordings from Beacon Settings first."
+                        "Camera is offline", "Camera is unavailable" ->
+                            "The camera must be online before recording."
+                        "Household owner access required" ->
+                            "Only the household owner can record clips."
+                        else -> "Recording could not be started. Try again."
+                    }
                 },
             )
         }
