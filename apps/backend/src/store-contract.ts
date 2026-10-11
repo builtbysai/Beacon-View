@@ -475,6 +475,7 @@ export interface MilestoneStore {
     cameraSourceIds: string[],
   ): Promise<RecordingThumbnailPlaybackClaim | null>;
   deleteRecording(householdId: string, recordingId: string): Promise<boolean>;
+  listRemovedCameraSourceIds(householdId: string): Promise<string[]>;
   rewrapRecordingKeys(
     transform: (row: {
       recordingId: string;

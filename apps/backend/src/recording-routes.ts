@@ -175,6 +175,26 @@ export function registerRecordingRoutes(
     return { failed, removed };
   });
 
+  // The camera sources whose clips this person may see: the ones they can
+  // watch, plus, for owners and admins, cameras that were removed (their clips
+  // are still in Drive and must stay listable, playable and deletable).
+  const recordingSourceIds = async (session: {
+    householdId: string;
+    role: string;
+    userId: string;
+  }): Promise<string[]> => {
+    const cameras = await store.listAccessibleCameras(
+      session.householdId,
+      session.userId,
+      session.role as 'owner' | 'admin' | 'viewer' | 'guest',
+    );
+    const removed =
+      session.role === 'owner' || session.role === 'admin'
+        ? await store.listRemovedCameraSourceIds(session.householdId)
+        : [];
+    return [...cameras.map((camera) => camera.id), ...removed];
+  };
+
   app.get('/api/recordings', async (request, reply) => {
     const session = await auth.authenticate(request, reply);
     if (!session) return;
@@ -183,14 +203,9 @@ export function registerRecordingRoutes(
       return reply
         .code(400)
         .send({ error: 'Invalid recording history filters' });
-    const cameras = await store.listAccessibleCameras(
-      session.householdId,
-      session.userId,
-      session.role,
-    );
     const rows = await store.listRecordings(
       session.householdId,
-      cameras.map((camera) => camera.id),
+      await recordingSourceIds(session),
       {
         limit: query.limit + 1,
         ...(query.before ? { before: query.before } : {}),
@@ -309,15 +324,10 @@ export function registerRecordingRoutes(
     // Playback follows the same per-camera access as live view and the
     // recordings list: owner/admin see everything, a viewer/guest needs a
     // grant on the specific camera that produced this clip.
-    const accessibleCameras = await store.listAccessibleCameras(
-      session.householdId,
-      session.userId,
-      session.role,
-    );
     const claim = await store.getRecordingPlaybackClaim(
       session.householdId,
       parameters.data.recordingId,
-      accessibleCameras.map((camera) => camera.id),
+      await recordingSourceIds(session),
     );
     if (!claim) return reply.code(404).send({ error: 'Recording unavailable' });
     if (!limiter.take(`recording-playback:${session.userId}`, 30, 60 * 60_000))
@@ -923,15 +933,10 @@ export function registerRecordingRoutes(
     const parameters = parametersSchema.safeParse(request.params);
     if (!parameters.success)
       return reply.code(404).send({ error: 'Thumbnail unavailable' });
-    const accessibleCameras = await store.listAccessibleCameras(
-      session.householdId,
-      session.userId,
-      session.role,
-    );
     const claim = await store.getThumbnailPlaybackClaim(
       session.householdId,
       parameters.data.recordingId,
-      accessibleCameras.map((camera) => camera.id),
+      await recordingSourceIds(session),
     );
     if (!claim) return reply.code(404).send({ error: 'Thumbnail unavailable' });
     if (!limiter.take(`recording-thumbnail:${session.userId}`, 90, 60 * 60_000))

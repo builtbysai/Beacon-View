@@ -322,6 +322,10 @@ export class PostgresStore implements MilestoneStore {
     return this.recordings.beginAvailableDeletion(householdId, recordingId);
   }
 
+  async listRemovedCameraSourceIds(householdId: string): Promise<string[]> {
+    return this.devices.listRemovedSourceIds(householdId);
+  }
+
   async rewrapRecordingKeys(
     transform: (row: {
       recordingId: string;
