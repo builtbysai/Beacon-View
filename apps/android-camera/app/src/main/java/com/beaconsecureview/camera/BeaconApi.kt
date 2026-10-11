@@ -1260,6 +1260,9 @@ class BeaconApi(private val baseUrl: String) {
             throw IllegalStateException(
                 when (serverMessage) {
                     "You cannot invite that household role" -> "You can't invite that role."
+                    "Verify your email address before inviting people" ->
+                        "Verify your email address in Beacon Settings, then send the invitation."
+                    "Choose which cameras a viewer can see" -> "Choose which cameras this person can see."
                     "Too many invitation changes" -> "Too many invitations. Wait before trying again."
                     else -> "The invitation could not be created. Try again."
                 },

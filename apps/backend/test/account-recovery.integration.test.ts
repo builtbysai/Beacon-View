@@ -296,6 +296,46 @@ describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
     expect(confirm.statusCode).toBe(204);
   });
 
+  it('lets only an account with a verified email send invitations (V47)', async () => {
+    const resend = stubResend();
+    const registration = await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'unverified-inviter@example.com',
+        password: 'first password value',
+      },
+      remoteAddress: '127.0.0.91',
+      url: '/api/auth/register',
+    });
+    const owner = sessionCookies(registration.headers);
+    const invite = () =>
+      app!.inject({
+        headers: {
+          cookie: owner.cookie,
+          'x-csrf-token': owner.csrf,
+        },
+        method: 'POST',
+        payload: {
+          cameraAccess: 'all',
+          email: 'someone@example.com',
+          role: 'viewer',
+        },
+        url: '/api/household/invitations',
+      });
+    const refused = await invite();
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({ code: 'email_not_verified' });
+    // Nothing was mailed to the stranger: only the verification email went out.
+    expect(resend.calls).toHaveLength(1);
+    const confirm = await app!.inject({
+      method: 'POST',
+      payload: { token: tokenFromEmail(resend.calls[0]!) },
+      url: '/api/account/email/verify/confirm',
+    });
+    expect(confirm.statusCode).toBe(204);
+    expect((await invite()).statusCode).toBe(201);
+  });
+
   it('verifies an email address through an emailed token, idempotently', async () => {
     const registration = await app!.inject({
       method: 'POST',
