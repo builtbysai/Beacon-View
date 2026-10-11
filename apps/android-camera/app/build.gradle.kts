@@ -149,6 +149,8 @@ android {
         getByName("main") {
             assets.srcDir(smartDetectionModelDir)
         }
+        // The MediaPipe-backed detector is compiled only for the controlled test build (V62).
+        getByName("main").java.srcDir(if (smartDetectionEnabled) "src/smartOn/java" else "src/smartOff/java")
     }
 
     buildFeatures {
@@ -192,7 +194,7 @@ dependencies {
     implementation("io.github.webrtc-sdk:android:144.7559.08")
     // ADR 0074/0075: smart-detection experiment runtime. The model asset is
     // fetched separately by downloadSmartDetectionModel, not bundled here.
-    implementation("com.google.mediapipe:tasks-vision:1.0.0")
+    if (smartDetectionEnabled) implementation("com.google.mediapipe:tasks-vision:1.0.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation(kotlin("test"))

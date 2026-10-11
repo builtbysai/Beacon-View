@@ -8,12 +8,6 @@ import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.objectdetector.ObjectDetector
 
 /**
- * One detected category and its confidence (ADR 0074/0075). Never a name, face, or
- * biometric template -- ADR 0031's ban on facial recognition is not revisable here.
- */
-internal data class SmartDetection(val label: String, val confidence: Float)
-
-/**
  * Real on-device object-detection runtime (ADR 0074/0075), distinct from ADR 0073's
  * heuristic [ActivityDetector] -- this one needs full color image data, not just a
  * luma plane. Only constructed when `BuildConfig.SMART_DETECTION_ENABLED` is
