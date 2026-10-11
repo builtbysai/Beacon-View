@@ -176,6 +176,21 @@ export function registerAccountRoutes(
     const driveRefreshToken = await store.getGoogleDriveRefreshToken(
       session.userId,
     );
+    // Remove the clip files from Drive while the connection still works; the
+    // token is revoked right after, and the database rows go with the account.
+    if (ownedHouseholdId && driveRefreshToken) {
+      await app
+        .removeHouseholdDriveFiles(ownedHouseholdId)
+        .then((outcome) =>
+          app.log.info(outcome, 'removed recording files from Drive'),
+        )
+        .catch((error: unknown) =>
+          app.log.warn(
+            { err: error },
+            'could not remove Drive recording files',
+          ),
+        );
+    }
     if (driveRefreshToken) {
       await revokeDriveRefreshToken(driveRefreshToken).catch(() => false);
     }

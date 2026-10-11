@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  cameraSetupConfirmation,
   cameraSetupPath,
   parseCameraSetupFile,
   parseCameraSetupLink,
@@ -119,5 +120,29 @@ describe('camera resume paths', () => {
       null,
     ])
       expect(validResumePath(value), String(value)).toBeNull();
+  });
+});
+
+describe('setup confirmation (V19)', () => {
+  it('asks before enrolling, defaults to Cancel, and names the microphone only when requested', () => {
+    const withSound = cameraSetupConfirmation({
+      code,
+      microphone: true,
+      power: 'standby',
+    });
+    expect(withSound.buttons).toEqual(['Set up camera', 'Cancel']);
+    expect(withSound.buttons[withSound.defaultId]).toBe('Cancel');
+    expect(withSound.buttons[withSound.cancelId]).toBe('Cancel');
+    expect(withSound.detail).toContain('camera and microphone');
+    expect(withSound.detail).toContain('start with this computer');
+    expect(withSound.detail).not.toContain(code);
+
+    const silent = cameraSetupConfirmation({
+      code,
+      microphone: false,
+      power: 'always',
+    });
+    expect(silent.detail).toContain('without sound');
+    expect(silent.detail).not.toContain('microphone');
   });
 });

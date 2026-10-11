@@ -222,6 +222,11 @@ class CameraSignalingClient(
                             }
                     }
 
+                    // Answer the server's close frame so onClosed (and its close code) is delivered (V67).
+                    override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                        webSocket.close(code, null)
+                    }
+
                     override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                         socketEnded(webSocket, generation, code == 4003, reason)
                     }

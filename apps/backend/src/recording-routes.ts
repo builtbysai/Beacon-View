@@ -23,6 +23,15 @@ import { unauthorized, type SessionAuth } from './session-auth.js';
 import type { SignalingHub } from './signaling.js';
 import type { MilestoneStore } from './store.js';
 
+declare module 'fastify' {
+  interface FastifyInstance {
+    /** Deletes a household's clip and thumbnail files from Drive (V42). */
+    removeHouseholdDriveFiles(
+      householdId: string,
+    ): Promise<{ failed: number; removed: number }>;
+  }
+}
+
 const createSchema = z
   .object({
     cameraId: z.string().uuid(),
@@ -121,6 +130,43 @@ export function registerRecordingRoutes(
     : null;
   const recordingAccessToken = (userId: string): Promise<string> =>
     driveHealth.recordingAccessToken(userId);
+
+  // Account deletion removes the household's clip files from Google Drive
+  // first, while the Drive connection still exists (V42). Without this the
+  // encrypted files stay in the owner's Drive with no way to play or delete
+  // them from Beacon. Best effort: a file Drive refuses is counted, not fatal.
+  app.decorate('removeHouseholdDriveFiles', async (householdId: string) => {
+    const files = await store.listRecordingDriveFiles(householdId);
+    let removed = 0;
+    let failed = 0;
+    const tokens = new Map<string, string | null>();
+    // Deleting an account must not hang on a long clip history.
+    const deadline = Date.now() + 45_000;
+    for (const file of files) {
+      if (Date.now() > deadline) {
+        failed += 1;
+        continue;
+      }
+      if (!tokens.has(file.userId)) {
+        tokens.set(
+          file.userId,
+          await recordingAccessToken(file.userId).catch(() => null),
+        );
+      }
+      const accessToken = tokens.get(file.userId);
+      if (!accessToken) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await deleteDriveRecordingFile(accessToken, file.providerFileId);
+        removed += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    return { failed, removed };
+  });
 
   app.get('/api/recordings', async (request, reply) => {
     const session = await auth.authenticate(request, reply);
@@ -397,7 +443,13 @@ export function registerRecordingRoutes(
     const tokenHash = hashSecret(parameters.data.token);
     const claim = await store.getRecordingShareLinkPlaybackClaim(tokenHash);
     if (!claim) return reply.code(404).send({ error: 'Link unavailable' });
-    void store.touchRecordingShareLinkAccess(claim.shareLinkId);
+    // A failure to count this view must never fail the relay, and an unhandled
+    // rejection would end the whole process.
+    void store
+      .touchRecordingShareLinkAccess(claim.shareLinkId)
+      .catch((error: unknown) =>
+        request.log.warn({ err: error }, 'Share link access was not recorded'),
+      );
     return relayRecordingPlayback(
       request,
       reply,

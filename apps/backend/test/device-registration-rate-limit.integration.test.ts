@@ -125,5 +125,27 @@ describe.skipIf(!app || !store)(
       expect(invalid.statusCode).toBe(400);
       expect(invalid.json()).toEqual({ error: 'Unable to pair device' });
     });
+
+    it('limits guessing by address and by code, not by the installation id the client picks', async () => {
+      const guess = (pairingCode: string) =>
+        app!.inject({
+          method: 'POST',
+          payload: {
+            installationId: randomUUID(),
+            name: 'Guesser',
+            pairingCode,
+          },
+          remoteAddress: '10.9.9.9',
+          url: '/api/devices/register',
+        });
+      // The same wrong code, each time from a "new" installation: ten tries.
+      for (let index = 0; index < 10; index += 1)
+        expect((await guess('GUESSAAAAA')).statusCode).toBe(400);
+      expect((await guess('GUESSAAAAA')).statusCode).toBe(429);
+      // Different codes from the same address: twenty tries in all.
+      for (let index = 0; index < 9; index += 1)
+        expect((await guess(`GUESSB${index}AAA`)).statusCode).toBe(400);
+      expect((await guess('GUESSCCCCC')).statusCode).toBe(429);
+    });
   },
 );

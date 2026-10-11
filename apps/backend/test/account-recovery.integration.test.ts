@@ -158,6 +158,45 @@ describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
     expect(newPasswordLogin.statusCode).toBe(200);
   });
 
+  it('retires every other reset link once one is used (V46)', async () => {
+    await app!.inject({
+      method: 'POST',
+      payload: {
+        email: 'two-links@example.com',
+        password: 'first password value',
+      },
+      remoteAddress: '10.5.5.5',
+      url: '/api/auth/register',
+    });
+    const resend = stubResend();
+    for (let index = 0; index < 2; index += 1)
+      await app!.inject({
+        method: 'POST',
+        payload: { email: 'two-links@example.com' },
+        remoteAddress: '10.5.5.5',
+        url: '/api/auth/password-reset/request',
+      });
+    const [first, second] = resend.calls
+      .filter((call) => call.includes('reset'))
+      .map(tokenFromEmail);
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    const used = await app!.inject({
+      method: 'POST',
+      payload: { password: 'brand new password value', token: first },
+      remoteAddress: '10.5.5.5',
+      url: '/api/auth/password-reset/confirm',
+    });
+    expect(used.statusCode).toBe(204);
+    const other = await app!.inject({
+      method: 'POST',
+      payload: { password: 'an attacker chosen password', token: second },
+      remoteAddress: '10.5.5.5',
+      url: '/api/auth/password-reset/confirm',
+    });
+    expect(other.statusCode).toBe(400);
+  });
+
   it('rejects an invalid or already-used reset token', async () => {
     await app!.inject({
       method: 'POST',

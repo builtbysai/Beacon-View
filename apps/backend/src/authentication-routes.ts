@@ -13,10 +13,13 @@ import {
   verifyDriveRecordingAccess,
 } from './google-drive-client.js';
 import {
+  androidChallengeFromState,
+  androidOAuthState,
   desktopChallengeFromState,
   desktopCompletionPath,
   DesktopGoogleHandoffs,
   desktopOAuthState,
+  pkceChallenge,
 } from './desktop-google-handoff.js';
 import {
   credentialsSchema,
@@ -81,7 +84,13 @@ export function registerAuthenticationRoutes(
       );
   const mobileGoogleHandoffs = new Map<
     string,
-    { email: string; expiresAt: number; householdId: string; userId: string }
+    {
+      challenge: string;
+      email: string;
+      expiresAt: number;
+      householdId: string;
+      userId: string;
+    }
   >();
   // Bridges a Google sign-in that turned out to belong to an existing
   // password account: rather than making the person repeat the whole OAuth
@@ -335,7 +344,11 @@ export function registerAuthenticationRoutes(
     const state =
       start.data.platform === 'desktop' && start.data.challenge
         ? desktopOAuthState(start.data.challenge)
-        : `${android ? 'android.' : 'web.'}${generateToken()}`;
+        : android && start.data.challenge
+          ? androidOAuthState(start.data.challenge)
+          : `web.${generateToken()}`;
+    // A Drive connection abandoned in another tab must not capture this sign-in (V45).
+    reply.clearCookie(GOOGLE_DRIVE_STATE_COOKIE, { path: '/' });
     reply.setCookie(GOOGLE_STATE_COOKIE, state, {
       httpOnly: true,
       maxAge: TEN_MINUTES / 1_000,
@@ -703,12 +716,15 @@ export function registerAuthenticationRoutes(
           userId: user.id,
         });
         if (android) {
+          const androidChallenge = androidChallengeFromState(state);
+          if (!androidChallenge) return reply.redirect(signInFailed);
           const handoffCode = generateToken();
           const now = Date.now();
           for (const [key, value] of mobileGoogleHandoffs) {
             if (value.expiresAt <= now) mobileGoogleHandoffs.delete(key);
           }
           mobileGoogleHandoffs.set(hashSecret(handoffCode), {
+            challenge: androidChallenge,
             email: user.email,
             expiresAt: now + TEN_MINUTES,
             householdId: user.householdId,
@@ -751,7 +767,11 @@ export function registerAuthenticationRoutes(
     }
     const handoff = mobileGoogleHandoffs.get(hashSecret(parsed.data.code));
     mobileGoogleHandoffs.delete(hashSecret(parsed.data.code));
-    if (!handoff || handoff.expiresAt <= Date.now()) {
+    if (
+      !handoff ||
+      handoff.expiresAt <= Date.now() ||
+      !secretsEqual(pkceChallenge(parsed.data.verifier), handoff.challenge)
+    ) {
       return reply
         .code(401)
         .send({ error: 'Google sign-in could not be completed' });

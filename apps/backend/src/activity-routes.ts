@@ -201,8 +201,9 @@ export function registerActivityRoutes(
     const limit = query.limit ? Number(query.limit) : undefined;
     const offset = query.offset ? Number(query.offset) : undefined;
     if (
-      (limit !== undefined && (!Number.isFinite(limit) || limit < 1)) ||
-      (offset !== undefined && (!Number.isFinite(offset) || offset < 0))
+      (limit !== undefined &&
+        (!Number.isInteger(limit) || limit < 1 || limit > 100)) ||
+      (offset !== undefined && (!Number.isInteger(offset) || offset < 0))
     ) {
       return reply.code(400).send({ error: 'Invalid pagination parameters' });
     }

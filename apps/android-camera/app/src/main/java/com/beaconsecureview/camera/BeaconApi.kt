@@ -387,10 +387,12 @@ class BeaconApi(private val baseUrl: String) {
         }
     }
 
-    fun exchangeGoogleSignIn(code: String): AccountSession {
+    fun exchangeGoogleSignIn(code: String, verifier: String): AccountSession {
         val connection = connection("/api/mobile/auth/google", "POST")
         connection.outputStream.use {
-            it.write(JSONObject().put("code", code).toString().toByteArray(Charsets.UTF_8))
+            it.write(
+                JSONObject().put("code", code).put("verifier", verifier).toString().toByteArray(Charsets.UTF_8),
+            )
         }
         val body = responseBody(connection)
         if (connection.responseCode != HttpURLConnection.HTTP_OK) {
@@ -969,11 +971,15 @@ class BeaconApi(private val baseUrl: String) {
             }
 
             cacheDirectory.mkdirs()
-            cacheDirectory.listFiles { file -> file.name.startsWith("beacon-thumb-") }
+            // Only this clip's earlier thumbnail is replaced, so rows loading in parallel do not delete
+            // each other's pictures (V78); anything older than an hour is swept.
+            val thumbnailPrefix = "beacon-thumb-${recordingId.filter { it.isLetterOrDigit() || it == '-' }}-"
+            cacheDirectory.listFiles { file -> file.name.startsWith(thumbnailPrefix) }
                 ?.forEach { it.delete() }
-            val encryptedFile = File.createTempFile("beacon-thumb-", ".encrypted", cacheDirectory)
+            deleteStaleCacheFiles(cacheDirectory, "beacon-thumb-", olderThanMs = 60 * 60_000L)
+            val encryptedFile = File.createTempFile(thumbnailPrefix, ".encrypted", cacheDirectory)
             val extension = if (mimeType == "image/webp") ".webp" else ".jpg"
-            val imageFile = File.createTempFile("beacon-thumb-", extension, cacheDirectory)
+            val imageFile = File.createTempFile(thumbnailPrefix, extension, cacheDirectory)
             return try {
                 val digest = MessageDigest.getInstance("SHA-256")
                 var bytes = 0L
@@ -1525,9 +1531,9 @@ class BeaconApi(private val baseUrl: String) {
         responseBody(connection)
         return when (connection.responseCode) {
             HttpURLConnection.HTTP_NO_CONTENT -> true
-            HttpURLConnection.HTTP_UNAUTHORIZED,
-            HttpURLConnection.HTTP_FORBIDDEN,
-            -> false
+            // Only Beacon's own "unknown credential" answer counts as a rejection. A 403 comes from a proxy
+            // or network in between, never from Beacon, so it is treated as temporarily unavailable.
+            HttpURLConnection.HTTP_UNAUTHORIZED -> false
             else -> throw IllegalStateException("Heartbeat temporarily unavailable")
         }
     }
@@ -1618,31 +1624,8 @@ class BeaconApi(private val baseUrl: String) {
             throw AuthorizationLostException()
         }
         if (connection.responseCode != HttpURLConnection.HTTP_OK) throw IllegalStateException("Motion settings unavailable")
-        val cameras = JSONObject(body).getJSONArray("cameras")
-        return (0 until cameras.length()).associate { index ->
-            val item = cameras.getJSONObject(index)
-            val sensitivity = MotionSensitivity.entries.firstOrNull { it.wireValue == item.getString("sensitivity") }
-                ?: throw IllegalStateException("Unsupported motion sensitivity")
-            item.getString("cameraId") to MotionSettings(
-                enabled = item.getBoolean("enabled"),
-                recordOnMotion = item.optBoolean("recordOnMotion", false),
-                sensitivity = sensitivity,
-                cooldownSeconds = item.getInt("cooldownSeconds"),
-                quietHours = item.optJSONObject("quietHours")?.let { quiet ->
-                    QuietHours(
-                        start = quiet.getString("start"),
-                        end = quiet.getString("end"),
-                        timeZone = quiet.getString("timeZone"),
-                    )
-                },
-                ignoredZones = item.optJSONArray("ignoredZones")?.let(::parseZones) ?: emptySet(),
-            )
-        }
+        return parseMotionSettingsResponse(body)
     }
-
-    /** Motion-zone cells from the backend, ignoring anything off the grid. */
-    private fun parseZones(array: org.json.JSONArray): Set<Int> =
-        (0 until array.length()).map { array.getInt(it) }.filter { it in 0 until ZoneGrid.COUNT }.toSet()
 
     /** Returns the id of a recording the backend started for this motion
      * report -- see core-feature-completion-plan.md's recording foundation
@@ -1769,6 +1752,9 @@ class BeaconApi(private val baseUrl: String) {
             ignoredZones = value.optJSONArray("ignoredZones")?.let(::parseZones) ?: emptySet(),
         )
 
+    /** Motion-zone cells from the backend, ignoring anything off the grid. */
+    private fun parseZones(array: org.json.JSONArray): Set<Int> = parseZoneCells(array)
+
     private fun connection(path: String, method: String): HttpURLConnection =
         (URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
             requestMethod = method
@@ -1788,6 +1774,41 @@ class BeaconApi(private val baseUrl: String) {
         return stream?.bufferedReader()?.use { it.readText() }.orEmpty()
     }
 }
+
+/**
+ * Reads the camera's motion settings. One value this app version does not know (a newer time-zone name, a new
+ * sensitivity) must not turn motion detection off, which is what a thrown error used to do (V83): the odd value
+ * falls back to a safe default and the rest of the settings still apply.
+ */
+internal fun parseMotionSettingsResponse(body: String): Map<String, MotionSettings> {
+    val cameras = JSONObject(body).getJSONArray("cameras")
+    return (0 until cameras.length()).associate { index ->
+        val item = cameras.getJSONObject(index)
+        item.getString("cameraId") to MotionSettings(
+            enabled = item.getBoolean("enabled"),
+            recordOnMotion = item.optBoolean("recordOnMotion", false),
+            sensitivity =
+                MotionSensitivity.entries.firstOrNull { it.wireValue == item.optString("sensitivity") }
+                    ?: MotionSensitivity.Medium,
+            cooldownSeconds = item.optInt("cooldownSeconds", 30).takeIf { it in listOf(30, 60, 120, 300) } ?: 30,
+            quietHours =
+                item.optJSONObject("quietHours")?.let { quiet ->
+                    runCatching {
+                        QuietHours(
+                            start = quiet.getString("start"),
+                            end = quiet.getString("end"),
+                            timeZone = quiet.getString("timeZone"),
+                        )
+                    }.getOrNull()
+                },
+            ignoredZones =
+                item.optJSONArray("ignoredZones")?.let(::parseZoneCells) ?: emptySet(),
+        )
+    }
+}
+
+internal fun parseZoneCells(array: org.json.JSONArray): Set<Int> =
+    (0 until array.length()).map { array.getInt(it) }.filter { it in 0 until ZoneGrid.COUNT }.toSet()
 
 internal fun parseRecordingsResponse(body: String): BeaconApi.RecordingPage {
     val response = JSONObject(body)

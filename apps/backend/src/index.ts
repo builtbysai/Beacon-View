@@ -3,6 +3,7 @@ import { config as loadEnvironment } from 'dotenv';
 
 import { buildApp, createPostgresStore } from './app.js';
 import { startAuditRetentionJob } from './audit-retention.js';
+import { startCredentialRetentionJob } from './credential-retention.js';
 import { parseConfig } from './config.js';
 import { startHouseholdModeJob } from './household-mode-job.js';
 import { startMotionRetentionJob } from './motion-retention.js';
@@ -23,6 +24,7 @@ const app = buildApp(config, store, householdEvents);
 let shuttingDown = false;
 let stopRetentionJob: (() => void) | undefined;
 let stopAuditRetentionJob: (() => void) | undefined;
+let stopCredentialRetentionJob: (() => void) | undefined;
 let stopNotificationJob: (() => void) | undefined;
 let stopPresenceActivityJob: (() => void) | undefined;
 let stopRecordingRecoveryJob: (() => void) | undefined;
@@ -33,6 +35,7 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   shuttingDown = true;
   stopRetentionJob?.();
   stopAuditRetentionJob?.();
+  stopCredentialRetentionJob?.();
   stopNotificationJob?.();
   stopPresenceActivityJob?.();
   stopRecordingRecoveryJob?.();
@@ -42,6 +45,12 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   await app.close();
   process.exitCode = 0;
 }
+
+// Background work is isolated from request handling: log a stray rejection
+// instead of ending every live camera session with the process.
+process.on('unhandledRejection', (reason) => {
+  app.log.error({ err: reason }, 'Unhandled promise rejection');
+});
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
@@ -56,6 +65,7 @@ try {
   await app.listen({ host: config.HOST, port: config.PORT });
   stopRetentionJob = startMotionRetentionJob(store, app.log);
   stopAuditRetentionJob = startAuditRetentionJob(store, app.log);
+  stopCredentialRetentionJob = startCredentialRetentionJob(store, app.log);
   stopNotificationJob = startNotificationJob(
     store,
     config,

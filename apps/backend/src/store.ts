@@ -322,6 +322,12 @@ export class PostgresStore implements MilestoneStore {
     return this.recordings.beginAvailableDeletion(householdId, recordingId);
   }
 
+  async listRecordingDriveFiles(
+    householdId: string,
+  ): Promise<{ userId: string; providerFileId: string }[]> {
+    return this.recordings.listDriveFiles(householdId);
+  }
+
   async finishRecordingDeletion(
     householdId: string,
     recordingId: string,
@@ -826,6 +832,10 @@ export class PostgresStore implements MilestoneStore {
 
   async purgeExpiredAuditEvents(now: Date): Promise<number> {
     return this.auditRepository.purgeExpired(now);
+  }
+
+  async purgeExpiredCredentials(now: Date): Promise<Record<string, number>> {
+    return this.sessions.purgeExpired(now);
   }
 
   async listAccessHistory(

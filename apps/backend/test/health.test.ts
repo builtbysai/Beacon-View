@@ -185,6 +185,25 @@ describe('environment configuration', () => {
     ).toThrow('SIGNALING_PUBLIC_URL');
   });
 
+  it('refuses two secrets that are the same value (V27)', () => {
+    const shared = 'S'.repeat(43);
+    expect(() =>
+      parseConfig({
+        DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/test',
+        GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY: shared,
+        GOOGLE_OAUTH_CLIENT_ID: 'id',
+        GOOGLE_OAUTH_CLIENT_SECRET: 'secret',
+        GOOGLE_OAUTH_REDIRECT_URI:
+          'http://127.0.0.1:5173/api/auth/google/callback',
+        NODE_ENV: 'test',
+        RECORDING_ENCRYPTION_KEY: shared,
+        TURN_SHARED_SECRET: 'test-shared-secret-with-at-least-32-bytes',
+      }),
+    ).toThrow(
+      'RECORDING_ENCRYPTION_KEY must differ from GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY',
+    );
+  });
+
   it('rejects the documented local TURN shared secret in production', () => {
     expect(() =>
       parseConfig({

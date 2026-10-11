@@ -1,0 +1,112 @@
+/* The menu is placed against the control bar, not this wrapper, so it stays
+   inside narrow screens. */
+.viewer-menu-anchor {
+  position: static;
+}
+
+.video-control.is-open {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Opens upward above the control bar and stays inside the live surface so it
+   is still shown in full screen. */
+.viewer-menu {
+  position: absolute;
+  right: max(var(--space-4), env(safe-area-inset-right));
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  z-index: 40;
+  display: grid;
+  gap: var(--space-1);
+  width: min(300px, calc(100vw - 2 * var(--space-4)));
+  max-height: min(70vh, 460px);
+  overflow-y: auto;
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
+  background: rgb(18, 20, 24);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+
+.viewer-menu-group {
+  display: grid;
+}
+
+.viewer-menu-group + .viewer-menu-group {
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.viewer-menu-heading {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.viewer-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.viewer-menu-item:hover,
+.viewer-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.viewer-menu-item:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+
+.viewer-menu-item[aria-pressed='true'] .viewer-menu-label {
+  font-weight: 600;
+}
+
+.viewer-menu-item[aria-pressed='true'] svg {
+  color: var(--accent-primary, #fff);
+}
+
+.viewer-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.viewer-menu-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.viewer-menu-value {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+/* Keep the open menu above the status overlay. */
+.video-controls:has(.viewer-menu) {
+  z-index: 30;
+}
+
+/* Wide screens: open straight above the More button. */
+@media (min-width: 721px) {
+  .viewer-menu-anchor {
+    position: relative;
+  }
+  .viewer-menu {
+    right: 0;
+    bottom: calc(100% + var(--space-2));
+  }
+}

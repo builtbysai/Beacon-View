@@ -45,6 +45,13 @@ const messageSchema = z.discriminatedUnion('type', [
 type SignalingMessage = z.infer<typeof messageSchema>;
 type PeerRole = 'device' | 'viewer';
 
+/** Live-view limits (V20). A session description is a few kilobytes and
+ * trickled ICE candidates arrive in tens, so these leave real use alone. */
+const MAX_VIEWERS_PER_CAMERA = 8;
+const MAX_MESSAGE_BYTES = 131_072;
+const MESSAGE_WINDOW_MS = 10_000;
+const MAX_MESSAGES_PER_WINDOW = 200;
+
 interface DevicePeer {
   householdId?: string | undefined;
   publicCameraId: string;
@@ -154,7 +161,16 @@ export class SignalingHub {
   ): boolean {
     const device = this.#devices.get(cameraId);
     if (!device) {
-      this.#reject(socket, 'camera_unavailable');
+      // Not 4003: the apps read that as "your authorization was lost" and sign
+      // the person out, but this camera is simply offline or paused (V67).
+      this.#reject(socket, 'camera_unavailable', 4004);
+      return false;
+    }
+    // One camera phone can encode and upload only so many streams (V20).
+    if (
+      (this.#cameraSessions.get(cameraId)?.size ?? 0) >= MAX_VIEWERS_PER_CAMERA
+    ) {
+      this.#reject(socket, 'camera_busy', 4008);
       return false;
     }
     const connectionId = randomUUID();
@@ -323,10 +339,19 @@ export class SignalingHub {
   }
 
   #listen(socket: WebSocket, role: PeerRole): void {
+    const arrivals: number[] = [];
     socket.on('message', (data) => {
       if (typeof data !== 'string' && !Buffer.isBuffer(data)) return;
+      const now = Date.now();
+      while (arrivals.length > 0 && arrivals[0]! <= now - MESSAGE_WINDOW_MS)
+        arrivals.shift();
+      arrivals.push(now);
+      if (arrivals.length > MAX_MESSAGES_PER_WINDOW) {
+        socket.close(1008, 'Too many messages');
+        return;
+      }
       const raw = Buffer.isBuffer(data) ? data.toString('utf8') : data;
-      if (Buffer.byteLength(raw, 'utf8') > 1_100_000) {
+      if (Buffer.byteLength(raw, 'utf8') > MAX_MESSAGE_BYTES) {
         socket.close(1009, 'Message too large');
         return;
       }
@@ -474,9 +499,9 @@ export class SignalingHub {
     this.#send(session.device, state);
   }
 
-  #reject(socket: WebSocket, code: string): void {
+  #reject(socket: WebSocket, code: string, closeCode = 4003): void {
     this.#send(socket, { code, type: 'error' });
-    socket.close(4003, 'Connection rejected');
+    socket.close(closeCode, 'Connection rejected');
   }
 
   #send(socket: WebSocket, message: object): void {

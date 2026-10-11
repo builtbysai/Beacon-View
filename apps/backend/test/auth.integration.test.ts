@@ -927,6 +927,22 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
       url: '/api/access-history',
     });
     expect(unauthenticated.statusCode).toBe(401);
+
+    // Paging values must be whole numbers within bounds (V48), not a 500.
+    for (const query of [
+      'limit=1.5',
+      'limit=0',
+      'limit=101',
+      'offset=-1',
+      'offset=2.5',
+    ]) {
+      const bad = await app!.inject({
+        headers: { cookie: credentials.cookie },
+        method: 'GET',
+        url: `/api/access-history?${query}`,
+      });
+      expect(bad.statusCode, query).toBe(400);
+    }
   });
 
   it('records a removed camera source with its display names', async () => {

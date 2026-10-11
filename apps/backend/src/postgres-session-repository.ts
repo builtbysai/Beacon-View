@@ -17,6 +17,9 @@ type CreateSessionInput = {
   userAgent?: string | null | undefined;
 };
 
+const SESSION_TOUCH_INTERVAL_MS = 60_000;
+const PURGE_AFTER_MS = 30 * 24 * 60 * 60 * 1_000;
+
 export class PostgresSessionRepository {
   constructor(
     private readonly pool: Pool,
@@ -46,29 +49,67 @@ export class PostgresSessionRepository {
     tokenHash: string,
     now: Date,
   ): Promise<SessionRecord | null> {
-    const result = await this.pool.query<SessionRecord>(
-      `UPDATE browser_sessions s
-       SET last_seen_at = $2,
-           idle_expires_at = LEAST($2 + interval '7 days', s.absolute_expires_at)
-       FROM users u
-       JOIN household_members m ON m.user_id = u.id
+    // Reading a session must not write one (V4): most requests only look.
+    // The idle deadline is extended at most once a minute, which is far
+    // finer than its seven days.
+    const result = await this.pool.query<SessionRecord & { lastSeenAt: Date }>(
+      `SELECT s.id, s.user_id AS "userId", u.email, u.avatar_url AS "avatarUrl",
+              h.id AS "householdId", owned.id AS "ownedHouseholdId",
+              m.role AS "role", s.token_hash AS "tokenHash",
+              s.csrf_hash AS "csrfHash", s.idle_expires_at AS "idleExpiresAt",
+              s.absolute_expires_at AS "absoluteExpiresAt",
+              s.reauthenticated_at AS "reauthenticatedAt", s.revoked_at AS "revokedAt",
+              s.last_seen_at AS "lastSeenAt"
+       FROM browser_sessions s
+       JOIN users u ON s.user_id = u.id
+       JOIN household_members m ON m.household_id = s.household_id AND m.user_id = u.id
        JOIN households h ON h.id = m.household_id
        LEFT JOIN households owned ON owned.owner_id = u.id
-       WHERE s.token_hash = $1 AND s.user_id = u.id
-         AND m.household_id = s.household_id
+       WHERE s.token_hash = $1
          AND m.status = 'active'
          AND (m.expires_at IS NULL OR m.expires_at > $2)
          AND s.revoked_at IS NULL AND s.idle_expires_at > $2
-         AND s.absolute_expires_at > $2
-       RETURNING s.id, s.user_id AS "userId", u.email, u.avatar_url AS "avatarUrl",
-                 h.id AS "householdId", owned.id AS "ownedHouseholdId",
-                 m.role AS "role", s.token_hash AS "tokenHash",
-                 s.csrf_hash AS "csrfHash", s.idle_expires_at AS "idleExpiresAt",
-                 s.absolute_expires_at AS "absoluteExpiresAt",
-                 s.reauthenticated_at AS "reauthenticatedAt", s.revoked_at AS "revokedAt"`,
+         AND s.absolute_expires_at > $2`,
       [tokenHash, now],
     );
-    return result.rows[0] ?? null;
+    const row = result.rows[0];
+    if (!row) return null;
+    const { lastSeenAt, ...session } = row;
+    if (now.getTime() - lastSeenAt.getTime() >= SESSION_TOUCH_INTERVAL_MS) {
+      await this.pool.query(
+        `UPDATE browser_sessions
+         SET last_seen_at = $2::timestamptz,
+             idle_expires_at = LEAST($2::timestamptz + interval '7 days', absolute_expires_at)
+         WHERE id = $1 AND revoked_at IS NULL`,
+        [session.id, now],
+      );
+    }
+    return session;
+  }
+
+  /** Removes credentials that expired or were revoked more than thirty days
+   * ago (V5): sessions, reset and verification tokens, pairing codes, guest
+   * links and clip share links. Returns how many rows each table lost. */
+  async purgeExpired(now: Date): Promise<Record<string, number>> {
+    const cutoff = new Date(now.getTime() - PURGE_AFTER_MS);
+    const deletes: Record<string, string> = {
+      browserSessions: `DELETE FROM browser_sessions
+        WHERE absolute_expires_at < $1 OR idle_expires_at < $1 OR revoked_at < $1`,
+      emailVerificationTokens:
+        'DELETE FROM email_verification_tokens WHERE expires_at < $1',
+      passwordResetTokens:
+        'DELETE FROM password_reset_tokens WHERE expires_at < $1',
+      pairingCodes: 'DELETE FROM pairing_codes WHERE expires_at < $1',
+      guestLinks: 'DELETE FROM guest_links WHERE expires_at < $1',
+      recordingShareLinks:
+        'DELETE FROM recording_share_links WHERE expires_at < $1',
+    };
+    const counts: Record<string, number> = {};
+    for (const [name, sql] of Object.entries(deletes)) {
+      const result = await this.pool.query(sql, [cutoff]);
+      counts[name] = result.rowCount ?? 0;
+    }
+    return counts;
   }
 
   async refreshReauthentication(id: string): Promise<void> {

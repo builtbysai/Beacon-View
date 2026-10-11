@@ -151,3 +151,32 @@ export function validResumePath(value: unknown): string | null {
   }
   return `${url.pathname}${url.search}`;
 }
+
+/** What the person sees before a setup link, file or installer turns this
+ * computer into a camera. A link can arrive from anywhere, so nothing starts
+ * and nothing is changed until they agree; Cancel is the default. */
+export function cameraSetupConfirmation(request: CameraSetupRequest): {
+  buttons: string[];
+  cancelId: number;
+  defaultId: number;
+  detail: string;
+  message: string;
+  noLink: boolean;
+  type: 'question';
+} {
+  const device = request.microphone
+    ? 'camera and microphone'
+    : 'camera (without sound)';
+  return {
+    buttons: ['Set up camera', 'Cancel'],
+    cancelId: 1,
+    defaultId: 1,
+    detail:
+      `This computer’s ${device} will be available to the Beacon household that created this setup link, ` +
+      'and Beacon will start with this computer so the camera stays available. ' +
+      'Only continue if you created this link yourself from your own Beacon account.',
+    message: 'Use this computer as a Beacon camera?',
+    noLink: true,
+    type: 'question',
+  };
+}

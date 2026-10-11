@@ -57,6 +57,8 @@ export async function deliverHouseholdInvitation(
   config: Pick<AppConfig, 'RESEND_API_KEY' | 'RESEND_FROM' | 'WEB_ORIGIN'>,
   invitation: {
     expiresAt: Date;
+    /** Who sent it, so an unexpected invitation can be judged (V28). */
+    invitedBy?: string;
     role: 'admin' | 'guest' | 'viewer';
     token: string;
     to: string;
@@ -68,7 +70,9 @@ export async function deliverHouseholdInvitation(
     from: config.RESEND_FROM,
     subject: 'You have a Beacon View invitation',
     text: [
-      'You have been invited to share a Beacon View household.',
+      invitation.invitedBy
+        ? `${invitation.invitedBy} invited you to share their Beacon View household.`
+        : 'You have been invited to share a Beacon View household.',
       '',
       `Access level: ${invitation.role}`,
       `Expires: ${invitation.expiresAt.toISOString()}`,
@@ -82,6 +86,8 @@ export async function deliverHouseholdInvitation(
     to: invitation.to,
   });
 }
+
+const EMAIL_REQUEST_TIMEOUT_MS = 10_000;
 
 export async function deliverResendEmail(
   config: ResendConfig,
@@ -102,6 +108,8 @@ export async function deliverResendEmail(
       'Content-Type': 'application/json',
     },
     method: 'POST',
+    // A slow provider must not hold a request, or a background job, open.
+    signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as {

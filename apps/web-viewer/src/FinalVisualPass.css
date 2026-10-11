@@ -256,8 +256,8 @@
   font-size: 11px !important;
 }
 .video-controls {
-  padding: 72px 18px max(20px, env(safe-area-inset-bottom)) !important;
-  gap: clamp(8px, 1.4vw, 14px) !important;
+  padding: 48px 18px max(16px, env(safe-area-inset-bottom)) !important;
+  gap: clamp(12px, 2.4vw, 20px) !important;
   background: linear-gradient(
     to top,
     rgba(0, 0, 0, 0.78),
@@ -347,7 +347,7 @@
 .video-stats-panel {
   position: absolute;
   right: clamp(16px, 2.5vw, 30px);
-  bottom: max(140px, calc(env(safe-area-inset-bottom) + 120px));
+  bottom: max(92px, calc(env(safe-area-inset-bottom) + 80px));
   z-index: 25;
   width: min(300px, calc(100vw - 32px));
   max-height: min(360px, 50dvh);
@@ -610,20 +610,12 @@
     padding: 17px;
   }
   .video-controls {
-    overflow-x: auto;
-    justify-content: flex-start;
     padding-inline: max(14px, env(safe-area-inset-left)) !important;
-    scrollbar-width: none;
-  }
-  .video-controls::before,
-  .video-controls::after {
-    content: '';
-    flex: 1 0 0;
   }
   .video-control {
-    flex: 0 0 46px !important;
-    width: 46px !important;
-    height: 46px !important;
+    flex: 0 0 48px !important;
+    width: 48px !important;
+    height: 48px !important;
   }
   .video-top-scrim {
     padding-inline: 14px !important;
@@ -659,12 +651,7 @@
     border-radius: 14px;
   }
   .video-controls {
-    gap: 7px !important;
-  }
-  .video-control {
-    flex-basis: 43px !important;
-    width: 43px !important;
-    height: 43px !important;
+    gap: 14px !important;
   }
   .video-overlay {
     min-width: 0;

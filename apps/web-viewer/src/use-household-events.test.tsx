@@ -49,7 +49,7 @@ it('refreshes inventory and history after a lost event connection recovers', () 
   expect(onRefreshNeeded).not.toHaveBeenCalled();
   act(() => EventSocket.instances[0]!.disconnect(1006));
   act(() => {
-    vi.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_300); // jittered: 0.75 to 1.25 seconds
   });
   act(() => EventSocket.instances[1]!.subscribe());
   expect(onRefreshNeeded).toHaveBeenCalledTimes(1);

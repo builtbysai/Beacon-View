@@ -129,6 +129,29 @@ export class PostgresRecordingRepository {
     return (result.rowCount ?? 0) === 1;
   }
 
+  /** Every Drive file a household's clips and thumbnails occupy, with the
+   * user whose Drive holds it, so account deletion can remove them (V42). */
+  async listDriveFiles(
+    householdId: string,
+  ): Promise<{ userId: string; providerFileId: string }[]> {
+    const result = await this.pool.query<{
+      userId: string;
+      providerFileId: string;
+    }>(
+      `SELECT created_by_user_id AS "userId", provider_file_id AS "providerFileId"
+       FROM recordings
+       WHERE household_id=$1 AND created_by_user_id IS NOT NULL
+         AND provider_file_id IS NOT NULL
+       UNION ALL
+       SELECT created_by_user_id, thumbnail_provider_file_id
+       FROM recordings
+       WHERE household_id=$1 AND created_by_user_id IS NOT NULL
+         AND thumbnail_provider_file_id IS NOT NULL`,
+      [householdId],
+    );
+    return result.rows;
+  }
+
   async beginAvailableDeletion(
     householdId: string,
     recordingId: string,

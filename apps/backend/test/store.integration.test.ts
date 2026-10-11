@@ -810,4 +810,79 @@ describe.skipIf(!store)('PostgreSQL security invariants', () => {
     );
     expect(withoutAgent?.userAgent).toBeNull();
   });
+
+  async function seedSession(
+    email: string,
+    overrides: { absolute?: Date; idle?: Date; revokedAt?: Date | null } = {},
+  ) {
+    const owner = await store!.createAccount(
+      email,
+      'irrelevant-test-hash',
+      '127.0.0.1',
+    );
+    const token = hashSecret(`token-${email}`);
+    await store!.createSession({
+      userId: owner.id,
+      tokenHash: token,
+      csrfHash: hashSecret(`csrf-${email}`),
+      idleExpiresAt: overrides.idle ?? new Date(Date.now() + 86_400_000),
+      absoluteExpiresAt:
+        overrides.absolute ?? new Date(Date.now() + 864_000_000),
+    });
+    if (overrides.revokedAt !== undefined)
+      await store!.pool.query(
+        'UPDATE browser_sessions SET revoked_at = $2 WHERE token_hash = $1',
+        [token, overrides.revokedAt],
+      );
+    return token;
+  }
+
+  it('reads a session without writing it, and refreshes it at most once a minute (V4)', async () => {
+    const token = await seedSession('touch@example.com');
+    const lastSeen = async () =>
+      (
+        await store!.pool.query<{ at: Date }>(
+          'SELECT last_seen_at AS at FROM browser_sessions WHERE token_hash = $1',
+          [token],
+        )
+      ).rows[0]!.at.getTime();
+    const first = await store!.findSession(token, new Date());
+    expect(first?.email).toBe('touch@example.com');
+    const afterFirst = await lastSeen();
+    // Many reads in a row leave the row untouched.
+    for (let index = 0; index < 5; index += 1)
+      await store!.findSession(token, new Date());
+    expect(await lastSeen()).toBe(afterFirst);
+    // Once the last touch is older than a minute, the next read refreshes it.
+    await store!.pool.query(
+      "UPDATE browser_sessions SET last_seen_at = now() - interval '5 minutes' WHERE token_hash = $1",
+      [token],
+    );
+    const stale = await lastSeen();
+    await store!.findSession(token, new Date());
+    expect(await lastSeen()).toBeGreaterThan(stale);
+  });
+
+  it('removes credentials that ended over thirty days ago and keeps the rest (V5)', async () => {
+    const longAgo = new Date(Date.now() - 40 * 86_400_000);
+    const lastWeek = new Date(Date.now() - 7 * 86_400_000);
+    const live = await seedSession('keep-live@example.com');
+    const recent = await seedSession('keep-recent@example.com', {
+      absolute: lastWeek,
+      idle: lastWeek,
+    });
+    await seedSession('purge-expired@example.com', {
+      absolute: longAgo,
+      idle: longAgo,
+    });
+    await seedSession('purge-revoked@example.com', { revokedAt: longAgo });
+    const counts = await store!.purgeExpiredCredentials(new Date());
+    expect(counts.browserSessions).toBe(2);
+    const remaining = await store!.pool.query<{ token_hash: string }>(
+      'SELECT token_hash FROM browser_sessions',
+    );
+    expect(remaining.rows.map((row) => row.token_hash).sort()).toEqual(
+      [live, recent].sort(),
+    );
+  });
 });

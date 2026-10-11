@@ -93,7 +93,9 @@ export function registerAccountRecoveryRoutes(
       // the response status, defeating the enumeration resistance this
       // route exists for. Still logged so a systemic delivery problem is
       // actually visible to operators instead of silently invisible.
-      await deliverPasswordResetEmail(config, {
+      // Not awaited: the provider's latency would otherwise tell a caller
+      // whether the address has an account (V23).
+      void deliverPasswordResetEmail(config, {
         expiresAt,
         to: email,
         token,
@@ -101,7 +103,7 @@ export function registerAccountRecoveryRoutes(
         app.log.warn({ err: error }, 'password reset email delivery failed'),
       );
     } else if (user) {
-      await deliverGoogleOnlyPasswordResetEmail(config, email).catch(
+      void deliverGoogleOnlyPasswordResetEmail(config, email).catch(
         (error: unknown) =>
           app.log.warn(
             { err: error },

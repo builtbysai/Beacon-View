@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { request } from './api';
+import { ApiError, request } from './api';
 import { Icon } from './Icon';
 import { PublicHeader } from './PublicHeader';
 import './AuthScreen.css';
@@ -26,6 +26,7 @@ export function AuthScreen({
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetSent, setResetSent] = useState(false);
+  const [resetError, setResetError] = useState('');
   const [localBusy, setLocalBusy] = useState(false);
 
   const googleResult = new URLSearchParams(window.location.search).get(
@@ -47,6 +48,7 @@ export function AuthScreen({
     setPassword('');
     setConfirmPassword('');
     setResetSent(false);
+    setResetError('');
   }, [view]);
 
   async function onResetSubmit(event: FormEvent<HTMLFormElement>) {
@@ -55,16 +57,26 @@ export function AuthScreen({
     const email =
       (new FormData(event.currentTarget).get('email') as string | null) ?? '';
     setLocalBusy(true);
+    setResetError('');
     try {
       await request<void>('/api/auth/password-reset/request', {
         body: JSON.stringify({ email }),
         method: 'POST',
       });
-    } catch {
-      // The response is intentionally identical whether the account exists.
+      // The server answers the same whether or not the account exists.
+      setResetSent(true);
+    } catch (error) {
+      // Only failures that say nothing about the account are shown (V69): being
+      // told "sent" when nothing could be sent leaves a person waiting for mail.
+      setResetError(
+        error instanceof ApiError && error.status === 429
+          ? 'Too many reset requests. Wait a little while, then try again.'
+          : error instanceof ApiError && error.status === 503
+            ? 'Password reset email is not available right now. Try again later.'
+            : 'Beacon could not be reached. Check your connection and try again.',
+      );
     } finally {
       setLocalBusy(false);
-      setResetSent(true);
     }
   }
 
@@ -342,6 +354,7 @@ export function AuthScreen({
                       disabled={isBusy}
                     />
                   </div>
+                  {resetError && <p role="alert">{resetError}</p>}
                   <button className="primary" disabled={isBusy}>
                     {isBusy ? 'Sending...' : 'Send reset link'}
                   </button>

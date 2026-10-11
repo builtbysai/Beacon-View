@@ -130,6 +130,7 @@ export function registerSharingRoutes(
       try {
         await deliverHouseholdInvitation(config, {
           expiresAt,
+          invitedBy: session.email,
           role: body.data.role,
           token,
           to: body.data.email,
@@ -205,6 +206,7 @@ export function registerSharingRoutes(
         try {
           await deliverHouseholdInvitation(config, {
             expiresAt,
+            invitedBy: session.email,
             role: pending.role,
             token,
             to: pending.invitedEmail,

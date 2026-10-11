@@ -113,16 +113,21 @@ export const googleStartSchema = z
   .object({
     platform: z.enum(['android', 'desktop']).optional(),
     intent: z.literal('addPassword').optional(),
-    // PKCE S256 challenge; required for (and only accepted from) desktop.
+    // PKCE S256 challenge; required for (and only accepted from) the desktop
+    // and Android apps, whose return links other apps on the device can read.
     challenge: z.string().regex(PKCE_CHALLENGE_PATTERN).optional(),
   })
   .refine(
     (start) =>
-      (start.platform === 'desktop') === (start.challenge !== undefined),
+      (start.platform === 'desktop' || start.platform === 'android') ===
+      (start.challenge !== undefined),
   );
-export const mobileGoogleExchangeSchema = z.object({
-  code: z.string().min(32).max(512),
-});
+export const mobileGoogleExchangeSchema = z
+  .object({
+    code: z.string().min(32).max(512),
+    verifier: z.string().regex(PKCE_VERIFIER_PATTERN),
+  })
+  .strict();
 export const desktopGoogleExchangeSchema = z
   .object({
     code: z.string().min(32).max(512),

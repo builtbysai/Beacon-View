@@ -105,6 +105,40 @@ it('requests a password reset without revealing whether the email exists', async
   );
   expect(await screen.findByText(/If an account exists/i)).toBeVisible();
 });
+it.each([
+  [429, /Too many reset requests/],
+  [503, /not available right now/],
+])(
+  'does not claim a reset link was sent when the server answers %i (V69)',
+  async (status, message) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: 'no' }), {
+          headers: { 'content-type': 'application/json' },
+          status,
+        }),
+      ),
+    );
+    render(
+      <AuthScreen
+        busy={false}
+        error=""
+        googleAvailable={false}
+        mode="login"
+        onMode={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+      target: { value: 'someone@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send reset link' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+    expect(screen.queryByText(/If an account exists/i)).not.toBeInTheDocument();
+  },
+);
 it('replaces the Google link when the backend reports authentication unavailable', () => {
   render(
     <AuthScreen

@@ -1,4 +1,16 @@
+import { isIP } from 'node:net';
+
 import { z } from 'zod';
+
+function isAddressOrCidr(entry: string): boolean {
+  const [address = '', prefix, ...rest] = entry.split('/');
+  if (rest.length > 0) return false;
+  const family = isIP(address);
+  if (family === 0) return false;
+  if (prefix === undefined) return true;
+  const bits = Number(prefix);
+  return /^d{1,3}$/u.test(prefix) && bits <= (family === 4 ? 32 : 128);
+}
 
 const booleanFromEnvironment = z.preprocess(
   (value) => (value === 'true' ? true : value === 'false' ? false : value),
@@ -36,6 +48,25 @@ const environmentSchema = z
       .url()
       .default('ws://127.0.0.1:3000/api/signaling'),
     ALLOW_INSECURE_LOCAL_DEV: booleanFromEnvironment.default(false),
+    // Networks whose X-Forwarded-For header is believed (a comma-separated list
+    // of addresses or CIDR ranges). Empty means the socket address is the
+    // client. Production lists the private network Caddy connects from; the
+    // client is then the last forwarded address that is not on that list, so
+    // a visitor cannot choose the address used for rate limits and audit
+    // records.
+    TRUSTED_PROXY_CIDRS: z
+      .string()
+      .optional()
+      .transform((value) =>
+        (value ?? '')
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+      )
+      .refine((entries) => entries.every(isAddressOrCidr), {
+        message: 'TRUSTED_PROXY_CIDRS must be IP addresses or CIDR ranges',
+      })
+      .optional(),
     SESSION_COOKIE_NAME: z.string().min(1).default('beacon_session'),
     VIEWER_STUN_URL: z.string().url().default('stun:127.0.0.1:3478'),
     VIEWER_TURN_URL: z.string().url().default('turn:127.0.0.1:3478'),
@@ -50,12 +81,16 @@ const environmentSchema = z
       .url()
       .default('turn:10.0.2.2:3478?transport=tcp'),
     TURN_SHARED_SECRET: z.string().min(32),
+    // coturn checks the time-limited username on every request, including the
+    // refresh that keeps a relayed session alive, so a relayed live view ends
+    // when its credential does (V21). An hour keeps a leaked credential short-lived
+    // without cutting every relayed view at ten minutes.
     TURN_CREDENTIAL_TTL_SECONDS: z.coerce
       .number()
       .int()
       .min(60)
-      .max(600)
-      .default(600),
+      .max(7_200)
+      .default(3_600),
     ICE_TRANSPORT_POLICY: z.enum(['all', 'relay']).default('all'),
     GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
@@ -145,6 +180,30 @@ const environmentSchema = z
           'Recording encryption requires the Google OAuth client configuration',
         path: ['RECORDING_ENCRYPTION_KEY'],
       });
+    }
+    // One leaked key must not open another door, so no two may be the same (V27).
+    const secrets = [
+      ['TURN_SHARED_SECRET', config.TURN_SHARED_SECRET],
+      [
+        'GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY',
+        config.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY,
+      ],
+      ['RECORDING_ENCRYPTION_KEY', config.RECORDING_ENCRYPTION_KEY],
+      ['NOTIFICATION_ENCRYPTION_KEY', config.NOTIFICATION_ENCRYPTION_KEY],
+      ['NOTIFICATION_FINGERPRINT_KEY', config.NOTIFICATION_FINGERPRINT_KEY],
+    ] as const;
+    const seen = new Map<string, string>();
+    for (const [name, value] of secrets) {
+      if (!value) continue;
+      const other = seen.get(value);
+      if (other) {
+        context.addIssue({
+          code: 'custom',
+          message: `${name} must differ from ${other}`,
+          path: [name],
+        });
+      }
+      seen.set(value, name);
     }
     const contactFields = [
       config.CONTACT_EMAIL_TO,

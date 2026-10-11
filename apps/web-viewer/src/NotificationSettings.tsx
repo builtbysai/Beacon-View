@@ -30,13 +30,22 @@ function applicationServerKey(value: string): Uint8Array<ArrayBuffer> {
   return new Uint8Array(bytes.buffer);
 }
 
+let memoryInstallationId: string | null = null;
+
 function installationId(): string {
   const key = 'beacon.notification.installation.v1';
-  const existing = localStorage.getItem(key);
-  if (existing) return existing;
-  const created = randomUuid();
-  localStorage.setItem(key, created);
-  return created;
+  // Storage can be blocked (private windows, site settings); the id then lasts for
+  // this visit instead of breaking the settings page (V81).
+  try {
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const created = randomUuid();
+    localStorage.setItem(key, created);
+    return created;
+  } catch {
+    memoryInstallationId ??= randomUuid();
+    return memoryInstallationId;
+  }
 }
 
 export async function disableWebNotifications(): Promise<void> {

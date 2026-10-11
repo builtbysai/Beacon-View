@@ -336,8 +336,15 @@ internal fun MonitorHome(
         when {
             inbound.code != null && session == null -> {
                 busy = true
+                // The verifier was kept when sign-in started; without it (for example a link from another
+                // app) the code cannot be redeemed and the attempt simply fails.
+                val verifier = GoogleSignInPkce(context).take()
                 val result =
-                    withContext(Dispatchers.IO) { runCatching { api.exchangeGoogleSignIn(inbound.code) } }
+                    withContext(Dispatchers.IO) {
+                        runCatching {
+                            api.exchangeGoogleSignIn(inbound.code, verifier ?: error("No sign-in in progress"))
+                        }
+                    }
                 result.onSuccess {
                     sessionStore.save(it)
                     session = it
@@ -409,7 +416,9 @@ internal fun MonitorHome(
         val active = session ?: return@LaunchedEffect
         while (session == active) {
             refresh(active.token)
-            delay(if (selectedCameraId == null) 15_000 else 1_000)
+            // Each refresh is two requests. Five seconds keeps viewer counts and camera status fresh
+            // enough while a camera is open without a request per second (V66).
+            delay(if (selectedCameraId == null) 15_000 else 5_000)
         }
     }
 

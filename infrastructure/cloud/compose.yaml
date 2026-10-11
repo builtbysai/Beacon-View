@@ -45,6 +45,9 @@ services:
       DEVICE_TURN_TCP_URL: turn:${TURN_EXTERNAL_IP}:3478?transport=tcp
       DEVICE_TURN_URL: turn:${TURN_EXTERNAL_IP}:3478?transport=udp
       HOST: 0.0.0.0
+      # Caddy is the only proxy in front of the backend and connects from the
+      # compose network's private range (F1).
+      TRUSTED_PROXY_CIDRS: 172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
       ICE_TRANSPORT_POLICY: all
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}

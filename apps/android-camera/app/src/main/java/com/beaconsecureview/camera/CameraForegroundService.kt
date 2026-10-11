@@ -60,6 +60,9 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
 
     override fun onCreate() {
         super.onCreate()
+        // Clips this camera recorded are plaintext until encrypted. They use their own prefix so playback
+        // cleanup cannot delete one being uploaded (V44), and any a crash left behind are removed here.
+        deleteStaleCacheFiles(cacheDir, "beacon-rec-", olderThanMs = 10 * 60_000L)
         if (!hasCameraPermission()) {
             startupBlockedByMissingCameraPermission = true
             CameraRuntime.update {
@@ -202,7 +205,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 withContext(Dispatchers.IO) {
                     runCatching { api.syncCameras(credential, enumerateCameraSources()) }
                 }
-            if (synchronization.exceptionOrNull() is AuthorizationLostException) {
+            if (synchronization.exceptionOrNull() is AuthorizationLostException && rejections.reject()) {
                 initializing = false
                 requirePairing()
                 return@launch
@@ -280,19 +283,28 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                     }
                 when (accepted) {
                     true -> {
+                        rejections.accept()
                         val settings = withContext(Dispatchers.IO) {
                             runCatching { api.motionSettings(credential) }
                         }
                         if (settings.exceptionOrNull() is AuthorizationLostException) {
-                            requirePairing()
-                            break
+                            if (rejections.reject()) {
+                                requirePairing()
+                                break
+                            }
                         }
                         settings.onSuccess { motionSettings = it }
                             .onFailure { Log.w(LOG_TAG, "event=motion_settings_sync_failed") }
                     }
                     false -> {
-                        requirePairing()
-                        break
+                        if (rejections.reject()) {
+                            requirePairing()
+                            break
+                        }
+                        signaling?.requestReconnect()
+                        CameraRuntime.update {
+                            it.copy(diagnostic = "Checking this device's connection")
+                        }
                     }
                     null -> {
                         signaling?.requestReconnect()
@@ -438,7 +450,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     }
 
     override fun onAuthorizationLost() {
-        requirePairing()
+        if (rejections.reject()) requirePairing() else signaling?.requestReconnect()
     }
 
     override fun onDestroy() {
@@ -483,6 +495,8 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
             )
         }
     }
+
+    private val rejections = RejectedCredentialTracker()
 
     private fun requirePairing() {
         CredentialStore(this).clear()
@@ -582,7 +596,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                 runCatching { api.reportMotion(credential, cameraId, confidence) }
                     .onFailure { error ->
                         if (error is AuthorizationLostException) {
-                            withContext(Dispatchers.Main) { requirePairing() }
+                            if (rejections.reject()) withContext(Dispatchers.Main) { requirePairing() }
                         } else {
                             Log.w(LOG_TAG, "event=motion_report_failed")
                         }
@@ -612,7 +626,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
             reportRecordingFailure(recordingId, "capture_failed")
             return
         }
-        val outputFile = File(cacheDir, "beacon-clip-$recordingId.mp4")
+        val outputFile = File(cacheDir, "beacon-rec-$recordingId.mp4")
         CameraRuntime.update {
             it.copy(recordingActive = true, diagnostic = "Recording a short clip")
         }
@@ -656,24 +670,28 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
     }
 
     private suspend fun uploadRequestedClip(recordingId: String, file: File, durationMs: Long) {
-        val encryptedFile = File(cacheDir, "beacon-clip-$recordingId.encrypted")
+        val encryptedFile = File(cacheDir, "beacon-rec-$recordingId.encrypted")
         runCatching {
             val encrypted = encryptClip(file, encryptedFile)
             file.delete()
             val checksum = sha256Hex(encrypted.file)
+            // Each step is retried on its own (V59): the encrypted file stays until the end, and the
+            // Drive upload session Beacon opened accepts the same bytes again after a failed PUT.
             val uploadUrl =
-                api.beginRecordingUpload(
-                    credential,
-                    recordingId,
-                    encrypted.file.length(),
-                    checksum,
-                    durationMs.coerceIn(1_000, 600_000),
-                    "video/mp4",
-                    encrypted.dataKey,
-                    encrypted.iv,
-                )
-            val providerFileId = uploadClipToDrive(uploadUrl, encrypted.file)
-            api.completeRecording(credential, recordingId, providerFileId)
+                retryTransient {
+                    api.beginRecordingUpload(
+                        credential,
+                        recordingId,
+                        encrypted.file.length(),
+                        checksum,
+                        durationMs.coerceIn(1_000, 600_000),
+                        "video/mp4",
+                        encrypted.dataKey,
+                        encrypted.iv,
+                    )
+                }
+            val providerFileId = retryTransient { uploadClipToDrive(uploadUrl, encrypted.file) }
+            retryTransient { api.completeRecording(credential, recordingId, providerFileId) }
             Log.i(LOG_TAG, "event=clip_uploaded")
         }.onFailure { error ->
             Log.w(LOG_TAG, "event=motion_clip_upload_failed")

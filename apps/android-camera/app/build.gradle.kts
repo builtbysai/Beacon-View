@@ -79,10 +79,26 @@ android {
         applicationId = "com.beaconsecureview.camera"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.0.0"
+        // Play rejects a versionCode it has seen, so each upload raises it:
+        //   ./gradlew :app:bundleRelease -PbeaconVersionCode=2 -PbeaconVersionName=0.1.0
+        versionCode = providers.gradleProperty("beaconVersionCode").orElse("1").get().toInt()
+        versionName = providers.gradleProperty("beaconVersionName").orElse("0.0.0").get()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // The upload key is created and kept by the owner (docs/android-release.md). It is read from the
+    // environment so it never lands in the repository; without it the release build is unsigned, as before.
+    signingConfigs {
+        val uploadKeystore = providers.environmentVariable("BEACON_UPLOAD_KEYSTORE").orNull
+        if (uploadKeystore != null) {
+            create("release") {
+                storeFile = file(uploadKeystore)
+                storePassword = providers.environmentVariable("BEACON_UPLOAD_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("BEACON_UPLOAD_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("BEACON_UPLOAD_KEY_PASSWORD").get()
+            }
+        }
     }
 
     buildTypes {
@@ -125,6 +141,7 @@ android {
             require(beaconWebUrl.startsWith("https://")) { "Release Beacon web URL must use https://" }
             buildConfigField("String", "BEACON_WEB_URL", "\"$beaconWebUrl\"")
             buildConfigField("boolean", "SMART_DETECTION_ENABLED", "$smartDetectionEnabled")
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 
@@ -179,4 +196,6 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation(kotlin("test"))
+    // The android.jar used by unit tests only stubs org.json; this is the reference implementation.
+    testImplementation("org.json:json:20240303")
 }

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Cameraswitch
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.MicOff
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PictureInPictureAlt
@@ -51,6 +52,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -92,6 +94,7 @@ internal fun AndroidLiveView(
     var quality by remember(camera.id) { mutableStateOf<StreamQuality?>(null) }
     var fullscreen by remember(camera.id) { mutableStateOf(false) }
     var statsOpen by remember(camera.id) { mutableStateOf(false) }
+    var moreOpen by remember(camera.id) { mutableStateOf(false) }
     var viewerSession by remember(camera.id) { mutableStateOf<AndroidViewerSession?>(null) }
     var manualRecording by remember(camera.id) { mutableStateOf<BeaconApi.RecordingSummary?>(null) }
     var recordingBusy by remember(camera.id) { mutableStateOf(false) }
@@ -455,9 +458,9 @@ internal fun AndroidLiveView(
             modifier =
                 Modifier.align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(BeaconVideoOverlay)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, BeaconVideoOverlay)))
                     .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = 28.dp, bottom = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -470,7 +473,7 @@ internal fun AndroidLiveView(
             if (talkState != TalkState.Idle) {
                 Text(talkStatusText(talkState), color = Color.White, style = MaterialTheme.typography.bodySmall)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (canListen) {
                     Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
                         IconButton(
@@ -509,19 +512,6 @@ internal fun AndroidLiveView(
                         }
                     }
                 }
-                Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
-                    IconButton(enabled = state == StreamingState.Connected, onClick = ::takeSnapshot) {
-                        Icon(Icons.Outlined.PhotoCamera, "Save a snapshot", tint = Color.White)
-                    }
-                }
-                if (onFlip != null) {
-                    Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
-                        IconButton(
-                            onClick = onFlip,
-                            modifier = Modifier.semantics { contentDescription = "Switch to ${flipLabel ?: "other camera"}" },
-                        ) { Icon(Icons.Outlined.Cameraswitch, null, tint = Color.White) }
-                    }
-                }
                 if (canRecord) {
                     ManualRecordingControl(
                         enabled = state == StreamingState.Connected,
@@ -531,82 +521,73 @@ internal fun AndroidLiveView(
                         onClick = ::requestRecording,
                     )
                 }
-                if (canFloat) {
-                    Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
-                        IconButton(
-                            enabled = state == StreamingState.Connected,
-                            onClick = {
+                Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
+                    IconButton(onClick = { moreOpen = true }) {
+                        Icon(Icons.Outlined.MoreVert, "More", tint = Color.White)
+                    }
+                }
+            }
+        }
+    }
+    if (moreOpen) {
+        val connected = state == StreamingState.Connected
+        LiveViewMoreSheet(
+            actions =
+                buildList {
+                    add(LiveMoreAction(Icons.Outlined.PhotoCamera, "Save snapshot", enabled = connected, onClick = ::takeSnapshot))
+                    if (onFlip != null) {
+                        add(LiveMoreAction(Icons.Outlined.Cameraswitch, "Switch camera", value = flipLabel, onClick = onFlip))
+                    }
+                    if (canFloat) {
+                        add(
+                            LiveMoreAction(Icons.Outlined.PictureInPictureAlt, "Picture in picture", enabled = connected) {
                                 if (activity == null || !enterLivePictureInPicture(activity)) {
                                     recordingError =
                                         "Picture-in-picture is turned off for Beacon. Turn it on in Android Settings → Apps → Beacon."
                                 }
                             },
-                        ) {
-                            Icon(Icons.Outlined.PictureInPictureAlt, "Picture in picture", tint = Color.White)
-                        }
-                    }
-                }
-                Surface(shape = RoundedCornerShape(999.dp), color = BeaconVideoControl) {
-                    IconButton(enabled = state == StreamingState.Connected, onClick = { fullscreen = true }) {
-                        Icon(Icons.Outlined.Fullscreen, "Full screen", tint = Color.White)
-                    }
-                }
-            }
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = BeaconVideoControl,
-                onClick = { statsOpen = !statsOpen },
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Outlined.Visibility, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                    Text(
-                        if (othersWatching > 0) {
-                            "$othersWatching other ${if (othersWatching == 1) "viewer" else "viewers"}"
-                        } else {
-                            "Stream details"
-                        },
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-            if (statsOpen) {
-                Column(
-                    modifier =
-                        Modifier.fillMaxWidth()
-                            .background(BeaconVideoControl, RoundedCornerShape(12.dp))
-                            .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(
-                        if (othersWatching == 0) "No one else is watching" else "Watching now",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    if (state == StreamingState.Connected) {
-                        Text("You", color = BeaconVideoMuted, style = MaterialTheme.typography.bodySmall)
-                    }
-                    repeat(othersWatching) { index ->
-                        Text(
-                            "Household viewer ${index + 1}",
-                            color = BeaconVideoMuted,
-                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    Text(
-                        "Viewer names stay private in this live view.",
-                        color = BeaconVideoMuted,
-                        style = MaterialTheme.typography.labelSmall,
+                    add(LiveMoreAction(Icons.Outlined.Fullscreen, "Full screen", enabled = connected) { fullscreen = true })
+                    add(
+                        LiveMoreAction(
+                            Icons.Outlined.Visibility,
+                            "Stream details",
+                            value = if (othersWatching > 0) "$othersWatching ${if (othersWatching == 1) "viewer" else "viewers"}" else null,
+                            keepOpen = true,
+                        ) { statsOpen = !statsOpen },
                     )
-                    quality?.let { StreamQualityFacts(it) }
-                }
-            }
-        }
+                },
+            onDismiss = { moreOpen = false },
+            details =
+                if (statsOpen) {
+                    {
+                        Text(
+                            if (othersWatching == 0) "No one else is watching" else "Watching now",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        if (state == StreamingState.Connected) {
+                            Text("You", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        }
+                        repeat(othersWatching) { index ->
+                            Text(
+                                "Household viewer ${index + 1}",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Text(
+                            "Viewer names stay private in this live view.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                        quality?.let { StreamQualityFacts(it) }
+                    }
+                } else {
+                    null
+                },
+        )
     }
 }
 
@@ -628,8 +609,8 @@ private fun StreamQualityFacts(quality: StreamQuality) {
 @Composable
 private fun StreamQualityRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = BeaconVideoMuted, style = MaterialTheme.typography.labelSmall)
-        Text(value, color = Color.White, style = MaterialTheme.typography.labelSmall)
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+        Text(value, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelSmall)
     }
 }
 

@@ -307,7 +307,11 @@ private fun BeaconCameraApp(
             cameraSetupStarted = true
             navigationPreferences.edit().putBoolean("camera_setup_started", true).apply()
             onInboundPairingCodeHandled()
-            pairCamera(inboundPairingCode)
+            // A link, QR code or another app can send a code here, so it only
+            // fills in the field. Joining a household is a tap on Pair (V19b).
+            pairingCode = normalizePairingCodeInput(inboundPairingCode)
+            message =
+                "A setup link filled in this code. Tap Pair only if you made it yourself from your own Beacon account."
         }
     }
 
@@ -371,7 +375,10 @@ private fun BeaconCameraApp(
                         context.startActivity(
                             Intent(
                                 Intent.ACTION_VIEW,
-                                Uri.parse("${BuildConfig.BEACON_API_URL.trimEnd('/')}/api/auth/google?platform=android"),
+                                Uri.parse(
+                                    "${BuildConfig.BEACON_API_URL.trimEnd('/')}/api/auth/google?platform=android" +
+                                        "&challenge=${GoogleSignInPkce(context).begin()}",
+                                ),
                             ).addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY),
                         )
                     },
