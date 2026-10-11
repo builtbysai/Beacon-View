@@ -81,12 +81,16 @@ const environmentSchema = z
       .url()
       .default('turn:10.0.2.2:3478?transport=tcp'),
     TURN_SHARED_SECRET: z.string().min(32),
+    // coturn checks the time-limited username on every request, including the
+    // refresh that keeps a relayed session alive, so a relayed live view ends
+    // when its credential does (V21). An hour keeps a leaked credential short-lived
+    // without cutting every relayed view at ten minutes.
     TURN_CREDENTIAL_TTL_SECONDS: z.coerce
       .number()
       .int()
       .min(60)
-      .max(600)
-      .default(600),
+      .max(7_200)
+      .default(3_600),
     ICE_TRANSPORT_POLICY: z.enum(['all', 'relay']).default('all'),
     GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
@@ -176,6 +180,30 @@ const environmentSchema = z
           'Recording encryption requires the Google OAuth client configuration',
         path: ['RECORDING_ENCRYPTION_KEY'],
       });
+    }
+    // One leaked key must not open another door, so no two may be the same (V27).
+    const secrets = [
+      ['TURN_SHARED_SECRET', config.TURN_SHARED_SECRET],
+      [
+        'GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY',
+        config.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY,
+      ],
+      ['RECORDING_ENCRYPTION_KEY', config.RECORDING_ENCRYPTION_KEY],
+      ['NOTIFICATION_ENCRYPTION_KEY', config.NOTIFICATION_ENCRYPTION_KEY],
+      ['NOTIFICATION_FINGERPRINT_KEY', config.NOTIFICATION_FINGERPRINT_KEY],
+    ] as const;
+    const seen = new Map<string, string>();
+    for (const [name, value] of secrets) {
+      if (!value) continue;
+      const other = seen.get(value);
+      if (other) {
+        context.addIssue({
+          code: 'custom',
+          message: `${name} must differ from ${other}`,
+          path: [name],
+        });
+      }
+      seen.set(value, name);
     }
     const contactFields = [
       config.CONTACT_EMAIL_TO,

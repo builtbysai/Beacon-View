@@ -68,6 +68,14 @@ export class PostgresAccountRecoveryRepository {
        RETURNING user_id AS "userId"`,
       [tokenHash, now],
     );
-    return result.rows[0]?.userId ?? null;
+    const userId = result.rows[0]?.userId ?? null;
+    // Other reset links sent earlier must not outlive the one just used (V46).
+    if (userId)
+      await this.pool.query(
+        `UPDATE password_reset_tokens SET consumed_at = $2
+         WHERE user_id = $1 AND consumed_at IS NULL`,
+        [userId, now],
+      );
+    return userId;
   }
 }

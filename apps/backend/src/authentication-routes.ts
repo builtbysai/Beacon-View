@@ -347,6 +347,8 @@ export function registerAuthenticationRoutes(
         : android && start.data.challenge
           ? androidOAuthState(start.data.challenge)
           : `web.${generateToken()}`;
+    // A Drive connection abandoned in another tab must not capture this sign-in (V45).
+    reply.clearCookie(GOOGLE_DRIVE_STATE_COOKIE, { path: '/' });
     reply.setCookie(GOOGLE_STATE_COOKIE, state, {
       httpOnly: true,
       maxAge: TEN_MINUTES / 1_000,

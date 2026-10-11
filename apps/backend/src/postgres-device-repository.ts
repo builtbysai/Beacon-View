@@ -614,7 +614,7 @@ export class PostgresDeviceRepository {
        LEFT JOIN device_credentials dc ON dc.camera_id = d.id
        WHERE d.household_id = $1 AND cs.public_camera_id = $2
          AND d.revoked_at IS NULL AND cs.removed_at IS NULL
-         AND (d.platform = 'browser' OR dc.revoked_at IS NULL)`,
+         AND d.platform = 'browser'`,
       [householdId, publicCameraId],
     );
     return result.rows[0] ?? null;
