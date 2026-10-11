@@ -67,6 +67,7 @@ internal class MotionDetector(
     private var lastEventAt = Long.MIN_VALUE
     private var counted: BooleanArray? = null
     private var countedFor: Triple<Int, Int, Int>? = null
+    private var lastRotation = 0
 
     fun analyze(
         plane: ByteBuffer,
@@ -81,6 +82,11 @@ internal class MotionDetector(
             return null
         }
         lastSampleAt = timestampNanos
+        // Turning the phone changes every sample at once; start a fresh baseline instead of reporting it (V61).
+        if (rotationDegrees != lastRotation) {
+            lastRotation = rotationDegrees
+            previous = null
+        }
         val columns = SAMPLE_COLUMNS.coerceAtMost(width.coerceAtLeast(1))
         val rows = SAMPLE_ROWS.coerceAtMost(height.coerceAtLeast(1))
         val current = sample(plane, rowStride, pixelStride, width, height, columns, rows)
@@ -88,12 +94,17 @@ internal class MotionDetector(
         previous = current
         if (prior == null || prior.size != current.size) return null
         val counts = countedSamples(columns, rows, rotationDegrees)
+        val all = IntArray(current.size) { current[it] - prior[it] }
+        // Auto-exposure, IR-cut switching and a passing light brighten or darken the whole picture at once. The
+        // typical change across the whole picture, ignored areas included, is that shift; only what differs from it
+        // counts as movement (V61). Taken over everything so that a change filling the watched area still counts.
+        val shift = all.sorted()[(all.size - 1) / 2]
         var changed = 0
         var considered = 0
-        current.indices.forEach { index ->
+        all.indices.forEach { index ->
             if (!counts[index]) return@forEach
             considered += 1
-            if (kotlin.math.abs(current[index] - prior[index]) >= threshold) changed += 1
+            if (kotlin.math.abs(all[index] - shift) >= threshold) changed += 1
         }
         if (considered == 0) return null
         val confidence = changed.toFloat() / considered
