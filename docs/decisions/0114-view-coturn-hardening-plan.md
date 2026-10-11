@@ -67,12 +67,13 @@ container reads a file that deploys do not refresh, and the audit's earlier rela
 
 ## Findings from the local rehearsal (2026-10-11)
 
-Run against coturn 4.13.0 at the digest the VM already runs, in throwaway local containers:
+Run against coturn 4.13.0 at the digest the VM already runs, in throwaway local containers (details and the
+caveat about `turnutils_uclient -y` are in [docs/turn-relay-transfer.md](../turn-relay-transfer.md)):
 
-- Today's live configuration lets a client relay to another private address (F3 is real).
-- The hardened configuration refuses that, but would also refuse two relayed sessions on this one server,
-  because the server's own public address maps back to its container address. The repository entrypoint
-  (`turn-relay-entrypoint.sh`) therefore allows exactly the container's own address and nothing else.
+- Today's live configuration lets a client relay to a private address (F3 is real).
+- The hardened configuration plus the repository entrypoint refuses private peers, while two relayed sessions
+  on this one server still work. The entrypoint denies 10/8, 172.16/12 and 192.168/16 with a one-address hole
+  for the container itself; `allowed-peer-ip` was not used for that.
 - `no-cli` is deprecated in 4.13.0 (the CLI is off by default); it was removed from the configuration.
-- `compose.yaml` now pins the image digest and mounts the entrypoint from the repository, so View no longer
+- `compose.yaml` pins the image digest and mounts the entrypoint from the repository, so View no longer
   depends on files in `/etc/beacon-remote/`.
