@@ -35,8 +35,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -148,7 +148,7 @@ internal fun BeaconPairAnotherDeviceDialog(
     onDismiss: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val clipboard = LocalClipboardManager.current
+    val sensitiveContext = LocalContext.current
     var code by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -194,11 +194,11 @@ internal fun BeaconPairAnotherDeviceDialog(
                         Text("ONE-TIME PAIRING CODE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(code!!, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
                         Text("Expires in 10 minutes", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                        OutlinedButton(onClick = { clipboard.setText(AnnotatedString(setupLink)); copied = true }) {
+                        OutlinedButton(onClick = { copySensitiveText(sensitiveContext, setupLink); copied = true }) {
                             Text(if (copied) "Copied" else "Copy setup link")
                         }
                         if (browserCameraLink != null) {
-                            OutlinedButton(onClick = { clipboard.setText(AnnotatedString(browserCameraLink)) }) {
+                            OutlinedButton(onClick = { copySensitiveText(sensitiveContext, browserCameraLink) }) {
                                 Text("Copy browser camera link")
                             }
                             Text(

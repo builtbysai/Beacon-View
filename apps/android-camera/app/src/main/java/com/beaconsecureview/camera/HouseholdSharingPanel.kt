@@ -34,7 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -365,7 +365,7 @@ private fun InvitePersonDialog(
     onCreated: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val clipboard = LocalClipboardManager.current
+    val sensitiveContext = LocalContext.current
     var email by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("viewer") }
     // Starts unset on purpose: the owner must choose which cameras a viewer sees (V32).
@@ -394,7 +394,7 @@ private fun InvitePersonDialog(
                             style = MaterialTheme.typography.bodySmall,
                         )
                         TextButton(onClick = {
-                            clipboard.setText(AnnotatedString(invitation.token))
+                            copySensitiveText(sensitiveContext, invitation.token)
                             copied = true
                         }) { Text(if (copied) "Copied" else "Copy") }
                     }
