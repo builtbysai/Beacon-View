@@ -43,6 +43,28 @@ describe('household invitation email delivery', () => {
     expect(body.text).not.toContain('household name');
   });
 
+  it('names who sent the invitation (V28)', async () => {
+    const fetchMock = vi.fn<
+      (input: string | URL, init?: RequestInit) => Promise<Response>
+    >(() => Promise.resolve(new Response(null, { status: 202 })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await deliverHouseholdInvitation(config, {
+      expiresAt: new Date('2026-09-14T12:00:00.000Z'),
+      invitedBy: 'owner@example.com',
+      role: 'viewer',
+      token: 'one-time-invitation-code',
+      to: 'guest@example.com',
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string) as {
+      text: string;
+    };
+    expect(body.text).toContain(
+      'owner@example.com invited you to share their Beacon View household.',
+    );
+  });
+
   it("surfaces provider failures to the invitation route, with Resend's own reason for diagnosis", async () => {
     vi.stubGlobal(
       'fetch',

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { retryDelay } from './reconnect';
 
 import { eventsUrl } from './app-navigation';
 
@@ -79,7 +80,9 @@ export function useHouseholdEvents({
         // either. If this tab's own state hasn't already disabled this
         // hook (see `enabled` above), just keep retrying with backoff.
         if (event.code !== 4003) refreshOnSubscribe = true;
-        const delay = Math.min(1_000 * 2 ** retry, 15_000);
+        // Jittered, so every open tab does not reconnect in the same instant
+        // after a server restart (V55).
+        const delay = retryDelay(retry, Math.random(), 1_000, 15_000);
         retry += 1;
         reconnectTimer = window.setTimeout(connect, delay);
       };

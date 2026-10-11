@@ -287,7 +287,7 @@ internal fun WelcomeScreen(
                     modifier = Modifier.padding(BeaconSpacing.Lg),
                     verticalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text("HD · 1080p", color = BeaconHeroSupporting, style = MaterialTheme.typography.labelSmall)
+                    Text("Live video", color = BeaconHeroSupporting, style = MaterialTheme.typography.labelSmall)
                     Column {
                         Text("Living room", color = Color.White, style = MaterialTheme.typography.titleMedium)
                         Text("Spare phone · Rear camera", color = BeaconHeroSupporting, style = MaterialTheme.typography.bodySmall)

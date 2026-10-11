@@ -196,4 +196,6 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation(kotlin("test"))
+    // The android.jar used by unit tests only stubs org.json; this is the reference implementation.
+    testImplementation("org.json:json:20240303")
 }

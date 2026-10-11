@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +40,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -127,6 +130,7 @@ internal fun MonitorAuthScreen(
                                 value = email,
                                 onValueChange = onEmailChange,
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
@@ -146,6 +150,7 @@ internal fun MonitorAuthScreen(
                                 value = password,
                                 onValueChange = onPasswordChange,
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                                 trailingIcon = {
                                     IconButton(onClick = { onShowPasswordChange(!showPassword) }) {
@@ -213,6 +218,7 @@ internal fun MonitorAuthScreen(
                                 value = email,
                                 onValueChange = onEmailChange,
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
@@ -222,6 +228,7 @@ internal fun MonitorAuthScreen(
                                 value = password,
                                 onValueChange = onPasswordChange,
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                                 trailingIcon = {
                                     IconButton(onClick = { onShowPasswordChange(!showPassword) }) {
@@ -245,6 +252,7 @@ internal fun MonitorAuthScreen(
                                 value = confirmPassword,
                                 onValueChange = { confirmPassword = it },
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                                 isError = confirmPassword.isNotEmpty() && confirmPassword != password,
                                 visualTransformation = PasswordVisualTransformation(),
                                 modifier = Modifier.fillMaxWidth(),
@@ -299,6 +307,7 @@ internal fun MonitorAuthScreen(
                             onValueChange = { resetEmail = it },
                             label = { Text("Email") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Button(
