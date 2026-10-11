@@ -113,7 +113,7 @@ describe('Google Drive OAuth client', () => {
       part: 'thumbnail',
       recordingId: '8aedbca1-6d5a-47b6-8c31-d20da64eb670',
     });
-    const body = JSON.parse(String(fetch.mock.calls[0]![1]?.body)) as {
+    const body = JSON.parse(fetch.mock.calls[0]![1]?.body as string) as {
       appProperties: Record<string, string>;
       name: string;
     };

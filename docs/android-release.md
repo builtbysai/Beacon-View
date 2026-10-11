@@ -84,3 +84,7 @@ Play Console or a private key, so it cannot be done from the repository.
 - Toolchain age and dependency scanning (V24): compile and target SDK are 35, and
   there is no Gradle dependency-vulnerability check in CI yet.
 - R8 and a per-ABI bundle (V62).
+
+## Dependency lockfile
+
+`apps/android-camera/app/gradle.lockfile` pins the release dependencies; the weekly dependency-audit workflow scans it with OSV (V24). After changing a dependency, refresh it with `./gradlew :app:dependencies --write-locks` and commit the result. The smart-detection runtime is excluded unless `-PsmartDetectionEnabled=true` (V62).

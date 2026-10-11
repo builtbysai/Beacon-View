@@ -201,3 +201,9 @@ dependencies {
     // The android.jar used by unit tests only stubs org.json; this is the reference implementation.
     testImplementation("org.json:json:20240303")
 }
+
+// Pin and record the shipped dependency versions so the weekly OSV scan (.github/workflows/dependency-audit.yml)
+// can read them (V24). Refresh with: ./gradlew :app:dependencies --write-locks
+configurations
+    .matching { it.name == "releaseRuntimeClasspath" }
+    .configureEach { resolutionStrategy.activateDependencyLocking() }

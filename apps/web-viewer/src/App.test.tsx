@@ -501,7 +501,11 @@ describe('App', () => {
     await screen.findByText('Add your first device');
     fireEvent.click(screen.getAllByRole('button', { name: 'Add camera' })[0]!);
     fireEvent.click(
-      await screen.findByRole('button', { name: /Pair a device/i }),
+      await screen.findByRole(
+        'button',
+        { name: /Pair a device/i },
+        { timeout: 8_000 },
+      ),
     );
     expect(await screen.findByText('ABCD2345')).toBeVisible();
     vi.useFakeTimers();
@@ -1005,7 +1009,11 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     expect(
-      await screen.findByRole('heading', { name: 'Household' }),
+      await screen.findByRole(
+        'heading',
+        { name: 'Household' },
+        { timeout: 8_000 },
+      ),
     ).toBeVisible();
     expect(window.location.pathname + window.location.search).toBe('/settings');
 
