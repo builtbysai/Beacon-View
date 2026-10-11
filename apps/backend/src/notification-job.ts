@@ -15,6 +15,8 @@ export interface NotificationDeliverySender {
   send(delivery: NotificationDelivery): Promise<NotificationDeliveryOutcome>;
 }
 
+const SEND_CONCURRENCY = 8;
+
 /** One sweep: claim due deliveries, send each, and record the outcome.
  * Counts are derived only from `channel` and the already-public
  * `safePayload.category` -- never `providerMaterial` or payload content --
@@ -35,7 +37,14 @@ export async function runNotificationSweep(
   let expired = 0;
   const byChannel: Record<string, number> = {};
   const byCategory: Record<string, number> = {};
-  for (const delivery of deliveries) {
+  // A few sends at a time: one slow provider no longer holds up every alert
+  // queued behind it (V39). The counters are only touched between awaits.
+  const queue = [...deliveries];
+  const worker = async () => {
+    for (let delivery = queue.shift(); delivery; delivery = queue.shift())
+      await deliver(delivery);
+  };
+  const deliver = async (delivery: NotificationDelivery) => {
     const outcome = await sender.send(delivery);
     byChannel[delivery.channel] = (byChannel[delivery.channel] ?? 0) + 1;
     const category = delivery.safePayload.category ?? 'unknown';
@@ -61,7 +70,10 @@ export async function runNotificationSweep(
         outcome.retryAfterMs,
       );
     }
-  }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(SEND_CONCURRENCY, queue.length) }, worker),
+  );
   if (deliveries.length > 0)
     logger.info(
       {

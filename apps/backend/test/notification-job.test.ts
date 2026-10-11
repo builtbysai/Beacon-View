@@ -158,4 +158,38 @@ describe('runNotificationSweep', () => {
     expect(markFailed).not.toHaveBeenCalled();
     expect(info.mock.calls[0]?.[0]).toMatchObject({ expired: 1 });
   });
+
+  it('keeps sending while one provider is slow (V39)', async () => {
+    const deliveries = [
+      delivery({ id: 'slow' }),
+      delivery({ id: 'fast-1' }),
+      delivery({ id: 'fast-2' }),
+    ];
+    let releaseSlow: () => void = () => undefined;
+    const finished: string[] = [];
+    const sender = {
+      send: vi.fn((item: NotificationDelivery) =>
+        item.id === 'slow'
+          ? new Promise<NotificationDeliveryOutcome>((resolve) => {
+              releaseSlow = () => resolve({ permanent: false, success: true });
+            })
+          : Promise.resolve({ permanent: false, success: true }),
+      ),
+    };
+    const store = {
+      claimNotificationDeliveries: () => Promise.resolve(deliveries),
+      markNotificationDelivered: (id: string) => {
+        finished.push(id);
+        return Promise.resolve();
+      },
+      scanNotificationPresence: () => Promise.resolve(),
+      scanNotificationHealth: () => Promise.resolve(),
+    } as unknown as MilestoneStore;
+    const logger = { info: vi.fn() } as unknown as FastifyBaseLogger;
+    const sweep = runNotificationSweep(store, sender, logger, new Date(), 120);
+    await vi.waitFor(() => expect(finished).toEqual(['fast-1', 'fast-2']));
+    releaseSlow();
+    await sweep;
+    expect(finished).toEqual(['fast-1', 'fast-2', 'slow']);
+  });
 });

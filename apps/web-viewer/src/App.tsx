@@ -17,26 +17,17 @@ import { CameraSettings } from './CameraSettings';
 import { ModalDialog } from './ModalDialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ReauthenticationDialog } from './ReauthenticationDialog';
-import { BrowserCameraMode } from './BrowserCameraMode';
 import { MotionEventList } from './MotionEventList';
 import { RecordingLibrary } from './RecordingLibrary';
 import { EventsViewSwitch, type EventsView } from './EventsViewSwitch';
 import { AuthScreen } from './AuthScreen';
 import { SplashScreen } from './SplashScreen';
-import { CameraBrowser } from './CameraBrowser';
-import { ContactPage } from './ContactPage';
-import { Diagnostics } from './Diagnostics';
-import { GuestViewPage } from './GuestViewPage';
-import { SharedRecordingPage } from './SharedRecordingPage';
 import { Brand, Icon } from './Icon';
 import { Sidebar, SidebarProvider, SidebarTrigger } from './Sidebar';
 import { PendingDeviceRow } from './PendingDeviceRow';
-import { AddCameraPage } from './AddCameraPage';
-import { ComputerCameraSetupDialog } from './ComputerCameraSetupDialog';
 import { takePendingUseCase } from './pending-use-case';
 import { type DesktopAlert, desktopBridge } from './desktop-shell';
 import { PairingDialog } from './PairingDialog';
-import { SettingsPage } from './SettingsPage';
 import { HouseholdModeBar } from './HouseholdModeSettings';
 import { announceModeChange } from './household-mode';
 import { reportTrayCameras, trayCameras } from './desktop-tray';
@@ -46,8 +37,6 @@ import {
   PairLinkPage,
   PublicTrustPage,
 } from './PublicPages';
-import { ResetPasswordPage } from './ResetPasswordPage';
-import { VerifyEmailPage } from './VerifyEmailPage';
 import { groupCamerasByDevice, reconcileLiveCamera } from './camera-selection';
 import type { Camera, Device, HouseholdSession, User } from './domain';
 import { goBack, pushRoute, replaceRoute } from './history-nav';
@@ -77,6 +66,57 @@ import {
   type BackendCapabilities,
 } from './capabilities';
 import { isLocalBrowserCamera } from './browser-camera-local';
+import { lazyPage } from './lazy-page';
+
+const BrowserCameraMode = lazyPage(() =>
+  import('./BrowserCameraMode').then((module) => ({
+    default: module.BrowserCameraMode,
+  })),
+);
+const ContactPage = lazyPage(() =>
+  import('./ContactPage').then((module) => ({ default: module.ContactPage })),
+);
+const Diagnostics = lazyPage(() =>
+  import('./Diagnostics').then((module) => ({ default: module.Diagnostics })),
+);
+const GuestViewPage = lazyPage(() =>
+  import('./GuestViewPage').then((module) => ({
+    default: module.GuestViewPage,
+  })),
+);
+const SharedRecordingPage = lazyPage(() =>
+  import('./SharedRecordingPage').then((module) => ({
+    default: module.SharedRecordingPage,
+  })),
+);
+const ResetPasswordPage = lazyPage(() =>
+  import('./ResetPasswordPage').then((module) => ({
+    default: module.ResetPasswordPage,
+  })),
+);
+const VerifyEmailPage = lazyPage(() =>
+  import('./VerifyEmailPage').then((module) => ({
+    default: module.VerifyEmailPage,
+  })),
+);
+const SettingsPage = lazyPage(() =>
+  import('./SettingsPage').then((module) => ({ default: module.SettingsPage })),
+);
+const CameraBrowser = lazyPage(() =>
+  import('./CameraBrowser').then((module) => ({
+    default: module.CameraBrowser,
+  })),
+);
+const AddCameraPage = lazyPage(() =>
+  import('./AddCameraPage').then((module) => ({
+    default: module.AddCameraPage,
+  })),
+);
+const ComputerCameraSetupDialog = lazyPage(() =>
+  import('./ComputerCameraSetupDialog').then((module) => ({
+    default: module.ComputerCameraSetupDialog,
+  })),
+);
 
 const SPLASH_SEEN_KEY = 'beacon.splash.seen.v1';
 
