@@ -24,8 +24,6 @@ export class DriveNotConnectedError extends Error {
 /** A connection is re-checked at most this often, so a dead token is
  * noticed before the owner tries to record (ADR 0086). */
 export const DRIVE_HEALTH_CHECK_INTERVAL_MS = 60 * 60 * 1_000;
-/** How long a refreshed Google access token is reused (they last about an hour). */
-const ACCESS_TOKEN_REUSE_MS = 30 * 60 * 1_000;
 
 /** Which connection a caller needs: any (app data) or recordings. */
 export type DriveNeed = 'any' | 'recordings';
@@ -76,9 +74,6 @@ export class DriveHealth {
   // When each user's token was last confirmed live. In memory: a restart
   // only costs one extra refresh.
   readonly #confirmedAt = new Map<string, number>();
-  /** Google access tokens last an hour; reuse one for a shorter time instead
-   * of refreshing on every playback, upload and deletion (V53). */
-  readonly #tokens = new Map<string, { expiresAt: number; token: string }>();
 
   constructor(
     private readonly store: MilestoneStore,
@@ -111,8 +106,6 @@ export class DriveHealth {
     ]);
     if (!refreshToken || !drive || !satisfies(drive.scopes, need))
       throw new DriveNotConnectedError();
-    const cached = this.#tokens.get(userId);
-    if (cached && cached.expiresAt > this.now()) return cached.token;
     try {
       const token = await refreshDriveAccessToken(
         new OAuth2Client(
@@ -123,10 +116,6 @@ export class DriveHealth {
         refreshToken,
       );
       this.#confirmedAt.set(userId, this.now());
-      this.#tokens.set(userId, {
-        expiresAt: this.now() + ACCESS_TOKEN_REUSE_MS,
-        token,
-      });
       return token;
     } catch (error) {
       if (error instanceof DriveReconnectRequiredError)
@@ -169,7 +158,6 @@ export class DriveHealth {
 
   async expire(userId: string, householdId?: string): Promise<void> {
     this.#confirmedAt.delete(userId);
-    this.#tokens.delete(userId);
     if (await this.store.markGoogleDriveConnectionExpired(userId))
       await this.store.audit({
         eventType: 'google_drive_connection_expired',
@@ -182,7 +170,6 @@ export class DriveHealth {
   /** Forgets a confirmation, e.g. after the owner disconnects Drive. */
   forget(userId: string): void {
     this.#confirmedAt.delete(userId);
-    this.#tokens.delete(userId);
   }
 
   private async absentProblem(userId: string): Promise<DriveProblemCode> {
