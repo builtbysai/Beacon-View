@@ -289,6 +289,7 @@ try {
 Write-Host "Beacon LAN development is ready."
 Write-Host "Browser and phone URL: $httpsOrigin"
 Write-Host "Dashboard: $httpsOrigin"
+Write-Warning 'LAN mode listens on every network address and uses the published development TURN secret. Anyone on this network can reach the services and obtain relay credentials while it runs. Use it only on a network you trust, and stop it when you are done.'
 Write-Host "Monitor: $httpsOrigin/monitor"
 Write-Host "Cameras: $httpsOrigin/cameras"
 Write-Host "Devices: $httpsOrigin/devices"
