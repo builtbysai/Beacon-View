@@ -4,6 +4,8 @@ import { App } from './App';
 import { AppErrorBoundary } from './AppErrorBoundary';
 import { finishDriveConnectPopup } from './drive-recording';
 import { VisualTestHarness } from './VisualTestHarness';
+// Inter is served from this origin: no request to a third-party font host (V12).
+import '@fontsource-variable/inter';
 import './styles.css';
 import './FinalVisualPass.css';
 
