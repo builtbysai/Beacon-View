@@ -1260,6 +1260,9 @@ class BeaconApi(private val baseUrl: String) {
             throw IllegalStateException(
                 when (serverMessage) {
                     "You cannot invite that household role" -> "You can't invite that role."
+                    "Verify your email address before inviting people" ->
+                        "Verify your email address in Beacon Settings, then send the invitation."
+                    "Choose which cameras a viewer can see" -> "Choose which cameras this person can see."
                     "Too many invitation changes" -> "Too many invitations. Wait before trying again."
                     else -> "The invitation could not be created. Try again."
                 },
@@ -1561,6 +1564,8 @@ class BeaconApi(private val baseUrl: String) {
     fun syncCameras(
         credential: String,
         sources: List<CameraSource>,
+        // Reported once capture has started, so the owner can be told when this phone cannot record clips (V72).
+        clipRecording: Boolean? = null,
     ): CameraSynchronization {
         val connection = connection("/api/device/cameras", "PUT")
         connection.setRequestProperty("Authorization", "Bearer $credential")
@@ -1574,7 +1579,12 @@ class BeaconApi(private val baseUrl: String) {
                                 JSONObject()
                                     .put("sourceKey", source.sourceKey)
                                     .put("name", source.name)
-                                    .put("facing", source.facing),
+                                    .put("facing", source.facing)
+                                    .apply {
+                                        if (clipRecording != null) {
+                                            put("capabilities", JSONObject().put("clipRecording", clipRecording))
+                                        }
+                                    },
                             )
                         }
                     },

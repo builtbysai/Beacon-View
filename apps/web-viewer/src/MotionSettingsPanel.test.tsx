@@ -290,4 +290,25 @@ describe('MotionSettingsPanel', () => {
     await screen.findByText('Record on motion');
     expect(screen.queryByRole('alert')).toBeNull();
   });
+
+  it('says so when the phone cannot record clips at all (V72)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          response({ cameras: [{ ...rear, recordOnMotion: true }] }),
+        ),
+    );
+    render(
+      <MotionSettingsPanel
+        cameras={[{ ...cameras[0]!, capabilities: { clipRecording: false } }]}
+        deviceId="device"
+        driveState="ready"
+      />,
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /can’t record clips/,
+    );
+  });
 });

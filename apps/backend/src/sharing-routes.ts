@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { canAssignRole } from './household-authorization.js';
@@ -88,6 +88,28 @@ export function registerSharingRoutes(
   const { auth, config, householdEvents, limiter, signaling, store } =
     dependencies;
 
+  // Invitations are sent from Beacon's own email address to any address the
+  // sender types. An account with an unverified email could use that to mail
+  // strangers, so sending needs a verified email (V47). Where email is not
+  // configured nothing is sent, and verification is impossible, so it is not
+  // required there.
+  const emailMustBeVerified = Boolean(
+    config.RESEND_API_KEY && config.RESEND_FROM,
+  );
+  const senderIsVerified = async (
+    session: { email: string },
+    reply: FastifyReply,
+  ): Promise<boolean> => {
+    if (!emailMustBeVerified) return true;
+    const user = await store.findUserByEmail(session.email);
+    if (user?.emailVerifiedAt) return true;
+    void reply.code(403).send({
+      code: 'email_not_verified',
+      error: 'Verify your email address before inviting people',
+    });
+    return false;
+  };
+
   app.get('/api/household/sharing', async (request, reply) => {
     const session = await auth.authenticateHouseholdAdmin(request, reply);
     if (!session) return;
@@ -117,6 +139,7 @@ export function registerSharingRoutes(
     if (!session) return;
     if (!limiter.take(`household-invite:${session.householdId}`, 20, HOUR))
       return reply.code(429).send({ error: 'Too many invitation changes' });
+    if (!(await senderIsVerified(session, reply))) return;
     const body = invitationSchema.safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ error: 'Invalid household invitation' });
@@ -202,6 +225,7 @@ export function registerSharingRoutes(
         reply,
       );
       if (!session) return;
+      if (!(await senderIsVerified(session, reply))) return;
       if (!limiter.take(`household-invite:${session.householdId}`, 20, HOUR))
         return reply.code(429).send({ error: 'Too many invitation changes' });
       const parameters = invitationParameterSchema.safeParse(request.params);

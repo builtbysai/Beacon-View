@@ -716,6 +716,15 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         }
     }
 
+    /** Tells the server whether this phone can record clips, so a camera that never can is not silently set up to (V72). */
+    private fun reportClipCapability() {
+        val available = media?.clipRecordingAvailable ?: return
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { api.syncCameras(credential, enumerateCameraSources(), available) }
+                .onFailure { Log.w(LOG_TAG, "event=clip_capability_report_failed") }
+        }
+    }
+
     private fun handleCaptureStart(generation: Int, started: Boolean) {
         if (generation != captureGeneration) return
         if (started) {
@@ -727,6 +736,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
                         if (signalingOnline) "Live and ready" else "Camera ready; connecting",
                 )
             }
+            reportClipCapability()
             return
         }
         captureGeneration += 1
