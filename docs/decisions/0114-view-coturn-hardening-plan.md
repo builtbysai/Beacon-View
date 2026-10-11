@@ -1,7 +1,9 @@
 # ADR 0114: Plan for hardening View's TURN relay after Remote's relay is separated
 
-- Status: Proposed. Nothing in this record changes the running relay. Needs Codex's confirmation of the
-  Remote split and a joint restart window (audit finding F3).
+- Status: Accepted for preparation (2026-10-11). Remote's cutover is complete: it runs
+  `beacon-remote-turn-coturn-1` on port 3479. The live View relay is **unchanged** and keeps using Remote's
+  override and entrypoint until the owner and Codex agree a restart window. The step-by-step transfer, with
+  rollback, is [docs/turn-relay-transfer.md](../turn-relay-transfer.md).
 
 ## Context
 
@@ -62,3 +64,15 @@ container reads a file that deploys do not refresh, and the audit's earlier rela
   `/etc/beacon/production.env`; the backend must restart with it at the same time as the relay.
 - If Codex keeps Remote on the old relay, that relay should stop reading View's files, so a View deploy
   cannot change Remote's relay.
+
+## Findings from the local rehearsal (2026-10-11)
+
+Run against coturn 4.13.0 at the digest the VM already runs, in throwaway local containers:
+
+- Today's live configuration lets a client relay to another private address (F3 is real).
+- The hardened configuration refuses that, but would also refuse two relayed sessions on this one server,
+  because the server's own public address maps back to its container address. The repository entrypoint
+  (`turn-relay-entrypoint.sh`) therefore allows exactly the container's own address and nothing else.
+- `no-cli` is deprecated in 4.13.0 (the CLI is off by default); it was removed from the configuration.
+- `compose.yaml` now pins the image digest and mounts the entrypoint from the repository, so View no longer
+  depends on files in `/etc/beacon-remote/`.
