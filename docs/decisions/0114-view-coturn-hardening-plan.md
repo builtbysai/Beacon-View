@@ -1,6 +1,6 @@
 # ADR 0114: Plan for hardening View's TURN relay after Remote's relay is separated
 
-- Status: Accepted for preparation (2026-10-11). Remote's cutover is complete: it runs
+- Status: Done (2026-10-11): proven on the server and by the owner on different networks. Earlier status: accepted for preparation. Remote's cutover is complete: it runs
   `beacon-remote-turn-coturn-1` on port 3479. The live View relay is **unchanged** and keeps using Remote's
   override and entrypoint until the owner and Codex agree a restart window. The step-by-step transfer, with
   rollback, is [docs/turn-relay-transfer.md](../turn-relay-transfer.md).

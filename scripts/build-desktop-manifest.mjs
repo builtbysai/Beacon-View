@@ -21,6 +21,9 @@ if (!folder || !/^\d+\.\d+\.\d+$/.test(version ?? '')) {
 
 /** Maps electron-builder artifact names to manifest entries. */
 export function classify(file) {
+  // The Android sideload app has its own version, so it is matched by name.
+  if (/^Beacon-android-[A-Za-z0-9.-]+\.apk$/.test(file))
+    return { arch: 'universal', kind: 'apk', platform: 'android' };
   const arch = /(arm64|aarch64)/i.test(file)
     ? 'arm64'
     : /(x64|x86_64|amd64)/i.test(file)
@@ -48,9 +51,9 @@ function sha256(file) {
 
 const files = [];
 for (const name of readdirSync(folder).sort()) {
-  if (!name.includes(version)) continue;
   const kind = classify(name);
   if (!kind) continue;
+  if (kind.platform !== 'android' && !name.includes(version)) continue;
   const full = path.join(folder, name);
   files.push({
     ...kind,

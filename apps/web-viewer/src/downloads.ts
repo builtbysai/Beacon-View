@@ -9,11 +9,11 @@ export type DesktopPlatform = 'windows' | 'macos' | 'linux';
 export type VisitorPlatform = DesktopPlatform | 'android' | 'ios' | 'other';
 
 export interface DownloadFile {
-  arch: 'x64' | 'arm64';
+  arch: 'x64' | 'arm64' | 'universal';
   bytes: number;
   file: string;
-  kind: 'installer' | 'dmg' | 'appimage' | 'deb';
-  platform: DesktopPlatform;
+  kind: 'installer' | 'dmg' | 'appimage' | 'deb' | 'apk';
+  platform: DesktopPlatform | 'android';
   sha256: string;
 }
 
@@ -31,9 +31,14 @@ function isDownloadFile(value: unknown): value is DownloadFile {
   return (
     (file.platform === 'windows' ||
       file.platform === 'macos' ||
-      file.platform === 'linux') &&
-    (file.arch === 'x64' || file.arch === 'arm64') &&
-    ['installer', 'dmg', 'appimage', 'deb'].includes(String(file.kind)) &&
+      file.platform === 'linux' ||
+      file.platform === 'android') &&
+    (file.arch === 'x64' ||
+      file.arch === 'arm64' ||
+      file.arch === 'universal') &&
+    ['installer', 'dmg', 'appimage', 'deb', 'apk'].includes(
+      String(file.kind),
+    ) &&
     typeof file.file === 'string' &&
     FILE_NAME.test(file.file) &&
     typeof file.bytes === 'number' &&

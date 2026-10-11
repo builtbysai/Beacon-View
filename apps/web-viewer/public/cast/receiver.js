@@ -22,7 +22,7 @@ export function start(frame, idle) {
     idle.hidden = path !== null;
     frame.src = path ?? 'about:blank';
   };
-  context.addCustomMessageHandler(NAMESPACE, (event) => {
+  context.addCustomMessageListener(NAMESPACE, (event) => {
     const data = event.data;
     if (data && data.type === 'stop') {
       show(null);
