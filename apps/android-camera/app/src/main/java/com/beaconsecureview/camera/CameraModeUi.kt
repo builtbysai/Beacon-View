@@ -206,107 +206,6 @@ internal fun PairingScreen(
     }
 }
 
-@Composable
-internal fun WelcomeScreen(
-    onCameraSetup: () -> Unit,
-    onMonitor: () -> Unit,
-) {
-    Column(
-        modifier =
-            Modifier.fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .safeDrawingPadding()
-                .padding(horizontal = BeaconSpacing.Lg, vertical = BeaconSpacing.Lg),
-        verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Xl),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BeaconWordmark(compact = true)
-            BeaconStatusPill("PRIVATE ALPHA", MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Md)) {
-            Text(
-                "YOUR SPACE, WITHIN REACH",
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.labelMedium,
-                letterSpacing = 1.4.sp,
-            )
-            Text(
-                "Turn a spare device into your camera.",
-                style = MaterialTheme.typography.displayLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                "Use this phone or tablet as a live camera, or securely view cameras already in your household.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(BeaconSpacing.Sm)) {
-            Button(
-                onClick = onCameraSetup,
-                modifier = Modifier.fillMaxWidth(),
-                colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.onSurface,
-                        contentColor = MaterialTheme.colorScheme.surface,
-                    ),
-                shape = RoundedCornerShape(BeaconRadii.Md),
-            ) {
-                Icon(Icons.Outlined.Smartphone, null, modifier = Modifier.size(20.dp))
-                Text("Set up camera", modifier = Modifier.padding(start = 8.dp))
-                Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, modifier = Modifier.padding(start = 8.dp).size(18.dp))
-            }
-            OutlinedButton(
-                onClick = onMonitor,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(BeaconRadii.Md),
-            ) {
-                Icon(Icons.Outlined.Videocam, null, modifier = Modifier.size(20.dp))
-                Text("Monitor cameras", modifier = Modifier.padding(start = BeaconSpacing.Sm))
-            }
-        }
-        BeaconHeroPanel(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Beacon Live", color = Color.White, fontWeight = FontWeight.Bold)
-                BeaconStatusPill("LIVE", BeaconOnline)
-            }
-            Surface(
-                modifier = Modifier.fillMaxWidth().height(170.dp),
-                color = BeaconCanvas,
-                shape = RoundedCornerShape(BeaconRadii.Lg),
-            ) {
-                Column(
-                    modifier = Modifier.padding(BeaconSpacing.Lg),
-                    verticalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text("Live video", color = BeaconHeroSupporting, style = MaterialTheme.typography.labelSmall)
-                    Column {
-                        Text("Living room", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                        Text("Spare phone · Rear camera", color = BeaconHeroSupporting, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(BeaconSpacing.Lg)) {
-                BeaconTrustBadge(Icons.Outlined.Lock, "Encrypted", Modifier.weight(1f), textColor = BeaconHeroSupporting)
-                BeaconTrustBadge(Icons.Outlined.Visibility, "Visible capture", Modifier.weight(1f), textColor = BeaconHeroSupporting)
-            }
-        }
-        Text(
-            "Live viewing · Private access · Optional encrypted clips",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
 private val pairingCodePattern = Regex("[A-HJ-NP-Z2-9]{10}")
 
 internal fun normalizePairingCodeInput(value: String): String =
@@ -356,37 +255,6 @@ internal fun parsePairingQr(rawValue: String?, trustedApiUrl: String? = null, tr
  * web's `?googleSignIn=failed`/`linkRequired` query param) carries [status]
  * instead so the caller can still show the PWA's equivalent message rather
  * than silently doing nothing. */
-internal data class MobileGoogleAuthResult(val code: String? = null, val status: String? = null)
-
-internal fun parseMobileGoogleAuthLink(rawValue: String?, trustedApiUrl: String?): MobileGoogleAuthResult? {
-    if (rawValue == null) return null
-    val link = runCatching { java.net.URI(rawValue.trim()) }.getOrNull() ?: return null
-    val trustedHost = trustedApiUrl?.let { runCatching { java.net.URI(it).host }.getOrNull() }
-    val trustedHttps =
-        link.scheme.equals("https", ignoreCase = true) &&
-            trustedHost != null &&
-            link.host.equals(trustedHost, ignoreCase = true) &&
-            link.path == "/auth/mobile"
-    val trustedAppReturn =
-        link.scheme.equals("beaconsecureview", ignoreCase = true) &&
-            link.host.equals("auth", ignoreCase = true) &&
-            link.path == "/mobile"
-    if (!trustedHttps && !trustedAppReturn) return null
-    val parameters = (link.rawQuery ?: link.rawFragment)?.split('&') ?: return null
-    val code =
-        parameters
-            .firstOrNull { it.substringBefore('=').equals("code", ignoreCase = true) }
-            ?.substringAfter('=', missingDelimiterValue = "")
-            ?.takeIf { it.length in 32..512 && it.matches(Regex("[A-Za-z0-9_-]+")) }
-    val status =
-        parameters
-            .firstOrNull { it.substringBefore('=').equals("status", ignoreCase = true) }
-            ?.substringAfter('=', missingDelimiterValue = "")
-            ?.takeIf { it == "failed" || it == "linkRequired" }
-    if (code == null && status == null) return null
-    return MobileGoogleAuthResult(code = code, status = status)
-}
-
 @Composable
 internal fun PairingSuccess() {
     Column(
@@ -453,8 +321,7 @@ internal fun CameraHome(
     onDisconnect: () -> Unit,
     disconnecting: Boolean,
     onOpenBackgroundSettings: () -> Unit,
-    onMonitor: () -> Unit,
-    monitorSignedIn: Boolean,
+    onOpenBeacon: () -> Unit,
 ) {
     var settingsOpen by remember { mutableStateOf(false) }
     val qualityStore = CaptureQualityStore(androidx.compose.ui.platform.LocalContext.current)
@@ -554,12 +421,12 @@ internal fun CameraHome(
                     containerColor = Color(0xFFF8FAFC),
                 ) {
                     DropdownMenuItem(
-                        text = { Text(if (monitorSignedIn) "Monitor" else "Sign in") },
+                        text = { Text("Open Beacon") },
                         leadingIcon = { Icon(Icons.Outlined.Person, null) },
                         colors = MenuDefaults.itemColors(textColor = Color(0xFF0F172A), leadingIconColor = Color(0xFF475569)),
                         onClick = {
                             settingsOpen = false
-                            onMonitor()
+                            onOpenBeacon()
                         },
                     )
                     DropdownMenuItem(

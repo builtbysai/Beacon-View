@@ -21,6 +21,7 @@ import { ReauthenticationDialog } from './ReauthenticationDialog';
 import { MotionEventList } from './MotionEventList';
 import { RecordingLibrary } from './RecordingLibrary';
 import { EventsViewSwitch, type EventsView } from './EventsViewSwitch';
+import { syncAndroidAlerts } from './android-push';
 import { isAndroidApp } from './android-shell';
 import { AuthScreen } from './AuthScreen';
 import { SplashScreen } from './SplashScreen';
@@ -342,6 +343,12 @@ function AppShell() {
       if (camera) openCamera(camera);
     })();
     // openCamera and navigate only touch state setters and history.
+  }, [user]);
+
+  // In the Android app, Firebase may have handed out a new alert token since the last time this session registered
+  // one; register it so phone alerts keep arriving.
+  useEffect(() => {
+    if (user && isAndroidApp()) void syncAndroidAlerts().catch(() => undefined);
   }, [user]);
 
   // A household invitation link (/join?token=...) can be opened signed out,

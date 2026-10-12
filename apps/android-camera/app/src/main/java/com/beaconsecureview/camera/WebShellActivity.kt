@@ -5,7 +5,9 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
@@ -23,11 +25,14 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -53,15 +58,15 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
     private var pendingWebRequest: PermissionRequest? = null
     private var bridgeProxy: JavaScriptReplyProxy? = null
     private val bridge = NativeBridge(this)
-    private var pendingGoogleCode: WebShellPolicy.GoogleReturn.Code? = null
     private val pkce by lazy { GoogleSignInPkce(this) }
 
-    private val androidPermissions =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            val request = pendingWebRequest ?: return@registerForActivityResult
-            pendingWebRequest = null
-            answer(request)
-        }
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != WEB_PERMISSION_REQUEST) return
+        val request = pendingWebRequest ?: return
+        pendingWebRequest = null
+        answer(request)
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,6 +78,7 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
         root.addView(errorPage, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         errorPage.visibility = View.GONE
         setContentView(root)
+        applySystemBars(root)
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
@@ -97,11 +103,17 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
         installBridge()
         webView.webViewClient = AppClient()
         webView.webChromeClient = AppChromeClient()
+        // A plain link to a file (an installer on the downloads page) is the browser's job, not the view's.
+        webView.setDownloadListener { url, _, _, _, _ -> openOutside(url) }
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (webView.canGoBack()) webView.goBack() else finish()
+                    when {
+                        customView != null -> exitFullscreen()
+                        webView.canGoBack() -> webView.goBack()
+                        else -> finish()
+                    }
                 }
             },
         )
@@ -129,7 +141,60 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
         handleLink(intent)
     }
 
+    // --- Look: system bars that match the page, and fullscreen video ------------------------------------------
+
+    private var customView: View? = null
+    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
+
+    /** Light page, dark icons; dark page, light icons: the page follows the phone's theme, so the bars do too. */
+    private fun applySystemBars(root: View) {
+        val dark =
+            (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val background = if (dark) 0xFF09090B.toInt() else 0xFFF9FAFB.toInt()
+        window.setBackgroundDrawable(ColorDrawable(background))
+        root.setBackgroundColor(background)
+        @Suppress("DEPRECATION")
+        run {
+            window.statusBarColor = background
+            window.navigationBarColor = background
+        }
+        WindowCompat.getInsetsController(window, root).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
+    }
+
+    private fun enterFullscreen(view: View, callback: WebChromeClient.CustomViewCallback) {
+        if (customView != null) {
+            callback.onCustomViewHidden()
+            return
+        }
+        customView = view
+        customViewCallback = callback
+        (window.decorView as ViewGroup).addView(
+            view,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+        )
+        webView.visibility = View.INVISIBLE
+        WindowCompat.getInsetsController(window, view).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    private fun exitFullscreen() {
+        val view = customView ?: return
+        (window.decorView as ViewGroup).removeView(view)
+        customView = null
+        webView.visibility = View.VISIBLE
+        WindowCompat.getInsetsController(window, webView).show(WindowInsetsCompat.Type.systemBars())
+        customViewCallback?.onCustomViewHidden()
+        customViewCallback = null
+    }
+
     override fun onDestroy() {
+        if (customView != null) exitFullscreen()
+        fileSaver.abortAll()
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
         super.onDestroy()
@@ -173,7 +238,6 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
         if (WebShellPolicy.isAppUrl(webView.url, appOrigin)) {
             redeem()
         } else {
-            pendingGoogleCode = result
             pendingRedeem = redeem
             webView.loadUrl("$appOrigin/")
         }
@@ -204,11 +268,12 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
             // The origin rule already limits who sees the object; these checks are the second lock.
             if (!isMainFrame || WebShellPolicy.originOf(sourceOrigin.toString()) != appOrigin) return@addWebMessageListener
             bridgeProxy = reply
-            bridge.handle(message.data)?.let(reply::postMessage)
+            bridge.handle(message.data) { runOnUiThread { reply.postMessage(it) } }
         }
     }
 
     private fun pushCameraState() {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return
         bridgeProxy?.postMessage(NativeBridgeProtocol.event("camera", cameraState()))
     }
 
@@ -216,6 +281,44 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
 
     override fun cameraState(): JSONObject =
         NativeBridgeProtocol.cameraState(CredentialStore(this).read() != null, CameraRuntime.state.value, defaultDeviceName())
+
+    override fun pushState(): JSONObject {
+        val consent = NotificationConsentStore(this)
+        return JSONObject().put("enabled", consent.enabled).put("stale", consent.tokenStale)
+    }
+
+    override fun enablePush(done: (Result<JSONObject>) -> Unit) {
+        lifecycleScope.launch {
+            done(
+                runCatching {
+                    val token = firebaseMessagingToken()
+                    val installationId =
+                        getSharedPreferences("beacon_installation", MODE_PRIVATE).getString("installation_id", null)
+                            ?: error("This installation is not ready")
+                    JSONObject().put("token", token).put("installationId", installationId)
+                },
+            )
+        }
+    }
+
+    private val fileSaver by lazy { FileSaver(applicationContext) }
+
+    override fun saveFileStart(name: String, mime: String): String? = fileSaver.start(name, mime)
+
+    override fun saveFileChunk(token: String, base64: String): Boolean = fileSaver.chunk(token, base64)
+
+    override fun saveFileEnd(token: String): String? =
+        fileSaver.end(token)?.also {
+            Toast.makeText(this, "Saved to Downloads: $it", Toast.LENGTH_LONG).show()
+        }
+
+    override fun pushEnabled(subscriptionId: String) {
+        NotificationConsentStore(this).enable(subscriptionId)
+    }
+
+    override fun disablePush(done: (Result<String?>) -> Unit) {
+        lifecycleScope.launch { done(runCatching { stopFirebaseMessaging(this@WebShellActivity) }) }
+    }
 
     override fun startCamera(code: String) {
         startActivity(
@@ -323,7 +426,6 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
         override fun onPageFinished(view: WebView, url: String?) {
             pendingRedeem?.takeIf { WebShellPolicy.isAppUrl(url, appOrigin) }?.let {
                 pendingRedeem = null
-                pendingGoogleCode = null
                 it()
             }
         }
@@ -343,16 +445,21 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
             } else {
                 pendingWebRequest?.deny()
                 pendingWebRequest = request
-                androidPermissions.launch(needed.toTypedArray())
+                ActivityCompat.requestPermissions(this@WebShellActivity, needed.toTypedArray(), WEB_PERMISSION_REQUEST)
             }
         }
 
         override fun onPermissionRequestCanceled(request: PermissionRequest) {
             if (pendingWebRequest === request) pendingWebRequest = null
         }
+
+        override fun onShowCustomView(view: View, callback: CustomViewCallback) = enterFullscreen(view, callback)
+
+        override fun onHideCustomView() = exitFullscreen()
     }
 
     private companion object {
         const val BRIDGE_NAME = "BeaconAndroid"
+        const val WEB_PERMISSION_REQUEST = 4101
     }
 }

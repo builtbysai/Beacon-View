@@ -18,6 +18,8 @@ export interface AndroidCameraState {
 export interface AndroidHello {
   app: 'android';
   camera: AndroidCameraState;
+  /** Phone alerts: on or off, and whether Firebase changed the token since this web app last registered it. */
+  push?: { enabled: boolean; stale: boolean };
   version: string;
 }
 
@@ -138,7 +140,16 @@ export function sendToAndroid<T = unknown>(
 
 export const androidApp = {
   disconnectCamera: () => sendToAndroid('disconnectCamera'),
+  /** Turns Firebase on and returns the token and installation id to register with the signed-in session. */
+  enablePush: () =>
+    sendToAndroid<{ installationId: string; token: string }>('enablePush'),
+  /** Turns phone alerts off; returns the subscription id the account should drop. */
+  disablePush: () =>
+    sendToAndroid<{ subscriptionId: string | null }>('disablePush'),
   hello: () => sendToAndroid<AndroidHello>('hello'),
+  /** Tells the app the token was registered, so it keeps showing alerts. */
+  pushEnabled: (subscriptionId: string) =>
+    sendToAndroid('pushEnabled', { subscriptionId }),
   openCameraScreen: () => sendToAndroid('openCameraScreen'),
   openUpdate: () => sendToAndroid('openUpdate'),
   setPrivacy: (enabled: boolean) => sendToAndroid('setPrivacy', { enabled }),
@@ -180,4 +191,42 @@ export function isNewerAndroidVersion(
     return xn !== null && yn !== null ? xn > yn : x > y;
   }
   return false;
+}
+
+/** A piece of a saved file: 96 KiB of bytes is 128 KiB of base64, well under the app's per-message limit. */
+const SAVE_PIECE_BYTES = 96 * 1024;
+
+function pieceToBase64(piece: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      resolve(
+        typeof reader.result === 'string'
+          ? (reader.result.split(',', 2)[1] ?? '')
+          : '',
+      );
+    reader.onerror = () => reject(reader.error ?? new Error('Read failed.'));
+    reader.readAsDataURL(piece);
+  });
+}
+
+/**
+ * Saves a file made in the page (a decrypted clip, a snapshot) to the phone's Downloads folder through the app, because
+ * a WebView cannot download a blob on its own. Nothing is uploaded: the pieces go from this page to the app on the phone.
+ */
+export async function saveBlobToAndroid(
+  blob: Blob,
+  name: string,
+): Promise<void> {
+  const { token } = await sendToAndroid<{ token: string }>('saveFileStart', {
+    mime: blob.type,
+    name,
+  });
+  for (let offset = 0; offset < blob.size; offset += SAVE_PIECE_BYTES) {
+    const data = await pieceToBase64(
+      blob.slice(offset, offset + SAVE_PIECE_BYTES),
+    );
+    await sendToAndroid('saveFileChunk', { data, token });
+  }
+  await sendToAndroid('saveFileEnd', { token });
 }

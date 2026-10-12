@@ -11,42 +11,22 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 /**
  * Android entry point for Firebase Cloud Messaging.
  *
- * Enrollment remains disabled until an authenticated user opts in. This service accepts only
+ * Delivery stays off until the signed-in person turns on phone alerts in Beacon. This service accepts only
  * Beacon's versioned, generic data categories and never trusts provider text for lock-screen copy.
  */
 class BeaconFirebaseMessagingService : FirebaseMessagingService() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     override fun onNewToken(firebaseMessagingToken: String) {
+        // The web app holds the signed-in session, so it registers the new token the next time Beacon opens.
         val consent = NotificationConsentStore(this)
-        val session = AccountSessionStore(this).read()
-        if (!consent.enabled || session == null) return
-        val beaconInstallationId =
-            getSharedPreferences("beacon_installation", MODE_PRIVATE)
-                .getString("installation_id", null) ?: return
-        scope.launch {
-            runCatching {
-                val id = BeaconApi(BuildConfig.BEACON_API_URL)
-                    .registerFcmSubscription(session.token, beaconInstallationId, firebaseMessagingToken)
-                consent.enable(id)
-            }
-        }
+        if (consent.enabled) consent.markTokenStale()
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
-        if (
-            !NotificationConsentStore(this).enabled ||
-                AccountSessionStore(this).read() == null ||
-                message.data["version"] != "1"
-        ) return
+        if (!NotificationConsentStore(this).enabled || message.data["version"] != "1") return
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
@@ -73,9 +53,9 @@ class BeaconFirebaseMessagingService : FirebaseMessagingService() {
         val eventId = message.data["eventId"]
         val intent =
             if (eventId != null && eventId.matches(EVENT_ID)) {
-                LaunchIntents.alertIntent(this, eventId)
+                LaunchLinks.alertIntent(this, eventId) ?: Intent(this, WebShellActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             } else {
-                Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                Intent(this, WebShellActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
         // One request code per alert, so a later alert never rewrites an earlier one's target.
         val pendingIntent = PendingIntent.getActivity(
