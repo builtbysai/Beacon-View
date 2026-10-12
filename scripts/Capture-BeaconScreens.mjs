@@ -63,6 +63,8 @@ const screens = {
     async (page) => page.getByRole('radio', { name: /^Computer/ }).click(),
   ],
   diagnostics: ['/diagnostics'],
+  // Signed out, with the one-time splash not yet seen: run with BEACON_QA_SIGNED_OUT=1.
+  landing: ['/'],
 };
 const wanted = process.argv.slice(2);
 const names = wanted.length ? wanted : Object.keys(screens);
@@ -80,6 +82,8 @@ for (const [width, height] of sizes) {
     reducedMotion: 'reduce',
     viewport: { width, height },
   });
+  const signedOut = process.env.BEACON_QA_SIGNED_OUT === '1';
+  if (signedOut) await context.addInitScript(() => (window.__qaLanding = true));
   await context.addInitScript(() => {
     window.WebSocket = class {
       close() {}
@@ -88,15 +92,21 @@ for (const [width, height] of sizes) {
     navigator.mediaDevices.getUserMedia = async () => {
       throw new DOMException('QA permission denied', 'NotAllowedError');
     };
-    localStorage.setItem('beacon.splash.seen.v1', 'true');
+    if (!window.__qaLanding)
+      localStorage.setItem('beacon.splash.seen.v1', 'true');
   });
   await context.route('**/api/**', async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     const data = routes[pathname];
+    const denied = signedOut && pathname === '/api/auth/me';
     await route.fulfill({
-      body: JSON.stringify(data || { error: 'Unmocked endpoint' }),
+      body: JSON.stringify(
+        denied
+          ? { error: 'Authentication required' }
+          : data || { error: 'Unmocked endpoint' },
+      ),
       contentType: 'application/json',
-      status: data ? 200 : 404,
+      status: denied ? 401 : data ? 200 : 404,
     });
   });
   await context.route('**/downloads/manifest.json', (route) =>
@@ -115,7 +125,7 @@ for (const [width, height] of sizes) {
     await entry[1]?.(page);
     await page.waitForTimeout(600);
     const file = path.join(out, `${name}-${width}.png`);
-    await page.screenshot({ fullPage: false, path: file });
+    await page.screenshot({ fullPage: name === 'landing', path: file });
     console.log(file);
   }
   await context.close();

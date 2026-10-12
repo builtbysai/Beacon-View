@@ -223,6 +223,20 @@ ipcMain.handle('beacon:set-autostart', (event, enabled: unknown) => {
   return getOpenAtLogin();
 });
 
+// --- Updates, for the Settings page (ADR 0118) ------------------------------
+
+ipcMain.handle('beacon:get-update-status', (event) =>
+  trustedSender(event) ? (updater?.status() ?? null) : null,
+);
+
+ipcMain.handle('beacon:check-for-updates', async (event) =>
+  trustedSender(event) ? ((await updater?.checkNow()) ?? null) : null,
+);
+
+ipcMain.handle('beacon:install-update', (event) => {
+  if (trustedSender(event)) updater?.installNow();
+});
+
 // --- Desktop alerts (ADR 0083) ----------------------------------------------
 
 ipcMain.on('beacon:show-alert', (event, value: unknown) => {
@@ -679,6 +693,7 @@ if (!app.requestSingleInstanceLock()) {
       }),
       offer: (offer) => tray?.setUpdate(offer),
       openDownloadPage: () => openExternal(appUrl('/#download')),
+      version: () => app.getVersion(),
     });
     updater.start();
     const installerSetup = takePendingInstallerSetup(app.getPath('userData'));

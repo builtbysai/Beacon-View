@@ -3,6 +3,8 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type { IconName } from './Icon';
 
 import { AccessHistory } from './AccessHistory';
+import { AppDownloads } from './AppDownloads';
+import { UpdateStatusCard } from './UpdateStatusCard';
 import { Avatar } from './Avatar';
 import { AudioSettings } from './AudioSettings';
 import { ViewingSettings } from './ViewingSettings';
@@ -46,6 +48,7 @@ type SettingsSection =
   | 'computer'
   | 'audio'
   | 'viewing'
+  | 'apps'
   | 'modes'
   | 'notifications'
   | 'access'
@@ -65,7 +68,10 @@ const legacySectionAliases: Record<string, string> = {
 const sectionGroups: Array<{ label: string; sections: SettingsSection[] }> = [
   { label: 'Household', sections: ['household', 'access', 'modes'] },
   { label: 'Alerts & storage', sections: ['notifications', 'data'] },
-  { label: 'This device', sections: ['computer', 'audio', 'viewing'] },
+  {
+    label: 'This device',
+    sections: ['computer', 'audio', 'viewing', 'apps'],
+  },
   { label: 'Account', sections: ['account', 'security', 'privacy'] },
 ];
 
@@ -75,6 +81,7 @@ const sectionInfo: Record<SettingsSection, { label: string; icon: IconName }> =
     computer: { label: 'This computer', icon: 'browser' },
     audio: { label: 'Audio', icon: 'speaker' },
     viewing: { label: 'Viewing', icon: 'eye' },
+    apps: { label: 'Apps & updates', icon: 'download' },
     modes: { label: 'Home & Away', icon: 'home' },
     notifications: { label: 'Notifications', icon: 'alert' },
     access: { label: 'People & access', icon: 'users' },
@@ -108,6 +115,10 @@ const sectionText: Record<SettingsSection, [string, string]> = {
   ],
   audio: ['Audio', 'Choose the microphone you use to talk through cameras.'],
   viewing: ['Viewing', 'How this device watches your cameras.'],
+  apps: [
+    'Apps & updates',
+    'Get Beacon on your other devices and keep this one up to date.',
+  ],
   account: ['Account', 'Manage how you sign in and your Beacon account.'],
   security: [
     'Security',
@@ -157,6 +168,7 @@ export function SettingsPage({
       computer: desktopApp,
       audio: true,
       viewing: true,
+      apps: true,
       account: true,
       security: manager,
       privacy: true,
@@ -316,6 +328,12 @@ export function SettingsPage({
       <>
         <BrowserSessions onCurrentRevoked={onCurrentSessionRevoked} />
         <AccessHistory currentEmail={user.email} />
+      </>
+    ),
+    apps: (
+      <>
+        <UpdateStatusCard />
+        <AppDownloads variant="app" />
       </>
     ),
     account: (

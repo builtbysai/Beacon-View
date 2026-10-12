@@ -1,0 +1,43 @@
+.update-banner {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 12px 10px 16px;
+  color: var(--text-primary);
+  font-size: 13px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  box-shadow: 0 8px 28px rgba(16, 24, 40, 0.18);
+  transform: translateX(-50%);
+}
+.update-banner button {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 650;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.update-banner .primary {
+  color: #fff;
+  background: var(--accent-base);
+  border: 0;
+}
+.update-banner .quiet {
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+}
+@media (max-width: 480px) {
+  .update-banner {
+    width: calc(100vw - 32px);
+    justify-content: space-between;
+    border-radius: 16px;
+  }
+}

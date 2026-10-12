@@ -222,6 +222,7 @@ internal fun ColumnScope.MonitorSettingsPage(
                     onAuthorizationLost = expireSession,
                 )
             }
+            BeaconPanel(modifier = Modifier.fillMaxWidth()) { AppVersionRow() }
             BeaconPanel(modifier = Modifier.fillMaxWidth()) {
                 Text("Delete account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(

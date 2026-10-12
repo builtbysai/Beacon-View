@@ -857,6 +857,7 @@ internal fun MonitorHome(
                     },
                 )
             } else {
+                AppUpdateBanner()
                 DriveExpiredBanner(api, currentSession.token, currentSession.householdRole == "owner")
                 when (monitorPage) {
                 MonitorPage.Home -> MonitorHomePage(state, currentSession)

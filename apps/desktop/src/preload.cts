@@ -20,6 +20,15 @@ electron.contextBridge.exposeInMainWorld(
         enabled === true,
       ) as Promise<boolean>;
     },
+    getUpdateStatus(): Promise<unknown> {
+      return ipcRenderer.invoke('beacon:get-update-status');
+    },
+    checkForUpdates(): Promise<unknown> {
+      return ipcRenderer.invoke('beacon:check-for-updates');
+    },
+    installUpdate(): Promise<void> {
+      return ipcRenderer.invoke('beacon:install-update') as Promise<void>;
+    },
     setCameraActivity(activity: unknown): void {
       if (activity === 'off' || activity === 'standby' || activity === 'live')
         ipcRenderer.send('beacon:camera-activity', activity);

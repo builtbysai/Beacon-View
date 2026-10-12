@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { markBusy } from './busy';
 import { useCastToTv } from './cast-sender';
 import { Icon, type IconName } from './Icon';
 import { LiveViewerMenu, type ViewerMenuGroup } from './LiveViewerMenu';
@@ -181,6 +182,11 @@ export function LiveVideo({
 }) {
   const sleep = useSleepTimer(camera.id);
   const enabled = requestedEnabled && !sleep.expired;
+  // A reload would cut off a live view (the update manager waits, ADR 0118).
+  useEffect(
+    () => (!compact && enabled ? markBusy('live view') : undefined),
+    [compact, enabled],
+  );
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
