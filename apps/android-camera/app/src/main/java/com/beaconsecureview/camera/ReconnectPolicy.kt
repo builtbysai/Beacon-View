@@ -1,6 +1,5 @@
 package com.beaconsecureview.camera
 
-const val MAX_SIGNALING_RETRIES = 5
 const val STABLE_CONNECTION_MILLIS = 10_000L
 
 class RetryGate {

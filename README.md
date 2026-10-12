@@ -14,7 +14,7 @@ The camera device always shows when it is capturing, and privacy mode stops capt
 
 ## What is here
 
-- `apps/android-camera`: the Kotlin/Compose camera and viewer app (CameraX and WebRTC)
+- `apps/android-camera`: the Android app: a native camera agent (CameraX and WebRTC) plus a WebView that hosts the web app (ADR 0121)
 - `apps/web-viewer`: the React web app and installable PWA (dashboard, live view, activity, clips, settings, Camera Mode)
 - `apps/desktop`: the Electron app for Windows, macOS and Linux (background camera, alerts, signed updates)
 - `apps/backend`: the Fastify API, WebSocket signaling and PostgreSQL schema

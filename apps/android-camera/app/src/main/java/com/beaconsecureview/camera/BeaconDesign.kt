@@ -41,25 +41,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// These semantic values mirror the web viewer tokens so the Monitor keeps the
-// same visual language without depending on the web implementation.
-internal val BeaconLightColorScheme =
-    lightColorScheme(
-        primary = Color(0xFF2563EB),
-        onPrimary = Color.White,
-        primaryContainer = Color(0xFFEFF6FF),
-        onPrimaryContainer = Color(0xFF1D4ED8),
-        secondary = Color(0xFF4B5563),
-        background = Color(0xFFF9FAFB),
-        surface = Color.White,
-        surfaceVariant = Color(0xFFF3F4F6),
-        onSurface = Color(0xFF111827),
-        onSurfaceVariant = Color(0xFF4B5563),
-        outline = Color(0xFFD1D5DB),
-        outlineVariant = Color(0xFFE5E7EB),
-        error = Color(0xFFDC2626),
-    )
-
 internal val BeaconDarkColorScheme =
     darkColorScheme(
         primary = Color(0xFF3B82F6),
@@ -82,37 +63,8 @@ internal val BeaconOnline = Color(0xFF047857)
 internal val BeaconPrivacy = Color(0xFF7C3AED)
 internal val BeaconWarning = Color(0xFFB45309)
 internal val BeaconOffline = Color(0xFF64748B)
-internal val BeaconHero = Color(0xFF18181B)
-internal val BeaconHeroEnd = Color(0xFF27272A)
 internal val BeaconCanvas = Color(0xFF09090B)
-internal val BeaconAction = Color(0xFF2563EB)
 internal val BeaconActionBright = Color(0xFF60A5FA)
-internal val BeaconHeroSupporting = Color(0xFFA1A1AA)
-internal val BeaconVideoOverlay = Color(0xE009090B)
-internal val BeaconVideoControl = Color(0xFF27272A)
-internal val BeaconVideoMuted = Color(0xFFA1A1AA)
-
-/** Mirrors the PWA's `--space-*` scale instead of scattering unrelated dp values. */
-internal object BeaconSpacing {
-    val Xs = 4.dp
-    val Sm = 8.dp
-    val Md = 12.dp
-    val Lg = 16.dp
-    val Xl = 24.dp
-    val Xxl = 32.dp
-    val Xxxl = 48.dp
-    val Huge = 64.dp
-}
-
-internal object BeaconRadii {
-    val Sm = 4.dp
-    val Md = 8.dp
-    val Lg = 12.dp
-    val Full = 999.dp
-}
-
-internal enum class BeaconThemePreference { Light, System, Dark }
-
 @OptIn(ExperimentalTextApi::class)
 private val BeaconInter =
     FontFamily(
@@ -151,39 +103,6 @@ internal val BeaconShapes =
     )
 
 @Composable
-internal fun BeaconWordmark(
-    modifier: Modifier = Modifier,
-    compact: Boolean = false,
-) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_beacon_mark),
-            contentDescription = null,
-            tint = Color.Unspecified,
-            modifier = Modifier.size(if (compact) 24.dp else 28.dp),
-        )
-        Text(
-            "Beacon",
-            color = MaterialTheme.colorScheme.onSurface,
-            style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.ExtraBold,
-        )
-        if (!compact) {
-            Text(
-                "View",
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-    }
-}
-
-@Composable
 internal fun BeaconPageHeader(
     eyebrow: String,
     title: String,
@@ -205,45 +124,6 @@ internal fun BeaconPageHeader(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-    }
-}
-
-@Composable
-internal fun BeaconSectionHeader(
-    title: String,
-    supportingText: String,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier.fillMaxWidth().padding(top = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-        Text(
-            supportingText,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-internal fun BeaconHeroPanel(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    Column(
-        modifier =
-            modifier
-                .background(
-                    Brush.linearGradient(listOf(BeaconHeroEnd, BeaconHero)),
-                    RoundedCornerShape(16.dp),
-                )
-                .border(1.dp, Color(0xFF3F3F46), RoundedCornerShape(16.dp))
-                .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        content()
     }
 }
 
@@ -310,47 +190,6 @@ internal fun BeaconStatusPill(
 }
 
 @Composable
-internal fun BeaconMetric(
-    value: String,
-    label: String,
-    icon: ImageVector? = null,
-    color: Color = MaterialTheme.colorScheme.primary,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            if (icon != null) {
-                Surface(shape = RoundedCornerShape(10.dp), color = color.copy(alpha = 0.13f)) {
-                    Icon(icon, null, tint = color, modifier = Modifier.padding(8.dp).size(20.dp))
-                }
-            }
-            Column {
-                Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
-                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-/** A plain label/value row -- shared between the Activity feed's detail
- * dialog and the Camera Device Settings screen's device-information list. */
-@Composable
-internal fun BeaconFactRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
 internal fun BeaconTrustLine(
     text: String,
     modifier: Modifier = Modifier,
@@ -365,33 +204,9 @@ internal fun BeaconTrustLine(
     }
 }
 
-/** Mirrors one row of the PWA Privacy section's `privacy-settings-facts`:
- * a bold one-line label plus a short explanation. */
-@Composable
-internal fun BeaconPrivacyFact(
-    label: String,
-    detail: String,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-        Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-    }
-}
-
-@Composable
-internal fun BeaconTrustBadge(
-    icon: ImageVector,
-    text: String,
-    modifier: Modifier = Modifier,
-    textColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
-) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(17.dp))
-        Text(text, style = MaterialTheme.typography.labelMedium, color = textColor)
-    }
+internal object BeaconRadii {
+    val Sm = 4.dp
+    val Md = 8.dp
+    val Lg = 12.dp
+    val Full = 999.dp
 }

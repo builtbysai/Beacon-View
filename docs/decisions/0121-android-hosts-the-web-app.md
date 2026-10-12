@@ -83,3 +83,11 @@ from inside the WebView so the session cookie lands there.
 3. **Google sign-in** through the system browser.
 4. **Remove** the native monitor UI and its tests; keep the camera agent.
 5. **Ship** as the next alpha with device-checked notes.
+
+### Stage status
+
+1. Spike: done (emulator, 2026-10-12).
+2. Bridge and camera: done and checked on emulators (sign-in, dashboard, live view, This phone settings, Add device to native camera, push, downloads, deep links).
+3. Google sign-in through the system browser: done (PKCE hand-off, `beaconsecureview://auth/desktop`).
+4. Native monitor UI removed; the camera agent, pairing, privacy, push delivery and update check remain.
+5. Ship: pending. The web app is deployed first, then the APK is built with `BEACON_RELEASE_API_URL`/`BEACON_RELEASE_WEB_URL` set, and checked on a real phone.
