@@ -91,3 +91,7 @@ from inside the WebView so the session cookie lands there.
 3. Google sign-in through the system browser: done (PKCE hand-off, `beaconsecureview://auth/desktop`).
 4. Native monitor UI removed; the camera agent, pairing, privacy, push delivery and update check remain.
 5. Ship: pending. The web app is deployed first, then the APK is built with `BEACON_RELEASE_API_URL`/`BEACON_RELEASE_WEB_URL` set, and checked on a real phone.
+
+### Picture in picture (added after alpha15)
+
+A WebView cannot float a video, so the app floats its whole window (`enterPip`) and the page, told by the `pip` event, shows only the picture while the window is small (`html.android-pip`). The live view arms `pipReady` so the window also floats on its own when the person leaves the app, as it does in a browser. Checked on an emulator; the picture itself needs a real camera to confirm.

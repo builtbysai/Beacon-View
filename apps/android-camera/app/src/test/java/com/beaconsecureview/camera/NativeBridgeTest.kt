@@ -52,6 +52,18 @@ class NativeBridgeTest {
             done(disabledSubscription)
         }
 
+        override var pipSupported = true
+        var pipEntered = true
+
+        override fun enterPip(): Boolean {
+            calls += "enterPip"
+            return pipEntered
+        }
+
+        override fun setPipReady(ready: Boolean) {
+            calls += "pipReady:$ready"
+        }
+
         override fun saveFileStart(name: String, mime: String): String? {
             calls += "saveStart:$name:$mime"
             return "123e4567-e89b-12d3-a456-426614174000"
@@ -100,6 +112,19 @@ class NativeBridgeTest {
             listOf("start:ABCD234567", "privacy:true", "open", "disconnect", "update", "pushEnabled:sub-12345678"),
             host.calls,
         )
+    }
+
+    @Test
+    fun floatingTheVideoIsRefusedWhenThePhoneCannotDoIt() {
+        assertTrue(JSONObject(send("""{"id":"a","type":"hello"}""")!!).getJSONObject("data").getBoolean("pip"))
+        assertTrue(JSONObject(send("""{"id":"b","type":"enterPip"}""")!!).getBoolean("ok"))
+        send("""{"id":"c","type":"pipReady","ready":true}""")
+        assertNull(send("""{"id":"d","type":"pipReady","ready":"yes"}"""))
+        host.pipEntered = false
+        assertFalse(JSONObject(send("""{"id":"e","type":"enterPip"}""")!!).getBoolean("ok"))
+        host.pipSupported = false
+        assertFalse(JSONObject(send("""{"id":"f","type":"enterPip"}""")!!).getBoolean("ok"))
+        assertEquals(listOf("enterPip", "pipReady:true", "enterPip"), host.calls)
     }
 
     @Test

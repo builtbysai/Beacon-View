@@ -34,6 +34,15 @@ internal class NativeBridge(private val host: Host) {
         /** Turns alerts off; [done] gets the subscription id the web app should remove (or null). */
         fun disablePush(done: (Result<String?>) -> Unit)
 
+        /** Whether this phone can float a video (Android 8 and newer). */
+        val pipSupported: Boolean
+
+        /** Floats the live video now; false when it cannot. */
+        fun enterPip(): Boolean
+
+        /** Float on its own when the person leaves the app, while [ready]. */
+        fun setPipReady(ready: Boolean)
+
         /** Starts saving a file; returns the token for its pieces, or null when it cannot be saved. */
         fun saveFileStart(name: String, mime: String): String?
 
@@ -55,7 +64,8 @@ internal class NativeBridge(private val host: Host) {
                         .put("app", "android")
                         .put("version", host.appVersion)
                         .put("camera", host.cameraState())
-                        .put("push", host.pushState()),
+                        .put("push", host.pushState())
+                        .put("pip", host.pipSupported),
                 )
             is BridgeRequest.StartCamera -> {
                 host.startCamera(request.code)
@@ -95,6 +105,16 @@ internal class NativeBridge(private val host: Host) {
                         onFailure = { respond(NativeBridgeProtocol.failure(id, "Alerts could not be turned off.")) },
                     )
                 }
+            BridgeRequest.EnterPip ->
+                if (host.pipSupported && host.enterPip()) {
+                    ok()
+                } else {
+                    respond(NativeBridgeProtocol.failure(id, "The video could not float."))
+                }
+            is BridgeRequest.PipReady -> {
+                host.setPipReady(request.ready)
+                ok()
+            }
             is BridgeRequest.SaveFileStart ->
                 host.saveFileStart(request.name, request.mime)
                     ?.let { ok(JSONObject().put("token", it)) }

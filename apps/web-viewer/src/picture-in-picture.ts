@@ -1,5 +1,7 @@
 import { type RefObject, useCallback, useEffect, useState } from 'react';
 
+import { androidApp, isAndroidApp, onAndroidPip } from './android-shell';
+
 /** Safari's older presentation-mode API (iPhone/iPad and macOS Safari). */
 interface WebKitVideo extends HTMLVideoElement {
   webkitPresentationMode?: 'inline' | 'picture-in-picture' | 'fullscreen';
@@ -81,6 +83,35 @@ export function usePictureInPicture(
   const [supported, setSupported] = useState(false);
   const [active, setActive] = useState(false);
   const [error, setError] = useState('');
+  // Inside the Android app the page cannot float a video itself; the app floats the whole window instead (ADR 0121)
+  // and the page shows only the picture while it is small.
+  const [inApp, setInApp] = useState(false);
+
+  useEffect(() => {
+    if (!enabled || !isAndroidApp()) return;
+    let current = true;
+    void androidApp.hello().then(
+      (hello) => current && setInApp(hello.pip === true),
+      () => undefined,
+    );
+    const stop = onAndroidPip((open) => {
+      setActive(open);
+      document.documentElement.classList.toggle('android-pip', open);
+    });
+    return () => {
+      current = false;
+      stop();
+      document.documentElement.classList.remove('android-pip');
+    };
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!inApp || !enabled || !auto) return;
+    void androidApp.pipReady(true).catch(() => undefined);
+    return () => {
+      void androidApp.pipReady(false).catch(() => undefined);
+    };
+  }, [auto, enabled, inApp]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -158,13 +189,22 @@ export function usePictureInPicture(
     const video = videoRef.current;
     if (!video) return;
     setError('');
+    if (inApp) {
+      if (!active)
+        void androidApp
+          .enterPip()
+          .catch(() =>
+            setError('The video couldn’t open in a floating window.'),
+          );
+      return;
+    }
     const attempt = isInPictureInPicture(video) ? exit(video) : enter(video);
     void attempt.catch(() =>
       setError(
         'The video couldn’t open in a floating window. Wait for it to start playing, then try again.',
       ),
     );
-  }, [videoRef]);
+  }, [active, inApp, videoRef]);
 
-  return { active, error, supported, toggle };
+  return { active, error, supported: supported || inApp, toggle };
 }

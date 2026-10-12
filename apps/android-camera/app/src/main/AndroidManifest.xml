@@ -84,7 +84,8 @@
             android:name=".WebShellActivity"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboardHidden"
             android:exported="true"
-            android:launchMode="singleTask">
+            android:launchMode="singleTask"
+            android:supportsPictureInPicture="true">
             <!-- Google sign-in returns here from the system browser with a one-time code that only this app can redeem
                  (it is bound to a PKCE verifier the app never shares). Nothing else is exported. -->
             <intent-filter>
