@@ -30,14 +30,6 @@ enum class CameraSourceLifecycle {
     Error,
 }
 
-enum class ViewerLifecycle {
-    Disconnected,
-    Watching,
-    Paused,
-    Background,
-    Recording,
-}
-
 enum class PairingLifecycle {
     Pending,
     Waiting,

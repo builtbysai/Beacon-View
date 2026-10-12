@@ -1,3 +1,4 @@
+import { isAndroidApp, saveBlobToAndroid } from './android-shell';
 /**
  * Snapshot of a live view (ADR 0090). The picture is drawn from the video the
  * person is already watching and saved as a file on their own device.
@@ -61,6 +62,11 @@ export function captureSnapshot(video: HTMLVideoElement): Promise<Blob> {
 
 /** Saves a blob through the browser's normal download. */
 export function saveBlob(blob: Blob, fileName: string): void {
+  // A WebView cannot download a blob; the Android app saves it to Downloads instead (ADR 0121).
+  if (isAndroidApp()) {
+    void saveBlobToAndroid(blob, fileName).catch(() => undefined);
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

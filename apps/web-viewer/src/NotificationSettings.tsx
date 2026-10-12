@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { request } from './api';
 import { friendlyError } from './friendly-errors';
+import { registerAndroidAlerts, removeAndroidAlerts } from './android-push';
+import { androidApp, isAndroidApp } from './android-shell';
 import { desktopSupportsAlerts, isDesktopShell } from './desktop-shell';
 import { useSettingsAutosave } from './SettingsAutosave';
 import { SettingsRow } from './SettingsUI';
@@ -49,6 +51,11 @@ function installationId(): string {
 }
 
 export async function disableWebNotifications(): Promise<void> {
+  // Inside the Android app, alerts are the app's own (Firebase), not a browser push subscription.
+  if (isAndroidApp()) {
+    await removeAndroidAlerts().catch(() => undefined);
+    return;
+  }
   if ('serviceWorker' in navigator) {
     const registration = await navigator.serviceWorker.getRegistration('/');
     await (
@@ -86,8 +93,11 @@ export function NotificationSettings({
   // (ADR 0083); older ones honestly report alerts as unavailable.
   const desktopShell = isDesktopShell();
   const desktopAlerts = desktopSupportsAlerts();
-  const webPushAvailable = serverWebPushAvailable && !desktopShell;
-  const channelAvailable = desktopAlerts || webPushAvailable;
+  // The Android app has its own alert channel (Firebase), run through the app (ADR 0121).
+  const androidAlerts = isAndroidApp();
+  const webPushAvailable =
+    serverWebPushAvailable && !desktopShell && !androidAlerts;
+  const channelAvailable = desktopAlerts || webPushAvailable || androidAlerts;
   const { run } = useSettingsAutosave();
   const [preferences, setPreferences] = useState<Preference[] | null>(null);
   const [enabled, setEnabled] = useState(
@@ -121,7 +131,12 @@ export function NotificationSettings({
 
   useEffect(() => {
     loadPreferences();
-    if (!desktopShell && 'serviceWorker' in navigator) {
+    if (androidAlerts) {
+      void androidApp.hello().then(
+        (hello) => setEnabled(hello.push?.enabled === true),
+        () => setEnabled(false),
+      );
+    } else if (!desktopShell && 'serviceWorker' in navigator) {
       void navigator.serviceWorker
         .getRegistration('/')
         .then(async (registration) => {
@@ -162,6 +177,11 @@ export function NotificationSettings({
     setChannelBusy(true);
     setChannelError('');
     try {
+      if (androidAlerts) {
+        await registerAndroidAlerts();
+        setEnabled(true);
+        return;
+      }
       if (desktopAlerts) {
         await enableDesktopAlerts();
         setEnabled(true);
@@ -213,7 +233,8 @@ export function NotificationSettings({
     setChannelBusy(true);
     setChannelError('');
     try {
-      if (desktopAlerts) await disableDesktopAlerts();
+      if (androidAlerts) await removeAndroidAlerts();
+      else if (desktopAlerts) await disableDesktopAlerts();
       else await disableWebNotifications();
       setEnabled(false);
     } finally {
@@ -308,13 +329,21 @@ export function NotificationSettings({
   return (
     <div className="notification-settings">
       <SettingsRow
-        title={desktopShell ? 'Desktop alerts' : 'Browser notifications'}
-        description={
-          desktopAlerts
-            ? 'Show private Beacon alerts on this computer, even while the window is closed.'
+        title={
+          androidAlerts
+            ? 'Phone alerts'
             : desktopShell
-              ? 'Update the Beacon desktop app to receive alerts here, or turn them on in Chrome, Edge, or the Android app.'
-              : 'Receive private Beacon alerts on this browser.'
+              ? 'Desktop alerts'
+              : 'Browser notifications'
+        }
+        description={
+          androidAlerts
+            ? 'Show private Beacon alerts on this phone, even while the app is closed.'
+            : desktopAlerts
+              ? 'Show private Beacon alerts on this computer, even while the window is closed.'
+              : desktopShell
+                ? 'Update the Beacon desktop app to receive alerts here, or turn them on in Chrome, Edge, or the Android app.'
+                : 'Receive private Beacon alerts on this browser.'
         }
       >
         <div className="notification-channel-action">

@@ -132,6 +132,14 @@ android {
             require(beaconApiUrl.startsWith("https://")) {
                 "Release Beacon API URL must use https://"
             }
+            // A signed release with the placeholder address cannot reach any server: refuse to build one (alpha11 to
+            // alpha13 were published that way). Unsigned CI builds keep the placeholder.
+            require(
+                beaconApiUrl != "https://invalid.beacon.local" ||
+                    providers.environmentVariable("BEACON_UPLOAD_KEYSTORE").orNull == null,
+            ) {
+                "Set BEACON_RELEASE_API_URL (https://beacon.builtbysai.com) before building a signed release."
+            }
             buildConfigField("String", "BEACON_API_URL", "\"$beaconApiUrl\"")
             val beaconWebUrl =
                 providers.gradleProperty("beaconReleaseWebUrl")
@@ -172,6 +180,7 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
     implementation("androidx.activity:activity-compose:1.10.0")
+    implementation("androidx.webkit:webkit:1.12.1")
     implementation("androidx.camera:camera-camera2:1.4.2")
     implementation("androidx.camera:camera-lifecycle:1.4.2")
     implementation("androidx.camera:camera-video:1.4.2")

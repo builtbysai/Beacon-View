@@ -8,12 +8,7 @@ household event WebSocket keeps browser camera state current without polling.
 
 ## Application module boundaries
 
-Android's activity is a composition root for lifecycle, permissions, inbound links,
-and top-level mode. Camera-device presentation lives in `CameraModeUi`; native monitor
-state coordination, reusable components, navigation, presentation rules, and playback
-have separate modules. Capture, signaling, credentials, and runtime state remain
-independent services. UI modules may request actions but do not own camera or microphone
-lifetime.
+The Android app has two parts (ADR 0121). The viewer is the web app itself, hosted in a locked-down WebView (`WebShellActivity`, `WebShellPolicy`) that exposes one origin-restricted message bridge (`NativeBridge`, `NativeBridgeProtocol`) for the things a page cannot do: starting the camera, privacy, push registration, saving files, Google sign-in hand-off. The camera agent stays native: capture, signaling, credentials and runtime state are independent services, and `CameraModeUi` is the camera-device screen that keeps capture visible. UI modules may request actions but do not own camera or microphone lifetime.
 
 The web application shell coordinates authenticated routing and cross-feature realtime
 state. Public authentication-return, pairing, trust, diagnostics, and device-guidance

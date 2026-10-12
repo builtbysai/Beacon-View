@@ -43,6 +43,8 @@ Play Console or a private key, so it cannot be done from the repository.
    $env:BEACON_UPLOAD_KEY_ALIAS = 'beacon-upload'
    $env:BEACON_UPLOAD_KEY_PASSWORD = '...'
    $env:BEACON_RELEASE_API_URL = 'https://beacon.builtbysai.com'
+   # Required: a signed release without it is refused (the placeholder address cannot reach any server).
+   $env:BEACON_RELEASE_WEB_URL = 'https://beacon.builtbysai.com'
    apps/android-camera/gradlew.bat -p apps/android-camera :app:bundleRelease `
      -PbeaconVersionCode=2 -PbeaconVersionName=0.1.0
    ```
