@@ -6,7 +6,6 @@ coverage
 **/build
 pnpm-lock.yaml
 AGENTS.md
-docs/AGENTS.md
 docs/product-build-brief.md
 
 # Drizzle generated snapshots

@@ -1,99 +1,58 @@
 # Beacon View
 
-Beacon View is a device-agnostic camera platform. Android devices and
-attended HTTPS browsers can produce video; responsive browsers can view it; and
-one device may expose several independently named camera sources.
+Beacon View turns a spare Android phone, tablet or computer into a private security camera you can watch from any
+browser, phone or computer. Live video goes device to viewer over WebRTC; the server only introduces the two sides,
+relays when a direct path is impossible, and keeps the account, household and settings. Clips exist only if you turn
+them on, and they are encrypted and stored in your own Google Drive.
 
-Beacon View is an Android-first system intended to turn an unused Android
-phone into a remotely accessible smart security camera. The current foundation
-includes secure pairing, foreground-service camera readiness, authorized
-multi-viewer WebRTC, multiple sources per device, responsive device management,
-local multi-camera monitoring workspaces, explicit Listen controls, a single-owner
-web-to-Android talk path, Android privacy mode, and on-device motion metadata.
-Later approved milestones add opt-in encrypted short clips exported to user-owned
-Google Drive, notification transport, household sharing, and an Electron desktop
-client. Trained object detection remains experimental foundation work.
-The [roadmap](docs/roadmap.md) records the remaining release acceptance gates.
+The camera device always shows when it is capturing, and privacy mode stops capture immediately. See the
+[threat model](docs/threat-model.md) and [SECURITY.md](SECURITY.md).
 
 <p align="center">
   <img src="assets/architecture.svg" width="900" alt="Beacon View system architecture: Android camera client, Fastify backend, React web viewer">
 </p>
 
-Development follows the [testing policy](docs/testing-policy.md): protect realistic
-regressions with the smallest useful suite. Per-feature behaviour notes live in
-[docs/feature-notes.md](docs/feature-notes.md).
+## What is here
 
-## Repository layout
+- `apps/android-camera`: the Kotlin/Compose camera and viewer app (CameraX and WebRTC)
+- `apps/web-viewer`: the React web app and installable PWA (dashboard, live view, activity, clips, settings, Camera Mode)
+- `apps/desktop`: the Electron app for Windows, macOS and Linux (background camera, alerts, signed updates)
+- `apps/backend`: the Fastify API, WebSocket signaling and PostgreSQL schema
+- `packages/shared-types`, `packages/config`: shared TypeScript contracts and configuration
+- `infrastructure`: local PostgreSQL and Coturn, and the Oracle Cloud deployment (Compose, Caddy, backups, monitor)
+- `docs`: design, security, testing and operations; decisions are in [docs/decisions](docs/decisions) and per-feature notes in [docs/feature-notes.md](docs/feature-notes.md)
 
-- `apps/android-camera` — Kotlin/Compose CameraX and WebRTC camera client
-- `apps/backend` — Fastify API, authorized WebSocket signaling, and PostgreSQL
-- `apps/web-viewer` — React account, camera, and browser WebRTC interface
-- `packages/shared-types` — platform-neutral TypeScript contracts
-- `packages/config` — shared TypeScript configuration
-- `infrastructure` — loopback-only local PostgreSQL and Coturn
-- `docs` — architecture, security, testing, and development guidance
+## Develop
 
-## Quick start on Windows
+Node 22, pnpm 11.9.0 and Docker are needed (a JDK and the Android SDK for the Android app).
 
-Prerequisites are Node.js 22.13+ within Node 22, pnpm 11.9.0, and Docker
-Compose. JDK 17 and Android SDK 35 are needed for Android.
-
-```powershell
-.\Start-Beacon.ps1
+```sh
+pnpm install --frozen-lockfile
+cp apps/backend/.env.example apps/backend/.env
+docker compose -f infrastructure/docker/compose.yaml up -d
+pnpm --filter @beacon/backend db:migrate
+pnpm dev
+pnpm check
 ```
 
-Stop and validate with:
+[Local development](docs/local-development.md) covers the test database, Android, a physical phone over HTTPS and
+the desktop app. Follow the [testing policy](docs/testing-policy.md). The [roadmap](docs/roadmap.md) is the current
+scope; [AGENTS.md](AGENTS.md) holds the working rules for contributors and coding agents.
 
-```powershell
-.\Stop-Beacon.ps1
-.\Test-Beacon.ps1
-```
+## Operate
 
-The launcher installs pinned dependencies, creates missing local configuration,
-starts Docker services, applies migrations, starts HTTPS/WSS LAN development,
-and opens Beacon. See the [Windows quick start](docs/quick-start.md) for Android
-installation and useful options, or
-[local development](docs/local-development.md) for lower-level commands. This
-project is not production-ready.
+[Release procedure](docs/release-procedure.md), [outage and recovery runbook](docs/runbook-outage-and-recovery.md),
+[Oracle Cloud deployment](docs/oracle-cloud-staging.md) and [Android release](docs/android-release.md).
 
-For the recommended local/GitHub workflow, see the
-[development handoff](docs/development-handoff.md). GitHub is the source of
-truth; work on a `codex/*` feature branch, open a pull request, and merge to
-`main` only after CI passes. Automatic Oracle deployment is currently disabled;
-an owner-authorized release deploys the exact validated merged commit using the
-[release-directory procedure](docs/github-web-deployment.md).
+## Status
 
-## Product surfaces
-
-- Dashboard: `/`
-- Cameras (list view, or a grid view for watching several at once): `/cameras`
-- Devices: `/devices`
-- Browser Camera Mode: `/camera-mode`
-- Development diagnostics: `/diagnostics`
-
-The web viewer is also an installable PWA (manifest, generated icons, and an
-app-shell-only service worker at `apps/web-viewer/public/sw.js`); it never
-caches `/api/*` or the events WebSocket.
-
-Browser Camera Mode requires explicit permission and trusted HTTPS. It is for
-attended use because browsers may throttle background tabs. See
-[Browser Camera Mode](docs/browser-camera-mode.md),
-[multi-camera architecture](docs/multi-camera-architecture.md), and
-[multi-viewer testing](docs/multi-viewer-testing.md).
-
-The current foundation establishes independent multi-camera tiles and local
-workspace layouts in addition to resilient producer reconnect, device/camera
-separation, browser producers, independent multi-viewer sessions, privacy mode,
-and one-way camera audio. Recording, motion/events, notifications, distributed
-presence/signaling, production deployment, SFU fan-out, iOS/desktop agents, and
-IP-camera adapters remain future roadmap work.
-
----
-
-_Built by [Hans Sai](https://builtbysai.com)._
+A private alpha. It is not yet a finished consumer product: the Windows and Mac apps are not code-signed, the Android
+app is distributed as a signed file from the website rather than through Google Play, and iOS is supported only as a
+web app.
 
 ## License
 
 Beacon View is licensed under the [GNU Affero General Public License v3.0](LICENSE). If you run a modified version
-as a network service, the AGPL requires you to offer your users the source of your changes. To report a security
-problem, see [SECURITY.md](SECURITY.md).
+as a network service, the AGPL requires you to offer your users the source of your changes.
+
+_Built by [Hans Sai](https://builtbysai.com)._

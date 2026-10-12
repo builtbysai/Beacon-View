@@ -9,12 +9,8 @@ The historical validation records below are evidence logs, not coverage targets.
 and all TypeScript builds. Backend unit tests cover security primitives, rate
 windows, and the exact presence boundary.
 
-On Windows, `.\Test-Beacon.ps1` is the complete local entry point. It runs
-`pnpm check`, creates and migrates the dedicated `beacon_secureview_test`
-database, runs integration tests with the existing destructive-target guards,
-then runs Android unit tests and `assembleDebug`. Use `-SkipAndroid` or
-`-SkipDatabaseIntegration` only when that environment is intentionally
-unavailable.
+The database-backed backend suites need a dedicated test database; the recipe is in
+[local-development.md](local-development.md). Android unit tests and lint run with Gradle.
 
 PostgreSQL integration suites run only when both `NODE_ENV=test` and a
 dedicated `TEST_DATABASE_URL` are defined:

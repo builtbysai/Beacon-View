@@ -98,8 +98,7 @@ further.
 
 An iOS **viewer** does not have this problem, and iOS 16.4+ Safari supports Web Push for an
 installed (added-to-home-screen) PWA. Beacon's web viewer is already a PWA with a service
-worker (`docs/development-handoff.md`, "installable, background-capable notification
-behavior"). Supporting iOS as a viewer is largely a matter of verifying that existing PWA
+worker (see the web push work in `apps/web-viewer/public/sw.js`). Supporting iOS as a viewer is largely a matter of verifying that existing PWA
 install/push flow on iOS Safari, not building a new client.
 
 ### If a native iOS app is pursued anyway

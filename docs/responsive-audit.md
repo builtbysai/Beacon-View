@@ -155,7 +155,7 @@ container IDs were unchanged. Publicly fetched assets matched the tested local b
 - `assets/index-D5TKISeX.css`:
   `f92827f9ba01154fb42f4732a2b16b7996070b5bbae3135b2b1009cc9308bf14`
 
-The repository-wide `Test-Beacon.ps1` gate also passed: formatting, ESLint,
+The repository-wide gate (`pnpm check`, Android tasks) also passed: formatting, ESLint,
 TypeScript checks, 70 web tests, 95 database-backed backend tests, production
 builds, Android unit tests, Android lint, a debug APK and an unsigned release APK.
 The deployment preserved the successful rollback set under

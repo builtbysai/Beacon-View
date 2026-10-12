@@ -5,6 +5,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import {
   activityDateStart,
   activitySince,
+  completeThroughEvents,
   localActivityDate,
 } from './activity-filters';
 import { recordingStatusLabels, recordingStatusTone } from './recording-status';
@@ -380,7 +381,10 @@ export function MotionEventList({
 
   const filteredEvents = useMemo(() => {
     if (!events) return [];
-    let result = events;
+    let result: ActivityEvent[] = completeThroughEvents<ActivityEvent>(events, [
+      { belongs: isMotionEvent, hasMore: cursor !== null },
+      { belongs: (event) => !isMotionEvent(event), hasMore: activityHasMore },
+    ]);
     if (cameraFilter !== 'all') {
       result = result.filter((event) =>
         isMotionEvent(event)
@@ -438,6 +442,8 @@ export function MotionEventList({
     return result;
   }, [
     events,
+    cursor,
+    activityHasMore,
     cameraFilter,
     timeFilter,
     sinceDate,

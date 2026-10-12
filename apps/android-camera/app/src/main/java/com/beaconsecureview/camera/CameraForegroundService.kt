@@ -905,6 +905,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         private const val MANUAL_CLIP_MAX_DURATION_MS = 15_000L
 
         fun start(context: Context) {
+            BootResume.remember(context, running = true)
             androidx.core.content.ContextCompat.startForegroundService(
                 context,
                 Intent(context, CameraForegroundService::class.java),
@@ -912,6 +913,7 @@ class CameraForegroundService : LifecycleService(), CameraSignalingListener {
         }
 
         fun stop(context: Context) {
+            BootResume.remember(context, running = false)
             context.stopService(Intent(context, CameraForegroundService::class.java))
         }
 

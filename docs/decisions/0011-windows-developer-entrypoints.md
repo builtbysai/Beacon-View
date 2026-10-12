@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted for post-Milestone-9 stabilization.
+Superseded (2026-10-12): the top-level `Start-Beacon.ps1`, `Stop-Beacon.ps1` and `Test-Beacon.ps1` launchers and the
+`scripts/Quick-*.ps1` wrappers were removed. Local development is described in `docs/local-development.md`; the LAN
+HTTPS scripts for a physical phone remain.
+
+Originally: accepted for post-Milestone-9 stabilization.
 
 ## Context
 

@@ -171,5 +171,4 @@ Android/iOS senders that have not been built. Google's publication fields and
 process are described in its registration guide linked above.
 
 Related: [ADR 0097](decisions/0097-cast-to-tv.md),
-[October 9 review and pending work](project-review-2026-10-09.md),
-Claude handoff notes (kept privately).
+and the Cast item in [the roadmap](roadmap.md).

@@ -103,7 +103,7 @@ internal fun BeaconAccountProfileCard(
 /** Mirrors the PWA's GoogleDriveSettings.tsx status card. Read-only plus
  * disconnect/verify -- initiating a *new* connection needs a browser OAuth
  * round trip the backend does not yet support for a bearer-token mobile
- * client (see docs/development-handoff.md), so there is deliberately no
+ * client, so there is deliberately no
  * "Connect" button here rather than one that would silently fail. */
 @Composable
 internal fun BeaconGoogleDriveCard(
