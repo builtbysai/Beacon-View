@@ -8,6 +8,7 @@ import { useDriveRecording } from './drive-recording';
 import { CameraWall } from './CameraWall';
 import { wallStorageKey } from './wall-layouts';
 import { LivePlayerProvider, LivePlayerSlot } from './LivePlayerHost';
+import { DriveExpiredNotice } from './DriveExpiredNotice';
 import { ErrorNotice } from './ErrorNotice';
 import { nextPairingState } from './lifecycle';
 import { cameraStatus } from './camera-status';
@@ -470,9 +471,11 @@ function AppShell() {
   // shows a working record button, or "Connect/Reconnect Google Drive"
   // that fixes things in place -- never a dead-end error after recording.
   const drive = useDriveRecording(
-    household?.role === 'owner' &&
-      (selectedCamera !== null || browserCameraActive),
+    household?.role === 'owner',
+    selectedCamera !== null || browserCameraActive ? 0 : 2_500,
   );
+  // The reconnect reminder can be put away for this visit; it returns on the next one (ADR 0116).
+  const [driveReminderDismissed, setDriveReminderDismissed] = useState(false);
 
   // Applies a /join link's stashed token once a session exists -- either
   // immediately (already signed in) or right after this same load's sign-in/
@@ -1321,6 +1324,12 @@ function AppShell() {
           <div className={`page-content-inner page-body ${pageWidthClass}`}>
             {error && (
               <ErrorNotice message={error} onDismiss={() => setError('')} />
+            )}
+            {!driveReminderDismissed && (
+              <DriveExpiredNotice
+                drive={drive}
+                onDismiss={() => setDriveReminderDismissed(true)}
+              />
             )}
             {camerasError && (page === 'dashboard' || page === 'cameras') && (
               <ErrorNotice message={camerasError} onRetry={retryCameras} />

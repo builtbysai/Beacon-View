@@ -559,6 +559,15 @@ export interface MilestoneStore {
    * true only on the first call. Expired connections read as absent. */
   markGoogleDriveConnectionExpired(userId: string): Promise<boolean>;
   googleDriveConnectionExpired(userId: string): Promise<boolean>;
+  listLiveGoogleDriveConnections(): Promise<
+    Array<{ householdId: string; userId: string }>
+  >;
+  listGoogleDriveReminderTargets(input: {
+    gapMs: number;
+    maxReminders: number;
+    now: Date;
+  }): Promise<Array<{ email: string; userId: string }>>;
+  markGoogleDriveReminderSent(userId: string, now: Date): Promise<void>;
   notificationsConfigured(): boolean;
   recordSecurityEvent(input: {
     userId: string;

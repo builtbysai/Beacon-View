@@ -73,7 +73,12 @@ function installedWebApp(): boolean {
   );
 }
 
-export function useDriveRecording(enabled: boolean): DriveRecording {
+/** `initialDelayMs` puts off the first check when nothing on screen needs it yet, so a background
+ * reminder never competes with the page's own first requests. */
+export function useDriveRecording(
+  enabled: boolean,
+  initialDelayMs = 0,
+): DriveRecording {
   const [state, setState] = useState<DriveRecordingState>('checking');
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState('');
@@ -110,7 +115,7 @@ export function useDriveRecording(enabled: boolean): DriveRecording {
 
   useEffect(() => {
     if (!enabled) return;
-    void refresh();
+    const first = window.setTimeout(() => void refresh(), initialDelayMs);
     function recheck() {
       if (document.visibilityState !== 'visible') return;
       if (
@@ -123,10 +128,11 @@ export function useDriveRecording(enabled: boolean): DriveRecording {
     window.addEventListener('focus', recheck);
     document.addEventListener('visibilitychange', recheck);
     return () => {
+      window.clearTimeout(first);
       window.removeEventListener('focus', recheck);
       document.removeEventListener('visibilitychange', recheck);
     };
-  }, [enabled, refresh]);
+  }, [enabled, initialDelayMs, refresh]);
 
   // The connect popup reports how Google's consent ended.
   useEffect(() => {

@@ -281,6 +281,13 @@
       "when": 1791740404538,
       "tag": "0039_device_credential_rotation",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1791780894972,
+      "tag": "0040_drive_expiry_reminders",
+      "breakpoints": true
     }
   ]
 }

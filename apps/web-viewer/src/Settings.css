@@ -409,18 +409,6 @@
   color: var(--accent-base);
 }
 
-.retention-recommended {
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-}
-
-.retention-choices button[aria-checked='true'] .retention-recommended {
-  color: var(--accent-base);
-}
-
 .settings-subsection {
   margin-top: var(--space-6);
 }
