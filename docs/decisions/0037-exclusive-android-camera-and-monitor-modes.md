@@ -1,5 +1,7 @@
 # ADR 0037: Exclusive Android Camera and Monitor modes
 
+Status: Superseded by [ADR 0121](0121-android-hosts-the-web-app.md): the Android app no longer has a native monitor mode; the web app is the viewer.
+
 ## Context
 
 The Android app can act as the camera agent or as a native single-camera monitor. The

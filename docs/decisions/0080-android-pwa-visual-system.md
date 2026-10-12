@@ -1,6 +1,6 @@
 # ADR 0080: Share the PWA visual system with the Android app
 
-- Status: Accepted for the active Android parity milestone
+- Status: Superseded by [ADR 0121](0121-android-hosts-the-web-app.md) (the app now shows the web app itself, so visual parity is by construction)
 - Date: 2026-09-27
 
 ## Context
