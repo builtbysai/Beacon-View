@@ -12,6 +12,7 @@ import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.util.Rational
 import android.view.Gravity
 import android.view.View
@@ -65,6 +66,12 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST) {
+            val answer = pendingNotificationAnswer
+            pendingNotificationAnswer = null
+            answer?.invoke(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
+            return
+        }
         if (requestCode != WEB_PERMISSION_REQUEST) return
         val request = pendingWebRequest ?: return
         pendingWebRequest = null
@@ -305,15 +312,35 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
     }
 
     override fun enablePush(done: (Result<JSONObject>) -> Unit) {
-        lifecycleScope.launch {
-            done(
-                runCatching {
-                    val token = firebaseMessagingToken()
-                    JSONObject().put("token", token).put("installationId", installationId(this@WebShellActivity))
-                },
+        val proceed = {
+            lifecycleScope.launch {
+                done(
+                    runCatching {
+                        val token = firebaseMessagingToken()
+                        JSONObject().put("token", token).put("installationId", installationId(this@WebShellActivity))
+                    }.onFailure { Log.w("BeaconPush", "Phone alerts could not be turned on", it) },
+                )
+            }
+            Unit
+        }
+        // Android 13 and newer hide every alert until the person allows notifications, so ask now, in context.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingNotificationAnswer = { granted ->
+                if (granted) proceed() else done(Result.failure(IllegalStateException("Notifications are not allowed")))
+            }
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                NOTIFICATION_PERMISSION_REQUEST,
             )
+        } else {
+            proceed()
         }
     }
+
+    private var pendingNotificationAnswer: ((Boolean) -> Unit)? = null
 
     private val fileSaver by lazy { FileSaver(applicationContext) }
 
@@ -505,6 +532,7 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
     private companion object {
         const val BRIDGE_NAME = "BeaconAndroid"
         const val WEB_PERMISSION_REQUEST = 4101
+        const val NOTIFICATION_PERMISSION_REQUEST = 4102
         const val EXCHANGE_POLLS = 80
         const val EXCHANGE_POLL_MS = 250L
     }
