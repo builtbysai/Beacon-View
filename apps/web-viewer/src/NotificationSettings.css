@@ -1,3 +1,9 @@
+/* The table collapses by the width of this section, not the window: next to the sidebar and the jump list a
+   wide window can still leave the section narrow. */
+.notification-settings {
+  container: notification-settings / inline-size;
+}
+
 .notification-channel-action {
   display: flex;
   align-items: center;
@@ -163,13 +169,20 @@
 }
 
 /* Tablet/mobile: rows become compact per-camera groups instead of a table. */
-@media (max-width: 860px) {
+@container notification-settings (max-width: 780px) {
   .notification-table-head {
     display: none;
   }
+  /* Each camera is a name over a few labelled controls that sit side by side while there is room. */
   .notification-table-row {
-    grid-template-columns: 1fr;
-    gap: var(--space-3);
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: var(--space-3) var(--space-6);
+  }
+  .notification-table-name {
+    grid-column: 1 / -1;
+  }
+  .notification-table-cell.notification-table-quiet {
+    grid-column: 1 / -1;
   }
   .notification-table-cell {
     flex-direction: row;
@@ -340,7 +353,7 @@
   min-width: 0;
 }
 
-@media (max-width: 860px) {
+@container notification-settings (max-width: 780px) {
   .notification-table-cell.notification-motion-cell {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;

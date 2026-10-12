@@ -50,10 +50,20 @@ function sha256(file) {
 }
 
 const files = [];
+// Only the newest Android app is offered; older ones may stay in the folder.
+const androidNames = readdirSync(folder)
+  .filter((name) => classify(name)?.platform === 'android')
+  .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+const newestAndroid = androidNames.at(-1);
 for (const name of readdirSync(folder).sort()) {
   const kind = classify(name);
   if (!kind) continue;
-  if (kind.platform !== 'android' && !name.includes(version)) continue;
+  if (
+    kind.platform === 'android'
+      ? name !== newestAndroid
+      : !name.includes(version)
+  )
+    continue;
   const full = path.join(folder, name);
   files.push({
     ...kind,
