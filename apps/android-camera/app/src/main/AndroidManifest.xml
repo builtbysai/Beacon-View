@@ -79,6 +79,11 @@
                     android:scheme="beaconsecureview" />
             </intent-filter>
         </activity>
+        <!-- The signed-in app: the web app in a locked-down WebView (ADR 0121). -->
+        <activity
+            android:name=".WebShellActivity"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboardHidden"
+            android:exported="false" />
         <service
             android:name=".CameraForegroundService"
             android:exported="false"
