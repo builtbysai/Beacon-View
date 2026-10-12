@@ -1,6 +1,6 @@
 # ADR 0119: Security review before the repository goes public
 
-- Status: Accepted (2026-10-12). The review is done; the repository is still private until the owner decides.
+- Status: Accepted (2026-10-12). The review is done and the pre-publication cleanup was applied the same day (below); the repository stays private until the owner picks a license and decides.
 
 ## Context
 
@@ -31,9 +31,16 @@ Going public publishes every file and every commit forever, so this review came 
 - The history can be published as it is: nothing in it needs rewriting for secrecy.
 - Before the switch, in one small change: remove the internal handoff files and the server address from public docs, add `LICENSE` (owner's choice) and `SECURITY.md`, and turn on GitHub secret scanning and push protection.
 - Keep production secrets, the update-signing key, signing keystores and the production environment out of the repository as they are today (`/etc/beacon/*.env` on the server; the owner's credential store locally).
-- Rotate nothing for this reason alone. Rotate the TURN secret, Resend key and notification keys only if the owner finds a copy outside the places listed in `docs/OMARCHY-SECRETS-HANDOFF.md`.
+- Rotate nothing for this reason alone. Rotate the TURN secret, Resend key and notification keys only if the owner finds a copy outside the places listed in `docs/runbook-outage-and-recovery.md`, section 5.
 
 ## Not done
 
 - No third-party penetration test. The threat model (`docs/threat-model.md`) is the author's own.
 - Dependencies are scanned weekly by `dependency-audit.yml` and not re-scanned here.
+
+## Cleanup applied (2026-10-12)
+
+- `docs/OMARCHY-*.md` and `docs/handoff-2026-*.md` were removed from the tree (private copies kept outside the repository). They stay in git history; they contain no credential, only paths and provider names.
+- The server address was replaced in the deploy workflow by the repository variable `ORACLE_HOST_KEY_ALIAS` and by a placeholder in the docs. **The variable must be set in GitHub before the deploy workflow is ever turned on** (`BEACON_AUTO_DEPLOY` is off, so nothing breaks today). The address stays in git history; public DNS already shows it and SSH is Tailscale-only.
+- `SECURITY.md` added.
+- Still open for the owner: choose a `LICENSE`, turn on secret scanning, push protection and **private vulnerability reporting** in the repository settings (`SECURITY.md` points reporters at it).

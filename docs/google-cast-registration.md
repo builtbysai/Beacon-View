@@ -172,4 +172,4 @@ process are described in its registration guide linked above.
 
 Related: [ADR 0097](decisions/0097-cast-to-tv.md),
 [October 9 review and pending work](project-review-2026-10-09.md),
-[Claude handoff](handoff-2026-10-09.md).
+Claude handoff notes (kept privately).

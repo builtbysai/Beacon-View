@@ -30,7 +30,8 @@ Create a GitHub Environment named `production` and add these environment secrets
 - `ORACLE_USER` — restricted SSH deployment user.
 - `ORACLE_SSH_PRIVATE_KEY` — an Ed25519 key used only for deployment.
 - `ORACLE_KNOWN_HOSTS` — the pinned `known_hosts` line for the VM's established
-  host-key alias (`129.213.128.206`).
+  host-key alias. Put that alias in the repository variable `ORACLE_HOST_KEY_ALIAS` (not in the
+  repository, so a public repository does not publish the server address).
 - `TS_OAUTH_CLIENT_ID` — the Tailscale workload-identity client ID restricted to
   this GitHub repository and environment.
 - `TS_AUDIENCE` — the matching Tailscale workload-identity audience.

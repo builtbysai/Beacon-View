@@ -1440,7 +1440,7 @@ Host beacon-oracle
     User ubuntu
     IdentityFile ~/.ssh/<owner-provided-beacon-key>
     IdentitiesOnly yes
-    HostKeyAlias 129.213.128.206
+    HostKeyAlias <server-ip>
     StrictHostKeyChecking yes
 ```
 
