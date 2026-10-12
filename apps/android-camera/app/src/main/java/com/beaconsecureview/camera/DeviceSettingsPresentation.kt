@@ -65,7 +65,7 @@ internal fun deviceGuidance(
             summary = "Its access was revoked, so it cannot reconnect with the old pairing.",
             steps =
                 listOf(
-                    "Create a fresh one-time setup link from Add camera.",
+                    "Create a fresh one-time setup link from Add a device.",
                     if (platform == "android") {
                         "Open Beacon on the camera phone and complete pairing with the new link or code."
                     } else {
@@ -82,7 +82,7 @@ internal fun deviceGuidance(
             steps =
                 listOf(
                     "Confirm that this is the device you intend to restore.",
-                    "Create a fresh one-time setup link from Add camera and pair the device again.",
+                    "Create a fresh one-time setup link from Add a device and pair the device again.",
                 ),
         )
     }
@@ -118,7 +118,7 @@ internal fun deviceGuidance(
                 summary = "A browser camera is available only while Camera mode is open in that browser.",
                 steps =
                     listOf(
-                        "Open Add camera on that computer and choose Use this browser.",
+                        "Open Add a device on that computer and choose This device.",
                         "Allow camera access and leave Camera mode open while you want to share.",
                     ),
             )

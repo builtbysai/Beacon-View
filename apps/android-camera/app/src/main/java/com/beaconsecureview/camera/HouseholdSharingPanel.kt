@@ -582,7 +582,7 @@ internal fun BeaconSignedInDevicesPanel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(entry.userAgent, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(sessionDeviceLabel(entry.userAgent), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         if (entry.current) "This device · active now" else "Last active ${formatRecordingTime(entry.lastSeenAt)}",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -796,5 +796,33 @@ private fun BeaconGrantCheckbox(label: String, checked: Boolean, enabled: Boolea
         // doesn't announce it as a second, separately-focusable, unlabeled control.
         Checkbox(checked = checked, enabled = enabled, onCheckedChange = null)
         Text(label, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** A readable name for a signed-in session instead of the raw user-agent string ("Dalvik/2.1.0 (Linux; U; ...)"). */
+internal fun sessionDeviceLabel(userAgent: String): String {
+    val browser =
+        when {
+            Regex("Edg/").containsMatchIn(userAgent) -> "Edge"
+            Regex("OPR/").containsMatchIn(userAgent) -> "Opera"
+            Regex("Chrome/|CriOS/").containsMatchIn(userAgent) -> "Chrome"
+            Regex("Firefox/|FxiOS/").containsMatchIn(userAgent) -> "Firefox"
+            Regex("Version/.*Safari/").containsMatchIn(userAgent) -> "Safari"
+            else -> null
+        }
+    if (browser == null && Regex("Dalvik/|okhttp/").containsMatchIn(userAgent)) return "Beacon for Android"
+    val os =
+        when {
+            "iPhone" in userAgent -> "iPhone"
+            "iPad" in userAgent -> "iPad"
+            "Android" in userAgent -> "Android"
+            "Mac OS X" in userAgent -> "Mac"
+            "Windows" in userAgent -> "Windows"
+            "Linux" in userAgent -> "Linux"
+            else -> null
+        }
+    return when {
+        browser != null && os != null -> "$browser on $os"
+        else -> browser ?: os ?: "Signed-in device"
     }
 }

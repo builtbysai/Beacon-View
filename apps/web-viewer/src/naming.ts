@@ -47,6 +47,9 @@ export function browserOsLabel(
   userAgent: string | null | undefined,
   fallback: string,
 ): string {
+  // The Android app's own requests identify as the runtime ("Dalvik/2.1.0 ...") or the HTTP library.
+  if (userAgent && /Dalvik\/|okhttp\//.test(userAgent))
+    return 'Beacon for Android';
   const { browser, os } = parseUserAgent(userAgent);
   if (browser && os) return `${browser} on ${os}`;
   return browser ?? os ?? fallback;

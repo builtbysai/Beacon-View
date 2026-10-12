@@ -18,7 +18,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -65,6 +64,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Icon
@@ -138,7 +138,7 @@ internal fun PairingScreen(
         }
         BeaconPageHeader(
             eyebrow = "Beacon / camera setup",
-            title = "Add camera",
+            title = "Set up this device",
             supportingText = "Connect this Android phone or tablet to your household.",
         )
         BeaconPanel(modifier = Modifier.fillMaxWidth()) {
@@ -157,7 +157,7 @@ internal fun PairingScreen(
                 modifier = Modifier.padding(top = 14.dp),
             )
             Text(
-                "In your signed-in Beacon viewer, choose Add camera (or Reconnect on an offline camera) to show a pairing code. Then scan it here.",
+                "In your signed-in Beacon viewer, choose Add a device (or Reconnect on an offline camera) to show a pairing code. Then scan it here.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp, bottom = 14.dp),
             )
@@ -295,8 +295,8 @@ internal fun WelcomeScreen(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(BeaconSpacing.Lg)) {
-                BeaconTrustBadge(Icons.Outlined.Lock, "Encrypted", Modifier.weight(1f))
-                BeaconTrustBadge(Icons.Outlined.Visibility, "Visible capture", Modifier.weight(1f))
+                BeaconTrustBadge(Icons.Outlined.Lock, "Encrypted", Modifier.weight(1f), textColor = BeaconHeroSupporting)
+                BeaconTrustBadge(Icons.Outlined.Visibility, "Visible capture", Modifier.weight(1f), textColor = BeaconHeroSupporting)
             }
         }
         Text(
@@ -540,7 +540,12 @@ internal fun CameraHome(
                 }
             }
             Box {
-                IconButton(onClick = { settingsOpen = true }) {
+                IconButton(
+                    onClick = { settingsOpen = true },
+                    modifier =
+                        Modifier.background(Color(0xD9030B17), RoundedCornerShape(999.dp))
+                            .border(1.dp, Color(0x80FFFFFF), RoundedCornerShape(999.dp)),
+                ) {
                     Icon(Icons.Outlined.Settings, "Camera options", tint = Color.White)
                 }
                 DropdownMenu(
@@ -551,6 +556,7 @@ internal fun CameraHome(
                     DropdownMenuItem(
                         text = { Text(if (monitorSignedIn) "Monitor" else "Sign in") },
                         leadingIcon = { Icon(Icons.Outlined.Person, null) },
+                        colors = MenuDefaults.itemColors(textColor = Color(0xFF0F172A), leadingIconColor = Color(0xFF475569)),
                         onClick = {
                             settingsOpen = false
                             onMonitor()
@@ -567,6 +573,7 @@ internal fun CameraHome(
                             }
                         },
                         leadingIcon = { Icon(Icons.Outlined.Videocam, null) },
+                        colors = MenuDefaults.itemColors(textColor = Color(0xFF0F172A), leadingIconColor = Color(0xFF475569)),
                         onClick = {
                             quality = if (quality == CaptureQuality.Standard) CaptureQuality.Hd else CaptureQuality.Standard
                             qualityStore.save(quality)
@@ -739,24 +746,23 @@ private fun CameraRuntimeStatus(runtime: CameraRuntimeState) {
         BeaconStatusPill(cameraRuntimeLabel(runtime), cameraRuntimeColor(runtime))
         return
     }
-    var expanded by remember { mutableStateOf(false) }
+    // The label is shown by default: a bare dot is easy to miss on a busy or dark picture. Tapping still collapses it.
+    var expanded by remember { mutableStateOf(true) }
     Surface(
         modifier =
-            Modifier.onFocusChanged {
-                    if (!it.isFocused) expanded = false
-                }
-                .semantics {
+            Modifier.semantics {
                     contentDescription =
                         if (expanded) "Online. Collapse status" else "Online. Expand status"
                 }
                 .clickable(role = Role.Button) { expanded = !expanded },
         shape = RoundedCornerShape(999.dp),
-        color = Color(0x99030B17),
+        color = Color(0xD9030B17),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x80FFFFFF)),
     ) {
         Row(
             modifier =
                 Modifier.padding(
-                    horizontal = if (expanded) 10.dp else 5.dp,
+                    horizontal = if (expanded) 12.dp else 6.dp,
                     vertical = 5.dp,
                 ),
             verticalAlignment = Alignment.CenterVertically,

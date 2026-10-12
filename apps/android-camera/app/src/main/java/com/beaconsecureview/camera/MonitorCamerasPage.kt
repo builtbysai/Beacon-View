@@ -162,7 +162,19 @@ internal fun ColumnScope.MonitorCamerasPage(
                             .beaconDashedBorder(MaterialTheme.colorScheme.outlineVariant, 12.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("No cameras yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        ) {
+                            Text("No cameras yet", fontWeight = FontWeight.Bold)
+                            Text(
+                                "Choose Add device at the top to set up a phone, tablet or computer.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            )
+                        }
                     }
                 } else if (!busy) {
                     Column(
