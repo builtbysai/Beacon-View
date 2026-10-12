@@ -113,6 +113,7 @@ androidx.vectordrawable:vectordrawable-animated:1.1.0=releaseRuntimeClasspath
 androidx.vectordrawable:vectordrawable:1.1.0=releaseRuntimeClasspath
 androidx.versionedparcelable:versionedparcelable:1.1.1=releaseRuntimeClasspath
 androidx.viewpager:viewpager:1.0.0=releaseRuntimeClasspath
+androidx.webkit:webkit:1.12.1=releaseRuntimeClasspath
 com.google.android.datatransport:transport-api:3.1.0=releaseRuntimeClasspath
 com.google.android.datatransport:transport-backend-cct:3.1.9=releaseRuntimeClasspath
 com.google.android.datatransport:transport-runtime:3.1.9=releaseRuntimeClasspath

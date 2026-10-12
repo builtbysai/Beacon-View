@@ -10,6 +10,8 @@ import { AudioSettings } from './AudioSettings';
 import { ViewingSettings } from './ViewingSettings';
 import { HouseholdModeSettings } from './HouseholdModeSettings';
 import { BrowserSessions } from './BrowserSessions';
+import { AndroidPhoneSettings } from './AndroidPhoneSettings';
+import { isAndroidApp } from './android-shell';
 import { DesktopComputerSettings } from './DesktopComputerSettings';
 import { desktopSupportsAutostart } from './desktop-shell';
 import { EmailVerification } from './EmailVerification';
@@ -41,6 +43,8 @@ type SettingsPageProps = {
   onDeleteAccount: () => void;
   onCurrentSessionRevoked: (message?: string) => void;
   onUserChanged: () => void;
+  /** Opens Add a device, so the phone's own camera can be set up from This phone. */
+  onSetUpThisDevice?: () => void;
 };
 
 type SettingsSection =
@@ -78,7 +82,10 @@ const sectionGroups: Array<{ label: string; sections: SettingsSection[] }> = [
 const sectionInfo: Record<SettingsSection, { label: string; icon: IconName }> =
   {
     household: { label: 'Household', icon: 'home' },
-    computer: { label: 'This computer', icon: 'browser' },
+    computer: {
+      label: isAndroidApp() ? 'This phone' : 'This computer',
+      icon: isAndroidApp() ? 'phone' : 'browser',
+    },
     audio: { label: 'Audio', icon: 'speaker' },
     viewing: { label: 'Viewing', icon: 'eye' },
     apps: { label: 'Apps & updates', icon: 'download' },
@@ -109,10 +116,9 @@ const sectionText: Record<SettingsSection, [string, string]> = {
     'Data & storage',
     'Choose how long event metadata is kept and where optional cloud data is stored.',
   ],
-  computer: [
-    'This computer',
-    'How the Beacon desktop app runs on this computer.',
-  ],
+  computer: isAndroidApp()
+    ? ['This phone', 'Whether this phone is a camera, and how it runs.']
+    : ['This computer', 'How the Beacon desktop app runs on this computer.'],
   audio: ['Audio', 'Choose the microphone you use to talk through cameras.'],
   viewing: ['Viewing', 'How this device watches your cameras.'],
   apps: [
@@ -153,11 +159,14 @@ export function SettingsPage({
   onDeleteAccount,
   onCurrentSessionRevoked,
   onUserChanged,
+  onSetUpThisDevice,
 }: SettingsPageProps) {
   const manager = household.role === 'owner' || household.role === 'admin';
   // Viewers can ask for alerts about the cameras they were given (V43).
   const canReceiveAlerts = manager || household.role === 'viewer';
-  const [desktopApp] = useState(desktopSupportsAutostart);
+  const [desktopApp] = useState(
+    () => desktopSupportsAutostart() || isAndroidApp(),
+  );
   const available = useMemo<Record<SettingsSection, boolean>>(
     () => ({
       household: true,
@@ -280,7 +289,13 @@ export function SettingsPage({
     ),
     computer: (
       <>
-        <DesktopComputerSettings />
+        {isAndroidApp() ? (
+          <AndroidPhoneSettings
+            onSetUpCamera={onSetUpThisDevice ?? (() => undefined)}
+          />
+        ) : (
+          <DesktopComputerSettings />
+        )}
       </>
     ),
     audio: (
@@ -333,7 +348,7 @@ export function SettingsPage({
     apps: (
       <>
         <UpdateStatusCard />
-        <AppDownloads variant="app" />
+        {!isAndroidApp() && <AppDownloads variant="app" />}
       </>
     ),
     account: (

@@ -45,12 +45,21 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 
 class MainActivity : ComponentActivity() {
+    private var autoPairCode by mutableStateOf<String?>(null)
     private var inboundPairingCode by mutableStateOf<String?>(null)
     private var inboundGoogleAuthCode by mutableStateOf<MobileGoogleAuthResult?>(null)
     private var launchTarget by mutableStateOf<LaunchTarget?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // The app is the web app (ADR 0121): a phone that is not a camera opens straight into it. Only a paired camera,
+        // or the web app asking for the camera screen, lands here.
+        if (savedInstanceState == null && !wantsCameraScreen(intent)) {
+            startActivity(Intent(this, WebShellActivity::class.java).setData(intent?.data))
+            finish()
+            return
+        }
+        autoPairCode = pairingCodeFromIntent(intent)
         inboundPairingCode = parsePairingQr(intent?.dataString, BuildConfig.BEACON_API_URL, BuildConfig.BEACON_WEB_URL)
         inboundGoogleAuthCode = parseMobileGoogleAuthLink(intent?.dataString, BuildConfig.BEACON_API_URL)
         // A relaunch from the recents list repeats the old intent; only a fresh start counts.
@@ -67,6 +76,8 @@ class MainActivity : ComponentActivity() {
                 credentialStore = CredentialStore(this),
                 accountSessionStore = AccountSessionStore(this),
                 installationId = installationId,
+                autoPairCode = autoPairCode,
+                onAutoPairCodeHandled = { autoPairCode = null },
                 inboundPairingCode = inboundPairingCode,
                 onInboundPairingCodeHandled = { inboundPairingCode = null },
                 inboundGoogleAuthCode = inboundGoogleAuthCode,
@@ -80,17 +91,29 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        pairingCodeFromIntent(intent)?.let { autoPairCode = it }
         inboundPairingCode = parsePairingQr(intent.dataString, BuildConfig.BEACON_API_URL, BuildConfig.BEACON_WEB_URL)
         inboundGoogleAuthCode = parseMobileGoogleAuthLink(intent.dataString, BuildConfig.BEACON_API_URL)
         LaunchIntents.parse(intent)?.let { launchTarget = it }
     }
 
+    private fun wantsCameraScreen(intent: Intent?): Boolean =
+        intent?.action == ACTION_START_CAMERA ||
+            intent?.action == ACTION_OPEN_CAMERA ||
+            CredentialStore(this).read() != null
+
+    private fun pairingCodeFromIntent(intent: Intent?): String? =
+        if (intent?.action == ACTION_START_CAMERA) {
+            normalizePairingCodeInput(intent.getStringExtra(EXTRA_PAIRING_CODE).orEmpty()).takeIf(::isValidPairingCode)
+        } else {
+            null
+        }
+
     override fun onStart() {
         super.onStart()
         refreshBatteryOptimizationState()
-        val monitorMode =
-            getSharedPreferences("beacon_navigation", MODE_PRIVATE)
-                .getBoolean("monitor_destination", false)
+        // The camera keeps running while the web app is on screen, so there is no separate "monitor" mode any more.
+        val monitorMode = false
         val cameraAllowed =
             ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
                 PackageManager.PERMISSION_GRANTED
@@ -110,6 +133,12 @@ class MainActivity : ComponentActivity() {
         } else if (monitorMode) {
             CameraForegroundService.stop(this)
         }
+    }
+
+    companion object {
+        const val ACTION_START_CAMERA = "com.beaconsecureview.camera.START_CAMERA"
+        const val ACTION_OPEN_CAMERA = "com.beaconsecureview.camera.OPEN_CAMERA"
+        const val EXTRA_PAIRING_CODE = "pairing_code"
     }
 
     override fun onResume() {
@@ -136,6 +165,8 @@ private fun BeaconCameraApp(
     credentialStore: CredentialStore,
     accountSessionStore: AccountSessionStore,
     installationId: String,
+    autoPairCode: String?,
+    onAutoPairCodeHandled: () -> Unit,
     inboundPairingCode: String?,
     onInboundPairingCodeHandled: () -> Unit,
     inboundGoogleAuthCode: MobileGoogleAuthResult?,
@@ -174,12 +205,10 @@ private fun BeaconCameraApp(
     var message by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var disconnecting by remember { mutableStateOf(false) }
-    var monitorMode by remember {
-        mutableStateOf(navigationPreferences.getBoolean("monitor_destination", false))
-    }
+    val monitorMode = false
     fun selectMonitor(enabled: Boolean) {
-        navigationPreferences.edit().putBoolean("monitor_destination", enabled).apply()
-        monitorMode = enabled
+        // "Monitor" is the web app now; the camera keeps running behind it.
+        if (enabled) context.startActivity(Intent(context, WebShellActivity::class.java))
     }
     var cameraPermission by remember {
         mutableStateOf(
@@ -301,6 +330,16 @@ private fun BeaconCameraApp(
                 CameraForegroundService.restart(context)
             }
         }
+
+    LaunchedEffect(autoPairCode, credential) {
+        // The web app asked this phone to become a camera with a code the signed-in person just created there.
+        if (credential == null && autoPairCode != null) {
+            cameraSetupStarted = true
+            navigationPreferences.edit().putBoolean("camera_setup_started", true).apply()
+            onAutoPairCodeHandled()
+            pairCamera(autoPairCode)
+        }
+    }
 
     LaunchedEffect(inboundPairingCode, credential) {
         if (credential == null && inboundPairingCode != null) {
@@ -566,7 +605,7 @@ private fun BeaconTheme(
 }
 
 /** The phone's own model makes several paired devices tell apart in the viewer; the owner can rename it. */
-private fun defaultDeviceName(): String =
+internal fun defaultDeviceName(): String =
     listOf(Build.MANUFACTURER, Build.MODEL)
         .filter { it.isNotBlank() }
         .joinToString(" ")

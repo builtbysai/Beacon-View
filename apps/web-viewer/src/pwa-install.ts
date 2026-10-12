@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { isAndroidApp } from './android-shell';
+
 /** The browser's "install this site as an app" prompt, kept until a button asks for it. Imported by main.tsx
  * so the early `beforeinstallprompt` event is never missed. */
 interface InstallPromptEvent extends Event {
@@ -24,6 +26,8 @@ if (typeof window !== 'undefined') {
 }
 
 export function installedAsApp(): boolean {
+  // Inside the Android app it is already an app: never offer to install it again.
+  if (isAndroidApp()) return true;
   return (
     window.matchMedia?.('(display-mode: standalone)').matches === true ||
     (navigator as { standalone?: boolean }).standalone === true

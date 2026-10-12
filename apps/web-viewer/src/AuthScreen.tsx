@@ -1,4 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
+import { androidApp, isAndroidApp } from './android-shell';
 import { ApiError, request } from './api';
 import { Icon } from './Icon';
 import { PublicHeader } from './PublicHeader';
@@ -111,6 +112,7 @@ export function AuthScreen({
     else window.location.assign('/');
   };
 
+  const inAndroidApp = isAndroidApp();
   const authAction = (
     <button onClick={onBack} className="ph-back-action">
       &larr; Back to Beacon
@@ -119,7 +121,11 @@ export function AuthScreen({
 
   return (
     <>
-      <PublicHeader action={authAction} sticky={false} alignContainer="auth" />
+      <PublicHeader
+        action={inAndroidApp ? undefined : authAction}
+        sticky={false}
+        alignContainer="auth"
+      />
       <main className="auth">
         <section className="stage">
           <aside className="context">
@@ -242,7 +248,23 @@ export function AuthScreen({
                   </button>
                 </p>
                 <p className="switch">
-                  <a href="/camera-mode/setup">Use this browser as a camera</a>
+                  {inAndroidApp ? (
+                    <a
+                      href="/camera-mode/setup"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        void androidApp
+                          .openCameraScreen()
+                          .catch(() => undefined);
+                      }}
+                    >
+                      Use this phone as a camera
+                    </a>
+                  ) : (
+                    <a href="/camera-mode/setup">
+                      Use this browser as a camera
+                    </a>
+                  )}
                 </p>
               </div>
             )}

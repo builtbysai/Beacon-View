@@ -83,7 +83,20 @@
         <activity
             android:name=".WebShellActivity"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboardHidden"
-            android:exported="false" />
+            android:exported="true"
+            android:launchMode="singleTask">
+            <!-- Google sign-in returns here from the system browser with a one-time code that only this app can redeem
+                 (it is bound to a PKCE verifier the app never shares). Nothing else is exported. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="auth"
+                    android:pathPrefix="/desktop"
+                    android:scheme="beaconsecureview" />
+            </intent-filter>
+        </activity>
         <service
             android:name=".CameraForegroundService"
             android:exported="false"

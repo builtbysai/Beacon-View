@@ -21,6 +21,7 @@ import { ReauthenticationDialog } from './ReauthenticationDialog';
 import { MotionEventList } from './MotionEventList';
 import { RecordingLibrary } from './RecordingLibrary';
 import { EventsViewSwitch, type EventsView } from './EventsViewSwitch';
+import { isAndroidApp } from './android-shell';
 import { AuthScreen } from './AuthScreen';
 import { SplashScreen } from './SplashScreen';
 import { Brand, Icon } from './Icon';
@@ -133,6 +134,8 @@ function AppShell() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [splashSeen, setSplashSeen] = useState(() => {
+    // The Android app opens straight to sign-in: the person already has the app, so the marketing page is skipped.
+    if (isAndroidApp()) return true;
     try {
       return localStorage.getItem(SPLASH_SEEN_KEY) === 'true';
     } catch {
@@ -1781,6 +1784,7 @@ function AppShell() {
                   setSettingsSection(section);
                 }}
                 onDeleteAccount={requestDeleteAccount}
+                onSetUpThisDevice={() => navigate('camera mode')}
                 onCurrentSessionRevoked={clearLocalSession}
                 onUserChanged={() => {
                   void request<{ household: HouseholdSession; user: User }>(

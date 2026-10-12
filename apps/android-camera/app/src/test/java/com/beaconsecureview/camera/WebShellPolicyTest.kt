@@ -3,6 +3,7 @@ package com.beaconsecureview.camera
 import android.webkit.PermissionRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -46,5 +47,84 @@ class WebShellPolicyTest {
         assertTrue(
             WebShellPolicy.resourcesToGrant(arrayOf("android.webkit.resource.PROTECTED_MEDIA_ID"), app, app, true, true).isEmpty(),
         )
+    }
+}
+
+class WebShellNavigationTest {
+    private val app = "https://beacon.builtbysai.com"
+
+    @Test
+    fun googleAndOutsideLinksNeverLoadInsideTheView() {
+        assertEquals(WebShellPolicy.Navigation.Load, WebShellPolicy.classify("$app/cameras", app))
+        assertEquals(WebShellPolicy.Navigation.GoogleSignIn(false), WebShellPolicy.classify("$app/api/auth/google", app))
+        assertEquals(
+            WebShellPolicy.Navigation.GoogleSignIn(true),
+            WebShellPolicy.classify("$app/api/auth/google?intent=addPassword", app),
+        )
+        assertEquals(
+            WebShellPolicy.Navigation.GoogleInBrowser("/settings?section=storage"),
+            WebShellPolicy.classify("$app/api/drive/connect?purpose=recordings", app),
+        )
+        assertEquals(
+            WebShellPolicy.Navigation.GoogleInBrowser("/settings?section=account"),
+            WebShellPolicy.classify("$app/api/auth/google/link", app),
+        )
+        assertEquals(
+            WebShellPolicy.Navigation.External("https://accounts.google.com/o/oauth2/v2/auth"),
+            WebShellPolicy.classify("https://accounts.google.com/o/oauth2/v2/auth", app),
+        )
+        assertEquals(WebShellPolicy.Navigation.External("mailto:a@b.test"), WebShellPolicy.classify("mailto:a@b.test", app))
+        assertEquals(WebShellPolicy.Navigation.Blocked, WebShellPolicy.classify("intent://x#Intent;end", app))
+        assertEquals(WebShellPolicy.Navigation.Blocked, WebShellPolicy.classify("javascript:alert(1)", app))
+        assertEquals(WebShellPolicy.Navigation.Blocked, WebShellPolicy.classify(null, app))
+    }
+
+    @Test
+    fun theGoogleStartUrlCarriesTheChallengeForTheDesktopStyleHandoff() {
+        val challenge = "A".repeat(43)
+        assertEquals(
+            "$app/api/auth/google?platform=desktop&challenge=$challenge",
+            WebShellPolicy.googleStartUrl(app, challenge, addPassword = false),
+        )
+        assertTrue(WebShellPolicy.googleStartUrl(app, challenge, addPassword = true).endsWith("&intent=addPassword"))
+    }
+
+    @Test
+    fun onlyAWellFormedReturnLinkIsAccepted() {
+        val code = "c".repeat(40)
+        assertEquals(
+            WebShellPolicy.GoogleReturn.Code(code),
+            WebShellPolicy.parseGoogleReturn("beaconsecureview://auth/desktop?code=$code"),
+        )
+        assertEquals(WebShellPolicy.GoogleReturn.Failed, WebShellPolicy.parseGoogleReturn("beaconsecureview://auth/desktop?status=failed"))
+        assertNull(WebShellPolicy.parseGoogleReturn("beaconsecureview://auth/desktop?code=short"))
+        assertNull(WebShellPolicy.parseGoogleReturn("beaconsecureview://auth/mobile?code=$code"))
+        assertNull(WebShellPolicy.parseGoogleReturn("https://beacon.builtbysai.com/auth/desktop?code=$code"))
+        assertNull(WebShellPolicy.parseGoogleReturn("beaconsecureview://evil/desktop?code=$code"))
+        assertNull(WebShellPolicy.parseGoogleReturn(null))
+    }
+
+    @Test
+    fun theExchangeScriptEncodesItsInputsAndRefusesBadOnes() {
+        val verifier = "v".repeat(43)
+        val script = WebShellPolicy.exchangeScript("c".repeat(40), verifier)
+        assertTrue(script.contains("'/api/desktop/auth/google'"))
+        assertTrue(script.contains("'x-beacon-desktop': '1'"))
+        assertTrue(script.contains(verifier))
+        assertFailsWith<IllegalArgumentException> { WebShellPolicy.exchangeScript("c';alert(1);//", verifier) }
+        assertFailsWith<IllegalArgumentException> { WebShellPolicy.exchangeScript("c".repeat(40), "short") }
+    }
+
+    @Test
+    fun readsTheServersAnswerToTheExchange() {
+        // evaluateJavascript returns the promise's string as a JSON string literal.
+        fun literal(json: String) = org.json.JSONObject.quote(json)
+        assertEquals("/settings", WebShellPolicy.exchangeDestination(literal("""{"ok":true,"body":{"redirect":"/settings"}}""")))
+        assertNull(WebShellPolicy.exchangeDestination(literal("""{"ok":true,"body":{"redirect":"//evil.example"}}""")))
+        assertNull(WebShellPolicy.exchangeDestination(literal("""{"ok":true,"body":{"redirect":"https://evil.example/"}}""")))
+        assertNull(WebShellPolicy.exchangeDestination(literal("""{"ok":false,"body":null}""")))
+        assertNull(WebShellPolicy.exchangeDestination(null))
+        assertTrue(WebShellPolicy.exchangeNeedsLinking(literal("""{"ok":true,"body":{"status":"linkRequired"}}""")))
+        assertFalse(WebShellPolicy.exchangeNeedsLinking(literal("""{"ok":true,"body":{"redirect":"/"}}""")))
     }
 }

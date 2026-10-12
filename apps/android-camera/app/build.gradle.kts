@@ -172,6 +172,7 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
     implementation("androidx.activity:activity-compose:1.10.0")
+    implementation("androidx.webkit:webkit:1.12.1")
     implementation("androidx.camera:camera-camera2:1.4.2")
     implementation("androidx.camera:camera-lifecycle:1.4.2")
     implementation("androidx.camera:camera-video:1.4.2")

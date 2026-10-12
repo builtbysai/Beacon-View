@@ -2,6 +2,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { androidApp } from './android-shell';
+import { request } from './api';
 import { browserCameraSetupLink, pairingLink } from './app-navigation';
 import { ComputerSetupPanel } from './ComputerCameraSetupDialog';
 import { desktopBridge } from './desktop-shell';
@@ -13,6 +15,7 @@ import {
   primaryDownload,
 } from './downloads';
 import { Icon, type IconName } from './Icon';
+import { useAndroidApp } from './use-android-app';
 import { usePairingCode } from './use-pairing-code';
 import './AddDevicePage.css';
 
@@ -131,6 +134,30 @@ function ThisDevicePanel({
 }) {
   const platform = detectPlatform();
   const inDesktopApp = desktopBridge() !== null;
+  const { camera: phoneCamera, inApp: inAndroidApp } = useAndroidApp();
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState('');
+
+  /** In the Android app the camera is native: make a one-time code with this signed-in session and hand it over. */
+  async function startPhoneCamera() {
+    setStartError('');
+    setStarting(true);
+    try {
+      if (phoneCamera?.paired) {
+        await androidApp.openCameraScreen();
+      } else {
+        const { code } = await request<{ code: string }>('/api/pairing-codes', {
+          body: '{}',
+          method: 'POST',
+        });
+        await androidApp.startCamera(code);
+      }
+    } catch {
+      setStartError('The camera could not be started. Try again.');
+    } finally {
+      setStarting(false);
+    }
+  }
   const computer =
     platform === 'windows' || platform === 'macos' || platform === 'linux'
       ? platform
@@ -141,15 +168,28 @@ function ThisDevicePanel({
     <section className="add-device-panel" aria-label="This device">
       <h2>Use this device as a camera</h2>
       <p>
-        Beacon uses the camera on this device while this page stays open, and
-        shows a clear indicator whenever it is on.
+        {inAndroidApp
+          ? 'Beacon uses this phone’s camera, keeps it ready with the screen off, and shows a clear indicator whenever it is on.'
+          : 'Beacon uses the camera on this device while this page stays open, and shows a clear indicator whenever it is on.'}
       </p>
       <div className="add-device-actions">
-        <button className="btn primary" onClick={onUseBrowser} type="button">
-          Start the camera
+        <button
+          className="btn primary"
+          disabled={starting}
+          onClick={inAndroidApp ? () => void startPhoneCamera() : onUseBrowser}
+          type="button"
+        >
+          {inAndroidApp && phoneCamera?.paired
+            ? 'Open the camera'
+            : 'Start the camera'}
         </button>
       </div>
-      {!inDesktopApp && installer && (
+      {startError && (
+        <p className="add-device-error" role="alert">
+          {startError}
+        </p>
+      )}
+      {!inDesktopApp && !inAndroidApp && installer && (
         <div className="add-device-aside">
           <h3>Want it to keep running?</h3>
           <p>
@@ -167,7 +207,7 @@ function ThisDevicePanel({
           </a>
         </div>
       )}
-      {platform === 'android' && android && (
+      {platform === 'android' && !inAndroidApp && android && (
         <div className="add-device-aside">
           <h3>Want it to keep running?</h3>
           <p>
