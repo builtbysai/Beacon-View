@@ -26,7 +26,9 @@ mkdirSync(out, { recursive: true });
 const screens = {
   dashboard: ['/'],
   cameras: ['/cameras'],
-  activity: ['/activity'],
+  activity: ['/events'],
+  wall: ['/wall'],
+  trust: ['/trust'],
   settings: ['/settings'],
   'settings-notifications': ['/settings?section=notifications'],
   'settings-data': ['/settings?section=data'],

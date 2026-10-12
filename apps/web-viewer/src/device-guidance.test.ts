@@ -48,7 +48,7 @@ describe('device setup and recovery guidance', () => {
       platform: 'browser',
     });
     expect(browserGuidance.title).toBe('Browser camera is paused');
-    expect(browserGuidance.steps.join(' ')).toContain('Use this browser');
+    expect(browserGuidance.steps.join(' ')).toContain('This device');
   });
 
   it('distinguishes unfinished setup from a ready device', () => {

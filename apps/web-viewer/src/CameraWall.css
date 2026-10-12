@@ -176,3 +176,16 @@
   overflow: hidden;
   pointer-events: none;
 }
+
+/* In a small tile the status card is compact and sits above the name scrim instead of covering it. */
+.wall-tile .video-overlay {
+  top: 38%;
+  min-width: 0;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 10px 14px !important;
+  gap: 2px;
+}
+.wall-tile .video-overlay span {
+  font-size: 11px !important;
+}

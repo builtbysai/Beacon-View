@@ -248,7 +248,7 @@ describe('App', () => {
       screen.getByText(/Ask the household owner or an admin/),
     ).toBeVisible();
     expect(
-      screen.queryByRole('button', { name: /Add camera/i }),
+      screen.queryByRole('button', { name: /Add a device/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -501,7 +501,9 @@ describe('App', () => {
     render(<App />);
 
     await screen.findByText('Add your first device');
-    fireEvent.click(screen.getAllByRole('button', { name: 'Add camera' })[0]!);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Add a device' })[0]!,
+    );
     fireEvent.click(
       await screen.findByRole(
         'radio',

@@ -22,7 +22,7 @@ export function deviceGuidance(device: DeviceGuidanceInput): DeviceGuidance {
       summary:
         'Its access was revoked, so it cannot reconnect with the old pairing.',
       steps: [
-        'Create a fresh one-time setup link from Add camera.',
+        'Create a fresh one-time setup link from Add a device.',
         device.platform === 'android'
           ? 'Open Beacon on the camera phone and complete pairing with the new link or code.'
           : 'Return to Browser Camera Mode in the attended browser and register its sources again.',
@@ -38,7 +38,7 @@ export function deviceGuidance(device: DeviceGuidanceInput): DeviceGuidance {
         "Beacon won't accept camera connections from this device until it's paired again.",
       steps: [
         'Confirm that this is the device you intend to restore.',
-        'Create a fresh one-time setup link from Add camera and pair the device again.',
+        'Create a fresh one-time setup link from Add a device and pair the device again.',
       ],
     };
   }
@@ -72,7 +72,7 @@ export function deviceGuidance(device: DeviceGuidanceInput): DeviceGuidance {
         summary:
           'A browser camera is available only while Camera mode is open in that browser.',
         steps: [
-          'Open Add camera on that computer and choose Use this browser.',
+          'Open Add a device on that computer and choose This device.',
           'Allow camera access and leave Camera mode open while you want to share.',
         ],
       };

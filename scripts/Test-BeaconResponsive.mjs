@@ -151,12 +151,12 @@ const report = [];
     console.log('PASS', name, `${layout.scrollWidth}×${layout.scrollHeight}`);
   }
   async function assertCompactMobileHeaderAction(name) {
-    // The mobile top bar keeps a labelled "Add camera" action (it was once
+    // The mobile top bar keeps a labelled "Add a device" action (it was once
     // an icon-only button); it must stay a usable touch target and fit the
     // bar, which capture() separately checks for clipping.
     const size = await page
       .locator('.app-topbar-actions')
-      .getByRole('button', { name: 'Add camera' })
+      .getByRole('button', { name: 'Add a device' })
       .evaluate((button) => ({
         width: button.getBoundingClientRect().width,
         height: button.getBoundingClientRect().height,
@@ -166,7 +166,7 @@ const report = [];
       size.height >= 24 &&
         size.width >= 24 &&
         size.width <= innerWidthAtCapture(),
-      `${name}: mobile Add camera action is not a usable touch target ${JSON.stringify(size)}`,
+      `${name}: mobile Add a device action is not a usable touch target ${JSON.stringify(size)}`,
     );
     console.log(
       'PASS',
@@ -230,7 +230,7 @@ const report = [];
       ['/cameras', '.camera-tile-grid'],
       ['/events', '.activity-v3-container'],
       ['/settings', '.settings-shell'],
-      ['/camera-mode', '.add-device-grid'],
+      ['/camera-mode', '.add-device-kinds'],
       ['/contact', '#form'],
       ['/trust', '.commitments'],
       ['/pair?code=ABCD234567', '.pair-link-code'],
@@ -362,8 +362,13 @@ const report = [];
   ]) {
     await page.setViewportSize({ width, height });
     signedIn = true;
-    await visit('/camera-mode', '.add-device-grid');
-    await page.getByRole('button', { name: 'Pair a device →' }).click();
+    await visit('/camera-mode', '.add-device-kinds');
+    await page.getByRole('radio', { name: /Phone or tablet/ }).click();
+    await capture(`add-device-phone-${width}`);
+    await page.getByRole('radio', { name: /Computer/ }).click();
+    await capture(`add-device-computer-${width}`);
+    await page.getByRole('radio', { name: /This device/ }).click();
+    await page.getByRole('button', { name: 'Start the camera' }).click();
     await page.getByRole('dialog').waitFor();
     await capture(`pair-modal-${width}`);
     const modal = page.getByRole('dialog');
@@ -374,15 +379,13 @@ const report = [];
     assert.deepEqual(
       modalState,
       { modal: true, focusContained: true },
-      'Pairing dialog must take focus and make the page behind it inert',
+      'Camera dialog must take focus and make the page behind it inert',
     );
     const box = await modal.boundingBox();
     assert(
       box.y >= 0 && box.y + box.height <= height + 1,
       'Modal must scroll inside viewport',
     );
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await page.getByRole('button', { name: 'Use this device →' }).click();
     await page.getByRole('button', { name: 'Allow camera access' }).click();
     await page.getByRole('alert').waitFor();
     await capture(`camera-permission-denied-${width}`);

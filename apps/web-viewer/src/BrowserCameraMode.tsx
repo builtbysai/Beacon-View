@@ -974,11 +974,7 @@ export function BrowserCameraMode({
   }
 
   const setup = (
-    <section
-      className="local-modal"
-      role={standalone ? undefined : 'dialog'}
-      aria-modal={standalone ? undefined : true}
-    >
+    <section className="local-modal">
       <div className="local-mh">
         <div>
           <div className="local-eyebrow">Use this device</div>
@@ -1047,7 +1043,7 @@ export function BrowserCameraMode({
                   onChange={(event) =>
                     setPairingCode(event.target.value.toUpperCase())
                   }
-                  placeholder="Code from the account owner's Add camera screen"
+                  placeholder="Code from the account owner's Add a device screen"
                 />
                 <div className="local-hint">
                   Already paired in this browser? Leave the code blank to

@@ -1308,7 +1308,7 @@ function AppShell() {
                       onClick={() => navigate('camera mode')}
                     >
                       <Icon name="plus" />
-                      <span>Add camera</span>
+                      <span>Add a device</span>
                     </button>
                   )}
               </div>
