@@ -1,0 +1,4 @@
+# Fake UUIDs used as save-session tokens in unit tests (not credentials).
+827fde7cf13b51bff6c840717b24612a05aa829e:apps/android-camera/app/src/test/java/com/beaconsecureview/camera/NativeBridgeTest.kt:generic-api-key:119
+827fde7cf13b51bff6c840717b24612a05aa829e:apps/android-camera/app/src/test/java/com/beaconsecureview/camera/NativeBridgeTest.kt:generic-api-key:193
+827fde7cf13b51bff6c840717b24612a05aa829e:apps/web-viewer/src/android-save.test.ts:generic-api-key:21
