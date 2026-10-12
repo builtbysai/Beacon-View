@@ -111,7 +111,7 @@ export function GuestViewPage() {
     return (
       <main className="shell trust-shell pair-link-shell">
         <section className="trust-page" aria-labelledby="guest-view-title">
-          <a className="trust-brand" href="/" aria-label="Beacon home">
+          <a className="trust-brand" href="/" aria-label="Beacon View home">
             <Brand />
           </a>
           <p className="eyebrow">Shared camera</p>
@@ -124,7 +124,7 @@ export function GuestViewPage() {
     return (
       <main className="shell trust-shell pair-link-shell">
         <section className="trust-page" aria-labelledby="guest-view-title">
-          <a className="trust-brand" href="/" aria-label="Beacon home">
+          <a className="trust-brand" href="/" aria-label="Beacon View home">
             <Brand />
           </a>
           <p className="eyebrow">Shared camera</p>
@@ -144,7 +144,7 @@ export function GuestViewPage() {
     return (
       <main className="shell trust-shell pair-link-shell">
         <section className="trust-page" aria-labelledby="guest-view-title">
-          <a className="trust-brand" href="/" aria-label="Beacon home">
+          <a className="trust-brand" href="/" aria-label="Beacon View home">
             <Brand />
           </a>
           <p className="eyebrow">Shared camera</p>
@@ -167,7 +167,7 @@ export function GuestViewPage() {
     return (
       <main className="shell trust-shell pair-link-shell">
         <section className="trust-page" aria-labelledby="guest-view-title">
-          <a className="trust-brand" href="/" aria-label="Beacon home">
+          <a className="trust-brand" href="/" aria-label="Beacon View home">
             <Brand />
           </a>
           <p className="eyebrow">Shared camera</p>

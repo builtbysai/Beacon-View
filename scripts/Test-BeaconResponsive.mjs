@@ -25,6 +25,15 @@ const sizes = process.env.BEACON_QA_EXTENDED_ONLY
       [2560, 1080],
     ];
 const report = [];
+// BEACON_QA_AXE=1 also runs axe-core (WCAG 2.x A and AA rules) on every capture and lists what it finds.
+const axeEnabled = process.env.BEACON_QA_AXE === '1';
+const axeSource = axeEnabled
+  ? require('node:fs').readFileSync(
+      require.resolve('axe-core/axe.min.js'),
+      'utf8',
+    )
+  : '';
+const axeFindings = new Map();
 (async () => {
   const browser = await chromium.launch({
     channel: process.env.BEACON_QA_CHANNEL || 'msedge',
@@ -129,6 +138,34 @@ const report = [];
         clipped,
       };
     });
+    if (axeEnabled) {
+      // Mid-fade colours would be reported as low contrast; wait for them to settle.
+      await page.evaluate(() =>
+        Promise.all(document.getAnimations().map((a) => a.finished)).catch(
+          () => undefined,
+        ),
+      );
+      await page.evaluate(axeSource);
+      const result = await page.evaluate(() =>
+        window.axe.run(document, {
+          runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'],
+        }),
+      );
+      for (const violation of result.violations) {
+        const entry = axeFindings.get(violation.id) ?? {
+          help: violation.help,
+          impact: violation.impact,
+          states: new Set(),
+          targets: new Set(),
+        };
+        entry.states.add(name);
+        for (const node of violation.nodes.slice(0, 3))
+          entry.targets.add(
+            `${node.target.join(' ')}  <- ${node.html.slice(0, 160)} | ${(node.failureSummary ?? '').replace(/\s+/g, ' ').slice(0, 220)}`,
+          );
+        axeFindings.set(violation.id, entry);
+      }
+    }
     report.push({ name, ...layout });
     writeFileSync(
       path.join(out, 'results.json'),
@@ -488,6 +525,23 @@ const report = [];
     report.length,
     'captures; no page errors or unexpected API calls',
   );
+  if (axeEnabled) {
+    const rows = [...axeFindings].map(([id, entry]) => ({
+      id,
+      impact: entry.impact,
+      help: entry.help,
+      states: [...entry.states].slice(0, 6),
+      targets: [...entry.targets].slice(0, 4),
+    }));
+    writeFileSync(path.join(out, 'axe.json'), JSON.stringify(rows, null, 2));
+    console.log(
+      rows.length
+        ? `AXE ${rows.length} kinds of finding; see .beacon-dev/responsive-audit/axe.json`
+        : 'AXE no findings',
+    );
+    for (const row of rows) console.log(' -', row.impact, row.id, row.help);
+    assert.deepEqual(rows, [], 'axe found accessibility problems');
+  }
   await browser.close();
 })().catch((error) => {
   console.error(error);

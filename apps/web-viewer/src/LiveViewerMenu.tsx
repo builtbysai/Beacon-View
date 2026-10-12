@@ -79,8 +79,10 @@ export function LiveViewerMenu({
               </span>
               {group.items.map((item) => (
                 <button
-                  aria-label={item.ariaLabel}
-                  aria-pressed={item.pressed}
+                  aria-checked={item.pressed}
+                  aria-describedby={
+                    item.ariaLabel ? `viewer-menu-note-${item.id}` : undefined
+                  }
                   className="viewer-menu-item"
                   disabled={item.disabled}
                   key={item.id}
@@ -91,13 +93,24 @@ export function LiveViewerMenu({
                       triggerRef.current?.focus({ preventScroll: true });
                     }
                   }}
-                  role="menuitem"
+                  role={
+                    item.pressed === undefined ? 'menuitem' : 'menuitemcheckbox'
+                  }
                   type="button"
                 >
                   <Icon name={item.icon} />
                   <span className="viewer-menu-label">{item.label}</span>
                   {item.value && (
                     <span className="viewer-menu-value">{item.value}</span>
+                  )}
+                  {/* The visible words are the name (so voice control can say them); this adds the detail. */}
+                  {item.ariaLabel && (
+                    <span
+                      className="visually-hidden"
+                      id={`viewer-menu-note-${item.id}`}
+                    >
+                      {item.ariaLabel}
+                    </span>
                   )}
                 </button>
               ))}

@@ -334,7 +334,7 @@ nav {
   color: var(--text-primary);
 }
 
-.theme-toggle-btn[aria-pressed='true'] {
+.theme-toggle-btn[aria-checked='true'] {
   background-color: var(--bg-surface);
   color: var(--text-primary);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -429,8 +429,8 @@ nav {
 .sidebar-rail {
   position: absolute;
   top: 0;
-  right: -8px;
-  width: 16px;
+  right: -12px;
+  width: 24px;
   height: 100%;
   cursor: pointer;
   background: transparent;

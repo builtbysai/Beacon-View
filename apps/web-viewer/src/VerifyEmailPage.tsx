@@ -32,7 +32,7 @@ export function VerifyEmailPage() {
   return (
     <main className="shell trust-shell pair-link-shell">
       <section className="trust-page" aria-labelledby="verify-email-title">
-        <a className="trust-brand" href="/" aria-label="Beacon home">
+        <a className="trust-brand" href="/" aria-label="Beacon View home">
           <Brand />
         </a>
         <p className="eyebrow">Account</p>

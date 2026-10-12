@@ -684,7 +684,6 @@ export function MotionEventList({
                   className="events-row"
                   tabIndex={0}
                   role="button"
-                  aria-label={`View ${label} from ${activityDeviceName(event)}`}
                   onClick={() => setDrawerEvent(event)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {

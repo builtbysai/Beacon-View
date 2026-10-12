@@ -30,3 +30,8 @@
   font-size: 1.25rem;
   font-weight: 600;
 }
+
+/* The initial is drawn, not written, so a button that holds an avatar is named by its visible words alone. */
+.avatar-initial::before {
+  content: attr(data-initial);
+}

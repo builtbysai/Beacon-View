@@ -404,9 +404,9 @@
 }
 
 .retention-choices button[aria-checked='true'] {
-  border-color: var(--accent-base);
+  border-color: var(--accent-ink);
   background-color: var(--accent-subtle);
-  color: var(--accent-base);
+  color: var(--accent-ink);
 }
 
 .settings-subsection {

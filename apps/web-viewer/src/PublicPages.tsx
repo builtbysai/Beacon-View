@@ -13,7 +13,7 @@ export function PairLinkPage() {
   return (
     <main className="trust-shell">
       <section className="trust-page" aria-labelledby="pair-link-title">
-        <a className="trust-brand" href="/" aria-label="Beacon home">
+        <a className="trust-brand" href="/" aria-label="Beacon View home">
           <Brand />
         </a>
         <p className="eyebrow">New camera</p>
@@ -73,7 +73,7 @@ export function MobileAuthReturnPage() {
   return (
     <main className="trust-shell">
       <section className="trust-page" aria-labelledby="mobile-auth-title">
-        <a className="trust-brand" href="/" aria-label="Beacon home">
+        <a className="trust-brand" href="/" aria-label="Beacon View home">
           <Brand />
         </a>
         <p className="eyebrow">Beacon for Android</p>
@@ -112,7 +112,7 @@ export function DesktopAuthReturnPage() {
   return (
     <main className="trust-shell">
       <section className="trust-page" aria-labelledby="desktop-auth-title">
-        <a className="trust-brand" href="/" aria-label="Beacon home">
+        <a className="trust-brand" href="/" aria-label="Beacon View home">
           <Brand />
         </a>
         <p className="eyebrow">Beacon for desktop</p>

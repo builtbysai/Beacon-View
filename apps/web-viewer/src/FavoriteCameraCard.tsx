@@ -100,7 +100,7 @@ export function FavoriteCameraCard({
       <button
         type="button"
         className="favorite-card-surface"
-        aria-label={`View live: ${camera.deviceName}`}
+        aria-label={`${state.label}. View live: ${camera.deviceName}`}
         disabled={!state.available}
         aria-disabled={!state.available}
         onClick={() => {
@@ -124,7 +124,7 @@ export function FavoriteCameraCard({
             {state.label}
           </span>
           {camera.viewerCount > 0 && (
-            <span className="favorite-card-viewers">
+            <span className="favorite-card-viewers" aria-hidden="true">
               <Icon name="eye" />
               {camera.viewerCount}
             </span>

@@ -197,3 +197,12 @@ split-screen, tablets/foldables and older-device performance need their own date
 evidence. OAuth account choice still needs the owner on Android. See N1–N9 in the
 roadmap for owners, evidence and decisions; this web deployment is not public
 release approval.
+
+## Automated accessibility check
+
+Set `BEACON_QA_AXE=1` on the same command to run axe-core (WCAG 2.2 A and AA rules) on every captured state, in light
+and dark themes and at every width. It fails on any finding and writes the details to
+`.beacon-dev/responsive-audit/axe.json`. On 2026-10-12 the first run found six kinds of problem (a radio with
+`aria-pressed`, a tab pointing at a missing panel, menu items that were not menu items, accessible names that left out
+the visible words, low-contrast text in both themes, and a 16 px click strip); all are fixed and the audit is clean.
+This does not replace the manual keyboard, screen-reader and reduced-motion pass (roadmap N8).

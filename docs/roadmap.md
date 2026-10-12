@@ -34,7 +34,7 @@ Shipped, in outline (the ADR number has the detail):
 | Google Play (see [android-release.md](android-release.md))  | Account identity review and phone verification, an upload key, then store listing and data safety.                                      |
 | Legal and trust copy (N7)                                   | Owner and reviewer approve the [drafts](legal/) and name the operator, contact, region and retention.                                   |
 | Domain and sender identity (N4)                             | Owner decision; plan TLS, OAuth, Android app-links and rollback before any DNS change.                                                  |
-| Accessibility pass (N8)                                     | Keyboard, screen reader, contrast and reduced-motion check on real browsers and devices.                                                |
+| Accessibility pass (N8)                                     | Automated axe check is clean on 120 states; still needed: keyboard, screen reader and reduced-motion check on real browsers/devices.    |
 | Capacity limits (N9)                                        | Measure older-device decode, CPU, heat, battery and bandwidth; record safe viewer limits.                                               |
 | MFA and passkeys                                            | Approved in principle; needs the recovery decision (can a passkey be the only credential) first.                                        |
 | GitHub review rule                                          | `main` needs a pull request and green `validate` and `secrets` checks; no second reviewer is required.                                  |

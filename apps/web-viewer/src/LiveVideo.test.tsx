@@ -159,7 +159,7 @@ describe('LiveVideo', () => {
       expect(FakeWebSocket.instances).toHaveLength(count + 1);
       openMore();
       expect(
-        screen.getByRole('menuitem', { name: /Sleep timer: off/ }),
+        screen.getByRole('menuitem', { name: /Sleep timer/ }),
       ).toBeVisible();
     } finally {
       view.unmount();
@@ -278,7 +278,9 @@ describe('LiveVideo', () => {
     ).not.toBeInTheDocument();
     openMore();
     await act(async () => {
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Resume camera' }));
+      fireEvent.click(
+        screen.getByRole('menuitemcheckbox', { name: 'Resume camera' }),
+      );
       await Promise.resolve();
     });
     expect(onPrivacy).toHaveBeenCalledOnce();
@@ -789,10 +791,12 @@ describe('LiveVideo', () => {
     });
 
     openMore();
-    const statsToggle = screen.getByRole('menuitem', {
+    const statsToggle = screen.getByRole('menuitemcheckbox', {
       name: /Stream details/,
     });
-    expect(statsToggle).toHaveAccessibleName('Stream details: 1 other viewer');
+    expect(statsToggle).toHaveAccessibleDescription(
+      'Stream details: 1 other viewer',
+    );
     expect(statsToggle).toHaveTextContent('1 viewer');
     fireEvent.click(statsToggle);
     expect(screen.getByText('Watching now')).toBeVisible();
@@ -993,12 +997,16 @@ describe('LiveVideo', () => {
       await Promise.resolve();
     });
     openMore();
-    expect(screen.getByRole('menuitem', { name: /TURN relay/ })).toBeVisible();
+    expect(
+      screen.getByRole('menuitemcheckbox', { name: /Stream details/ }),
+    ).toHaveAccessibleDescription(/TURN relay/);
     expect(screen.getByText('Starting secure video')).toBeVisible();
     fireEvent.loadedData(container.querySelector('video')!);
     expect(screen.queryByText('Starting secure video')).not.toBeInTheDocument();
     openMore();
-    fireEvent.click(screen.getByRole('menuitem', { name: /TURN relay/ }));
+    fireEvent.click(
+      screen.getByRole('menuitemcheckbox', { name: /Stream details/ }),
+    );
     expect(screen.getByLabelText('Live stream quality')).toBeVisible();
     getStats.mockRejectedValueOnce(new Error('Peer closed'));
     await act(async () => {
@@ -1008,7 +1016,7 @@ describe('LiveVideo', () => {
     expect(screen.getByText('Connection: connected')).toBeInTheDocument();
     openMore();
     expect(
-      screen.queryByRole('menuitem', { name: /TURN relay/ }),
+      screen.queryByRole('menuitemcheckbox', { name: /Stream details/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -1039,11 +1047,13 @@ describe('LiveVideo', () => {
       'Full screen',
       'Picture fit',
       'Sleep timer',
-      'Ignore areas',
     ])
       expect(
         screen.getByRole('menuitem', { name: new RegExp(name) }),
       ).toBeVisible();
+    expect(
+      screen.getByRole('menuitemcheckbox', { name: /Ignore areas/ }),
+    ).toBeVisible();
     expect(screen.getByRole('menu')).toBeInTheDocument();
   });
 
