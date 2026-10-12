@@ -132,6 +132,14 @@ android {
             require(beaconApiUrl.startsWith("https://")) {
                 "Release Beacon API URL must use https://"
             }
+            // A signed release with the placeholder address cannot reach any server: refuse to build one (alpha11 to
+            // alpha13 were published that way). Unsigned CI builds keep the placeholder.
+            require(
+                beaconApiUrl != "https://invalid.beacon.local" ||
+                    providers.environmentVariable("BEACON_UPLOAD_KEYSTORE").orNull == null,
+            ) {
+                "Set BEACON_RELEASE_API_URL (https://beacon.builtbysai.com) before building a signed release."
+            }
             buildConfigField("String", "BEACON_API_URL", "\"$beaconApiUrl\"")
             val beaconWebUrl =
                 providers.gradleProperty("beaconReleaseWebUrl")
