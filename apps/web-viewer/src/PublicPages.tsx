@@ -60,33 +60,6 @@ export function PairLinkPage() {
   );
 }
 
-export function MobileAuthReturnPage() {
-  const status = new URLSearchParams(window.location.hash.slice(1)).get(
-    'status',
-  );
-  const message =
-    status === 'linkRequired'
-      ? 'This email already has a Beacon password account. Use that account in the app.'
-      : status === 'failed'
-        ? 'Google sign-in could not be completed. Return to Beacon and try again.'
-        : 'Return to the Beacon Android app to finish signing in.';
-  return (
-    <main className="trust-shell">
-      <section className="trust-page" aria-labelledby="mobile-auth-title">
-        <a className="trust-brand" href="/" aria-label="Beacon View home">
-          <Brand />
-        </a>
-        <p className="eyebrow">Beacon for Android</p>
-        <h1 id="mobile-auth-title">Finish in Beacon.</h1>
-        <p className="trust-lead">{message}</p>
-        <a className="btn-secondary w-full" href="/">
-          Return to Beacon
-        </a>
-      </section>
-    </main>
-  );
-}
-
 /** Google sign-in for the desktop app finishes here, in the person's own
  * browser (ADR 0083). The page hands the one-time, PKCE-bound code to the
  * app through its link and removes it from the address bar. Browsers only

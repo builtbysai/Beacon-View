@@ -365,48 +365,6 @@ describe.skipIf(!app || !store)('account recovery API with PostgreSQL', () => {
     expect((await signIn()).statusCode).toBe(200);
   });
 
-  it('applies the same rule to the Android sign-up and sign-in (V26)', async () => {
-    const resend = stubResend();
-    const credentials = {
-      email: 'mobile-verify@example.com',
-      password: 'first password value',
-    };
-    const registration = await app!.inject({
-      method: 'POST',
-      payload: credentials,
-      remoteAddress: '127.0.0.94',
-      url: '/api/mobile/auth/register',
-    });
-    expect(registration.statusCode).toBe(202);
-    expect(registration.json()).toEqual({
-      email: credentials.email,
-      verificationRequired: true,
-    });
-    const refused = await app!.inject({
-      method: 'POST',
-      payload: credentials,
-      remoteAddress: '127.0.0.94',
-      url: '/api/mobile/auth/login',
-    });
-    expect(refused.statusCode).toBe(403);
-    expect(refused.json()).toMatchObject({ code: 'email_not_verified' });
-    expect(refused.body).not.toContain('sessionToken');
-    const confirm = await app!.inject({
-      method: 'POST',
-      payload: { token: tokenFromEmail(resend.calls.at(-1)!) },
-      url: '/api/account/email/verify/confirm',
-    });
-    expect(confirm.statusCode).toBe(204);
-    const allowed = await app!.inject({
-      method: 'POST',
-      payload: credentials,
-      remoteAddress: '127.0.0.94',
-      url: '/api/mobile/auth/login',
-    });
-    expect(allowed.statusCode).toBe(200);
-    expect(allowed.json<{ sessionToken: string }>().sessionToken).toBeTruthy();
-  });
-
   it('counts a completed password reset as proof of the email address (V26)', async () => {
     const resend = stubResend();
     await app!.inject({

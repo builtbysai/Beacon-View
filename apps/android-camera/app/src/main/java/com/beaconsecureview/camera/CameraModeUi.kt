@@ -249,12 +249,6 @@ internal fun parsePairingQr(rawValue: String?, trustedApiUrl: String? = null, tr
     return code?.trim()?.uppercase()?.takeIf(::isValidPairingCode)
 }
 
-/** A successful exchange carries [code]; a failed or link-required attempt
- * (the backend redirects to `/auth/mobile#status=failed` or
- * `#status=linkRequired` when it has no handoff code to give, matching the
- * web's `?googleSignIn=failed`/`linkRequired` query param) carries [status]
- * instead so the caller can still show the PWA's equivalent message rather
- * than silently doing nothing. */
 @Composable
 internal fun PairingSuccess() {
     Column(

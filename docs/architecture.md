@@ -60,7 +60,8 @@ requiring repair.
 The Fastify backend owns identity, authorization, device pairing, credential
 revocation, presence, and signaling authorization. PostgreSQL is the security
 state authority. The React viewer uses cookie-authenticated JSON and WebSocket
-endpoints, while Android uses a separate bearer credential.
+endpoints (the Android app shows the same web app, so it signs in with the same cookie), while a camera device
+authenticates with its own bearer credential.
 
 Android enumerates Camera2 sources and binds the selected CameraX source to the
 foreground service.

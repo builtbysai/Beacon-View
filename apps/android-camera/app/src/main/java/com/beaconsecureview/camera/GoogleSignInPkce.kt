@@ -7,7 +7,7 @@ import java.util.Base64
 
 /**
  * PKCE (RFC 7636, S256) for the Google sign-in that returns through the
- * `beaconsecureview://auth/mobile` link. Any app on the phone can claim that
+ * `beaconsecureview://auth/desktop` link. Any app on the phone can claim that
  * custom scheme and read the code in it, so the code is bound to a challenge
  * and is useless without the verifier, which never leaves this app (V1).
  */

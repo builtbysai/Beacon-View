@@ -216,57 +216,6 @@ describe.skipIf(!app || !store)('desktop Google sign-in handoff', () => {
     ).toBe('desktop-owner@example.com');
   });
 
-  describe('Android handoff (V1)', () => {
-    async function androidBrowserSignIn(challenge: string): Promise<string> {
-      const start = await app!.inject({
-        method: 'GET',
-        url: `/api/auth/google?platform=android&challenge=${challenge}`,
-      });
-      expect(start.statusCode).toBe(302);
-      const state = new URL(String(start.headers.location)).searchParams.get(
-        'state',
-      );
-      expect(state).toMatch(/^android\./);
-      const callback = await app!.inject({
-        headers: { cookie: cookiePairs(start.headers).join('; ') },
-        method: 'GET',
-        url: `/api/auth/google/callback?code=simulated&state=${encodeURIComponent(state!)}`,
-      });
-      expect(callback.statusCode).toBe(302);
-      const link = new URL(String(callback.headers.location));
-      expect(link.protocol).toBe('beaconsecureview:');
-      return link.searchParams.get('code')!;
-    }
-    const exchangeAndroid = (code: string, verifier?: string) =>
-      app!.inject({
-        headers: { 'content-type': 'application/json' },
-        method: 'POST',
-        payload: JSON.stringify(verifier ? { code, verifier } : { code }),
-        url: '/api/mobile/auth/google',
-      });
-
-    it('signs the phone in only with the verifier the app kept', async () => {
-      const { challenge, verifier } = newVerifier();
-      const code = await androidBrowserSignIn(challenge);
-      const response = await exchangeAndroid(code, verifier);
-      expect(response.statusCode).toBe(200);
-      expect(
-        response.json<{ sessionToken: string }>().sessionToken,
-      ).toBeTruthy();
-    });
-
-    it('never redeems an intercepted link code, without a verifier or with the wrong one', async () => {
-      const { challenge, verifier } = newVerifier();
-      const code = await androidBrowserSignIn(challenge);
-      expect((await exchangeAndroid(code)).statusCode).toBe(401);
-      const stolen = await exchangeAndroid(code, newVerifier().verifier);
-      expect(stolen.statusCode).toBe(401);
-      expect(stolen.body).not.toContain('sessionToken');
-      // A failed attempt consumes the code, so the right verifier is too late.
-      expect((await exchangeAndroid(code, verifier)).statusCode).toBe(401);
-    });
-  });
-
   it('reports a failed desktop sign-in back through the deep link', async () => {
     const { challenge } = newVerifier();
     const start = await app!.inject({
