@@ -104,7 +104,7 @@ export function CameraTile({
       <button
         type="button"
         className="camera-tile-open"
-        aria-label={`View live: ${primaryName}`}
+        aria-label={`${state.label}. View live: ${primaryName}`}
         disabled={!state.available}
         aria-disabled={!state.available}
         onClick={() => {
@@ -134,7 +134,7 @@ export function CameraTile({
             {state.label}
           </span>
           {camera.viewerCount > 0 && (
-            <span className="camera-tile-viewers">
+            <span className="camera-tile-viewers" aria-hidden="true">
               <Icon name="eye" />
               {camera.viewerCount}
             </span>

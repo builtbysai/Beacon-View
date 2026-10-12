@@ -115,13 +115,15 @@ describe('mobile sidebar', () => {
     expect(screen.getByRole('button', { name: 'Close menu' })).toHaveFocus();
     expect(sidebar).toHaveAttribute('aria-modal', 'true');
 
-    screen.getByRole('link', { name: 'Beacon home' }).focus();
+    screen.getByRole('link', { name: 'Beacon View home' }).focus();
     fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
     expect(
       screen.getByRole('button', { name: /owner@example\.test/ }),
     ).toHaveFocus();
     fireEvent.keyDown(window, { key: 'Tab' });
-    expect(screen.getByRole('link', { name: 'Beacon home' })).toHaveFocus();
+    expect(
+      screen.getByRole('link', { name: 'Beacon View home' }),
+    ).toHaveFocus();
 
     fireEvent.click(screen.getByRole('button', { name: 'Home' }));
     expect(onSelect).toHaveBeenCalledOnce();
@@ -184,7 +186,7 @@ describe('mobile sidebar', () => {
     fireEvent.click(
       screen.getByRole('button', { name: /owner@example\.test/ }),
     );
-    const theme = screen.getByRole('button', { name: 'Light' });
+    const theme = screen.getByRole('menuitemradio', { name: 'Light' });
     const trust = screen.getByRole('menuitem', { name: /Trust & privacy/ });
     const signOut = screen.getByRole('menuitem', { name: /Sign out/ });
     expect(trust).toHaveFocus();
@@ -216,7 +218,10 @@ describe('account menu', () => {
     );
     fireEvent.error(image!);
     expect(container.querySelector('img.avatar')).not.toBeInTheDocument();
-    expect(screen.getByText('O')).toBeInTheDocument();
+    expect(container.querySelector('.avatar-initial')).toHaveAttribute(
+      'data-initial',
+      'O',
+    );
   });
 
   it('closes on Escape and on an outside click', () => {

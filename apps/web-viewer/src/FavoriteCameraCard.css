@@ -184,7 +184,7 @@
 }
 
 .favorite-card-signal-warn {
-  color: var(--status-warning);
+  color: var(--status-warning-text);
 }
 
 .favorite-card-signal-warn i {

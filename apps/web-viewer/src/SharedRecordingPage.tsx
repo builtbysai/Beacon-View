@@ -105,7 +105,7 @@ export function SharedRecordingPage() {
     return (
       <main className="shell trust-shell pair-link-shell">
         <section className="trust-page" aria-labelledby="shared-clip-title">
-          <a className="trust-brand" href="/" aria-label="Beacon home">
+          <a className="trust-brand" href="/" aria-label="Beacon View home">
             <Brand />
           </a>
           <p className="eyebrow">Shared clip</p>
@@ -118,7 +118,7 @@ export function SharedRecordingPage() {
     return (
       <main className="shell trust-shell pair-link-shell">
         <section className="trust-page" aria-labelledby="shared-clip-title">
-          <a className="trust-brand" href="/" aria-label="Beacon home">
+          <a className="trust-brand" href="/" aria-label="Beacon View home">
             <Brand />
           </a>
           <p className="eyebrow">Shared clip</p>
@@ -138,7 +138,7 @@ export function SharedRecordingPage() {
     return (
       <main className="shell trust-shell pair-link-shell">
         <section className="trust-page" aria-labelledby="shared-clip-title">
-          <a className="trust-brand" href="/" aria-label="Beacon home">
+          <a className="trust-brand" href="/" aria-label="Beacon View home">
             <Brand />
           </a>
           <p className="eyebrow">Shared clip</p>
@@ -160,7 +160,7 @@ export function SharedRecordingPage() {
   return (
     <main className="shell trust-shell pair-link-shell">
       <section className="trust-page" aria-labelledby="shared-clip-title">
-        <a className="trust-brand" href="/" aria-label="Beacon home">
+        <a className="trust-brand" href="/" aria-label="Beacon View home">
           <Brand />
         </a>
         <p className="eyebrow">Shared clip</p>

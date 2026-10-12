@@ -1172,7 +1172,7 @@ export function BrowserCameraMode({
         <div className="broadcast-setup-wrap">
           <a
             href="/"
-            aria-label="Beacon home"
+            aria-label="Beacon View home"
             className="broadcast-setup-brand"
           >
             <Brand />

@@ -427,7 +427,7 @@ describe('App', () => {
     );
     render(<App />);
     const open = await screen.findByRole('button', {
-      name: 'View live: Hallway phone',
+      name: /View live: Hallway phone/,
     });
     expect(open).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('heading', { name: 'Favorites' })).toBeVisible();
@@ -599,7 +599,7 @@ describe('App', () => {
       screen.getByRole('button', { name: 'Pixel options' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'View live: Pixel' }),
+      screen.getByRole('button', { name: /View live: Pixel/ }),
     ).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Pixel options' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Camera settings' }));
@@ -611,7 +611,7 @@ describe('App', () => {
     );
     expect(search).toHaveValue('Pixel');
     expect(
-      screen.getByRole('button', { name: 'View live: Pixel' }),
+      screen.getByRole('button', { name: /View live: Pixel/ }),
     ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Pixel' })).toBeInTheDocument();
     expect(
@@ -658,7 +658,7 @@ describe('App', () => {
     expect(screen.queryByRole('dialog', { name: 'Pixel' })).toBeNull();
     expect(screen.getByLabelText('Your cameras')).toBe(catalog);
     expect(search).toHaveValue('Pixel');
-    fireEvent.click(screen.getByRole('button', { name: 'View live: Pixel' }));
+    fireEvent.click(screen.getByRole('button', { name: /View live: Pixel/ }));
     const liveView = screen.getByRole('main');
     fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
     expect(screen.getByRole('dialog', { name: 'Pixel' })).toBeVisible();

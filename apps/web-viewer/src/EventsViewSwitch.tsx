@@ -30,7 +30,9 @@ export function EventsViewSwitch({
           role="tab"
           id={`events-view-tab-${view.id}`}
           aria-selected={value === view.id}
-          aria-controls={`events-view-panel-${view.id}`}
+          aria-controls={
+            value === view.id ? `events-view-panel-${view.id}` : undefined
+          }
           tabIndex={value === view.id ? 0 : -1}
           className={`events-view-tab ${value === view.id ? 'on' : ''}`}
           onClick={() => onChange(view.id)}

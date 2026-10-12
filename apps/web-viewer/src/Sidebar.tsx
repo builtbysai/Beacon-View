@@ -323,7 +323,7 @@ export function Sidebar({
         onPointerLeave={deferHideTip}
       >
         <div className="sidebar-header">
-          <a className="sidebar-brand" href="/" aria-label="Beacon home">
+          <a className="sidebar-brand" href="/" aria-label="Beacon View home">
             {state === 'collapsed' && !isMobile ? <Brand compact /> : <Brand />}
           </a>
           {isMobile && (
@@ -430,7 +430,8 @@ export function Sidebar({
                 <button
                   type="button"
                   className="theme-toggle-btn"
-                  aria-pressed={theme === 'light'}
+                  role="menuitemradio"
+                  aria-checked={theme === 'light'}
                   onClick={() => setTheme('light')}
                 >
                   <Icon name="sun" /> Light
@@ -438,7 +439,8 @@ export function Sidebar({
                 <button
                   type="button"
                   className="theme-toggle-btn"
-                  aria-pressed={theme === 'system'}
+                  role="menuitemradio"
+                  aria-checked={theme === 'system'}
                   onClick={() => setTheme('system')}
                 >
                   <Icon name="browser" /> System
@@ -446,7 +448,8 @@ export function Sidebar({
                 <button
                   type="button"
                   className="theme-toggle-btn"
-                  aria-pressed={theme === 'dark'}
+                  role="menuitemradio"
+                  aria-checked={theme === 'dark'}
                   onClick={() => setTheme('dark')}
                 >
                   <Icon name="moon" /> Dark

@@ -63,7 +63,7 @@ describe('camera browsing', () => {
     ).toEqual(['Hallway', 'Garden']);
     expect(
       screen.getByRole('radio', { name: 'Ready to view' }),
-    ).toHaveAttribute('aria-pressed', 'true');
+    ).toHaveAttribute('aria-checked', 'true');
   });
   it('uses revoked access ahead of privacy when filtering attention', () => {
     mount();

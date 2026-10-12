@@ -1734,42 +1734,49 @@ function AppShell() {
             {page === 'events' && (
               <>
                 <EventsViewSwitch value={eventsView} onChange={setEventsView} />
-                {eventsView === 'clips' ? (
-                  <RecordingLibrary
-                    key={`clips_${user.id}_${household?.id ?? ''}_${household?.role ?? ''}_${membershipRevision}`}
-                    bookmarkStorageKey={`beacon_clip_bookmarks_${user.id}_${household?.id ?? ''}`}
-                    cameras={cameras}
-                    canDelete={household?.role === 'owner'}
-                    canShare={household?.role === 'owner'}
-                    focusRecordingId={focusRecordingId}
-                    onFocusHandled={() => setFocusRecordingId(null)}
-                    onOpenEvent={(motionEventId) => {
-                      setFocusMotionEventId(motionEventId);
-                      setEventsView('activity');
-                    }}
-                  />
-                ) : (
-                  <MotionEventList
-                    key={`activity_${user.id}_${household?.id ?? ''}`}
-                    filterStorageKey={`beacon_motion_filters_${user.id}_${household?.id ?? ''}`}
-                    includeHouseholdActivity={
-                      household?.role === 'owner' || household?.role === 'admin'
-                    }
-                    refreshRevision={motionEventRevision}
-                    clearRevision={motionClearRevision}
-                    cameras={cameras}
-                    onCamera={(id) => {
-                      const camera = cameras.find((item) => item.id === id);
-                      if (camera) openCamera(camera);
-                    }}
-                    onViewClip={(recordingId: string) => {
-                      setFocusRecordingId(recordingId);
-                      setEventsView('clips');
-                    }}
-                    focusMotionEventId={focusMotionEventId}
-                    onFocusHandled={() => setFocusMotionEventId(null)}
-                  />
-                )}
+                <div
+                  role="tabpanel"
+                  id={`events-view-panel-${eventsView}`}
+                  aria-labelledby={`events-view-tab-${eventsView}`}
+                >
+                  {eventsView === 'clips' ? (
+                    <RecordingLibrary
+                      key={`clips_${user.id}_${household?.id ?? ''}_${household?.role ?? ''}_${membershipRevision}`}
+                      bookmarkStorageKey={`beacon_clip_bookmarks_${user.id}_${household?.id ?? ''}`}
+                      cameras={cameras}
+                      canDelete={household?.role === 'owner'}
+                      canShare={household?.role === 'owner'}
+                      focusRecordingId={focusRecordingId}
+                      onFocusHandled={() => setFocusRecordingId(null)}
+                      onOpenEvent={(motionEventId) => {
+                        setFocusMotionEventId(motionEventId);
+                        setEventsView('activity');
+                      }}
+                    />
+                  ) : (
+                    <MotionEventList
+                      key={`activity_${user.id}_${household?.id ?? ''}`}
+                      filterStorageKey={`beacon_motion_filters_${user.id}_${household?.id ?? ''}`}
+                      includeHouseholdActivity={
+                        household?.role === 'owner' ||
+                        household?.role === 'admin'
+                      }
+                      refreshRevision={motionEventRevision}
+                      clearRevision={motionClearRevision}
+                      cameras={cameras}
+                      onCamera={(id) => {
+                        const camera = cameras.find((item) => item.id === id);
+                        if (camera) openCamera(camera);
+                      }}
+                      onViewClip={(recordingId: string) => {
+                        setFocusRecordingId(recordingId);
+                        setEventsView('clips');
+                      }}
+                      focusMotionEventId={focusMotionEventId}
+                      onFocusHandled={() => setFocusMotionEventId(null)}
+                    />
+                  )}
+                </div>
               </>
             )}
             {page === 'diagnostics' && (

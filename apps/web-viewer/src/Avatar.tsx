@@ -32,8 +32,10 @@ export function Avatar({
     );
   }
   return (
-    <span className={`${classes} avatar-initial`} aria-hidden="true">
-      {email.charAt(0).toUpperCase()}
-    </span>
+    <span
+      className={`${classes} avatar-initial`}
+      aria-hidden="true"
+      data-initial={email.charAt(0).toUpperCase()}
+    />
   );
 }

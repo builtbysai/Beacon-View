@@ -41,7 +41,7 @@ export function ResetPasswordPage() {
   return (
     <main className="trust-shell">
       <section className="trust-page" aria-labelledby="reset-password-title">
-        <a className="trust-brand" href="/" aria-label="Beacon home">
+        <a className="trust-brand" href="/" aria-label="Beacon View home">
           <Brand />
         </a>
         <p className="eyebrow">Account</p>

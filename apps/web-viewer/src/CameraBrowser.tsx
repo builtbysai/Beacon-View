@@ -104,7 +104,6 @@ export function CameraBrowser<T extends SearchableCamera>({
               <button
                 type="button"
                 key={value}
-                aria-pressed={filter === value}
                 role="radio"
                 aria-checked={filter === value}
                 onClick={() => setFilter(value)}
