@@ -71,7 +71,7 @@ jobs:
         run: >-
           scp
           -i "$RUNNER_TEMP/beacon-ssh/id_ed25519"
-          -o HostKeyAlias=129.213.128.206
+          -o HostKeyAlias=${{ vars.ORACLE_HOST_KEY_ALIAS }}
           -o IdentitiesOnly=yes
           -o StrictHostKeyChecking=yes
           -o UserKnownHostsFile="$RUNNER_TEMP/beacon-ssh/known_hosts"
@@ -87,7 +87,7 @@ jobs:
         run: |
           ssh \
             -i "$RUNNER_TEMP/beacon-ssh/id_ed25519" \
-            -o HostKeyAlias=129.213.128.206 \
+            -o HostKeyAlias=${{ vars.ORACLE_HOST_KEY_ALIAS }} \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$RUNNER_TEMP/beacon-ssh/known_hosts" \
