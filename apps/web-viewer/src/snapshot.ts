@@ -25,7 +25,7 @@ export function snapshotFileName(cameraName: string, now: Date): string {
   return `Beacon-${name}-${stamp}.png`;
 }
 
-export class SnapshotError extends Error {
+class SnapshotError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'SnapshotError';

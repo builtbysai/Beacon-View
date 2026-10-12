@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
-export interface WrappedRecordingKey {
+interface WrappedRecordingKey {
   ciphertext: Buffer;
   iv: Buffer;
 }

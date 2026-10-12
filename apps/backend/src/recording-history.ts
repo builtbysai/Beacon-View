@@ -17,7 +17,7 @@ const querySchema = z
   })
   .strict();
 
-export interface RecordingHistoryQuery {
+interface RecordingHistoryQuery {
   before?: { time: string; id: string };
   limit: number;
 }

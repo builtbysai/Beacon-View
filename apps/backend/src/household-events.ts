@@ -5,7 +5,7 @@ import type { AppConfig } from './config.js';
 import { hashSecret } from './security.js';
 import type { MilestoneStore } from './store.js';
 
-export type HouseholdEvent =
+type HouseholdEvent =
   | {
       cameraId: string;
       pairingState: 'completed';

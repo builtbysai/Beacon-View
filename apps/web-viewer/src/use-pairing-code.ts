@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { request } from './api';
 import { friendlyError } from './friendly-errors';
 
-export interface PairingCodeState {
+interface PairingCodeState {
   code: string;
   /** The code ran out; a new one is needed. */
   expired: boolean;

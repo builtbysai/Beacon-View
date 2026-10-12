@@ -2,7 +2,7 @@ import type { Pool } from 'pg';
 
 import { GoogleDriveTokenCipher } from './google-drive-crypto.js';
 
-export interface GoogleDriveConnectionRecord {
+interface GoogleDriveConnectionRecord {
   providerEmail: string | null;
   scopes: string;
   updatedAt: Date;

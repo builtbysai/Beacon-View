@@ -1,4 +1,4 @@
-export interface DeviceGuidanceInput {
+interface DeviceGuidanceInput {
   cameraCount: number;
   enabled: boolean;
   online: boolean;
@@ -7,7 +7,7 @@ export interface DeviceGuidanceInput {
   revoked: boolean;
 }
 
-export interface DeviceGuidance {
+interface DeviceGuidance {
   attention: boolean;
   summary: string;
   steps: string[];

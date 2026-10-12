@@ -16,7 +16,7 @@ export type HouseholdMode = 'home' | 'away';
 
 const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/u);
 
-export const scheduleWindowSchema = z
+const scheduleWindowSchema = z
   .object({
     /** 0 is Sunday, 6 is Saturday, in the window's own time zone. */
     days: z
@@ -37,12 +37,12 @@ export const scheduleWindowSchema = z
   });
 
 /** Times when the household is Home. Outside every window it is Away. */
-export const scheduleSchema = z
+const scheduleSchema = z
   .object({ windows: z.array(scheduleWindowSchema).min(1).max(8) })
   .strict();
 
-export type ModeSchedule = z.infer<typeof scheduleSchema>;
-export type ScheduleWindow = z.infer<typeof scheduleWindowSchema>;
+type ModeSchedule = z.infer<typeof scheduleSchema>;
+type ScheduleWindow = z.infer<typeof scheduleWindowSchema>;
 
 export const modeSettingsSchema = z
   .object({

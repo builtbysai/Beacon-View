@@ -67,6 +67,8 @@ Organize the system into these major components:
 
 ### 1. Android camera agent
 
+Since ADR 0121 the Android app also hosts the web app in a locked-down WebView, so the viewer on Android is the web app itself; the camera agent below stays native.
+
 Preferred implementation:
 
 * Kotlin

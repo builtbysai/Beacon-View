@@ -16,7 +16,7 @@ import { generateToken, hashSecret, secretsEqual } from './security.js';
 /** The browser lands here after Google; the page hands the code to the app
  * through beaconsecureview://auth/desktop and tells the person the tab can
  * be closed (apps/web-viewer DesktopAuthReturnPage). */
-export const DESKTOP_COMPLETION_PATH = '/auth/desktop/complete';
+const DESKTOP_COMPLETION_PATH = '/auth/desktop/complete';
 
 /** BASE64URL(SHA-256(verifier)) is always exactly 43 characters. */
 export const PKCE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;

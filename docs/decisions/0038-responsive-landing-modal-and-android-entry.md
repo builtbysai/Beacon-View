@@ -1,6 +1,6 @@
 # 0038 — Responsive landing, native modal and Android entry choice
 
-Date: 2026-09-08. Status: accepted within the requested experience milestone.
+Date: 2026-09-08. Status: accepted within the requested experience milestone; the Android monitor sign-in choice was removed by ADR 0121.
 
 The signed-out web experience uses a two-panel landing page where space permits and
 the compact authentication card alone on phone and tablet widths. The supplied SVG

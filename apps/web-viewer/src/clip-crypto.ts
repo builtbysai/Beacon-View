@@ -15,7 +15,7 @@
 import { Sha256 } from './sha256';
 
 export const CLIP_HEADER_BYTES = 16;
-export const CLIP_CHUNK_BYTES = 1024 * 1024;
+const CLIP_CHUNK_BYTES = 1024 * 1024;
 const TAG_BYTES = 16;
 const MIN_CHUNK_BYTES = 4096;
 const MAX_CHUNK_BYTES = 16 * 1024 * 1024;
@@ -56,7 +56,7 @@ function chunkNonce(
   return nonce;
 }
 
-export interface ChunkedClip {
+interface ChunkedClip {
   blob: Blob;
   dataKey: string;
   iv: string;

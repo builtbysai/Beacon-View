@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 
-export interface QuietHours {
+interface QuietHours {
   start: string;
   end: string;
   timeZone: string;
@@ -63,10 +63,10 @@ export function isQuietHoursActive(quietHours: QuietHours, now: Date): boolean {
 
 /** Motion zones (ADR 0092): a 16 x 16 grid over the upright picture,
  * numbered row by row (0 is the top-left cell, 255 the bottom-right). */
-export const ZONE_GRID_SIZE = 16;
-export const ZONE_COUNT = ZONE_GRID_SIZE * ZONE_GRID_SIZE;
+const ZONE_GRID_SIZE = 16;
+const ZONE_COUNT = ZONE_GRID_SIZE * ZONE_GRID_SIZE;
 
-export const ignoredZonesSchema = z
+const ignoredZonesSchema = z
   .array(
     z
       .number()

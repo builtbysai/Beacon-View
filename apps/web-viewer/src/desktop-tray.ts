@@ -1,9 +1,9 @@
 import { desktopBridge } from './desktop-shell';
 
 /** How many favorites the desktop tray lists (ADR 0095). */
-export const TRAY_CAMERA_LIMIT = 6;
+const TRAY_CAMERA_LIMIT = 6;
 /** Home shows this many when nothing has been chosen yet. */
-export const DEFAULT_FAVORITE_COUNT = 4;
+const DEFAULT_FAVORITE_COUNT = 4;
 
 interface TrayCandidate {
   deviceId: string;

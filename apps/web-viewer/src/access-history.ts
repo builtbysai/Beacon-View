@@ -17,7 +17,7 @@ export interface AccessEvent {
   reason: string | null;
 }
 
-export interface AccessEventPresentation {
+interface AccessEventPresentation {
   detail: string | null;
   label: string;
   tone: 'danger' | 'neutral' | 'success' | 'warning';
@@ -69,7 +69,7 @@ export function accessEventPresentation(
   }
 }
 
-export interface AccessEventGroup {
+interface AccessEventGroup {
   key: string;
   latest: AccessEvent;
   attempts: number;

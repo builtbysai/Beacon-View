@@ -15,26 +15,6 @@ import './Settings.css';
  * container query" for the incident this replaces.
  */
 
-export function SettingsSectionHeader({
-  eyebrow,
-  title,
-  description,
-}: {
-  eyebrow?: string;
-  title: string;
-  description?: ReactNode;
-}) {
-  return (
-    <div className="settings-section-header">
-      {eyebrow && <p className="eyebrow">{eyebrow}</p>}
-      <h2>{title}</h2>
-      {description && (
-        <p className="settings-section-description">{description}</p>
-      )}
-    </div>
-  );
-}
-
 /** A distinct, bordered block within a section -- use for a form, a
  * self-contained feature (Danger zone, Join another household), or a list.
  * Plain content that's just a sequence of <SettingsRow>s doesn't need one. */
@@ -150,8 +130,4 @@ export function SettingsField({
       {children}
     </div>
   );
-}
-
-export function SettingsEmpty({ children }: { children: ReactNode }) {
-  return <p className="empty">{children}</p>;
 }

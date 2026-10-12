@@ -9,7 +9,7 @@
 /** Parse a user-agent string into its browser and OS family, e.g. "Chrome"
  * and "Windows". Returns nulls for anything unrecognized rather than
  * guessing. */
-export function parseUserAgent(userAgent: string | null | undefined): {
+function parseUserAgent(userAgent: string | null | undefined): {
   browser: string | null;
   os: string | null;
 } {

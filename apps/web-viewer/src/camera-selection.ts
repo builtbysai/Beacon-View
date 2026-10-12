@@ -1,4 +1,4 @@
-export interface SelectableCamera {
+interface SelectableCamera {
   availability?: string;
   deviceId: string;
   id: string;

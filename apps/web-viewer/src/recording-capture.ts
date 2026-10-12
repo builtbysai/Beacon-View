@@ -47,7 +47,7 @@ export async function sha256Hex(blob: Blob): Promise<string> {
     .join('');
 }
 
-export interface EncryptedClip {
+interface EncryptedClip {
   blob: Blob;
   dataKey: string;
   iv: string;

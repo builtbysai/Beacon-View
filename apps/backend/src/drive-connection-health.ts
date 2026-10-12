@@ -8,13 +8,12 @@ import {
 } from './google-drive-client.js';
 import type { MilestoneStore } from './store.js';
 
-export const DRIVE_RECONNECT_MESSAGE =
+const DRIVE_RECONNECT_MESSAGE =
   'Google Drive disconnected, so Beacon can’t save or open recordings. Reconnect Google Drive to continue.';
-export const DRIVE_NOT_CONNECTED_MESSAGE =
-  'Connect Google Drive to save recordings.';
+const DRIVE_NOT_CONNECTED_MESSAGE = 'Connect Google Drive to save recordings.';
 
 /** Recording storage is not connected at all (never, or disconnected). */
-export class DriveNotConnectedError extends Error {
+class DriveNotConnectedError extends Error {
   constructor() {
     super(DRIVE_NOT_CONNECTED_MESSAGE);
     this.name = 'DriveNotConnectedError';
@@ -26,7 +25,7 @@ export class DriveNotConnectedError extends Error {
 export const DRIVE_HEALTH_CHECK_INTERVAL_MS = 60 * 60 * 1_000;
 
 /** Which connection a caller needs: any (app data) or recordings. */
-export type DriveNeed = 'any' | 'recordings';
+type DriveNeed = 'any' | 'recordings';
 
 function satisfies(scopes: string, need: DriveNeed): boolean {
   return (
@@ -35,10 +34,9 @@ function satisfies(scopes: string, need: DriveNeed): boolean {
   );
 }
 
-export type DriveProblemCode =
-  'drive_not_connected' | 'drive_reconnect_required';
+type DriveProblemCode = 'drive_not_connected' | 'drive_reconnect_required';
 
-export function driveProblemBody(code: DriveProblemCode): {
+function driveProblemBody(code: DriveProblemCode): {
   code: DriveProblemCode;
   error: string;
 } {

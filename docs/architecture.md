@@ -47,7 +47,8 @@ state ensuring one offline and one recovery transition. See
 A household owns devices; each device exposes one or more camera sources.
 Android and browser devices may produce video, while any responsive browser may
 view it. Producer and viewer roles are not mutually exclusive. See
-[`multi-camera-architecture.md`](multi-camera-architecture.md).
+[`multi-camera-architecture.md`](multi-camera-architecture.md) and
+[`camera-source-model.md`](camera-source-model.md).
 
 The historical SQL `cameras` table now represents devices for migration
 compatibility. `camera_sources` contains independently addressable sources.

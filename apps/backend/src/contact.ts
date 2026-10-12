@@ -23,7 +23,7 @@ export class ResendDeliveryError extends Error {
   }
 }
 
-export interface ContactMessage {
+interface ContactMessage {
   email: string;
   message: string;
   name?: string | undefined;

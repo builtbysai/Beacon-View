@@ -6,12 +6,12 @@ export interface HouseholdMembership {
   expiresAt: Date | null;
 }
 
-export interface CameraGrant {
+interface CameraGrant {
   canListen: boolean;
   canTalk: boolean;
 }
 
-export type HouseholdCapability =
+type HouseholdCapability =
   'manage_cameras' | 'manage_members' | 'view_camera' | 'listen' | 'talk';
 
 /** Central deny-by-default policy for household sharing. Routes and sockets

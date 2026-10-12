@@ -13,7 +13,7 @@ export function wallStorageKey(userId: string, householdId: string): string {
   return `beacon.wall.layouts.v1:${encodeURIComponent(userId)}:${encodeURIComponent(householdId)}`;
 }
 
-export function validLayout(value: unknown): value is WallLayout {
+function validLayout(value: unknown): value is WallLayout {
   if (!value || typeof value !== 'object') return false;
   const item = value as Partial<WallLayout>;
   return (

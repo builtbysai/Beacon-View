@@ -22,12 +22,12 @@ import {
 
 const { autoUpdater } = electronUpdater;
 
-export interface UpdateOffer {
+interface UpdateOffer {
   label: string;
   run(): void;
 }
 
-export interface AutoUpdaterHooks {
+interface AutoUpdaterHooks {
   /** What is happening right now, to pick a quiet moment to restart. */
   moment(): InstallMoment;
   /** Called just before a quiet restart, so the app comes back the way it

@@ -2,7 +2,7 @@ import type { AccessibleCameraRecord, CameraRecord } from './store.js';
 
 const ONLINE_WINDOW = 90 * 1_000;
 
-export interface CameraConnectionStatus {
+interface CameraConnectionStatus {
   producerConnected: boolean;
   viewerCount: number;
 }
@@ -16,7 +16,7 @@ export function isCameraOnline(
   );
 }
 
-export interface CameraViewerContext {
+interface CameraViewerContext {
   role: 'owner' | 'admin' | 'viewer' | 'guest';
   userId: string;
 }
@@ -38,7 +38,7 @@ export function canRemoveCamera(
  * else shared with them -- it's their own grant row, so there's nothing to
  * confirm beyond "is this actually a grant-gated role." Owner/admin see
  * every camera unconditionally and have no grant to leave. */
-export function canLeaveCamera(viewer: CameraViewerContext): boolean {
+function canLeaveCamera(viewer: CameraViewerContext): boolean {
   return viewer.role === 'viewer' || viewer.role === 'guest';
 }
 

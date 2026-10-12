@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
 
-export interface TurnCredential {
+interface TurnCredential {
   credential: string;
   expiresAt: Date;
   username: string;

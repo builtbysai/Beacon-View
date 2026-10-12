@@ -17,7 +17,7 @@ import {
 
 export type CameraActivity = 'off' | 'standby' | 'live';
 
-export interface TrayActions {
+interface TrayActions {
   autostart: { enabled: boolean; get(): boolean; set(value: boolean): void };
   open(): void;
   openPath(path: string): void;

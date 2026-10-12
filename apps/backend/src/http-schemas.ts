@@ -15,7 +15,7 @@ export const registerDeviceSchema = z.object({
   name: z.string().trim().min(1).max(100),
   pairingCode: z.string().trim().min(1).max(32),
 });
-export const cameraSourceSchema = z.object({
+const cameraSourceSchema = z.object({
   sourceKey: z.string().trim().min(1).max(200),
   name: z.string().trim().min(1).max(100),
   facing: z.enum(['front', 'rear', 'external', 'unknown']),

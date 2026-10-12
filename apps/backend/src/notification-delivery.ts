@@ -35,7 +35,7 @@ export type DesktopAlertTransport = (
  * offline, so the outbox retries (1 min, 5 min, 30 min, ...) only while the
  * alert is still useful -- mirroring Web Push TTLs of 15 minutes for motion
  * and an hour otherwise -- and then lets it expire. */
-export function desktopAttemptLimit(category: string | undefined): number {
+function desktopAttemptLimit(category: string | undefined): number {
   return category === 'motion' ? 2 : 3;
 }
 

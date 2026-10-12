@@ -16,7 +16,7 @@ import { SettingsCard, SettingsRow } from './SettingsUI';
 import './HouseholdMode.css';
 
 /** The Home / Away choice, shared by Settings and the cameras page. */
-export function ModeChoice({
+function ModeChoice({
   disabled,
   mode,
   onChoose,
@@ -71,7 +71,7 @@ function Switch({
 }
 
 /** Who set the mode, and when, in plain words. */
-export function modeCaption(state: HouseholdModeState): string {
+function modeCaption(state: HouseholdModeState): string {
   if (state.changedAt.startsWith('1970')) return 'Not changed yet.';
   const when = new Date(state.changedAt).toLocaleString([], {
     dateStyle: 'medium',

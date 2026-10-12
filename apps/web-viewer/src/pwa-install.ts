@@ -25,7 +25,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
-export function installedAsApp(): boolean {
+function installedAsApp(): boolean {
   // Inside the Android app it is already an app: never offer to install it again.
   if (isAndroidApp()) return true;
   return (

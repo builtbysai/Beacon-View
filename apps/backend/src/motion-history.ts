@@ -19,7 +19,7 @@ const querySchema = z
   })
   .strict();
 
-export interface MotionHistoryQuery {
+interface MotionHistoryQuery {
   cameraId?: string;
   since?: string;
   before?: { time: string; id: string };

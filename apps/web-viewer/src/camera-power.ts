@@ -76,7 +76,7 @@ export function cameraActivity(
   return streamOpen ? 'live' : 'standby';
 }
 
-export interface AutoStartRequest {
+interface AutoStartRequest {
   microphone?: boolean;
   power?: CameraPower;
 }
