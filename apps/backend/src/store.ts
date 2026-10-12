@@ -462,6 +462,24 @@ export class PostgresStore implements MilestoneStore {
     return this.googleDrive.isExpired(userId);
   }
 
+  async listLiveGoogleDriveConnections(): Promise<
+    Array<{ householdId: string; userId: string }>
+  > {
+    return this.googleDrive.listLive();
+  }
+
+  async listGoogleDriveReminderTargets(input: {
+    gapMs: number;
+    maxReminders: number;
+    now: Date;
+  }): Promise<Array<{ email: string; userId: string }>> {
+    return this.googleDrive.listReminderTargets(input);
+  }
+
+  async markGoogleDriveReminderSent(userId: string, now: Date): Promise<void> {
+    await this.googleDrive.markReminderSent(userId, now);
+  }
+
   async upsertNotificationSubscription(
     input: NotificationSubscriptionInput,
   ): Promise<string> {

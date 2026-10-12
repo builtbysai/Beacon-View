@@ -10,10 +10,6 @@ const OPTIONS = [
   { days: 90, label: '90 days' },
 ] as const;
 
-/** 30 days is Beacon's actual default retention (see the backend's
- * motion-retention default), not a made-up recommendation. */
-const RECOMMENDED_DAYS = 30;
-
 export function MotionRetentionSettings() {
   const { run } = useSettingsAutosave();
   const [days, setDays] = useState<number | null>(null);
@@ -75,9 +71,6 @@ export function MotionRetentionSettings() {
               onClick={() => choose(option.days)}
             >
               {option.label}
-              {option.days === RECOMMENDED_DAYS && (
-                <span className="retention-recommended">Recommended</span>
-              )}
             </button>
           ))}
         </div>

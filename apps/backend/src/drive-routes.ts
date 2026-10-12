@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
+import { runDriveExpirySweep } from './drive-expiry-job.js';
+
 import type { AppConfig } from './config.js';
 import { type DriveHealth, driveProblem } from './drive-connection-health.js';
 import {
@@ -11,6 +13,12 @@ import {
 import type { SessionAuth } from './session-auth.js';
 import type { MilestoneStore } from './store.js';
 
+declare module 'fastify' {
+  interface FastifyInstance {
+    runDriveExpirySweep(now?: Date): Promise<number>;
+  }
+}
+
 export function registerDriveRoutes(
   app: FastifyInstance,
   dependencies: {
@@ -21,6 +29,10 @@ export function registerDriveRoutes(
   },
 ): void {
   const { auth, config, driveHealth, store } = dependencies;
+
+  app.decorate('runDriveExpirySweep', (now = new Date()) =>
+    runDriveExpirySweep(store, driveHealth, config, app.log, now),
+  );
 
   app.get('/api/drive/status', async (request, reply) => {
     const session = await auth.authenticate(request, reply);

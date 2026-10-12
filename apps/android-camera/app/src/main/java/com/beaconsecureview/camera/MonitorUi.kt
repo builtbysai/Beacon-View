@@ -856,11 +856,14 @@ internal fun MonitorHome(
                         onSetUpThisDevice(currentSession.token)
                     },
                 )
-            } else when (monitorPage) {
+            } else {
+                DriveExpiredBanner(api, currentSession.token, currentSession.householdRole == "owner")
+                when (monitorPage) {
                 MonitorPage.Home -> MonitorHomePage(state, currentSession)
                 MonitorPage.Cameras -> MonitorCamerasPage(state, currentSession)
                 MonitorPage.Events -> MonitorEventsPage(state, currentSession)
                 MonitorPage.Settings -> MonitorSettingsPage(state, currentSession)
+                }
             }
         }
             if (message.isNotBlank()) {

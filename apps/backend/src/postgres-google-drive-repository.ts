@@ -66,6 +66,8 @@ export class PostgresGoogleDriveRepository {
          provider_email = EXCLUDED.provider_email,
          scopes = EXCLUDED.scopes,
          expired_at = NULL,
+         expiry_reminder_count = 0,
+         expiry_reminded_at = NULL,
          updated_at = now()`,
       [
         input.userId,
@@ -87,6 +89,48 @@ export class PostgresGoogleDriveRepository {
       [userId],
     );
     return (result.rowCount ?? 0) > 0;
+  }
+
+  /** Owners with a live connection, for the periodic check that finds a token Google stopped accepting. */
+  async listLive(): Promise<Array<{ householdId: string; userId: string }>> {
+    const result = await this.pool.query<{
+      householdId: string;
+      userId: string;
+    }>(
+      `SELECT c.user_id AS "userId", h.id AS "householdId"
+       FROM google_drive_connections c
+       JOIN households h ON h.owner_id = c.user_id
+       WHERE c.expired_at IS NULL`,
+    );
+    return result.rows;
+  }
+
+  /** Expired connections whose owner is due another reminder. */
+  async listReminderTargets(input: {
+    gapMs: number;
+    maxReminders: number;
+    now: Date;
+  }): Promise<Array<{ email: string; userId: string }>> {
+    const result = await this.pool.query<{ email: string; userId: string }>(
+      `SELECT c.user_id AS "userId", u.email
+       FROM google_drive_connections c
+       JOIN users u ON u.id = c.user_id
+       WHERE c.expired_at IS NOT NULL AND c.expiry_reminder_count < $3
+         AND (c.expiry_reminded_at IS NULL
+              OR c.expiry_reminded_at <= $1::timestamptz - ($2 * interval '1 millisecond'))
+       ORDER BY c.expired_at LIMIT 50`,
+      [input.now, input.gapMs, input.maxReminders],
+    );
+    return result.rows;
+  }
+
+  async markReminderSent(userId: string, now: Date): Promise<void> {
+    await this.pool.query(
+      `UPDATE google_drive_connections
+       SET expiry_reminder_count = expiry_reminder_count + 1, expiry_reminded_at = $2
+       WHERE user_id = $1 AND expired_at IS NOT NULL`,
+      [userId, now],
+    );
   }
 
   async isExpired(userId: string): Promise<boolean> {

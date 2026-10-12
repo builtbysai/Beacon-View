@@ -61,6 +61,27 @@ export async function deliverGoogleOnlyPasswordResetEmail(
   });
 }
 
+/** Tells an owner that Google stopped accepting their Drive connection (ADR 0116). */
+export async function deliverDriveExpiredReminder(
+  config: ResendConfig & Pick<AppConfig, 'WEB_ORIGIN'>,
+  to: string,
+): Promise<void> {
+  await deliverResendEmail(config, {
+    from: config.RESEND_FROM!,
+    subject: 'Reconnect Google Drive so Beacon View can save your clips',
+    text: [
+      'Google stopped accepting the Google Drive connection Beacon View uses to save your clips.',
+      'Until you reconnect it, new clips cannot be saved. Clips already saved stay in your Drive.',
+      '',
+      `Reconnect in Settings, Data & storage: ${config.WEB_ORIGIN}/settings?section=data`,
+      '',
+      'This usually happens when access is removed in your Google account, the connection has not been used for six months, or your Google password changed.',
+      'We will remind you a few more times, then stop.',
+    ].join('\n'),
+    to,
+  });
+}
+
 export async function deliverAccountDeletedAlert(
   config: ResendConfig,
   to: string,
