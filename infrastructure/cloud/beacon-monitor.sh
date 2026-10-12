@@ -4,8 +4,8 @@ set -Eeuo pipefail
 readonly state_dir=/var/lib/beacon-monitor
 readonly alert_marker="$state_dir/alert-sent"
 # The units run this script from the release the timers were installed from;
-# point /opt/beacon/app at the current release so nothing runs older code.
-readonly app_dir=/opt/beacon/app/infrastructure/cloud
+# point /opt/beacon/current (a symlink to the deployed release) so nothing runs older code.
+readonly app_dir=/opt/beacon/current/infrastructure/cloud
 readonly daily_backup_max_age_seconds=$((30 * 60 * 60))
 readonly weekly_backup_check_max_age_seconds=$((9 * 24 * 60 * 60))
 # A standing problem is reported again after this many minutes (V68).

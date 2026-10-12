@@ -172,7 +172,8 @@ RESEND_FROM=onboarding@resend.dev
 Then install and enable the monitor units:
 
 ```bash
-sudo install -m 0755 beacon-monitor.sh /opt/beacon/app/infrastructure/cloud/beacon-monitor.sh
+# The units run the script and compose file from /opt/beacon/current, a symlink to the deployed
+# release; every deploy ends with: sudo ln -sfn /opt/beacon/releases/web-<sha> /opt/beacon/current
 sudo install -m 0644 beacon-monitor.service beacon-monitor.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now beacon-monitor.timer
