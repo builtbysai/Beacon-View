@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, request } from './api';
+import { encryptClipChunked } from './clip-crypto';
 import { friendlyError } from './friendly-errors';
 import {
   captureFrameAsJpeg,
@@ -253,10 +254,10 @@ export function useClipRecorder(cameraId: string): {
     void (async () => {
       try {
         const { blob, durationMs } = await recorder.stop();
-        const encrypted = await encryptClip(blob);
+        const encrypted = await encryptClipChunked(blob);
         const pending: PendingUpload = {
           blob: encrypted.blob,
-          checksumSha256: await sha256Hex(encrypted.blob),
+          checksumSha256: encrypted.sha256,
           dataKey: encrypted.dataKey,
           durationMs: Math.min(Math.max(durationMs, 1_000), 600_000),
           encryptionIv: encrypted.iv,

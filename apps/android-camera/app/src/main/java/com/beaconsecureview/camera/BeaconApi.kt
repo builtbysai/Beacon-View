@@ -905,44 +905,69 @@ class BeaconApi(private val baseUrl: String) {
         cacheDirectory.mkdirs()
         cacheDirectory.listFiles { file -> file.name.startsWith("beacon-clip-") }
             ?.forEach { it.delete() }
-        val encryptedFile = File.createTempFile("beacon-clip-", ".encrypted", cacheDirectory)
         val extension = if (mimeType == "video/mp4") ".mp4" else ".webm"
         val playbackFile = File.createTempFile("beacon-clip-", extension, cacheDirectory)
+        val key = decodeBase64Url(encodedKey!!, 32)
+        val iv = decodeBase64Url(encodedIv!!, 12)
         try {
             val digest = MessageDigest.getInstance("SHA-256")
-            var bytes = 0L
-            connection.inputStream.use { input ->
-                encryptedFile.outputStream().use { output ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        bytes += read
-                        if (bytes > expectedBytes!!) throw IllegalStateException("Clip exceeded its expected size")
-                        digest.update(buffer, 0, read)
-                        output.write(buffer, 0, read)
+            val input = java.io.BufferedInputStream(connection.inputStream)
+            // The first bytes say which format this clip uses (ADR 0115).
+            input.mark(ClipFormat.HEADER_BYTES)
+            val leading = ByteArray(ClipFormat.HEADER_BYTES)
+            var leadingRead = 0
+            while (leadingRead < leading.size) {
+                val read = input.read(leading, leadingRead, leading.size - leadingRead)
+                if (read < 0) break
+                leadingRead += read
+            }
+            if (leadingRead == leading.size && ClipFormat.isChunked(leading)) {
+                // Decrypted chunk by chunk straight into the playback file: no second copy on disk.
+                playbackFile.outputStream().buffered().use { output ->
+                    decryptClipChunked(leading, input, output, key, iv, expectedBytes!!, digest)
+                }
+                val actualChecksum = digest.digest().joinToString("") { "%02x".format(it) }
+                if (actualChecksum != expectedChecksum) throw IllegalStateException("Clip failed its integrity check")
+                return PlaybackRecording(playbackFile, mimeType!!)
+            }
+            input.reset()
+            val encryptedFile = File.createTempFile("beacon-clip-", ".encrypted", cacheDirectory)
+            try {
+                var bytes = 0L
+                input.use { source ->
+                    encryptedFile.outputStream().use { output ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            val read = source.read(buffer)
+                            if (read < 0) break
+                            bytes += read
+                            if (bytes > expectedBytes!!) throw IllegalStateException("Clip exceeded its expected size")
+                            digest.update(buffer, 0, read)
+                            output.write(buffer, 0, read)
+                        }
                     }
                 }
-            }
-            if (bytes != expectedBytes) throw IllegalStateException("Clip download was incomplete")
-            val actualChecksum = digest.digest().joinToString("") { "%02x".format(it) }
-            if (actualChecksum != expectedChecksum) throw IllegalStateException("Clip failed its integrity check")
+                if (bytes != expectedBytes) throw IllegalStateException("Clip download was incomplete")
+                val actualChecksum = digest.digest().joinToString("") { "%02x".format(it) }
+                if (actualChecksum != expectedChecksum) throw IllegalStateException("Clip failed its integrity check")
 
-            val key = decodeBase64Url(encodedKey!!, 32)
-            val iv = decodeBase64Url(encodedIv!!, 12)
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
-            encryptedFile.inputStream().use { input ->
-                javax.crypto.CipherInputStream(input, cipher).use { decrypted ->
-                    playbackFile.outputStream().use { output -> decrypted.copyTo(output) }
+                // A clip recorded before the chunked format: one AES-GCM message.
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
+                encryptedFile.inputStream().use { encrypted ->
+                    javax.crypto.CipherInputStream(encrypted, cipher).use { decrypted ->
+                        playbackFile.outputStream().use { output -> decrypted.copyTo(output) }
+                    }
                 }
+                return PlaybackRecording(playbackFile, mimeType!!)
+            } finally {
+                encryptedFile.delete()
             }
-            return PlaybackRecording(playbackFile, mimeType!!)
         } catch (error: Exception) {
             playbackFile.delete()
             throw error
         } finally {
-            encryptedFile.delete()
+            key.fill(0)
             connection.disconnect()
         }
     }
