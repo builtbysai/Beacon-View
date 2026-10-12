@@ -18,6 +18,8 @@ export interface AndroidCameraState {
 export interface AndroidHello {
   app: 'android';
   camera: AndroidCameraState;
+  /** This phone can float a video over other apps (picture in picture). */
+  pip?: boolean;
   /** Phone alerts: on or off, and whether Firebase changed the token since this web app last registered it. */
   push?: { enabled: boolean; stale: boolean };
   version: string;
@@ -65,6 +67,7 @@ type Pending = {
 
 const pending = new Map<string, Pending>();
 const cameraListeners = new Set<(state: AndroidCameraState) => void>();
+const pipListeners = new Set<(active: boolean) => void>();
 let attachedTo: BeaconAndroidBridge | null = null;
 let counter = 0;
 
@@ -91,6 +94,11 @@ function handleMessage(event: { data: unknown }): void {
   ) {
     for (const listener of cameraListeners)
       listener(value.data as AndroidCameraState);
+    return;
+  }
+  if (value.event === 'pip' && value.data && typeof value.data === 'object') {
+    const active = (value.data as { active?: unknown }).active === true;
+    for (const listener of pipListeners) listener(active);
     return;
   }
   if (typeof value.id !== 'string') return;
@@ -150,12 +158,26 @@ export const androidApp = {
   /** Tells the app the token was registered, so it keeps showing alerts. */
   pushEnabled: (subscriptionId: string) =>
     sendToAndroid('pushEnabled', { subscriptionId }),
+  /** Floats the live video in a small window over other apps. */
+  enterPip: () => sendToAndroid('enterPip'),
   openCameraScreen: () => sendToAndroid('openCameraScreen'),
+  /** While true, the app floats the video on its own when the person leaves it. */
+  pipReady: (ready: boolean) => sendToAndroid('pipReady', { ready }),
   openUpdate: () => sendToAndroid('openUpdate'),
   setPrivacy: (enabled: boolean) => sendToAndroid('setPrivacy', { enabled }),
   /** Pairs this phone as a camera with a code the signed-in person just created, then shows the camera screen. */
   startCamera: (code: string) => sendToAndroid('startCamera', { code }),
 };
+
+/** Hears when the app's floating video window opens or closes. Returns the way to stop listening. */
+export function onAndroidPip(listener: (active: boolean) => void): () => void {
+  const bridge = androidBridge();
+  if (bridge) attach(bridge);
+  pipListeners.add(listener);
+  return () => {
+    pipListeners.delete(listener);
+  };
+}
 
 /** Hears about the phone's own camera (running, private, online) changing. Returns the way to stop listening. */
 export function onAndroidCameraState(

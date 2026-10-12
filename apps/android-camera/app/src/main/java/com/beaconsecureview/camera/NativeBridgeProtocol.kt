@@ -37,6 +37,12 @@ internal sealed interface BridgeRequest {
     /** Turn alerts off on this phone; the answer carries the subscription id for the web app to remove. */
     data object DisablePush : BridgeRequest
 
+    /** Float the live video in a small always-on-top window (picture in picture). */
+    data object EnterPip : BridgeRequest
+
+    /** The web app is showing a live video that should float on its own when the person leaves the app (or stops). */
+    data class PipReady(val ready: Boolean) : BridgeRequest
+
     /** Start saving a file the page made (a decrypted clip, a snapshot) to the Downloads folder; the answer is a token. */
     data class SaveFileStart(val name: String, val mime: String) : BridgeRequest
 
@@ -87,6 +93,13 @@ internal object NativeBridgeProtocol {
                         .takeIf { subscriptionIdPattern.matches(it) }
                         ?.let(BridgeRequest::PushEnabled)
                 "disablePush" -> BridgeRequest.DisablePush
+                "enterPip" -> BridgeRequest.EnterPip
+                "pipReady" ->
+                    if (json.has("ready") && json.get("ready") is Boolean) {
+                        BridgeRequest.PipReady(json.getBoolean("ready"))
+                    } else {
+                        null
+                    }
                 "saveFileStart" ->
                     json.optString("name").takeIf { it.isNotBlank() && it.length <= 255 }?.let {
                         BridgeRequest.SaveFileStart(it, json.optString("mime"))

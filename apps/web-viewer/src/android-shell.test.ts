@@ -6,6 +6,7 @@ import {
   isAndroidApp,
   isNewerAndroidVersion,
   onAndroidCameraState,
+  onAndroidPip,
   sendToAndroid,
 } from './android-shell';
 
@@ -98,5 +99,18 @@ describe('isNewerAndroidVersion', () => {
     expect(isNewerAndroidVersion('0.1.0', '0.1.0-alpha13')).toBe(true);
     expect(isNewerAndroidVersion('0.1.0-alpha13', '0.1.0')).toBe(false);
     expect(isNewerAndroidVersion('0.1.0-alpha13', '0.1.0-alpha13')).toBe(false);
+  });
+});
+
+describe('the floating video window in the app', () => {
+  it('tells the page when the app opens and closes the window', () => {
+    const app = installBridge();
+    const seen: boolean[] = [];
+    const stop = onAndroidPip((active) => seen.push(active));
+    app.emit({ data: { active: true }, event: 'pip' });
+    app.emit({ data: { active: false }, event: 'pip' });
+    stop();
+    app.emit({ data: { active: true }, event: 'pip' });
+    expect(seen).toEqual([true, false]);
   });
 });

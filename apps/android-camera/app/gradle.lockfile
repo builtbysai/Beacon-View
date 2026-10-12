@@ -143,7 +143,6 @@ com.google.guava:listenablefuture:1.0=releaseRuntimeClasspath
 com.google.mlkit:barcode-scanning-common:17.0.0=releaseRuntimeClasspath
 com.google.mlkit:common:18.9.0=releaseRuntimeClasspath
 com.google.mlkit:vision-common:17.0.0=releaseRuntimeClasspath
-com.google.zxing:core:3.5.3=releaseRuntimeClasspath
 com.squareup.okhttp3:okhttp:4.12.0=releaseRuntimeClasspath
 com.squareup.okio:okio-jvm:3.6.0=releaseRuntimeClasspath
 com.squareup.okio:okio:3.6.0=releaseRuntimeClasspath

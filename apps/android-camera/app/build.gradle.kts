@@ -194,11 +194,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
-    // QR *generation* only -- play-services-code-scanner above is scan-only.
-    // Pure Java, no Android dependencies, used to render the monitor-side
-    // "Pair another device" QR code (ADR-worthy: closes a real gap where
-    // Android had no way to hand a fresh pairing code to a separate device).
-    implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.firebase:firebase-messaging")
     implementation("io.github.webrtc-sdk:android:144.7559.08")
     // ADR 0074/0075: smart-detection experiment runtime. The model asset is

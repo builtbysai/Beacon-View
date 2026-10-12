@@ -3,13 +3,16 @@ package com.beaconsecureview.camera
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.app.PictureInPictureParams
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -345,6 +348,36 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
             runCatching { BeaconApi(BuildConfig.BEACON_API_URL).removeRegistration(credential) }
             withContext(Dispatchers.Main) { pushCameraState() }
         }
+    }
+
+    // --- Picture in picture: the live video keeps playing in a small window over other apps ------------------
+
+    private var pipReady = false
+
+    override val pipSupported: Boolean
+        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+
+    override fun enterPip(): Boolean =
+        runCatching {
+            enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build())
+        }.getOrDefault(false)
+
+    override fun setPipReady(ready: Boolean) {
+        pipReady = ready
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (pipReady && pipSupported) enterPip()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return
+        bridgeProxy?.postMessage(
+            NativeBridgeProtocol.event("pip", JSONObject().put("active", isInPictureInPictureMode)),
+        )
     }
 
     override fun openUpdate() {

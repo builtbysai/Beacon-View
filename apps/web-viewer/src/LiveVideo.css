@@ -319,3 +319,25 @@
 .video-frame.is-fill video {
   object-fit: cover;
 }
+
+/* Android app, floating window (ADR 0121): the app shrinks the whole page into a small window, so show the picture
+   alone, filling it, and hide everything else. */
+html.android-pip,
+html.android-pip body {
+  background: #000;
+}
+
+html.android-pip * {
+  visibility: hidden;
+}
+
+html.android-pip video {
+  background: #000;
+  height: 100vh;
+  inset: 0;
+  object-fit: contain;
+  position: fixed;
+  visibility: visible;
+  width: 100vw;
+  z-index: 2147483647;
+}
