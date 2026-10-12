@@ -91,3 +91,9 @@ IP-camera adapters remain future roadmap work.
 ---
 
 _Built by [Hans Sai](https://builtbysai.com)._
+
+## License
+
+Beacon View is licensed under the [GNU Affero General Public License v3.0](LICENSE). If you run a modified version
+as a network service, the AGPL requires you to offer your users the source of your changes. To report a security
+problem, see [SECURITY.md](SECURITY.md).

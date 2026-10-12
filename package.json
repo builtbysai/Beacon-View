@@ -2,6 +2,7 @@
   "name": "beacon-view",
   "version": "0.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "description": "Android-first secure peer-to-peer camera viewing for Beacon View",
   "packageManager": "pnpm@11.9.0",
   "engines": {

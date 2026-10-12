@@ -3,6 +3,7 @@
   "productName": "Beacon",
   "version": "0.4.1",
   "private": true,
+  "license": "AGPL-3.0-only",
   "description": "Beacon View desktop app for Windows, macOS, and Linux",
   "author": "Beacon View",
   "homepage": "https://beacon.builtbysai.com",
