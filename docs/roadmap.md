@@ -8,7 +8,7 @@ plans, handoffs and audits were removed on October 12; git history keeps them.
 ## Where Beacon View is
 
 A private alpha running on one Oracle Cloud VM at `https://beacon.builtbysai.com`, with the web app and installable
-PWA, an Android camera and viewer app (sideloaded, `0.1.0-alpha12`), a Windows, Mac and Linux desktop app (unsigned,
+PWA, an Android camera and viewer app (sideloaded, `0.1.0-alpha15`, which shows the web app inside the app), a Windows, Mac and Linux desktop app (unsigned,
 with signed update feeds) and iOS as a web app. The repository is public under AGPL-3.0 (ADR 0119).
 
 Shipped, in outline (the ADR number has the detail):
