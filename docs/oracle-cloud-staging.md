@@ -206,3 +206,4 @@ them; application startup does not modify the schema.
 ## Release log
 
 - 2026-10-12: web and backend deployed from main `9893657` (migrations through 0040 applied; `/opt/beacon/current` points at the release). Android `0.1.0-alpha11` (versionCode 11) published to `/opt/beacon/downloads` and listed in `manifest.json`; the previous manifest is kept on the server as `/opt/beacon/manifest.json.bak-alpha10`. The server has no Node, so the manifest's Android entry was edited off-server and uploaded.
+- 2026-10-12 (later): web deployed from main `370a1e8` (PR 127). Android `0.1.0-alpha12` (versionCode 12) published and listed; alpha11 kept for rollback, older APKs removed. The manifest before the change is saved as `/opt/beacon/manifest.json.bak-alpha11`.
