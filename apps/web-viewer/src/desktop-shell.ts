@@ -14,6 +14,16 @@ export interface DesktopAlert {
  * Everything after `setCaptureActive` was added later and is optional, so a
  * newer web viewer keeps working inside an older installed app.
  */
+/** The desktop app's own update state (ADR 0118). */
+export interface DesktopUpdateStatus {
+  checkedAt?: number;
+  currentVersion: string;
+  percent?: number;
+  selfUpdating: boolean;
+  state: 'idle' | 'checking' | 'downloading' | 'ready' | 'manual' | 'error';
+  version?: string;
+}
+
 export interface BeaconDesktopBridge {
   readonly version: 1;
   /** Drives the tray's visible "camera is live" indicator while the window
@@ -28,6 +38,9 @@ export interface BeaconDesktopBridge {
    * to stop resuming. */
   setCameraResume?(path: string | null): void;
   showAlert?(alert: DesktopAlert): void;
+  getUpdateStatus?(): Promise<DesktopUpdateStatus | null>;
+  checkForUpdates?(): Promise<DesktopUpdateStatus | null>;
+  installUpdate?(): Promise<void>;
   /** The favorite cameras to offer as tray shortcuts (ADR 0095). */
   setTrayCameras?(cameras: { id: string; name: string }[]): void;
 }

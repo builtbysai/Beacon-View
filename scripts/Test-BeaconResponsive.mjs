@@ -14,164 +14,7 @@ assert(
 );
 const out = path.resolve('.beacon-dev/responsive-audit');
 mkdirSync(out, { recursive: true });
-const now = new Date().toISOString();
-const cameras = ['Hallway', 'Garden', 'Bedroom', 'Garage'].map((name, i) => ({
-  id: `camera-${i}`,
-  deviceId: `phone-${i}`,
-  deviceName: `${name} phone`,
-  name,
-  online: i !== 3,
-  platform: 'android',
-  facing: 'rear',
-  enabled: true,
-  streaming: false,
-  viewerCount: 0,
-  lastSeenAt: now,
-  credentialRevoked: false,
-  capabilities: {},
-  availability: 'idle',
-  privacyMode: i === 2,
-  sourceKey: 'rear',
-}));
-const devices = cameras.map((c) => ({
-  id: c.deviceId,
-  name: c.deviceName,
-  platform: 'android',
-  deviceType: 'phone',
-  online: c.online,
-  privacyMode: c.privacyMode,
-  revoked: false,
-  enabled: true,
-  lastSeenAt: now,
-  batteryPercent: 82,
-  batteryCharging: true,
-}));
-devices.push({
-  id: 'pending-phone',
-  name: 'New camera phone',
-  platform: 'android',
-  deviceType: 'phone',
-  online: false,
-  privacyMode: false,
-  revoked: false,
-  enabled: true,
-  lastSeenAt: null,
-  batteryPercent: null,
-  batteryCharging: null,
-});
-const routes = {
-  '/api/auth/me': {
-    user: { id: 'responsive-qa', email: 'household@example.test' },
-  },
-  '/api/cameras': { cameras },
-  '/api/devices': { devices },
-  '/api/account/sessions': {
-    sessions: [
-      {
-        id: 'session-1',
-        current: true,
-        createdAt: now,
-        lastSeenAt: now,
-        expiresAt: now,
-      },
-    ],
-  },
-  '/api/access-history': {
-    events: [
-      'live_view_started',
-      'live_view_rejected',
-      'privacy_enabled',
-      'privacy_disabled',
-      'device_credential_revoked',
-      'camera_source_deleted',
-      'device_deleted',
-      'device_self_removed',
-    ].map((eventType, index) => ({
-      actorEmail: 'household@example.test',
-      cameraName: eventType === 'camera_source_deleted' ? 'Rear camera' : null,
-      deviceName: index > 5 ? 'Old hallway phone' : 'Hallway phone',
-      eventType,
-      occurredAt: new Date(Date.now() - index * 60_000).toISOString(),
-      reason: eventType === 'live_view_rejected' ? 'camera_offline' : null,
-      success: eventType !== 'live_view_rejected',
-      viewerSessionId: null,
-    })),
-  },
-  '/api/motion-retention': { days: 30 },
-  '/api/devices/phone-0/motion-settings': { cameras: [] },
-  '/api/devices/phone-2/motion-settings': { cameras: [] },
-  '/api/devices/phone-3/motion-settings': { cameras: [] },
-  '/api/motion-events': {
-    events: [
-      {
-        id: 'event-1',
-        cameraId: 'camera-0',
-        cameraName: 'Hallway',
-        deviceName: 'Hallway phone',
-        confidence: 0.62,
-        occurredAt: now,
-      },
-    ],
-    nextCursor: null,
-  },
-  '/api/diagnostics': { devices: [], cameras: [] },
-  '/api/notification-preferences': {
-    preferences: cameras.map((camera, index) => ({
-      deviceId: camera.deviceId,
-      deviceName: camera.deviceName,
-      motionEnabled: index === 0,
-      offlineEnabled: index < 2,
-      quietHours:
-        index === 0
-          ? {
-              start: '22:00',
-              end: '07:00',
-              timeZone: 'America/New_York',
-            }
-          : null,
-    })),
-  },
-  '/api/pairing-codes': { code: 'ABCD234567' },
-  // Endpoints added after this audit was first written; shapes match the
-  // web viewer's own types (capabilities.ts, HouseholdSwitcher.tsx,
-  // HouseholdSharingSettings.tsx, GoogleDriveSettings.tsx, MotionEventList.tsx).
-  '/api/capabilities': {
-    auth: { google: true },
-    contact: true,
-    googleDrive: true,
-    notifications: { firebase: false, webPush: true },
-    realtime: true,
-    recordings: true,
-  },
-  '/api/household/mode': {
-    mode: 'home',
-    source: 'manual',
-    changedAt: now,
-    canChange: true,
-    settings: {
-      muteMotionWhenHome: true,
-      pauseCamerasWhenHome: false,
-      resumeCamerasWhenAway: false,
-      schedule: null,
-    },
-  },
-  '/api/cast-config': { appId: null },
-  '/api/account/households': {
-    households: [
-      { expiresAt: null, id: 'household-1', name: 'Home', role: 'owner' },
-    ],
-  },
-  '/api/household/sharing': { invitations: [], members: [] },
-  '/api/household/guest-links': { guestLinks: [] },
-  '/api/drive/status': {
-    configured: true,
-    connected: false,
-    providerEmail: null,
-    recordingsConnected: false,
-    updatedAt: null,
-  },
-  '/api/activity': { events: [], total: 0 },
-};
+import { cameras, devices, routes } from './qa-fixtures.mjs';
 const sizes = process.env.BEACON_QA_EXTENDED_ONLY
   ? []
   : [
@@ -308,12 +151,12 @@ const report = [];
     console.log('PASS', name, `${layout.scrollWidth}×${layout.scrollHeight}`);
   }
   async function assertCompactMobileHeaderAction(name) {
-    // The mobile top bar keeps a labelled "Add camera" action (it was once
+    // The mobile top bar keeps a labelled "Add a device" action (it was once
     // an icon-only button); it must stay a usable touch target and fit the
     // bar, which capture() separately checks for clipping.
     const size = await page
       .locator('.app-topbar-actions')
-      .getByRole('button', { name: 'Add camera' })
+      .getByRole('button', { name: 'Add a device' })
       .evaluate((button) => ({
         width: button.getBoundingClientRect().width,
         height: button.getBoundingClientRect().height,
@@ -323,7 +166,7 @@ const report = [];
       size.height >= 24 &&
         size.width >= 24 &&
         size.width <= innerWidthAtCapture(),
-      `${name}: mobile Add camera action is not a usable touch target ${JSON.stringify(size)}`,
+      `${name}: mobile Add a device action is not a usable touch target ${JSON.stringify(size)}`,
     );
     console.log(
       'PASS',
@@ -387,7 +230,7 @@ const report = [];
       ['/cameras', '.camera-tile-grid'],
       ['/events', '.activity-v3-container'],
       ['/settings', '.settings-shell'],
-      ['/camera-mode', '.add-device-grid'],
+      ['/camera-mode', '.add-device-kinds'],
       ['/contact', '#form'],
       ['/trust', '.commitments'],
       ['/pair?code=ABCD234567', '.pair-link-code'],
@@ -519,8 +362,13 @@ const report = [];
   ]) {
     await page.setViewportSize({ width, height });
     signedIn = true;
-    await visit('/camera-mode', '.add-device-grid');
-    await page.getByRole('button', { name: 'Pair a device →' }).click();
+    await visit('/camera-mode', '.add-device-kinds');
+    await page.getByRole('radio', { name: /Phone or tablet/ }).click();
+    await capture(`add-device-phone-${width}`);
+    await page.getByRole('radio', { name: /Computer/ }).click();
+    await capture(`add-device-computer-${width}`);
+    await page.getByRole('radio', { name: /This device/ }).click();
+    await page.getByRole('button', { name: 'Start the camera' }).click();
     await page.getByRole('dialog').waitFor();
     await capture(`pair-modal-${width}`);
     const modal = page.getByRole('dialog');
@@ -531,15 +379,13 @@ const report = [];
     assert.deepEqual(
       modalState,
       { modal: true, focusContained: true },
-      'Pairing dialog must take focus and make the page behind it inert',
+      'Camera dialog must take focus and make the page behind it inert',
     );
     const box = await modal.boundingBox();
     assert(
       box.y >= 0 && box.y + box.height <= height + 1,
       'Modal must scroll inside viewport',
     );
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await page.getByRole('button', { name: 'Use this device →' }).click();
     await page.getByRole('button', { name: 'Allow camera access' }).click();
     await page.getByRole('alert').waitFor();
     await capture(`camera-permission-denied-${width}`);

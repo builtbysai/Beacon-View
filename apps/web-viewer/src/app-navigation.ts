@@ -31,7 +31,7 @@ export const pageLabels: Record<Page, string> = {
   dashboard: 'Home',
   cameras: 'Cameras',
   events: 'Activity',
-  'camera mode': 'Add camera',
+  'camera mode': 'Add a device',
   wall: 'Camera wall',
   settings: 'Settings',
   trust: 'Trust and privacy',

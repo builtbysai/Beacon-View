@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { markBusy } from './busy';
 
 import { ApiError, request } from './api';
 import { friendlyError, mediaErrorMessage } from './friendly-errors';
@@ -47,6 +48,17 @@ interface VideoInput {
 const INSTALLATION_KEY = 'beacon_browser_device_id';
 const CAMERA_NAME_KEY = 'beacon_browser_camera_name';
 const WAKE_LOCK_KEY = 'beacon_browser_keep_awake';
+/** Waits before each try to turn an always-on camera back on after it ended by itself. */
+const RECOVERY_DELAYS_MS = [1_500, 8_000, 30_000];
+
+/** A stream whose video has not ended. (A tracks without a state counts as live.) */
+function streamIsLive(stream: MediaStream): boolean {
+  const tracks = stream.getVideoTracks();
+  return (
+    tracks.length === 0 ||
+    tracks.every((track) => !track.readyState || track.readyState === 'live')
+  );
+}
 
 function initialWakeLockEnabled(): boolean {
   try {
@@ -253,6 +265,10 @@ export function BrowserCameraMode({
   // While Camera Mode runs inside the desktop app, the app reopens it after
   // the computer restarts. Stopping Camera Mode (or leaving it) clears that.
   const registered = activeCameraId !== null;
+  useEffect(
+    () => (registered ? markBusy('camera mode') : undefined),
+    [registered],
+  );
   useEffect(() => {
     if (!registered) return;
     desktopBridge()?.setCameraResume?.(
@@ -286,6 +302,20 @@ export function BrowserCameraMode({
     streamRef.current = null;
     if (previewRef.current) previewRef.current.srcObject = null;
     setStreamOpen(false);
+  }
+
+  /** A camera another app is just letting go of reports "busy" for a moment; one short retry covers it. */
+  async function openCameraWithRetry(deviceId: string): Promise<MediaStream> {
+    try {
+      return await openCamera(deviceId);
+    } catch (error) {
+      const transient =
+        error instanceof DOMException &&
+        (error.name === 'NotReadableError' || error.name === 'AbortError');
+      if (!transient) throw error;
+      await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+      return openCamera(deviceId);
+    }
   }
 
   async function openCamera(deviceId: string): Promise<MediaStream> {
@@ -360,20 +390,60 @@ export function BrowserCameraMode({
   }
 
   function installStream(stream: MediaStream) {
-    for (const track of stream.getVideoTracks()) track.contentHint = 'motion';
+    for (const track of stream.getVideoTracks()) {
+      track.contentHint = 'motion';
+      // The browser or the system can end a camera on its own: it was unplugged, another app took it,
+      // the computer slept, or permission was withdrawn. Without noticing, a camera kept "streaming" black
+      // video, and a standby camera handed that dead stream to the next viewer.
+      track.addEventListener?.('ended', () => handleTrackEnded(stream), {
+        once: true,
+      });
+    }
     streamRef.current = stream;
     if (previewRef.current) previewRef.current.srcObject = stream;
     setStreamOpen(true);
+  }
+
+  /** The camera ended on its own (see installStream). A standby camera simply lets go, so the next viewer
+   * opens it again; an always-on camera is started again, a few times, before giving up out loud. */
+  function handleTrackEnded(stream: MediaStream) {
+    if (streamRef.current !== stream) return;
+    releaseStream();
+    const key = activeSourceKey.current;
+    if (!key || powerRef.current === 'standby') return;
+    void recoverCamera(key);
+  }
+
+  async function recoverCamera(key: string) {
+    for (const delay of RECOVERY_DELAYS_MS) {
+      await new Promise((resolve) => window.setTimeout(resolve, delay));
+      if (activeSourceKey.current !== key) return; // stopped or switched meanwhile
+      await registerAndStartRef.current(key);
+      if (streamRef.current) {
+        setError('');
+        return;
+      }
+    }
+    if (activeSourceKey.current !== key) return;
+    stop();
+    setError(
+      'The camera stopped, and Beacon could not turn it back on. Another app may be using it, or it was unplugged. Start the camera again.',
+    );
   }
 
   /** Opens (or reuses) the camera for `deviceId` when a standby camera
    * wakes. Concurrent viewers share one getUserMedia call. */
   function acquireStream(deviceId: string): Promise<MediaStream> {
     cancelRelease();
-    if (streamRef.current) return Promise.resolve(streamRef.current);
+    if (streamRef.current) {
+      if (streamIsLive(streamRef.current))
+        return Promise.resolve(streamRef.current);
+      // Never hand a viewer a camera that has already ended.
+      releaseStream();
+    }
     if (pendingStream.current) return pendingStream.current;
     const generation = startGeneration.current;
-    const pending = openCamera(deviceId)
+    const pending = openCameraWithRetry(deviceId)
       .then((stream) => {
         if (generation !== startGeneration.current) {
           stream.getTracks().forEach((track) => track.stop());
@@ -440,6 +510,10 @@ export function BrowserCameraMode({
       setError(mediaErrorMessage(caught, 'camera'));
     }
   }
+
+  const registerAndStartRef = useRef<(key?: string) => Promise<void>>(() =>
+    Promise.resolve(),
+  );
 
   async function registerAndStart(requestedKey = selectedKey) {
     setScannerOpen(false);
@@ -569,6 +643,8 @@ export function BrowserCameraMode({
       );
     }
   }
+
+  registerAndStartRef.current = registerAndStart;
 
   function stop() {
     startGeneration.current += 1;
@@ -790,102 +866,106 @@ export function BrowserCameraMode({
             labelledBy="cameraSettingsTitle"
             onDismiss={() => setSettingsOpen(false)}
           >
-            <h2 id="cameraSettingsTitle">Camera settings</h2>
-            {retryCount > 0 && (
-              <p className="local-hint" role="status">
-                {retryCount} reconnect{retryCount === 1 ? '' : 's'} so far
-              </p>
-            )}
-            <div className="local-field">
-              <label htmlFor="activeDeviceName">Device name</label>
-              <input
-                id="activeDeviceName"
-                value={deviceName}
-                maxLength={100}
-                disabled={clipBusy}
-                onChange={(event) => setDeviceName(event.target.value)}
-              />
-            </div>
-            <div className="local-field">
-              <label htmlFor="activeCameraSelect">Camera</label>
-              <select
-                id="activeCameraSelect"
-                value={selectedKey}
-                onChange={(event) => setSelectedKey(event.target.value)}
-                disabled={clipBusy}
-              >
-                {inputs.map((input) => (
-                  <option key={input.deviceId} value={input.deviceId}>
-                    {input.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="local-field">
-              <label htmlFor="activeCameraName">Camera name</label>
-              <input
-                id="activeCameraName"
-                value={sourceNames[selectedKey] ?? ''}
-                maxLength={100}
-                disabled={clipBusy}
-                onChange={(event) =>
-                  setSourceNames((current) => ({
-                    ...current,
-                    [selectedKey]: event.target.value,
-                  }))
-                }
-              />
-            </div>
-            <CameraPowerFields
-              idPrefix="active"
-              disabled={clipBusy}
-              microphone={microphone}
-              power={power}
-              microphoneId={microphoneId}
-              microphones={microphones}
-              onMicrophoneChange={changeMicrophone}
-              onMicrophoneSelect={chooseMicrophone}
-              onPowerChange={setPower}
-            />
-            {wakeLockSupported() && (
-              <label className="local-check full">
+            <div className="broadcast-settings-panel">
+              <h2 id="cameraSettingsTitle">Camera settings</h2>
+              {retryCount > 0 && (
+                <p className="local-hint" role="status">
+                  {retryCount} reconnect{retryCount === 1 ? '' : 's'} so far
+                </p>
+              )}
+              <div className="local-field">
+                <label htmlFor="activeDeviceName">Device name</label>
                 <input
-                  checked={wakeLockEnabled}
-                  type="checkbox"
-                  onChange={(event) => {
-                    const enabled = event.target.checked;
-                    wakeLockEnabledRef.current = enabled;
-                    setWakeLockEnabled(enabled);
-                    try {
-                      localStorage.setItem(WAKE_LOCK_KEY, String(enabled));
-                    } catch {
-                      // Camera Mode still works with a session-only preference.
-                    }
-                    if (!enabled) {
-                      void wakeLockRef.current?.release();
-                      wakeLockRef.current = null;
-                    } else if (state !== 'offline') {
-                      void acquireWakeLock();
-                    }
-                  }}
+                  id="activeDeviceName"
+                  value={deviceName}
+                  maxLength={100}
+                  disabled={clipBusy}
+                  onChange={(event) => setDeviceName(event.target.value)}
                 />
-                <span>Keep this device awake while Camera Mode is active</span>
-              </label>
-            )}
-            <div className="heading-actions">
-              <button
-                type="button"
-                onClick={() => void registerAndStart()}
+              </div>
+              <div className="local-field">
+                <label htmlFor="activeCameraSelect">Camera</label>
+                <select
+                  id="activeCameraSelect"
+                  value={selectedKey}
+                  onChange={(event) => setSelectedKey(event.target.value)}
+                  disabled={clipBusy}
+                >
+                  {inputs.map((input) => (
+                    <option key={input.deviceId} value={input.deviceId}>
+                      {input.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="local-field">
+                <label htmlFor="activeCameraName">Camera name</label>
+                <input
+                  id="activeCameraName"
+                  value={sourceNames[selectedKey] ?? ''}
+                  maxLength={100}
+                  disabled={clipBusy}
+                  onChange={(event) =>
+                    setSourceNames((current) => ({
+                      ...current,
+                      [selectedKey]: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <CameraPowerFields
+                idPrefix="active"
                 disabled={clipBusy}
-              >
-                Save changes
-              </button>
-              <button className="secondary" onClick={onBack} type="button">
-                Back to dashboard
-              </button>
-            </div>
-            <div className="local-hint">
-              Saving briefly reconnects this camera to apply changes.
+                microphone={microphone}
+                power={power}
+                microphoneId={microphoneId}
+                microphones={microphones}
+                onMicrophoneChange={changeMicrophone}
+                onMicrophoneSelect={chooseMicrophone}
+                onPowerChange={setPower}
+              />
+              {wakeLockSupported() && (
+                <label className="local-check full">
+                  <input
+                    checked={wakeLockEnabled}
+                    type="checkbox"
+                    onChange={(event) => {
+                      const enabled = event.target.checked;
+                      wakeLockEnabledRef.current = enabled;
+                      setWakeLockEnabled(enabled);
+                      try {
+                        localStorage.setItem(WAKE_LOCK_KEY, String(enabled));
+                      } catch {
+                        // Camera Mode still works with a session-only preference.
+                      }
+                      if (!enabled) {
+                        void wakeLockRef.current?.release();
+                        wakeLockRef.current = null;
+                      } else if (state !== 'offline') {
+                        void acquireWakeLock();
+                      }
+                    }}
+                  />
+                  <span>
+                    Keep this device awake while Camera Mode is active
+                  </span>
+                </label>
+              )}
+              <div className="heading-actions">
+                <button
+                  type="button"
+                  onClick={() => void registerAndStart()}
+                  disabled={clipBusy}
+                >
+                  Save changes
+                </button>
+                <button className="secondary" onClick={onBack} type="button">
+                  Back to dashboard
+                </button>
+              </div>
+              <div className="local-hint">
+                Saving briefly reconnects this camera to apply changes.
+              </div>
             </div>
           </ModalDialog>
         )}
@@ -894,11 +974,7 @@ export function BrowserCameraMode({
   }
 
   const setup = (
-    <section
-      className="local-modal"
-      role={standalone ? undefined : 'dialog'}
-      aria-modal={standalone ? undefined : true}
-    >
+    <section className="local-modal">
       <div className="local-mh">
         <div>
           <div className="local-eyebrow">Use this device</div>
@@ -967,7 +1043,7 @@ export function BrowserCameraMode({
                   onChange={(event) =>
                     setPairingCode(event.target.value.toUpperCase())
                   }
-                  placeholder="Code from the account owner's Add camera screen"
+                  placeholder="Code from the account owner's Add a device screen"
                 />
                 <div className="local-hint">
                   Already paired in this browser? Leave the code blank to

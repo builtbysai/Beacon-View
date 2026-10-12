@@ -58,6 +58,13 @@ import /etc/caddy/products/*.caddy
 		file_server
 	}
 
+	# The deployed build's entry script, polled by open pages to offer an update (ADR 0118).
+	handle /version.json {
+		root * /srv
+		header Cache-Control "no-store"
+		file_server
+	}
+
 	handle {
 		root * /srv
 		try_files {path} /index.html

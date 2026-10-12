@@ -237,18 +237,8 @@
   color: var(--accent-base);
   box-shadow: none;
 }
-.settings-sections {
-  gap: 0;
-}
 .settings-section {
-  padding: 0 0 30px;
-  margin: 0 0 30px;
-  border-bottom: 1px solid var(--border-subtle);
   scroll-margin-top: 98px;
-}
-.settings-section:last-child {
-  border-bottom: 0;
-  margin-bottom: 0;
 }
 .settings-section-head {
   margin: 0 0 12px;

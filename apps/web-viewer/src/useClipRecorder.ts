@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { markBusy } from './busy';
 import { ApiError, request } from './api';
 import { encryptClipChunked } from './clip-crypto';
 import { friendlyError } from './friendly-errors';
@@ -243,6 +244,9 @@ export function useClipRecorder(cameraId: string): {
     },
     [clearTimers, detachTrackWatch],
   );
+
+  const working = ['starting', 'recording', 'uploading'].includes(state.status);
+  useEffect(() => (working ? markBusy('clip') : undefined), [working]);
 
   const stop = useCallback(() => {
     const recorder = recorderRef.current;

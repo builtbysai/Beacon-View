@@ -108,14 +108,9 @@ const CameraBrowser = lazyPage(() =>
     default: module.CameraBrowser,
   })),
 );
-const AddCameraPage = lazyPage(() =>
-  import('./AddCameraPage').then((module) => ({
-    default: module.AddCameraPage,
-  })),
-);
-const ComputerCameraSetupDialog = lazyPage(() =>
-  import('./ComputerCameraSetupDialog').then((module) => ({
-    default: module.ComputerCameraSetupDialog,
+const AddDevicePage = lazyPage(() =>
+  import('./AddDevicePage').then((module) => ({
+    default: module.AddDevicePage,
   })),
 );
 
@@ -174,7 +169,6 @@ function AppShell() {
   const [pairingBusy, setPairingBusy] = useState(false);
   const [pairingState, setPairingState] = useState<PairingLifecycle>('pending');
   const [browserCameraActive, setBrowserCameraActive] = useState(false);
-  const [computerSetupOpen, setComputerSetupOpen] = useState(false);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(
     deviceSettingsIdFromPath,
@@ -1314,7 +1308,7 @@ function AppShell() {
                       onClick={() => navigate('camera mode')}
                     >
                       <Icon name="plus" />
-                      <span>Add camera</span>
+                      <span>Add a device</span>
                     </button>
                   )}
               </div>
@@ -1817,17 +1811,10 @@ function AppShell() {
                 </section>
               ) : (
                 <>
-                  <AddCameraPage
+                  <AddDevicePage
                     onBack={() => navigate('dashboard')}
-                    onPairAndroid={() => openPairing()}
-                    onSetUpComputer={() => setComputerSetupOpen(true)}
                     onUseBrowser={() => setBrowserCameraActive(true)}
                   />
-                  {computerSetupOpen && (
-                    <ComputerCameraSetupDialog
-                      onDismiss={() => setComputerSetupOpen(false)}
-                    />
-                  )}
                   {browserCameraActive && (
                     <BrowserCameraMode
                       canRecord={household?.role === 'owner'}

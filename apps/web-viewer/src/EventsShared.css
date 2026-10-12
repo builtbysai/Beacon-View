@@ -368,3 +368,27 @@
     font-size: 11px;
   }
 }
+
+/* "Reset filters" sits under the controls as a quiet text button. */
+.events-controls > .secondary2 {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 32px;
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-base);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.events-controls > .secondary2:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.events-controls > .secondary2:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 2px;
+  border-radius: 6px;
+}

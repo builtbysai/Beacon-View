@@ -248,7 +248,7 @@ describe('App', () => {
       screen.getByText(/Ask the household owner or an admin/),
     ).toBeVisible();
     expect(
-      screen.queryByRole('button', { name: /Add camera/i }),
+      screen.queryByRole('button', { name: /Add a device/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -462,6 +462,8 @@ describe('App', () => {
         ok: true,
         status: 200,
       })
+      // The page looks up the published downloads as it opens, then asks for a code.
+      .mockResolvedValueOnce({ json: () => Promise.resolve({}), ok: false })
       .mockResolvedValueOnce({
         json: () => Promise.resolve({ code: 'ABCD2345' }),
         ok: true,
@@ -499,11 +501,13 @@ describe('App', () => {
     render(<App />);
 
     await screen.findByText('Add your first device');
-    fireEvent.click(screen.getAllByRole('button', { name: 'Add camera' })[0]!);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Add a device' })[0]!,
+    );
     fireEvent.click(
       await screen.findByRole(
-        'button',
-        { name: /Pair a device/i },
+        'radio',
+        { name: /Phone or tablet/i },
         { timeout: 8_000 },
       ),
     );
@@ -517,7 +521,7 @@ describe('App', () => {
       });
       await Promise.resolve();
     });
-    expect(screen.getByText('Camera connected')).toBeVisible();
+    expect(screen.getByText(/A new camera is connected/)).toBeVisible();
     await act(async () => vi.advanceTimersByTimeAsync(900));
     expect(screen.getByText('Android Camera')).toBeVisible();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

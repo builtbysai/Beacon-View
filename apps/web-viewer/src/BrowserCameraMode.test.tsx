@@ -1105,7 +1105,59 @@ describe('BrowserCameraMode standby (wake on view)', () => {
     );
   });
 
-  it('reports a camera that cannot wake without dropping standby', async () => {
+  /** A camera whose video tracks can end by themselves, like a real one being unplugged. */
+  function endableCamera() {
+    const listeners: Array<() => void> = [];
+    const stop = vi.fn();
+    const stream = {
+      getAudioTracks: () => [],
+      getTracks: () => [{ stop }],
+      getVideoTracks: () => [
+        {
+          addEventListener: (_type: string, listener: () => void) =>
+            listeners.push(listener),
+          id: 'track',
+          readyState: 'live',
+        },
+      ],
+    } as unknown as MediaStream;
+    return {
+      end: () => listeners.forEach((listener) => listener()),
+      stop,
+      stream,
+    };
+  }
+
+  it('opens a fresh camera for the next viewer when the open one ended by itself', async () => {
+    const { getUserMedia } = setup('?autostart=1&power=standby');
+    const first = endableCamera();
+    getUserMedia.mockImplementation((constraints: MediaStreamConstraints) =>
+      Promise.resolve(
+        typeof constraints.video === 'object'
+          ? first.stream
+          : { getTracks: () => [{ stop: vi.fn() }] },
+      ),
+    );
+    render(<BrowserCameraMode onBack={() => undefined} />);
+    await screen.findByText('Standby · camera off', undefined, {
+      timeout: 5_000,
+    });
+    viewerArrives('viewer-one');
+    await waitFor(() => expect(streamingOpens(getUserMedia)).toBe(1));
+
+    // The system takes the camera away. It lets go instead of keeping a dead stream.
+    act(() => first.end());
+    await waitFor(() => expect(first.stop).toHaveBeenCalled());
+    expect(await screen.findByText('Camera is off')).toBeVisible();
+
+    getUserMedia.mockImplementation(() =>
+      Promise.resolve(endableCamera().stream),
+    );
+    viewerArrives('viewer-two');
+    await waitFor(() => expect(streamingOpens(getUserMedia)).toBe(2));
+  });
+
+  it('tries the camera again once when another app has it for a moment', async () => {
     const { getUserMedia } = setup('?autostart=1&power=standby');
     render(<BrowserCameraMode onBack={() => undefined} />);
     await screen.findByText('Standby · camera off', undefined, {
@@ -1115,7 +1167,50 @@ describe('BrowserCameraMode standby (wake on view)', () => {
       new DOMException('busy', 'NotReadableError'),
     );
     viewerArrives('viewer-one');
-    expect(await screen.findByText(/couldn’t turn on/)).toBeVisible();
+    await waitFor(() => expect(streamingOpens(getUserMedia)).toBe(2), {
+      timeout: 5_000,
+    });
+    expect(screen.queryByText(/couldn’t turn on/)).not.toBeInTheDocument();
+  });
+
+  it('starts an always-on camera again after it ended by itself', async () => {
+    const { getUserMedia } = setup('?autostart=1&power=always');
+    const first = endableCamera();
+    getUserMedia.mockImplementation((constraints: MediaStreamConstraints) =>
+      Promise.resolve(
+        typeof constraints.video === 'object'
+          ? first.stream
+          : { getTracks: () => [{ stop: vi.fn() }] },
+      ),
+    );
+    render(<BrowserCameraMode onBack={() => undefined} />);
+    await waitFor(() => expect(streamingOpens(getUserMedia)).toBe(1), {
+      timeout: 5_000,
+    });
+    getUserMedia.mockImplementation(() =>
+      Promise.resolve(endableCamera().stream),
+    );
+    act(() => first.end());
+    await waitFor(() => expect(streamingOpens(getUserMedia)).toBe(2), {
+      timeout: 8_000,
+    });
+  });
+
+  it('reports a camera that cannot wake without dropping standby', async () => {
+    const { getUserMedia } = setup('?autostart=1&power=standby');
+    render(<BrowserCameraMode onBack={() => undefined} />);
+    await screen.findByText('Standby · camera off', undefined, {
+      timeout: 5_000,
+    });
+    getUserMedia.mockRejectedValue(
+      new DOMException('busy', 'NotReadableError'),
+    );
+    viewerArrives('viewer-one');
+    expect(
+      await screen.findByText(/couldn’t turn on/, undefined, {
+        timeout: 5_000,
+      }),
+    ).toBeVisible();
     expect(screen.getByText('Standby · camera off')).toBeVisible();
   });
 });

@@ -2,12 +2,14 @@ import { createRoot } from 'react-dom/client';
 
 import { App } from './App';
 import { AppErrorBoundary } from './AppErrorBoundary';
+import { UpdateBanner } from './UpdateBanner';
 import { finishDriveConnectPopup } from './drive-recording';
 import { VisualTestHarness } from './VisualTestHarness';
 // Inter is served from this origin: no request to a third-party font host (V12).
 import '@fontsource-variable/inter';
 import './styles.css';
 import './FinalVisualPass.css';
+import './pwa-install';
 
 const root = document.querySelector<HTMLDivElement>('#root');
 
@@ -24,9 +26,12 @@ if (!finishDriveConnectPopup())
     visualTest ? (
       <VisualTestHarness />
     ) : (
-      <AppErrorBoundary>
-        <App />
-      </AppErrorBoundary>
+      <>
+        <AppErrorBoundary>
+          <App />
+        </AppErrorBoundary>
+        <UpdateBanner />
+      </>
     ),
   );
 
