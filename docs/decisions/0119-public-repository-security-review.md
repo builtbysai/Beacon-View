@@ -44,3 +44,9 @@ Going public publishes every file and every commit forever, so this review came 
 - The server address was replaced in the deploy workflow by the repository variable `ORACLE_HOST_KEY_ALIAS` and by a placeholder in the docs. **The variable must be set in GitHub before the deploy workflow is ever turned on** (`BEACON_AUTO_DEPLOY` is off, so nothing breaks today). The address stays in git history; public DNS already shows it and SSH is Tailscale-only.
 - `SECURITY.md` added.
 - Still open for the owner: choose a `LICENSE`, turn on secret scanning, push protection and **private vulnerability reporting** in the repository settings (`SECURITY.md` points reporters at it).
+
+## License (decided 2026-10-12)
+
+AGPL-3.0-only. It keeps the code readable and self-hostable while requiring anyone who runs a modified hosted
+version to publish their changes, which leaves the option of a hosted product open. Dependencies are MIT, Apache or
+similarly permissive; none is copyleft-incompatible. Trademarks and the Beacon name and logo are not licensed.
