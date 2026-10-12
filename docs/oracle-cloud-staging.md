@@ -202,3 +202,7 @@ the data-loss scope is explicitly understood. Restore a verified encrypted snaps
 only after making a fresh safety backup and following the separate-database restore
 drill above. Apply database migrations before rolling out a backend that depends on
 them; application startup does not modify the schema.
+
+## Release log
+
+- 2026-10-12: web and backend deployed from main `9893657` (migrations through 0040 applied; `/opt/beacon/current` points at the release). Android `0.1.0-alpha11` (versionCode 11) published to `/opt/beacon/downloads` and listed in `manifest.json`; the previous manifest is kept on the server as `/opt/beacon/manifest.json.bak-alpha10`. The server has no Node, so the manifest's Android entry was edited off-server and uploaded.
