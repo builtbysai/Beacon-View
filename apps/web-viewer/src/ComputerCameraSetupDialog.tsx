@@ -44,6 +44,22 @@ export function ComputerCameraSetupDialog({
 }: {
   onDismiss: () => void;
 }) {
+  return (
+    <ModalDialog labelledBy="computer-setup-title" onDismiss={onDismiss}>
+      <ComputerSetupPanel onClose={onDismiss} />
+    </ModalDialog>
+  );
+}
+
+/** The setup itself. Inside the Add a device page it sits in the page (`embedded`); in a dialog it
+ * keeps its own title and Cancel/Done buttons. */
+export function ComputerSetupPanel({
+  embedded = false,
+  onClose,
+}: {
+  embedded?: boolean;
+  onClose: () => void;
+}) {
   const [useCase, setUseCase] = useState<CameraUseCase>('security');
   const [pairing, setPairing] = useState<PairingCode | null>(null);
   const [busy, setBusy] = useState(false);
@@ -106,195 +122,189 @@ export function ComputerCameraSetupDialog({
   }
 
   return (
-    <ModalDialog labelledBy="computer-setup-title" onDismiss={onDismiss}>
-      <section
-        className="computer-setup"
-        aria-labelledby="computer-setup-title"
-      >
-        <div className="computer-setup-head">
-          <p className="computer-setup-eyebrow">Computer camera</p>
-          <h2 id="computer-setup-title">
-            {pairing
-              ? 'Set up the camera computer'
-              : 'Set up a computer as a camera'}
-          </h2>
-          <p>
-            {pairing
-              ? 'Use one of these on the computer that will be the camera. Its camera use stays visible there.'
-              : 'Choose what the camera is for. You can change it later.'}
-          </p>
-        </div>
+    <section
+      className={`computer-setup${embedded ? ' computer-setup-embedded' : ''}`}
+      aria-labelledby="computer-setup-title"
+    >
+      <div className="computer-setup-head">
+        <p className="computer-setup-eyebrow">Computer camera</p>
+        <h2 id="computer-setup-title">
+          {pairing
+            ? 'Set up the camera computer'
+            : 'Set up a computer as a camera'}
+        </h2>
+        <p>
+          {pairing
+            ? 'Use one of these on the computer that will be the camera. Its camera use stays visible there.'
+            : 'Choose what the camera is for. You can change it later.'}
+        </p>
+      </div>
 
-        {error && (
-          <p className="computer-setup-error" role="alert">
-            {error}
-          </p>
-        )}
+      {error && (
+        <p className="computer-setup-error" role="alert">
+          {error}
+        </p>
+      )}
 
-        {!pairing ? (
-          <>
-            <fieldset className="computer-setup-uses">
-              <legend className="visually-hidden">What it’s for</legend>
-              {CAMERA_USE_CASES.map((option) => (
-                <label
-                  className={`computer-setup-use${option.id === useCase ? ' is-selected' : ''}`}
-                  key={option.id}
-                >
-                  <input
-                    checked={option.id === useCase}
-                    name="computerUseCase"
-                    onChange={() => setUseCase(option.id)}
-                    type="radio"
-                  />
-                  <span>
-                    <b>{option.label}</b>
-                    <span>{option.computer}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-            <div className="computer-setup-actions">
-              <button
-                className="btn secondary"
-                onClick={onDismiss}
-                type="button"
+      {!pairing ? (
+        <>
+          <fieldset className="computer-setup-uses">
+            <legend className="visually-hidden">What it’s for</legend>
+            {CAMERA_USE_CASES.map((option) => (
+              <label
+                className={`computer-setup-use${option.id === useCase ? ' is-selected' : ''}`}
+                key={option.id}
               >
+                <input
+                  checked={option.id === useCase}
+                  name="computerUseCase"
+                  onChange={() => setUseCase(option.id)}
+                  type="radio"
+                />
+                <span>
+                  <b>{option.label}</b>
+                  <span>{option.computer}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          <div className="computer-setup-actions">
+            {!embedded && (
+              <button className="btn secondary" onClick={onClose} type="button">
                 Cancel
               </button>
-              <button
-                className="btn primary"
-                disabled={busy}
-                onClick={() => void createSetup()}
-                type="button"
-              >
-                {busy ? 'Creating…' : 'Create setup'}
-              </button>
-            </div>
-          </>
-        ) : expired || !setup ? (
-          <div className="computer-setup-expired" role="status">
-            <p>This setup expired. Setups last 10 minutes for your security.</p>
+            )}
             <button
               className="btn primary"
+              disabled={busy}
               onClick={() => void createSetup()}
               type="button"
             >
-              Create a new setup
+              {busy ? 'Creating…' : 'Create setup'}
             </button>
           </div>
-        ) : (
-          <>
-            <p
-              className="computer-setup-code"
-              aria-label={`Pairing code ${setup.code}`}
-            >
-              {setup.code}
-              <span>Expires in {remaining(pairing.expiresAt, now)}</span>
-            </p>
+        </>
+      ) : expired || !setup ? (
+        <div className="computer-setup-expired" role="status">
+          <p>This setup expired. Setups last 10 minutes for your security.</p>
+          <button
+            className="btn primary"
+            onClick={() => void createSetup()}
+            type="button"
+          >
+            Create a new setup
+          </button>
+        </div>
+      ) : (
+        <>
+          <p
+            className="computer-setup-code"
+            aria-label={`Pairing code ${setup.code}`}
+          >
+            {setup.code}
+            <span>Expires in {remaining(pairing.expiresAt, now)}</span>
+          </p>
 
-            <div className="computer-setup-option">
-              <h3>New computer</h3>
-              {windows ? (
-                <>
-                  <a
-                    className="btn primary"
-                    download={preconfiguredInstallerName(windows, setup)}
-                    href={downloadUrl(windows)}
-                  >
-                    <Icon name="download" /> Download for Windows
-                  </a>
-                  <p className="local-hint">
-                    It sets itself up: run it on the camera computer within 10
-                    minutes, and Beacon installs, joins your household as{' '}
-                    {`“${info.label}”`}, and starts with the computer.
-                  </p>
-                </>
-              ) : (
-                <p className="local-hint">
-                  The Windows app isn’t published on this server yet.
-                </p>
-              )}
-              {otherDownloads.length > 0 && (
-                <p className="local-hint">
-                  On{' '}
-                  {otherDownloads.map(({ file, platform }, index) => (
-                    <span key={platform}>
-                      {index > 0 && ' or '}
-                      <a href={downloadUrl(file!)}>
-                        {platform === 'macos' ? 'a Mac' : 'Linux'}
-                      </a>
-                    </span>
-                  ))}
-                  , install Beacon, then open the setup file below.
-                </p>
-              )}
-            </div>
-
-            <div className="computer-setup-option">
-              <h3>Beacon already installed</h3>
-              <div className="computer-setup-row">
-                <a className="btn secondary" href={cameraSetupLink(setup)}>
-                  Open in Beacon
-                </a>
-                <button
-                  className="btn secondary"
-                  onClick={() =>
-                    downloadBlob(
-                      cameraSetupFile(setup),
-                      'Beacon camera setup.beaconcamera',
-                    )
-                  }
-                  type="button"
+          <div className="computer-setup-option">
+            <h3>New computer</h3>
+            {windows ? (
+              <>
+                <a
+                  className="btn primary"
+                  download={preconfiguredInstallerName(windows, setup)}
+                  href={downloadUrl(windows)}
                 >
-                  Download setup file
-                </button>
-              </div>
-              <p className="local-hint">
-                “Open in Beacon” works on this computer. Send the setup file to
-                another one — it holds only this one-time code.
-              </p>
-            </div>
-
-            <div className="computer-setup-option">
-              <h3>No install</h3>
-              <div className="computer-setup-row">
-                <a className="btn secondary" href={browserLink}>
-                  Use this browser
+                  <Icon name="download" /> Download for Windows
                 </a>
-                <button
-                  className="btn secondary"
-                  onClick={() => {
-                    void navigator.clipboard
-                      ?.writeText(browserLink)
-                      .then(() => setCopied(true))
-                      .catch(() =>
-                        setError(
-                          'Couldn’t copy the link. Select it and copy it manually.',
-                        ),
-                      );
-                  }}
-                  type="button"
-                >
-                  {copied ? 'Link copied' : 'Copy browser link'}
-                </button>
-              </div>
+                <p className="local-hint">
+                  It sets itself up: run it on the camera computer within 10
+                  minutes, and Beacon installs, joins your household as{' '}
+                  {`“${info.label}”`}, and starts with the computer.
+                </p>
+              </>
+            ) : (
               <p className="local-hint">
-                A browser tab works too, but it has to stay open.
+                The Windows app isn’t published on this server yet.
               </p>
-            </div>
+            )}
+            {otherDownloads.length > 0 && (
+              <p className="local-hint">
+                On{' '}
+                {otherDownloads.map(({ file, platform }, index) => (
+                  <span key={platform}>
+                    {index > 0 && ' or '}
+                    <a href={downloadUrl(file!)}>
+                      {platform === 'macos' ? 'a Mac' : 'Linux'}
+                    </a>
+                  </span>
+                ))}
+                , install Beacon, then open the setup file below.
+              </p>
+            )}
+          </div>
 
-            <div className="computer-setup-actions">
+          <div className="computer-setup-option">
+            <h3>Beacon already installed</h3>
+            <div className="computer-setup-row">
+              <a className="btn secondary" href={cameraSetupLink(setup)}>
+                Open in Beacon
+              </a>
               <button
                 className="btn secondary"
-                onClick={onDismiss}
+                onClick={() =>
+                  downloadBlob(
+                    cameraSetupFile(setup),
+                    'Beacon camera setup.beaconcamera',
+                  )
+                }
                 type="button"
               >
+                Download setup file
+              </button>
+            </div>
+            <p className="local-hint">
+              “Open in Beacon” works on this computer. Send the setup file to
+              another one — it holds only this one-time code.
+            </p>
+          </div>
+
+          <div className="computer-setup-option">
+            <h3>No install</h3>
+            <div className="computer-setup-row">
+              <a className="btn secondary" href={browserLink}>
+                Use this browser
+              </a>
+              <button
+                className="btn secondary"
+                onClick={() => {
+                  void navigator.clipboard
+                    ?.writeText(browserLink)
+                    .then(() => setCopied(true))
+                    .catch(() =>
+                      setError(
+                        'Couldn’t copy the link. Select it and copy it manually.',
+                      ),
+                    );
+                }}
+                type="button"
+              >
+                {copied ? 'Link copied' : 'Copy browser link'}
+              </button>
+            </div>
+            <p className="local-hint">
+              A browser tab works too, but it has to stay open.
+            </p>
+          </div>
+
+          {!embedded && (
+            <div className="computer-setup-actions">
+              <button className="btn secondary" onClick={onClose} type="button">
                 Done
               </button>
             </div>
-          </>
-        )}
-      </section>
-    </ModalDialog>
+          )}
+        </>
+      )}
+    </section>
   );
 }

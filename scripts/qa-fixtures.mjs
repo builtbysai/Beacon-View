@@ -160,3 +160,22 @@ export const routes = {
   },
   '/api/activity': { events: [], total: 0 },
 };
+
+/** What /downloads/manifest.json lists on the live server. */
+export const downloadsManifest = {
+  files: [
+    ['windows', 'x64', 'installer', 'Beacon-Setup-0.4.1-x64.exe'],
+    ['macos', 'arm64', 'dmg', 'Beacon-0.4.1-arm64.dmg'],
+    ['linux', 'x64', 'appimage', 'Beacon-0.4.1-x86_64.AppImage'],
+    ['android', 'universal', 'apk', 'Beacon-android-0.1.0-alpha10.apk'],
+  ].map(([platform, arch, kind, file]) => ({
+    arch,
+    bytes: 100_000_000,
+    file,
+    kind,
+    platform,
+    sha256: 'a'.repeat(64),
+  })),
+  publishedAt: new Date().toISOString(),
+  version: '0.4.1',
+};

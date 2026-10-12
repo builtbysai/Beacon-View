@@ -3,7 +3,7 @@
 // Output: .beacon-dev/screens/<screen>-<width>.png (gitignored). With no arguments every screen is captured.
 // Optional: BEACON_QA_SIZES=390x844,1280x800  BEACON_QA_SCHEME=dark
 import { createRequire } from 'node:module';
-import { routes } from './qa-fixtures.mjs';
+import { downloadsManifest, routes } from './qa-fixtures.mjs';
 
 const require = createRequire(import.meta.url);
 const { mkdirSync } = require('node:fs');
@@ -21,7 +21,7 @@ assert(
 const out = path.resolve('.beacon-dev/screens');
 mkdirSync(out, { recursive: true });
 
-/** name -> [path, optional steps run after load] */
+/** name -> [path, optional steps run after load (a function of the page)] */
 const screens = {
   dashboard: ['/'],
   cameras: ['/cameras'],
@@ -30,8 +30,37 @@ const screens = {
   'settings-notifications': ['/settings?section=notifications'],
   'settings-data': ['/settings?section=data'],
   'settings-access': ['/settings?section=access'],
-  'camera-mode': ['/camera-mode'],
-  'add-camera': ['/add-camera'],
+  'camera-mode': [
+    '/camera-mode',
+    async (page) =>
+      page
+        .getByRole('radio', { name: /This device/ })
+        .click()
+        .then(() =>
+          page.getByRole('button', { name: 'Start the camera' }).click(),
+        ),
+  ],
+  'add-camera': ['/camera-mode'],
+  'add-device-this': [
+    '/camera-mode',
+    async (page) => page.getByRole('radio', { name: /This device/ }).click(),
+  ],
+  'add-device-mobile': [
+    '/camera-mode',
+    async (page) =>
+      page.getByRole('radio', { name: /Phone or tablet/ }).click(),
+  ],
+  'add-device-ios': [
+    '/camera-mode',
+    async (page) => {
+      await page.getByRole('radio', { name: /Phone or tablet/ }).click();
+      await page.getByRole('radio', { name: /iPhone or iPad/ }).click();
+    },
+  ],
+  'add-device-computer': [
+    '/camera-mode',
+    async (page) => page.getByRole('radio', { name: /^Computer/ }).click(),
+  ],
   diagnostics: ['/diagnostics'],
 };
 const wanted = process.argv.slice(2);
@@ -69,6 +98,12 @@ for (const [width, height] of sizes) {
       status: data ? 200 : 404,
     });
   });
+  await context.route('**/downloads/manifest.json', (route) =>
+    route.fulfill({
+      body: JSON.stringify(downloadsManifest),
+      contentType: 'application/json',
+    }),
+  );
   const page = await context.newPage();
   for (const name of names) {
     const entry = screens[name];
@@ -76,7 +111,8 @@ for (const [width, height] of sizes) {
     await page.goto(new URL(entry[0], base).toString(), {
       waitUntil: 'networkidle',
     });
-    await page.waitForTimeout(400);
+    await entry[1]?.(page);
+    await page.waitForTimeout(600);
     const file = path.join(out, `${name}-${width}.png`);
     await page.screenshot({ fullPage: false, path: file });
     console.log(file);

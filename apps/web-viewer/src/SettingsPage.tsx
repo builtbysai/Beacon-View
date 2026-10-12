@@ -117,7 +117,7 @@ const sectionText: Record<SettingsSection, [string, string]> = {
     'Privacy',
     'Understand the data Beacon keeps and where to find the full details.',
   ],
-} as Record<SettingsSection, [string, string]>;
+};
 const titleOf = (section: SettingsSection) => sectionText[section][0];
 const descriptionOf = (section: SettingsSection) => sectionText[section][1];
 
