@@ -309,10 +309,7 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
             done(
                 runCatching {
                     val token = firebaseMessagingToken()
-                    val installationId =
-                        getSharedPreferences("beacon_installation", MODE_PRIVATE).getString("installation_id", null)
-                            ?: error("This installation is not ready")
-                    JSONObject().put("token", token).put("installationId", installationId)
+                    JSONObject().put("token", token).put("installationId", installationId(this@WebShellActivity))
                 },
             )
         }

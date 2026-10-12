@@ -35,7 +35,6 @@ import androidx.core.view.WindowCompat
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
-import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -60,12 +59,7 @@ class MainActivity : ComponentActivity() {
         }
         autoPairCode = pairingCodeFromIntent(intent)
         inboundPairingCode = parsePairingQr(intent?.dataString, BuildConfig.BEACON_API_URL, BuildConfig.BEACON_WEB_URL)
-        val preferences = getSharedPreferences("beacon_installation", MODE_PRIVATE)
-        val installationId =
-            preferences.getString("installation_id", null)
-                ?: UUID.randomUUID().toString().also {
-                    preferences.edit().putString("installation_id", it).apply()
-                }
+        val installationId = installationId(this)
         setContent {
             BeaconCameraApp(
                 api = BeaconApi(BuildConfig.BEACON_API_URL),
