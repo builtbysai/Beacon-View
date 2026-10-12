@@ -20,5 +20,5 @@ a browser, so nothing calls those endpoints. They were a second way to obtain an
 ## Consequences
 
 - A smaller authentication surface, and no route that bypasses CSRF for a user session.
-- Android builds before alpha14 cannot sign in with Google or password; they were already unusable or withdrawn.
+- Android builds before alpha15 (the native monitor) cannot sign in any more; they are no longer offered for download.
 - One regression test pins that a session token is refused as a bearer token and that the retired endpoints are gone.
