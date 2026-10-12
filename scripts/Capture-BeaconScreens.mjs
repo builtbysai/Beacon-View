@@ -65,6 +65,10 @@ const screens = {
     async (page) => page.getByRole('radio', { name: /^Computer/ }).click(),
   ],
   diagnostics: ['/diagnostics'],
+  guest: ['/g/demo-token'],
+  shared: ['/shared/demo-token'],
+  pair: ['/pair?code=ABCD234567'],
+  join: ['/join?token=demo'],
   // Signed out, with the one-time splash not yet seen: run with BEACON_QA_SIGNED_OUT=1.
   landing: ['/'],
 };
