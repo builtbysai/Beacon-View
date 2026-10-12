@@ -3,6 +3,7 @@
 // (capturing its own local getUserMedia stream). Beacon never sees the media
 // itself: the browser encrypts locally and PUTs ciphertext to the Google Drive
 // resumable-upload session; only ciphertext metadata reaches the server.
+import { base64url } from './clip-crypto';
 
 /** Well under the backend's 10-minute cap -- a manual clip auto-stops here
  * so a forgotten recording doesn't run indefinitely. */
@@ -46,22 +47,14 @@ export async function sha256Hex(blob: Blob): Promise<string> {
     .join('');
 }
 
-function base64url(bytes: Uint8Array): string {
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary)
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replaceAll('=', '');
-}
-
 export interface EncryptedClip {
   blob: Blob;
   dataKey: string;
   iv: string;
 }
 
-/** Encrypts the completed media locally before the direct Drive upload. */
+/** Encrypts a small asset (a thumbnail) as one AES-GCM message. Clips use the
+ * chunked format in clip-crypto.ts instead (ADR 0115). */
 export async function encryptClip(blob: Blob): Promise<EncryptedClip> {
   const key = await crypto.subtle.generateKey(
     { name: 'AES-GCM', length: 256 },

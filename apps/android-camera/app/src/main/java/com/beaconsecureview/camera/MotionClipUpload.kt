@@ -4,12 +4,6 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
-import java.security.SecureRandom
-import java.util.Base64
-import javax.crypto.Cipher
-import javax.crypto.CipherOutputStream
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 import org.json.JSONObject
 
 internal data class EncryptedClip(
@@ -18,38 +12,11 @@ internal data class EncryptedClip(
     val iv: String,
 )
 
-/** Encrypts a clip with a fresh AES-256-GCM key while streaming between files.
- * The plaintext clip never needs to fit in memory. The returned key and IV are
- * sent through Beacon's authenticated upload-session contract; Drive receives
- * only the ciphertext and authentication tag. */
-internal fun encryptClip(source: File, destination: File): EncryptedClip {
-    require(source.isFile) { "Recording source is unavailable" }
-    val key = ByteArray(32)
-    val iv = ByteArray(12)
-    SecureRandom().apply {
-        nextBytes(key)
-        nextBytes(iv)
-    }
-    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-    cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
-    try {
-        source.inputStream().buffered().use { input ->
-            CipherOutputStream(destination.outputStream().buffered(), cipher).use { output ->
-                input.copyTo(output, 64 * 1024)
-            }
-        }
-        return EncryptedClip(
-            file = destination,
-            dataKey = Base64.getUrlEncoder().withoutPadding().encodeToString(key),
-            iv = Base64.getUrlEncoder().withoutPadding().encodeToString(iv),
-        )
-    } catch (error: Throwable) {
-        destination.delete()
-        throw error
-    } finally {
-        key.fill(0)
-    }
-}
+/** Encrypts a clip with a fresh AES-256-GCM key in the chunked format (ADR 0115), streaming between
+ * files one chunk at a time. The returned key and IV are sent through Beacon's authenticated
+ * upload-session contract; Drive receives only the ciphertext and authentication tags. */
+internal fun encryptClip(source: File, destination: File): EncryptedClip =
+    encryptClipChunked(source, destination)
 
 /** Streaming SHA-256 of a recorded clip file, matching the checksum Beacon's
  * upload-session contract requires -- never loads the whole clip into memory. */

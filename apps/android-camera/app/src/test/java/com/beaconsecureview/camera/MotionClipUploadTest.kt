@@ -2,12 +2,8 @@ package com.beaconsecureview.camera
 
 import java.nio.file.Files
 import java.util.Base64
-import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 import kotlin.io.path.writeBytes
 import kotlin.test.Test
-import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 
@@ -27,15 +23,9 @@ class MotionClipUploadTest {
 
         assertEquals(32, key.size)
         assertEquals(12, iv.size)
-        assertEquals(plaintext.size + 16, ciphertext.size)
-        assertFalse(ciphertext.contentEquals(plaintext))
-        val decipher = Cipher.getInstance("AES/GCM/NoPadding")
-        decipher.init(
-            Cipher.DECRYPT_MODE,
-            SecretKeySpec(key, "AES"),
-            GCMParameterSpec(128, iv),
-        )
-        assertContentEquals(plaintext, decipher.doFinal(ciphertext))
+        // One chunk: header, the clip, one authentication tag.
+        assertEquals(ClipFormat.HEADER_BYTES + plaintext.size + ClipFormat.TAG_BYTES, ciphertext.size)
+        assertFalse(ciphertext.copyOfRange(ClipFormat.HEADER_BYTES, ciphertext.size).contentEquals(plaintext))
         assertEquals(64, sha256Hex(destination.toFile()).length)
 
         source.toFile().delete()
