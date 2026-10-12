@@ -36,7 +36,10 @@ internal fun ColumnScope.MonitorHomePage(
     with(state) {
             val isHouseholdManager = currentSession.householdRole == "owner" || currentSession.householdRole == "admin"
             val hostCameras = monitorHostCameras(cameras)
-            if (cameras.isEmpty()) {
+            if (cameras.isEmpty() && busy) {
+                // Still loading: saying "nothing shared with you" now would be wrong for an owner.
+                Text("Loading cameras…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else if (cameras.isEmpty()) {
                 val loadFailed = message.startsWith("Cameras are temporarily unavailable.")
                 Box(
                     modifier = Modifier.fillMaxWidth()
@@ -52,7 +55,9 @@ internal fun ColumnScope.MonitorHomePage(
                     ) {
                         Text(
                             if (loadFailed) "Cameras are temporarily unavailable"
-                            else if (isHouseholdManager) "Add your first device" else "No cameras shared with you yet",
+                            else if (isHouseholdManager) "Add your first device"
+                            else if (currentSession.householdRole == null) "No cameras yet"
+                            else "No cameras shared with you yet",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -61,6 +66,7 @@ internal fun ColumnScope.MonitorHomePage(
                         Text(
                             if (loadFailed) message.removePrefix("Cameras are temporarily unavailable. ")
                             else if (isHouseholdManager) "Turn a spare phone, tablet, or computer into a camera."
+                            else if (currentSession.householdRole == null) "Cameras you add, or that are shared with you, appear here."
                             else "Ask the household owner or an admin to grant you access to a camera from Settings → Household sharing.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

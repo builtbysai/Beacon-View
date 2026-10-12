@@ -186,12 +186,10 @@ internal fun MonitorDeviceSettings(
     sources.forEach { source ->
         val active = source.id == activeSource.id
         BeaconPanel(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            // The name gets its own line; the status and the rename and remove buttons sit under it, so a long name is
+            // not squeezed to "Go..." on a narrow phone.
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         Icons.Outlined.Cameraswitch,
                         null,
@@ -210,7 +208,7 @@ internal fun MonitorDeviceSettings(
                         )
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                     if (active) BeaconStatusPill("ACTIVE", BeaconOnline) else OutlinedButton(enabled = online && !privacyMode && !busy, onClick = { onActivate(source) }) { Text("Use") }
                     if (canManageSettings) {
                         IconButton(onClick = { renamingCameraId = source.id; renameCameraText = source.name }) {
