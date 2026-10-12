@@ -1,5 +1,7 @@
 # ADR 0013: Android monitor account sessions
 
+Status: Superseded by [ADR 0121](0121-android-hosts-the-web-app.md): the Android app no longer has a native monitor mode; the web app is the viewer.
+
 ## Context
 
 Beacon's Android camera credential is deliberately restricted to registration,

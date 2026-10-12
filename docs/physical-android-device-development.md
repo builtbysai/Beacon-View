@@ -129,6 +129,10 @@ account" -- none of it a code bug). Always export `BEACON_API_URL` (production:
 `https://beacon.builtbysai.com`) before an ad hoc Gradle invocation targeting
 the physical Pixel.
 
+Since ADR 0121 the app also shows the web app inside a WebView, so set `BEACON_WEB_URL` (or `-PbeaconWebUrl=`) the same
+way: production `https://beacon.builtbysai.com`, or the LAN web address for local builds. The emulator-only default is
+`http://10.0.2.2:5173`.
+
 Open `https://<LAN_IP>:8443` in laptop and phone Chrome. Pair the camera, keep
 the Android streaming screen visible, sign in as the owner, and open live
 video.
