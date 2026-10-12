@@ -357,9 +357,6 @@ internal fun parseMotionSettingsResponse(body: String): Map<String, MotionSettin
 internal fun parseZoneCells(array: org.json.JSONArray): Set<Int> =
     (0 until array.length()).map { array.getInt(it) }.filter { it in 0 until ZoneGrid.COUNT }.toSet()
 
-internal fun nullableApiText(value: String?): String? =
-    value?.trim()?.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
-
 internal fun checkMotionReportResponse(status: Int) {
     when (status) {
         HttpURLConnection.HTTP_CREATED,

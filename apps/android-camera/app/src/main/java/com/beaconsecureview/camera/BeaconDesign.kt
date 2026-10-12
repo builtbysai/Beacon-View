@@ -127,26 +127,6 @@ internal fun BeaconPageHeader(
     }
 }
 
-/** Matches the PWA's `.dash-empty` card (App.css): a dashed rather than
- * solid outline, used for the "nothing here yet" onboarding state. Plain
- * `Modifier.border` only draws solid strokes, so this dashes it manually. */
-internal fun Modifier.beaconDashedBorder(
-    color: Color,
-    cornerRadius: Dp,
-    strokeWidth: Dp = 1.dp,
-): Modifier =
-    drawBehind {
-        val stroke = Stroke(
-            width = strokeWidth.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx()), 0f),
-        )
-        drawRoundRect(
-            color = color,
-            style = stroke,
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius.toPx()),
-        )
-    }
-
 @Composable
 internal fun BeaconPanel(
     modifier: Modifier = Modifier,
@@ -208,5 +188,4 @@ internal object BeaconRadii {
     val Sm = 4.dp
     val Md = 8.dp
     val Lg = 12.dp
-    val Full = 999.dp
 }
