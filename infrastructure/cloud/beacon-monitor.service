@@ -6,4 +6,4 @@ After=docker.service
 [Service]
 Type=oneshot
 EnvironmentFile=/etc/beacon/production.env
-ExecStart=/opt/beacon/app/infrastructure/cloud/beacon-monitor.sh
+ExecStart=/opt/beacon/current/infrastructure/cloud/beacon-monitor.sh
