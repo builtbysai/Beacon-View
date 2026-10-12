@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Brand, Icon } from './Icon';
 import './PublicHeader.css';
 
-export interface NavLink {
+interface NavLink {
   label: string;
   href: string;
   isActive?: boolean;

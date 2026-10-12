@@ -1,11 +1,8 @@
-export type DeviceLifecycle =
+type DeviceLifecycle =
   'offline' | 'online' | 'streaming' | 'idle' | 'updating' | 'error';
 
 export type PairingLifecycle =
   'pending' | 'waiting' | 'accepted' | 'completed' | 'expired' | 'cancelled';
-
-export type ViewerLifecycle =
-  'disconnected' | 'watching' | 'paused' | 'background' | 'recording';
 
 export function deviceLifecycle(
   online: boolean,

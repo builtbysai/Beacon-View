@@ -2,7 +2,7 @@ import type { CameraPower } from './camera-power';
 
 export type CameraUseCase = 'general' | 'security' | 'baby' | 'doorbell';
 
-export interface CameraUseCaseInfo {
+interface CameraUseCaseInfo {
   id: CameraUseCase;
   label: string;
   /** What the preset does on an Android camera, which detects motion. */

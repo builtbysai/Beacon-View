@@ -13,20 +13,16 @@ import {
   verifyDriveRecordingAccess,
 } from './google-drive-client.js';
 import {
-  androidChallengeFromState,
-  androidOAuthState,
   desktopChallengeFromState,
   desktopCompletionPath,
   DesktopGoogleHandoffs,
   desktopOAuthState,
-  pkceChallenge,
 } from './desktop-google-handoff.js';
 import {
   credentialsSchema,
   desktopGoogleExchangeSchema,
   googleCallbackSchema,
   googleStartSchema,
-  mobileGoogleExchangeSchema,
 } from './http-schemas.js';
 import type { RateLimiter } from './rate-limit.js';
 import {
@@ -82,16 +78,6 @@ export function registerAuthenticationRoutes(
       .catch((error: unknown) =>
         app.log.warn({ err: error }, 'failed to record sign-in security event'),
       );
-  const mobileGoogleHandoffs = new Map<
-    string,
-    {
-      challenge: string;
-      email: string;
-      expiresAt: number;
-      householdId: string;
-      userId: string;
-    }
-  >();
   // Bridges a Google sign-in that turned out to belong to an existing
   // password account: rather than making the person repeat the whole OAuth
   // round-trip from Settings after signing in with their password, the
@@ -249,40 +235,6 @@ export function registerAuthenticationRoutes(
     }
   });
 
-  app.post('/api/mobile/auth/register', async (request, reply) => {
-    if (!limiter.take(`register:${request.ip}`, 5, HOUR)) {
-      return reply.code(429).send({ error: 'Too many requests' });
-    }
-    const parsed = credentialsSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Invalid registration details' });
-    }
-    const email = normalizeEmail(parsed.data.email);
-    try {
-      const user = await createPasswordAccount(
-        email,
-        parsed.data.password,
-        request.ip,
-      );
-      if (emailVerificationRequired)
-        return reply
-          .code(202)
-          .send({ email: user.email, verificationRequired: true });
-      const token = await issueSession(
-        reply,
-        user.id,
-        false,
-        request.headers['user-agent'],
-      );
-      return reply.code(201).send({
-        sessionToken: token,
-        user: { email: user.email, id: user.id },
-      });
-    } catch (error) {
-      return sendRegistrationConflict(error, email, reply);
-    }
-  });
-
   app.post('/api/auth/login', async (request, reply) => {
     const parsed = credentialsSchema.safeParse(request.body);
     const email = parsed.success ? normalizeEmail(parsed.data.email) : '';
@@ -374,13 +326,10 @@ export function registerAuthenticationRoutes(
     const start = googleStartSchema.safeParse(request.query);
     if (!start.success)
       return reply.code(400).send({ error: 'Invalid sign-in request' });
-    const android = start.data.platform === 'android';
     const state =
       start.data.platform === 'desktop' && start.data.challenge
         ? desktopOAuthState(start.data.challenge)
-        : android && start.data.challenge
-          ? androidOAuthState(start.data.challenge)
-          : `web.${generateToken()}`;
+        : `web.${generateToken()}`;
     // A Drive connection abandoned in another tab must not capture this sign-in (V45).
     reply.clearCookie(GOOGLE_DRIVE_STATE_COOKIE, { path: '/' });
     reply.setCookie(GOOGLE_STATE_COOKIE, state, {
@@ -490,13 +439,10 @@ export function registerAuthenticationRoutes(
         request.cookies[GOOGLE_INTENT_COOKIE] === 'addPassword';
       const googleClientId = config.GOOGLE_OAUTH_CLIENT_ID;
       const googleRedirectUri = config.GOOGLE_OAUTH_REDIRECT_URI;
-      const android = state?.startsWith('android.') === true;
       const desktopChallenge = desktopChallengeFromState(state);
       const signInFailed = desktopChallenge
         ? desktopCompletionPath({ status: 'failed' })
-        : android
-          ? '/auth/mobile#status=failed'
-          : '/?googleSignIn=failed';
+        : '/?googleSignIn=failed';
       reply.clearCookie(GOOGLE_STATE_COOKIE, { path: '/' });
       reply.clearCookie(GOOGLE_DRIVE_STATE_COOKIE, { path: '/' });
       reply.clearCookie(GOOGLE_INTENT_COOKIE, { path: '/' });
@@ -725,12 +671,8 @@ export function registerAuthenticationRoutes(
               });
               return reply.redirect(desktopCompletionPath({ code }));
             }
-            if (!android) holdPendingGoogleLink(reply, pendingLink);
-            return reply.redirect(
-              android
-                ? '/auth/mobile#status=linkRequired'
-                : '/?googleSignIn=linkRequired',
-            );
+            holdPendingGoogleLink(reply, pendingLink);
+            return reply.redirect('/?googleSignIn=linkRequired');
           }
           user = await store.createGoogleAccount(
             email,
@@ -749,25 +691,6 @@ export function registerAuthenticationRoutes(
           success: true,
           userId: user.id,
         });
-        if (android) {
-          const androidChallenge = androidChallengeFromState(state);
-          if (!androidChallenge) return reply.redirect(signInFailed);
-          const handoffCode = generateToken();
-          const now = Date.now();
-          for (const [key, value] of mobileGoogleHandoffs) {
-            if (value.expiresAt <= now) mobileGoogleHandoffs.delete(key);
-          }
-          mobileGoogleHandoffs.set(hashSecret(handoffCode), {
-            challenge: androidChallenge,
-            email: user.email,
-            expiresAt: now + TEN_MINUTES,
-            householdId: user.householdId,
-            userId: user.id,
-          });
-          return reply.redirect(
-            `beaconsecureview://auth/mobile?code=${encodeURIComponent(handoffCode)}`,
-          );
-        }
         if (desktopChallenge) {
           const code = desktopGoogleHandoffs.issue(desktopChallenge, {
             kind: 'session',
@@ -788,47 +711,6 @@ export function registerAuthenticationRoutes(
       }
     },
   );
-
-  app.post('/api/mobile/auth/google', async (request, reply) => {
-    const parsed = mobileGoogleExchangeSchema.safeParse(request.body);
-    if (
-      !parsed.success ||
-      !limiter.take(`mobile-google:${request.ip}`, 10, FIFTEEN_MINUTES)
-    ) {
-      return reply
-        .code(401)
-        .send({ error: 'Google sign-in could not be completed' });
-    }
-    const handoff = mobileGoogleHandoffs.get(hashSecret(parsed.data.code));
-    mobileGoogleHandoffs.delete(hashSecret(parsed.data.code));
-    if (
-      !handoff ||
-      handoff.expiresAt <= Date.now() ||
-      !secretsEqual(pkceChallenge(parsed.data.verifier), handoff.challenge)
-    ) {
-      return reply
-        .code(401)
-        .send({ error: 'Google sign-in could not be completed' });
-    }
-    await store.audit({
-      eventType: 'mobile_google_login_succeeded',
-      householdId: handoff.householdId,
-      ipAddress: request.ip,
-      success: true,
-      userId: handoff.userId,
-    });
-    await recordSignIn(handoff.userId);
-    const token = await issueSession(
-      reply,
-      handoff.userId,
-      false,
-      request.headers['user-agent'],
-    );
-    return reply.send({
-      sessionToken: token,
-      user: { email: handoff.email, id: handoff.userId },
-    });
-  });
 
   // Runs inside the desktop app's webview (same origin as the web viewer),
   // so the session lands in that webview's cookie jar exactly like a web
@@ -883,51 +765,6 @@ export function registerAuthenticationRoutes(
       redirect: outcome.addPassword
         ? '/settings?section=account&addPassword=1'
         : '/',
-    });
-  });
-
-  app.post('/api/mobile/auth/login', async (request, reply) => {
-    const parsed = credentialsSchema.safeParse(request.body);
-    const email = parsed.success ? normalizeEmail(parsed.data.email) : '';
-    if (
-      !limiter.take(
-        `mobile-login:${request.ip}:${hashSecret(email)}`,
-        10,
-        FIFTEEN_MINUTES,
-      )
-    ) {
-      return reply.code(429).send({ error: 'Too many requests' });
-    }
-    const user = parsed.success ? await store.findUserByEmail(email) : null;
-    const passwordHash = user?.passwordHash ?? (await dummyPasswordHash);
-    const password = parsed.success ? parsed.data.password : generateToken();
-    const passwordMatches = await verifyPassword(passwordHash, password);
-    if (!user || !parsed.success || !passwordMatches) {
-      await store.audit({
-        eventType: 'mobile_login_failed',
-        ipAddress: request.ip,
-        success: false,
-      });
-      return reply.code(401).send({ error: 'Invalid email or password' });
-    }
-    if (await refuseUnverified(user, reply)) return;
-    await store.audit({
-      eventType: 'mobile_login_succeeded',
-      householdId: user.householdId,
-      ipAddress: request.ip,
-      success: true,
-      userId: user.id,
-    });
-    await recordSignIn(user.id);
-    const token = await issueSession(
-      reply,
-      user.id,
-      false,
-      request.headers['user-agent'],
-    );
-    return reply.send({
-      sessionToken: token,
-      user: { email: user.email, id: user.id },
     });
   });
 }

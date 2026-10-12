@@ -5,7 +5,7 @@ import { validResumePath } from './camera-setup.js';
 
 /** Small, non-sensitive shell preferences. Sessions live in the webview's
  * own (encrypted, see the cookie-encryption fuse) cookie store, never here. */
-export interface DesktopPreferences {
+interface DesktopPreferences {
   /** Camera Mode path to reopen at startup (ADR 0083), or null. */
   cameraResumePath: string | null;
   /** Set just before an automatic update restarts Beacon, so the next launch

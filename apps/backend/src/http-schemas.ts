@@ -15,7 +15,7 @@ export const registerDeviceSchema = z.object({
   name: z.string().trim().min(1).max(100),
   pairingCode: z.string().trim().min(1).max(32),
 });
-export const cameraSourceSchema = z.object({
+const cameraSourceSchema = z.object({
   sourceKey: z.string().trim().min(1).max(200),
   name: z.string().trim().min(1).max(100),
   facing: z.enum(['front', 'rear', 'external', 'unknown']),
@@ -117,23 +117,17 @@ export const googleCallbackSchema = z.object({
 });
 export const googleStartSchema = z
   .object({
-    platform: z.enum(['android', 'desktop']).optional(),
+    platform: z.enum(['desktop']).optional(),
     intent: z.literal('addPassword').optional(),
     // PKCE S256 challenge; required for (and only accepted from) the desktop
     // and Android apps, whose return links other apps on the device can read.
+    // (The Android app uses the desktop hand-off, ADR 0121.)
     challenge: z.string().regex(PKCE_CHALLENGE_PATTERN).optional(),
   })
   .refine(
     (start) =>
-      (start.platform === 'desktop' || start.platform === 'android') ===
-      (start.challenge !== undefined),
+      (start.platform === 'desktop') === (start.challenge !== undefined),
   );
-export const mobileGoogleExchangeSchema = z
-  .object({
-    code: z.string().min(32).max(512),
-    verifier: z.string().regex(PKCE_VERIFIER_PATTERN),
-  })
-  .strict();
 export const desktopGoogleExchangeSchema = z
   .object({
     code: z.string().min(32).max(512),

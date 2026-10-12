@@ -34,7 +34,7 @@ const TIMEOUT_MESSAGE = 'Beacon took too long to respond. Try again.';
 /** Ordinary API calls give up after this long; uploads use their own path. */
 const REQUEST_TIMEOUT_MS = 60_000;
 
-export function csrfToken(): string {
+function csrfToken(): string {
   return (
     document.cookie
       .split('; ')

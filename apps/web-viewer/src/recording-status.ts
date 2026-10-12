@@ -4,7 +4,7 @@
  * (an inline clip tag on the triggering event) and the Clips library (the
  * clip's own status pill), so the two views never describe the same state
  * two different ways. */
-export type RecordingStatus =
+type RecordingStatus =
   'requested' | 'recording' | 'uploading' | 'available' | 'failed' | 'deleting';
 
 export const recordingStatusLabels: Record<RecordingStatus, string> = {

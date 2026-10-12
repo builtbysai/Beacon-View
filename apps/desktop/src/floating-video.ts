@@ -10,7 +10,7 @@ import type { WebContents } from 'electron';
  * The scripts are fixed strings and run with a user gesture, which the
  * Picture-in-Picture API requires.
  */
-export const FLOAT_LIVE_VIDEO = `(() => {
+const FLOAT_LIVE_VIDEO = `(() => {
   const video = document.querySelector('video[autopictureinpicture]');
   if (document.pictureInPictureElement) return 'floating';
   if (!video || video.paused || video.readyState < 2) return 'none';
@@ -19,7 +19,7 @@ export const FLOAT_LIVE_VIDEO = `(() => {
 })()`;
 
 /** Closes a floating window the shell opened, when the window comes back. */
-export const DOCK_LIVE_VIDEO = `(() => {
+const DOCK_LIVE_VIDEO = `(() => {
   const video = document.pictureInPictureElement;
   if (!video || !video.hasAttribute('autopictureinpicture')) return false;
   return document.exitPictureInPicture().then(() => true, () => false);

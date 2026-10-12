@@ -1,4 +1,4 @@
-export interface DevelopmentServerEnvironment {
+interface DevelopmentServerEnvironment {
   VITE_ALLOWED_HOST?: string;
   VITE_BACKEND_PROXY_TARGET?: string;
   VITE_DEV_HOST?: string;

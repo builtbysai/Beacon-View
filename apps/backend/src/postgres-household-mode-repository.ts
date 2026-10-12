@@ -17,7 +17,7 @@ export interface HouseholdModeRecord {
 }
 
 /** Cameras whose privacy mode a mode change flipped, by public camera ID. */
-export interface ModeCameraChanges {
+interface ModeCameraChanges {
   paused: string[];
   resumed: string[];
 }

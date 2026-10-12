@@ -28,11 +28,11 @@ function canBeAlertedAbout(member: string, camera: string): string {
 }
 
 /** A camera this low on battery, and not charging, needs attention. */
-export const LOW_BATTERY_PERCENT = 15;
+const LOW_BATTERY_PERCENT = 15;
 /** It counts as recovered once it is charging or back above this. */
-export const LOW_BATTERY_CLEARED_PERCENT = 25;
+const LOW_BATTERY_CLEARED_PERCENT = 25;
 /** From "severe" up, Android is already throttling or about to shut down. */
-export const HOT_THERMAL_STATUSES: ReadonlySet<string> = new Set([
+const HOT_THERMAL_STATUSES: ReadonlySet<string> = new Set([
   'severe',
   'critical',
   'emergency',
@@ -43,7 +43,7 @@ export const HOT_THERMAL_STATUSES: ReadonlySet<string> = new Set([
  * One health condition across scans: raised once when it starts, held until
  * it clears. `since` is the stored marker (null when clear).
  */
-export function nextHealthState(
+function nextHealthState(
   since: Date | null,
   active: boolean,
   cleared: boolean,

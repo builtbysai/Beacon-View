@@ -49,7 +49,11 @@ afterAll(async () => {
   limiter.close();
   await app.close();
 });
-const headers = { authorization: 'Bearer session-token' };
+const headers = {
+  cookie: 'session=session-token; beacon_csrf=csrf',
+  origin: 'https://beacon.test',
+  'x-csrf-token': 'csrf',
+};
 const url = `/api/notification-preferences/${deviceId}/motion-snooze`;
 
 it('binds the personal snooze to the authenticated account and household', async () => {

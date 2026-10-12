@@ -28,7 +28,7 @@ export interface HouseholdModeState {
   canChange: boolean;
 }
 
-export const MODE_EVENT = 'beacon:household-mode';
+const MODE_EVENT = 'beacon:household-mode';
 export const MAX_SCHEDULE_WINDOWS = 8;
 export const DAY_LABELS = [
   { label: 'Sun', name: 'Sunday' },

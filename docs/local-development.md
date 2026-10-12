@@ -6,6 +6,8 @@
 - Docker with the Compose plugin
 - JDK 17 or newer and Android SDK Platform 35, for the Android app (Android Studio's bundled JDK works)
 
+`bash scripts/dev/verify-environment.sh` checks the tools, Docker access and the backend `.env` and says what is missing.
+
 ## Run it
 
 ```sh
@@ -58,7 +60,9 @@ Android: `apps/android-camera/gradlew.bat -p apps/android-camera :app:testDebugU
 
 ## Android against local services
 
-The emulator reaches the host at `http://10.0.2.2:3000` (cleartext is allowed only for that host). For the viewer
+The Android app shows the web app inside the app (ADR 0121), so a local build needs both the backend and the web
+viewer running (`pnpm dev`). The emulator reaches the host at `http://10.0.2.2:3000` (cleartext is allowed only for that
+host). For the viewer
 at `http://10.0.2.2:5173`, set `WEB_ORIGIN=http://10.0.2.2:5173` in the ignored `apps/backend/.env` and restart the
 backend; the origin must match exactly or pairing fails the CSRF check. Debug builds take the viewer URL from
 `-PbeaconWebUrl=` or `BEACON_WEB_URL`; release builds use `-PbeaconReleaseWebUrl=` or `BEACON_RELEASE_WEB_URL`.
@@ -76,6 +80,7 @@ documentation address with your LAN address. Details are in
 .\scripts\Export-BeaconDevCertificate.ps1
 .\scripts\Test-BeaconLanDev.ps1 -LanHost 192.0.2.10
 .\scripts\Build-Install-BeaconAndroidDebug.ps1 -LanHost 192.0.2.10
+.\scripts\Open-BeaconLanDev.ps1 -Page CameraMode   # opens the running LAN site (Dashboard or CameraMode)
 .\scripts\Stop-BeaconLanDev.ps1
 ```
 

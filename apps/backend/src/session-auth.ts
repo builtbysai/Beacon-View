@@ -21,11 +21,8 @@ export function createSessionAuth(config: AppConfig, store: MilestoneStore) {
     request: FastifyRequest,
     reply: FastifyReply,
   ): Promise<SessionRecord | null> {
-    const authorization = request.headers.authorization;
-    const bearerToken = authorization?.startsWith('Bearer ')
-      ? authorization.slice('Bearer '.length)
-      : '';
-    const rawToken = bearerToken || request.cookies[config.SESSION_COOKIE_NAME];
+    // Signed-in sessions are cookies only; Authorization bearer tokens are for device credentials.
+    const rawToken = request.cookies[config.SESSION_COOKIE_NAME];
     if (!rawToken) {
       unauthorized(reply);
       return null;
@@ -44,7 +41,6 @@ export function createSessionAuth(config: AppConfig, store: MilestoneStore) {
   ): Promise<SessionRecord | null> {
     const session = await authenticate(request, reply);
     if (!session) return null;
-    if (request.headers.authorization?.startsWith('Bearer ')) return session;
     const csrfHeader = request.headers['x-csrf-token'];
     const csrfCookie = request.cookies[CSRF_COOKIE];
     const origin = request.headers.origin;

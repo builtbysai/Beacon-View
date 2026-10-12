@@ -15,7 +15,7 @@ export interface AndroidCameraState {
   viewers: number;
 }
 
-export interface AndroidHello {
+interface AndroidHello {
   app: 'android';
   camera: AndroidCameraState;
   /** This phone can float a video over other apps (picture in picture). */
@@ -42,7 +42,7 @@ declare global {
 
 const REPLY_TIMEOUT_MS = 8_000;
 
-export function androidBridge(): BeaconAndroidBridge | null {
+function androidBridge(): BeaconAndroidBridge | null {
   const bridge = window.BeaconAndroid;
   return bridge && typeof bridge.postMessage === 'function' ? bridge : null;
 }

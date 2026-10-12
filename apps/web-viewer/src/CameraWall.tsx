@@ -31,7 +31,7 @@ export const MAX_WALL_TILES = 9;
 const LAYOUT_KEY = 'beacon.wall.columns.v1';
 export type { WallColumns } from './wall-layouts';
 
-export function loadWallColumns(): WallColumns {
+function loadWallColumns(): WallColumns {
   try {
     const value = localStorage.getItem(LAYOUT_KEY);
     return value === '1' || value === '2' || value === '3'

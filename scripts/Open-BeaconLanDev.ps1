@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Dashboard', 'Monitor', 'CameraMode')]
+    [ValidateSet('Dashboard', 'CameraMode')]
     [string]$Page = 'Dashboard'
 )
 
@@ -10,10 +10,6 @@ $state = Read-BeaconDevState (Join-Path $repositoryRoot '.beacon-dev\lan-dev.jso
 if (-not $state) { throw 'Beacon LAN development is not running.' }
 $url = switch ($Page) {
     'CameraMode' { $state.urls.browserCamera }
-    'Monitor' {
-        if ($state.urls.monitor) { $state.urls.monitor }
-        else { "$($state.urls.dashboard)/monitor" }
-    }
     default { $state.urls.dashboard }
 }
 Start-Process $url

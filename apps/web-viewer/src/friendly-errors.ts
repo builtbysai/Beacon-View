@@ -206,7 +206,7 @@ const SERVER_CODES: Record<string, string> = {
  * form. When no specific wording exists, they get this. */
 const GENERIC_INVALID = `That didn’t go through. ${RELOAD}`;
 
-export interface FriendlyServerError {
+interface FriendlyServerError {
   code: string | undefined;
   message: string;
 }
@@ -245,7 +245,7 @@ export function statusMessage(status: number): string {
   return GENERIC_INVALID;
 }
 
-export type MediaDevice = 'camera' | 'microphone' | 'camera and microphone';
+type MediaDevice = 'camera' | 'microphone' | 'camera and microphone';
 
 /** Plain words for a camera/microphone failure (getUserMedia). */
 export function mediaErrorMessage(error: unknown, device: MediaDevice): string {

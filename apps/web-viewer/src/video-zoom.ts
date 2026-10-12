@@ -11,18 +11,18 @@ import {
  * transform whose origin is the frame's top-left corner, so a zoom state is
  * just `{ scale, x, y }` and the math below stays small and testable.
  */
-export interface ZoomState {
+interface ZoomState {
   scale: number;
   x: number;
   y: number;
 }
 
-export interface Frame {
+interface Frame {
   height: number;
   width: number;
 }
 
-export const MIN_SCALE = 1;
+const MIN_SCALE = 1;
 export const MAX_SCALE = 6;
 export const IDENTITY: ZoomState = { scale: 1, x: 0, y: 0 };
 
@@ -66,7 +66,7 @@ export function panBy(
   return clampZoom({ ...state, x: state.x + dx, y: state.y + dy }, frame);
 }
 
-export function isZoomed(state: ZoomState): boolean {
+function isZoomed(state: ZoomState): boolean {
   return state.scale > MIN_SCALE;
 }
 
@@ -74,7 +74,7 @@ export function isZoomed(state: ZoomState): boolean {
 const INTERACTIVE =
   'button, a, input, select, textarea, [role="dialog"], .video-controls, .video-top-scrim';
 
-export interface VideoZoom {
+interface VideoZoom {
   state: ZoomState;
   zoomed: boolean;
   zoomIn: () => void;

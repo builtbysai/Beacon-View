@@ -13,7 +13,7 @@ export const CAST_NAMESPACE = 'urn:x-cast:com.beaconsecureview.cast';
 const SENDER_SDK =
   'https://www.gstatic.com/cast/sdk/libs/sender/1.0/cast_framework.js?loadCastFramework=1';
 /** The TV link lives this long; after that the TV stops showing the camera. */
-export const CAST_LINK_HOURS = 4;
+const CAST_LINK_HOURS = 4;
 
 /** The path the receiver opens: a guest link in cast mode. */
 export function castWatchPath(token: string): string {
@@ -21,7 +21,7 @@ export function castWatchPath(token: string): string {
 }
 
 /** Cast senders run in Chrome-based browsers, never in the desktop app. */
-export function castBrowserSupported(): boolean {
+function castBrowserSupported(): boolean {
   if (typeof navigator === 'undefined' || isDesktopShell()) return false;
   return /\b(Chrome|CriOS|Edg)\//u.test(navigator.userAgent);
 }
@@ -54,7 +54,7 @@ interface CastGlobals {
 let loading: Promise<boolean> | null = null;
 
 /** Loads Google's sender framework once. Resolves false when it can't run. */
-export function loadCastFramework(): Promise<boolean> {
+function loadCastFramework(): Promise<boolean> {
   if (loading) return loading;
   const globals = window as unknown as CastGlobals;
   loading = new Promise<boolean>((resolve) => {
@@ -69,7 +69,7 @@ export function loadCastFramework(): Promise<boolean> {
 }
 
 /** Whether Beacon has a Cast application configured for this server. */
-export async function fetchCastAppId(): Promise<string | null> {
+async function fetchCastAppId(): Promise<string | null> {
   try {
     const result = await request<{ appId: string | null }>('/api/cast-config');
     return typeof result.appId === 'string' ? result.appId : null;

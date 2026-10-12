@@ -1,6 +1,6 @@
 # ADR 0041: Extract feature boundaries before expanding the product
 
-Status: Accepted for the maintainability milestone.
+Status: Accepted for the maintainability milestone. The native monitor modules named below were removed by ADR 0121.
 
 ## Context
 

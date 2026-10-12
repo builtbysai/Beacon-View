@@ -763,99 +763,42 @@ describe.skipIf(!app || !store)('authentication API with PostgreSQL', () => {
     });
   });
 
-  it('issues revocable bearer sessions for the Android monitor', async () => {
-    await app!.inject({
+  it('only accepts a session from its cookie, never as a bearer token', async () => {
+    const registration = await app!.inject({
       method: 'POST',
       payload: {
-        email: 'mobile@example.com',
+        email: 'cookie-only@example.com',
         password: 'correct horse battery staple',
       },
       remoteAddress: '127.0.0.20',
       url: '/api/auth/register',
     });
-    const login = await app!.inject({
-      method: 'POST',
-      payload: {
-        email: 'mobile@example.com',
-        password: 'correct horse battery staple',
-      },
-      remoteAddress: '127.0.0.20',
-      url: '/api/mobile/auth/login',
+    const { cookie } = sessionCookies(registration.headers);
+    const token = cookie
+      .split('; ')
+      .find((pair) => pair.startsWith('beacon_session='))!
+      .split('=')[1]!;
+    const withCookie = await app!.inject({
+      headers: { cookie },
+      method: 'GET',
+      url: '/api/cameras',
     });
-    expect(login.statusCode).toBe(200);
-    const token = login.json<{ sessionToken: string }>().sessionToken;
-    expect(token.length).toBeGreaterThan(32);
-    expect(login.headers['set-cookie']).toBeUndefined();
-
-    const cameras = await app!.inject({
+    expect(withCookie.statusCode).toBe(200);
+    const asBearer = await app!.inject({
       headers: { authorization: `Bearer ${token}` },
       method: 'GET',
       url: '/api/cameras',
     });
-    expect(cameras.statusCode).toBe(200);
-    expect(cameras.json()).toEqual({ cameras: [] });
-
-    const logout = await app!.inject({
-      headers: { authorization: `Bearer ${token}` },
-      method: 'POST',
-      url: '/api/auth/logout',
-    });
-    expect(logout.statusCode).toBe(204);
-    const revoked = await app!.inject({
-      headers: { authorization: `Bearer ${token}` },
-      method: 'GET',
-      url: '/api/cameras',
-    });
-    expect(revoked.statusCode).toBe(401);
-  });
-
-  it('registers Android monitor accounts with revocable bearer sessions', async () => {
-    const invalid = await app!.inject({
-      method: 'POST',
-      payload: { email: 'mobile-new@example.com', password: 'too short' },
-      remoteAddress: '127.0.0.21',
-      url: '/api/mobile/auth/register',
-    });
-    expect(invalid.statusCode).toBe(400);
-
-    const registration = await app!.inject({
-      headers: { 'user-agent': 'Beacon Android test' },
-      method: 'POST',
-      payload: {
-        email: ' Mobile-New@Example.com ',
-        password: 'correct horse battery staple',
-      },
-      remoteAddress: '127.0.0.21',
-      url: '/api/mobile/auth/register',
-    });
-    expect(registration.statusCode).toBe(201);
-    expect(registration.headers['set-cookie']).toBeUndefined();
-    const body = registration.json<{
-      sessionToken: string;
-      user: { email: string; id: string };
-    }>();
-    expect(body.sessionToken.length).toBeGreaterThan(32);
-    expect(body.user.email).toBe('mobile-new@example.com');
-
-    const account = await app!.inject({
-      headers: { authorization: `Bearer ${body.sessionToken}` },
-      method: 'GET',
-      url: '/api/auth/me',
-    });
-    expect(account.statusCode).toBe(200);
-    expect(account.json<{ user: { id: string } }>().user.id).toBe(body.user.id);
-
-    const duplicate = await app!.inject({
-      method: 'POST',
-      payload: {
-        email: 'mobile-new@example.com',
-        password: 'correct horse battery staple',
-      },
-      remoteAddress: '127.0.0.21',
-      url: '/api/mobile/auth/register',
-    });
-    expect(duplicate.statusCode).toBe(409);
-    expect(duplicate.json()).toEqual({ error: 'Unable to create account' });
+    expect(asBearer.statusCode).toBe(401);
+    // The retired Android sign-in endpoints no longer exist.
+    for (const url of [
+      '/api/mobile/auth/login',
+      '/api/mobile/auth/register',
+      '/api/mobile/auth/google',
+    ]) {
+      const gone = await app!.inject({ method: 'POST', payload: {}, url });
+      expect(gone.statusCode, url).toBe(404);
+    }
   });
 
   it('immediately rejects idle-expired sessions', async () => {

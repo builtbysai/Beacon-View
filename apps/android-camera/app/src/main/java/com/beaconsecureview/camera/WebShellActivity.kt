@@ -212,11 +212,16 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
 
     // --- Links in: notifications, setup links and the Google hand-off ---------------------------------------
 
+    private fun shortcutUrl(intent: Intent?): String? =
+        LaunchLinks.pageUrl(BuildConfig.BEACON_WEB_URL, intent?.getStringExtra("beacon_page"))
+
     private fun startUrl(intent: Intent?): String =
-        intent?.dataString?.takeIf { WebShellPolicy.isAppUrl(it, appOrigin) } ?: BuildConfig.BEACON_WEB_URL
+        intent?.dataString?.takeIf { WebShellPolicy.isAppUrl(it, appOrigin) }
+            ?: shortcutUrl(intent)
+            ?: BuildConfig.BEACON_WEB_URL
 
     private fun handleLink(intent: Intent) {
-        val link = intent.dataString ?: return
+        val link = intent.dataString ?: shortcutUrl(intent) ?: return
         WebShellPolicy.parseGoogleReturn(link)?.let {
             completeGoogleSignIn(it)
             return

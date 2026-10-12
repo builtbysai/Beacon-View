@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
-export interface EncryptedDriveToken {
+interface EncryptedDriveToken {
   ciphertext: Buffer;
   iv: Buffer;
 }

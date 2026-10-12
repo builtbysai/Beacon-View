@@ -10,7 +10,7 @@ export type ConnectionStatus =
   | 'switching source'
   | ConnectionFailure;
 
-export type LiveOverlay = {
+type LiveOverlay = {
   detail: string;
   title: string;
 };

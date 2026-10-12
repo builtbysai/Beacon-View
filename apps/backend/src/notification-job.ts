@@ -11,7 +11,7 @@ import type {
 } from './notification-types.js';
 import type { MilestoneStore } from './store.js';
 
-export interface NotificationDeliverySender {
+interface NotificationDeliverySender {
   send(delivery: NotificationDelivery): Promise<NotificationDeliveryOutcome>;
 }
 

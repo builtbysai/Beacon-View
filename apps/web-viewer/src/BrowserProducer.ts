@@ -31,7 +31,7 @@ type ProducerMessage =
  * when the first viewer arrives (standby camera). The function is called for
  * every new viewer, so it must return the already-open stream if there is
  * one. */
-export type StreamSource = MediaStream | (() => Promise<MediaStream>);
+type StreamSource = MediaStream | (() => Promise<MediaStream>);
 
 function producerUrl(cameraId: string): string {
   const url = new URL('/api/signaling', window.location.href);

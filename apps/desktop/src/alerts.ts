@@ -5,10 +5,9 @@
  * copy matches the PWA service worker (apps/web-viewer/public/sw.js): no
  * camera names or event details ever appear in an OS notification.
  */
-export type AlertCategory =
-  'motion' | 'offline' | 'recovered' | 'security' | 'health';
+type AlertCategory = 'motion' | 'offline' | 'recovered' | 'security' | 'health';
 
-export interface DesktopAlert {
+interface DesktopAlert {
   category: AlertCategory;
   eventId: string;
   route: '/activity' | '/settings';

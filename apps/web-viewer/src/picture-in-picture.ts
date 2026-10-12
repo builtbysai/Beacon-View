@@ -54,7 +54,7 @@ async function exit(video: HTMLVideoElement): Promise<void> {
     webkit.webkitSetPresentationMode?.('inline');
 }
 
-export interface PictureInPicture {
+interface PictureInPicture {
   /** This browser can float the video. */
   supported: boolean;
   /** The video is floating right now. */

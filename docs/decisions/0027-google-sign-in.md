@@ -26,6 +26,8 @@ The Google client secret belongs only in the VM's protected environment file.
 Email verification, password reset, and explicit account linking remain
 separate account-lifecycle work.
 
+(Superseded for Android by ADR 0121: the app now uses the same system-browser hand-off as the desktop app, returning to `beaconsecureview://auth/desktop`. The paragraph below describes the older `auth/mobile` flow.)
+
 Android monitor sign-in returns to the installed app through the exact
 `beaconsecureview://auth/mobile` callback. The callback contains only a
 high-entropy, single-use handoff code that expires after ten minutes; the app

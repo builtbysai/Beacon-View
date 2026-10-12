@@ -4,11 +4,10 @@ The ordered release gates and evidence requirements are maintained in
 [`pre-deployment-readiness.md`](pre-deployment-readiness.md). This document describes the
 technical deployment boundary; both documents apply.
 
-The existing Oracle private alpha uses [oracle-cloud-staging.md](oracle-cloud-staging.md).
-The current approved coordinated backend, migration, and web release procedure and validation evidence are in
-[responsive-audit.md](responsive-audit.md). Historical Milestone 3 did not authorize production deployment. The Compose file is for
-loopback-only local development and contains intentionally weak sample
-credentials. Never publish it directly.
+The Oracle private alpha is described in [oracle-cloud-staging.md](oracle-cloud-staging.md); the release steps
+(backend, migrations and web, with rollback) are in [release-procedure.md](release-procedure.md). The Compose file in
+`infrastructure/docker` is for loopback-only local development and contains intentionally weak sample credentials.
+Never publish it directly; production uses `infrastructure/cloud`.
 
 A future approved deployment must supply configuration through environment
 variables, use TLS, secure cookies, managed secrets, backups, migration release
@@ -30,8 +29,8 @@ Static local TURN credentials are rejected in production. The optional local
 Caddy profile and its development CA are not a deployment solution.
 
 Signaling remains single-instance and in-memory. Horizontal deployment requires
-shared signaling state and shared rate-limit storage. This milestone is not
-production-ready and makes no application-level end-to-end-encryption claim.
+shared signaling state and shared rate-limit storage. Beacon makes no application-level end-to-end-encryption claim for
+live video.
 
 Browser Camera Mode requires a secure context and explicit permission. Browsers
 may suspend hidden producers, and Screen Wake Lock is advisory, so it is an

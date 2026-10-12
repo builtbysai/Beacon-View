@@ -80,7 +80,7 @@ interface ActiveSession {
   viewer: WebSocket;
 }
 
-export interface SignalingDiagnostic {
+interface SignalingDiagnostic {
   connectionId?: string;
   durationMs?: number;
   event:

@@ -74,7 +74,7 @@ export function exchangeScript(code: string, verifier: string): string {
 );`;
 }
 
-export type ExchangeOutcome =
+type ExchangeOutcome =
   | { kind: 'signedIn'; path: string }
   | { kind: 'linkRequired' }
   | { kind: 'failed' };

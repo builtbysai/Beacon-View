@@ -36,7 +36,6 @@ import { announceModeChange } from './household-mode';
 import { reportTrayCameras, trayCameras } from './desktop-tray';
 import {
   DesktopAuthReturnPage,
-  MobileAuthReturnPage,
   PairLinkPage,
   PublicTrustPage,
 } from './PublicPages';
@@ -373,7 +372,6 @@ function AppShell() {
     if (
       window.location.pathname === '/trust' ||
       window.location.pathname === '/pair' ||
-      window.location.pathname === '/auth/mobile' ||
       window.location.pathname === '/auth/desktop/complete' ||
       window.location.pathname === '/account/verify-email' ||
       window.location.pathname === '/account/reset-password' ||
@@ -1063,8 +1061,6 @@ function AppShell() {
   if (window.location.pathname === '/pair') return <PairLinkPage />;
   if (window.location.pathname === '/auth/desktop/complete')
     return <DesktopAuthReturnPage />;
-  if (window.location.pathname === '/auth/mobile')
-    return <MobileAuthReturnPage />;
   if (window.location.pathname === '/account/verify-email')
     return <VerifyEmailPage />;
   if (window.location.pathname === '/account/reset-password')

@@ -7,7 +7,7 @@ import { createPublicKey, verify } from 'node:crypto';
  * signs each feed file with an Ed25519 key that never leaves their computer; the
  * app carries the matching public key and acts only on a feed that verifies.
  */
-export const UPDATE_SIGNING_PUBLIC_KEY =
+const UPDATE_SIGNING_PUBLIC_KEY =
   'tehdjGrvyI3nTJmZat+4BXt7FkOuY+xpnzq3yu389vQ=';
 
 // SubjectPublicKeyInfo prefix for a raw 32-byte Ed25519 public key.

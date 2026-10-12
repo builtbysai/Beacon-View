@@ -6,12 +6,12 @@ import { request } from './api';
  * `/activity?alert=<eventId>` and asks the server, as the signed-in user,
  * which camera it was about.
  */
-export const ALERT_PARAM = 'alert';
+const ALERT_PARAM = 'alert';
 
 const EVENT_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
-export interface AlertTarget {
+interface AlertTarget {
   /** The camera to open, or null when there is none (or no access). */
   cameraId: string | null;
   category: string;

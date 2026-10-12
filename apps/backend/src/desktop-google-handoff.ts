@@ -16,7 +16,7 @@ import { generateToken, hashSecret, secretsEqual } from './security.js';
 /** The browser lands here after Google; the page hands the code to the app
  * through beaconsecureview://auth/desktop and tells the person the tab can
  * be closed (apps/web-viewer DesktopAuthReturnPage). */
-export const DESKTOP_COMPLETION_PATH = '/auth/desktop/complete';
+const DESKTOP_COMPLETION_PATH = '/auth/desktop/complete';
 
 /** BASE64URL(SHA-256(verifier)) is always exactly 43 characters. */
 export const PKCE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -24,7 +24,6 @@ export const PKCE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 export const PKCE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/;
 
 const DESKTOP_STATE_PREFIX = 'desktop.';
-const ANDROID_STATE_PREFIX = 'android.';
 
 export function pkceChallenge(verifier: string): string {
   return createHash('sha256').update(verifier, 'ascii').digest('base64url');
@@ -36,23 +35,6 @@ export function desktopOAuthState(challenge: string): string {
   if (!PKCE_CHALLENGE_PATTERN.test(challenge))
     throw new Error('Invalid PKCE challenge');
   return `${DESKTOP_STATE_PREFIX}${challenge}.${generateToken()}`;
-}
-
-/** The OAuth `state` for an Android sign-in, bound the same way (V1): the
- * custom-scheme link that returns the handoff code can be claimed by any app
- * on the phone, so the code is useless without the verifier the Beacon app
- * kept. */
-export function androidOAuthState(challenge: string): string {
-  if (!PKCE_CHALLENGE_PATTERN.test(challenge))
-    throw new Error('Invalid PKCE challenge');
-  return `${ANDROID_STATE_PREFIX}${challenge}.${generateToken()}`;
-}
-
-/** Returns the PKCE challenge when `state` began an Android sign-in. */
-export function androidChallengeFromState(
-  state: string | undefined,
-): string | null {
-  return challengeFromState(state, ANDROID_STATE_PREFIX);
 }
 
 /** Returns the PKCE challenge when `state` began a desktop sign-in. */

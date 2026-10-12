@@ -5,7 +5,7 @@ import {
   randomBytes,
 } from 'node:crypto';
 
-export interface EncryptedProviderMaterial {
+interface EncryptedProviderMaterial {
   providerCiphertext: Buffer;
   providerIv: Buffer;
   wrappedKey: Buffer;

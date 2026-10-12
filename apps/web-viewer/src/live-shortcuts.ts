@@ -72,7 +72,7 @@ export function shortcutFor(event: KeyLike): ShortcutAction | null {
 }
 
 /** Typing, dialogs, and menus own the keyboard. */
-export function keyboardBusy(target: EventTarget | null): boolean {
+function keyboardBusy(target: EventTarget | null): boolean {
   const element = target instanceof Element ? target : null;
   if (element?.closest('input, textarea, select, [contenteditable="true"]'))
     return true;
@@ -82,7 +82,7 @@ export function keyboardBusy(target: EventTarget | null): boolean {
   );
 }
 
-export interface ShortcutHandlers {
+interface ShortcutHandlers {
   on: (action: ShortcutAction) => void;
   /** Talk is the one action with a release (hold-to-talk). */
   talkRelease: () => void;

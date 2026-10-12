@@ -20,77 +20,26 @@ of feature completeness.
 
 These strengths do not replace production operations or real-world acceptance.
 
-## September 2026 implementation checkpoint
+## Where the gates stand (October 12, 2026)
 
-- Web Talk now keeps its existing video connection, gates outgoing audio on the
-  server grant, and stops capture on interruption, cancellation, page hiding, and
-  late permission results. Reconnection requires a fresh Talk action.
-- Home and camera cards show privacy/access restrictions ahead of stale live state.
-  Mobile navigation, focus movement, and semantic text contrast have regression
-  coverage; Chrome was checked at 320 CSS pixels with 44-pixel navigation targets.
-- CI now defines PostgreSQL integration, clean/repeated migration, Android unit/lint/
-  debug/unsigned-release compilation, fully redacted history secret scanning, and a
-  90-day retained CycloneDX SBOM artifact generated from the frozen pnpm dependency
-  graph without lifecycle scripts. Production signing and populated prior-version
-  migration acceptance remain. GitHub branch protection is unavailable for this private
-  repository on its current plan, confirmed by the GitHub API on September 24; protect
-  `main` before any public release if the hosting plan changes.
-- Generic redacted scans of 20 git commits and the working source found no leaks. The
-  household owner confirmed the previously exposed GitHub token was revoked on
-  September 6, 2026. Keep it absent from source, logs, shell history, CI variables,
-  and artifacts; this local scan cannot inspect external account settings or
-  conversation history.
-- Live View fullscreen retains identity and controls; playback, privacy, source-switch,
-  and statistics failures have regression coverage. Activity now has household-scoped
-  server filters and cursor pagination, day grouping, retries, camera navigation, and
-  deletion confirmation. Retention automation remains open.
-- The Activity checkpoint passed all 69 backend tests against PostgreSQL and 47 web
-  tests. Its LAN browser check was blocked after the host Wi-Fi address changed while
-  the development HTTPS proxy retained its previous address. No network access or
-  certificate settings were changed to bypass that limitation.
-- Motion ingestion now serializes authorization, cooldown checking, and insertion.
-  A controlled eight-report race previously inserted eight events; it now inserts
-  one. All 74 backend tests pass, including waiting reports during privacy, source
-  disablement, credential revocation, and device revocation.
-- Android local privacy remains paused after synchronization failure, retains pending
-  pause intent across service restart, and blocks late capture callbacks. Seven new
-  privacy regression tests, Android lint, debug/unsigned release builds, all 74 backend
-  tests, and the full web/backend check passed locally. Physical offline/restart
-  acceptance and globally versioned cross-device privacy remain unverified.
-- Per-camera motion controls preserve the prior enabled/medium/30-second defaults,
-  provide owner-facing enablement, sensitivity, and cooldown choices, and are enforced
-  by the backend for stale device clients. The connected Pixel installed the current
-  debug build, completed authenticated settings fetches, and retained its foreground
-  camera service. Changing settings through a physical household-owner web session and
-  physical false-positive profiling remain open, along with schedules, quiet hours,
-  zones, calibration, and notifications.
-- Daily per-camera quiet hours now use a strict `HH:mm` plus IANA time-zone contract.
-  The backend suppresses event insertion inside the configured interval even for stale
-  Android clients, and the Android detector locally pauses and resets its baseline.
-  Backend unit tests, web controls, Android unit/lint, and debug/unsigned-release
-  compilation passed locally. Physical boundary, daylight-saving, and stale-device
-  acceptance require the configured HTTPS LAN environment and an owner session.
-- Household motion metadata now defaults to 30-day retention, with owner-selectable
-  1, 7, 30, and 90-day periods. Expired rows are hidden at read time and an hourly
-  single-instance backend job deletes them with count-only audit evidence. The live
-  deployment must apply migration `0008_motion_metadata_retention.sql` before this
-  release; backup expiry and restore verification remain open.
+The private alpha has been internet-accessible since the Oracle deployment, so Gate A was applied as it was built. The
+list below says which items are met, with where the evidence is; an item is met only when it has evidence, not because
+the feature exists.
 
-These are bounded local improvements, not release approval. Physical audible Talk,
-echo/routing, cross-network acceptance, and the production gates below remain open.
+| Gate A item                     | Status                                                                                                                                                                                                               |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 Exposed credential            | Met (owner confirmed revocation on September 6, 2026).                                                                                                                                                               |
+| 2 Topology                      | Met: one Oracle VM, documented in [oracle-cloud-staging.md](oracle-cloud-staging.md).                                                                                                                                |
+| 3 Secrets and certificates      | Partly: secrets live in root-only files on the VM with a documented list ([release-procedure.md](release-procedure.md)), certificates are platform-trusted; there is no managed secret system or rotation drill yet. |
+| 4 TURN                          | Met in the alpha: own relay (ADR 0114, [turn-relay-transfer.md](turn-relay-transfer.md)); cross-network acceptance is still manual.                                                                                  |
+| 5 Recoverable database releases | Met: encrypted off-site backups, restore drill, migration job with verification ([runbook](runbook-outage-and-recovery.md)); point-in-time recovery is not set up.                                                   |
+| 6 Observability                 | Partly: monitor, alerting and a runbook; no metrics or tracing stack.                                                                                                                                                |
+| 7 Account lifecycle             | Met except export and mandatory MFA (both on the [roadmap](roadmap.md)).                                                                                                                                             |
+| 8 Android release pipeline      | Partly: signed sideload builds ([android-release.md](android-release.md)); no Play upload key or App Bundle in production use.                                                                                       |
+| 9 Trust documents               | Open: drafts in [legal](legal/) need owner and reviewer approval.                                                                                                                                                    |
+| 10 Independent security review  | Open.                                                                                                                                                                                                                |
 
-Device health now includes an authenticated Android battery/charging sample, displayed
-only to the owning household. A connected Pixel sent and persisted a charging 100% sample.
-The first local hot-reload briefly ran the new writer before its migration; this confirms
-the release requirement that migrations run before application rollout. Temperature,
-network quality, permission diagnostics, warning policy, and historical health remain open.
-
-The Oracle private-alpha monitor now also checks backup-job freshness: a daily backup
-that fails or is more than 30 hours old, and a previously completed weekly repository
-check that fails or is more than nine days old, open the existing rate-limited alert
-state. The deployed monitor completed successfully after installation. This detects
-backup job failure but does not prove a restorable application database; scheduled
-separate-database restore drills remain a release gate.
+Gates B and C are unchanged below and remain open.
 
 ## Gate A: required before any internet-accessible alpha
 

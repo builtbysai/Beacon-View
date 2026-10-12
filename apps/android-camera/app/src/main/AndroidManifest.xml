@@ -45,7 +45,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Static launcher shortcuts (ADR 0095); favorite cameras are added in code. -->
+            <!-- Static launcher shortcuts (ADR 0095); they open pages of the web app in WebShellActivity. -->
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
@@ -58,22 +58,6 @@
                     android:host="beacon.builtbysai.com"
                     android:pathPrefix="/pair"
                     android:scheme="https" />
-                <data
-                    android:host="beacon.builtbysai.com"
-                    android:pathPrefix="/auth/mobile"
-                    android:scheme="https" />
-            </intent-filter>
-            <!-- OAuth returns through a one-time code. This explicit app scheme is the
-                 reliable fallback for locally/debug-signed builds that cannot satisfy
-                 production Android App Link certificate verification. -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:host="auth"
-                    android:pathPrefix="/mobile"
-                    android:scheme="beaconsecureview" />
             </intent-filter>
         </activity>
         <!-- The signed-in app: the web app in a locked-down WebView (ADR 0121). -->

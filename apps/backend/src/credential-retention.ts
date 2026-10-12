@@ -8,7 +8,7 @@ type CredentialRetentionStore = Pick<MilestoneStore, 'purgeExpiredCredentials'>;
 
 /** Removes sessions, tokens, pairing codes and links that ended long ago (V5),
  * so those tables do not grow for the life of the database. */
-export async function runCredentialRetentionSweep(
+async function runCredentialRetentionSweep(
   store: CredentialRetentionStore,
   logger: FastifyBaseLogger,
   now = new Date(),

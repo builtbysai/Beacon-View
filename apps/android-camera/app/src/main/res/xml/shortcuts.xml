@@ -9,7 +9,7 @@
         android:shortcutShortLabel="@string/shortcut_cameras_short">
         <intent
             android:action="com.beaconsecureview.camera.action.OPEN_PAGE"
-            android:targetClass="com.beaconsecureview.camera.MainActivity"
+            android:targetClass="com.beaconsecureview.camera.WebShellActivity"
             android:targetPackage="com.beaconsecureview.camera">
             <extra
                 android:name="beacon_page"
@@ -24,7 +24,7 @@
         android:shortcutShortLabel="@string/shortcut_activity_short">
         <intent
             android:action="com.beaconsecureview.camera.action.OPEN_PAGE"
-            android:targetClass="com.beaconsecureview.camera.MainActivity"
+            android:targetClass="com.beaconsecureview.camera.WebShellActivity"
             android:targetPackage="com.beaconsecureview.camera">
             <extra
                 android:name="beacon_page"
