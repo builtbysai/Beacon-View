@@ -137,28 +137,32 @@ internal fun BeaconGoogleDriveCard(
     Text(
         "Store Beacon app data and optional recordings in your Drive.",
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodyMedium,
     )
-    if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
-    if (notice.isNotBlank()) Text(notice, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+    if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp))
+    if (notice.isNotBlank()) Text(notice, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp))
     val current = status
     when {
-        !loaded -> Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+        !loaded -> Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp))
         current == null -> Unit
-        !current.configured -> Text("Google Drive is not configured on this Beacon server.", modifier = Modifier.padding(top = 6.dp))
+        !current.configured -> Text("Google Drive is not configured on this Beacon server.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
         current.expired -> Text(
             "Google stopped accepting this connection. Reconnect Google Drive from the web app so clips can be saved again.",
             color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 6.dp),
         )
         !current.connected -> Text(
             "Not connected. Connect Google Drive from the web app to enable it here too.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 6.dp),
         )
         else -> {
             Text(
                 current.providerEmail?.let { "Connected as $it" } ?: "Connected",
                 color = BeaconOnline,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 6.dp),
             )
             Text(

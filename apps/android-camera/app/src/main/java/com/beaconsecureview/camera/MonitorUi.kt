@@ -775,7 +775,7 @@ internal fun MonitorHome(
                         .weight(1f)
                         .verticalScroll(monitorScrollState)
                         .then(if (session == null) Modifier.safeDrawingPadding() else Modifier.navigationBarsPadding())
-                        .padding(horizontal = 16.dp, vertical = 24.dp),
+                        .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
         if (session == null) {

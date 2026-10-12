@@ -99,7 +99,7 @@ internal fun BeaconMonitorTopBar(onOpenNavigation: () -> Unit, onAddCamera: (() 
                     Modifier.fillMaxWidth()
                         .statusBarsPadding()
                         .height(54.dp)
-                        .padding(horizontal = BeaconSpacing.Sm),
+                        .padding(start = BeaconSpacing.Sm, end = BeaconSpacing.Md),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onOpenNavigation) {
@@ -122,7 +122,7 @@ internal fun BeaconMonitorTopBar(onOpenNavigation: () -> Unit, onAddCamera: (() 
                         shape = RoundedCornerShape(BeaconRadii.Md),
                     ) {
                         Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
-                        Text(if (compactAction) "Add" else "Add camera", modifier = Modifier.padding(start = BeaconSpacing.Xs), fontWeight = FontWeight.Bold)
+                        Text(if (compactAction) "Add" else "Add device", modifier = Modifier.padding(start = BeaconSpacing.Xs), fontWeight = FontWeight.Bold)
                     }
                 }
             }

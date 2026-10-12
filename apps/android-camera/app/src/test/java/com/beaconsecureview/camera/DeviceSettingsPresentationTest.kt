@@ -133,3 +133,15 @@ class DeviceSettingsPresentationTest {
         assertEquals(false, deviceIsHealthy(device(revoked = true)))
     }
 }
+
+class SessionDeviceLabelTest {
+    @kotlin.test.Test
+    fun namesTheAppAndBrowsersInsteadOfShowingTheRawUserAgent() {
+        kotlin.test.assertEquals("Beacon for Android", sessionDeviceLabel("Dalvik/2.1.0 (Linux; U; Android 16; sdk_gphone64_x86_64 Build/BP22)"))
+        kotlin.test.assertEquals(
+            "Chrome on Windows",
+            sessionDeviceLabel("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36"),
+        )
+        kotlin.test.assertEquals("Signed-in device", sessionDeviceLabel("Unknown device"))
+    }
+}

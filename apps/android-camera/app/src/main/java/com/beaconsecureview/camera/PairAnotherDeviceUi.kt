@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Smartphone
+import androidx.compose.material.icons.outlined.TabletAndroid
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material3.AlertDialog
@@ -73,7 +74,7 @@ internal fun BeaconAddCameraChoicePage(
     var selected by remember { mutableStateOf<AddDeviceKind?>(null) }
     val context = LocalContext.current
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        TextButton(onClick = onDismiss) {
+        TextButton(onClick = onDismiss, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp, vertical = 8.dp)) {
             Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, modifier = Modifier.size(18.dp))
             Text("Back to Home", modifier = Modifier.padding(start = 6.dp), fontWeight = FontWeight.Bold)
         }
@@ -101,7 +102,11 @@ internal fun BeaconAddCameraChoicePage(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        if (kind == AddDeviceKind.Computer) Icons.Outlined.Computer else Icons.Outlined.Smartphone,
+                        when (kind) {
+                            AddDeviceKind.Computer -> Icons.Outlined.Computer
+                            AddDeviceKind.PhoneOrTablet -> Icons.Outlined.TabletAndroid
+                            AddDeviceKind.ThisDevice -> Icons.Outlined.Smartphone
+                        },
                         null,
                         tint = MaterialTheme.colorScheme.primary,
                     )
@@ -122,6 +127,7 @@ internal fun BeaconAddCameraChoicePage(
                     Text(
                         "Beacon uses this phone's camera while the camera screen is open, and shows a clear indicator whenever it is on.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                     Button(onClick = onUseThisDevice, modifier = Modifier.fillMaxWidth().height(44.dp)) {
                         Text("Start the camera", fontWeight = FontWeight.Bold)
@@ -132,6 +138,7 @@ internal fun BeaconAddCameraChoicePage(
                     Text(
                         "Install Beacon on it (Android: from your Beacon website's downloads page; iPhone or iPad: open the setup link in Safari), then pair it with a one-time code.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                     Button(onClick = onPairAnotherDevice, modifier = Modifier.fillMaxWidth().height(44.dp)) {
                         Text("Show a pairing code", fontWeight = FontWeight.Bold)
@@ -140,8 +147,9 @@ internal fun BeaconAddCameraChoicePage(
             AddDeviceKind.Computer ->
                 AddDevicePanel("Set up a computer") {
                     Text(
-                        "A computer is set up from the computer: open Beacon on it, sign in, then choose Add camera and Computer. It downloads the app with a one-time code already inside.",
+                        "A computer is set up from the computer: open Beacon on it, sign in, then choose Add a device and Computer. It downloads the app with a one-time code already inside.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                     OutlinedButton(
                         onClick = {

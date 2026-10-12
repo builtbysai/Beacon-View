@@ -425,7 +425,7 @@ private fun BeaconCameraApp(
                                     val scanned = parsePairingQr(barcode.rawValue, BuildConfig.BEACON_API_URL, BuildConfig.BEACON_WEB_URL)
                                     if (scanned == null) {
                                         message =
-                                            "That is not a Beacon setup link. In Beacon web, choose Add camera and scan its QR code."
+                                            "That is not a Beacon setup link. In Beacon web, choose Add a device and scan its QR code."
                                     } else {
                                         pairCamera(scanned)
                                     }
