@@ -1,7 +1,7 @@
 # ADR 0108: Security hardening, first batch
 
 - Status: Accepted. Implemented 2026-10-10 on `claude/audit-fixes-live-viewer`.
-- Source: the October 2026 audit (`docs/full-audit-2026-10-09.md`). Finding ids
+- Source: the October 2026 audit (removed; see `docs/audit-2026-10-09-closure.md` and git history). Finding ids
   (F1, V1, and so on) refer to that document.
 
 ## Decisions

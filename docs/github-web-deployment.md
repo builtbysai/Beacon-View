@@ -10,7 +10,7 @@ The workflow is **disabled manually**, confirmed through the GitHub API. A merge
 does not deploy automatically. Keep it disabled unless the owner explicitly
 approves future automatic releases. For an authorized release, use the exact
 CI-validated merged `main` SHA and the manual
-[release-directory procedure](development-handoff.md#deploying-a-reviewed-commit).
+[release procedure](release-procedure.md).
 It uses the same migration, schema verification, backend/web replacement, and TLS
 health-check sequence described below. Do not use the historical `/opt/beacon/app`
 copy procedure.

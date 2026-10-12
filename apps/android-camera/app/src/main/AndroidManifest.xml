@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Monitor mode remains usable on devices without local camera hardware. -->
@@ -83,6 +84,15 @@
             android:exported="false"
             android:foregroundServiceType="camera|microphone"
             android:stopWithTask="false" />
+        <!-- After a restart or an app update the camera is off; this only posts a "tap to turn it on" reminder (V50). -->
+        <receiver
+            android:name=".BootResumeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <service
             android:name=".BeaconFirebaseMessagingService"
             android:exported="false">

@@ -1736,8 +1736,7 @@ class BeaconApi(private val baseUrl: String) {
     }
 
     /** Returns the id of a recording the backend started for this motion
-     * report -- see core-feature-completion-plan.md's recording foundation
-     * -- or null when this report didn't trigger one (recording-on-motion is
+     * report, or null when this report didn't trigger one (recording-on-motion is
      * off, Drive isn't connected, or one is already in flight). Never an
      * error: the motion event itself is already committed either way. */
     fun reportMotion(credential: String, cameraId: String, confidence: Float): String? {
@@ -1759,8 +1758,7 @@ class BeaconApi(private val baseUrl: String) {
 
     /** Opens the Drive upload session for a motion-triggered recording using
      * this camera's own device credential -- no browser session involved,
-     * matching the device-initiated path core-feature-completion-plan.md's
-     * recording foundation was built for. Mirrors the web viewer's own
+     * matching the device-initiated recording path. Mirrors the web viewer's own
      * upload-session call against /api/recordings/:id/upload-session. */
     fun beginRecordingUpload(
         credential: String,

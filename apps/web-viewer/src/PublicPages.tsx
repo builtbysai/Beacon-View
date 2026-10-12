@@ -40,7 +40,7 @@ export function PairLinkPage() {
               up. It expires in 10 minutes.
             </p>
             <a
-              className="btn-secondary w-full"
+              className="btn primary w-full"
               href={`/camera-mode/setup?code=${validCode}`}
             >
               Use this browser as camera

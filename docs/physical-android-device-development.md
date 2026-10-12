@@ -117,7 +117,7 @@ The Android build receives
 The emulator default remains `http://10.0.2.2:3000`. Release builds require
 HTTPS and do not broadly trust user certificates or cleartext.
 
-**Building a debug APK for the physical Pixel outside `Start-Beacon.ps1`/this
+**Building a debug APK for the physical Pixel outside this
 script -- for example a plain `gradlew assembleDebug` -- silently falls back to
 the emulator-only `http://10.0.2.2:3000` default if `BEACON_API_URL` is not set
 in the shell or passed as `-PbeaconApiUrl=...`.** That address means nothing to

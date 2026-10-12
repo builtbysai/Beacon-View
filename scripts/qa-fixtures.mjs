@@ -120,6 +120,12 @@ export const routes = {
     })),
   },
   '/api/pairing-codes': { code: 'ABCD234567' },
+  // Guest and shared-clip pages (no account): /g/demo-token and /shared/demo-token.
+  '/api/guest/enter': { ok: true },
+  '/api/guest/cameras': { cameras: cameras.slice(0, 2) },
+  '/api/shared-recordings/demo-token': {
+    expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+  },
   // Endpoints added after this audit was first written; shapes match the
   // web viewer's own types (capabilities.ts, HouseholdSwitcher.tsx,
   // HouseholdSharingSettings.tsx, GoogleDriveSettings.tsx, MotionEventList.tsx).
@@ -167,7 +173,7 @@ export const downloadsManifest = {
     ['windows', 'x64', 'installer', 'Beacon-Setup-0.4.1-x64.exe'],
     ['macos', 'arm64', 'dmg', 'Beacon-0.4.1-arm64.dmg'],
     ['linux', 'x64', 'appimage', 'Beacon-0.4.1-x86_64.AppImage'],
-    ['android', 'universal', 'apk', 'Beacon-android-0.1.0-alpha10.apk'],
+    ['android', 'universal', 'apk', 'Beacon-android-0.1.0-alpha11.apk'],
   ].map(([platform, arch, kind, file]) => ({
     arch,
     bytes: 100_000_000,

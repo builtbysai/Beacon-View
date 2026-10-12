@@ -1,7 +1,7 @@
 # ADR 0109: Owner decisions of October 10, 2026
 
 - Status: Accepted (answers given by the owner in the session of 2026-10-10)
-- Source: `docs/full-audit-2026-10-09.md`
+- Source: the October 9 audit (removed; see `docs/audit-2026-10-09-closure.md`)
 
 ## V32: who a new viewer sees
 
