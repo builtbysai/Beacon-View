@@ -866,102 +866,106 @@ export function BrowserCameraMode({
             labelledBy="cameraSettingsTitle"
             onDismiss={() => setSettingsOpen(false)}
           >
-            <h2 id="cameraSettingsTitle">Camera settings</h2>
-            {retryCount > 0 && (
-              <p className="local-hint" role="status">
-                {retryCount} reconnect{retryCount === 1 ? '' : 's'} so far
-              </p>
-            )}
-            <div className="local-field">
-              <label htmlFor="activeDeviceName">Device name</label>
-              <input
-                id="activeDeviceName"
-                value={deviceName}
-                maxLength={100}
-                disabled={clipBusy}
-                onChange={(event) => setDeviceName(event.target.value)}
-              />
-            </div>
-            <div className="local-field">
-              <label htmlFor="activeCameraSelect">Camera</label>
-              <select
-                id="activeCameraSelect"
-                value={selectedKey}
-                onChange={(event) => setSelectedKey(event.target.value)}
-                disabled={clipBusy}
-              >
-                {inputs.map((input) => (
-                  <option key={input.deviceId} value={input.deviceId}>
-                    {input.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="local-field">
-              <label htmlFor="activeCameraName">Camera name</label>
-              <input
-                id="activeCameraName"
-                value={sourceNames[selectedKey] ?? ''}
-                maxLength={100}
-                disabled={clipBusy}
-                onChange={(event) =>
-                  setSourceNames((current) => ({
-                    ...current,
-                    [selectedKey]: event.target.value,
-                  }))
-                }
-              />
-            </div>
-            <CameraPowerFields
-              idPrefix="active"
-              disabled={clipBusy}
-              microphone={microphone}
-              power={power}
-              microphoneId={microphoneId}
-              microphones={microphones}
-              onMicrophoneChange={changeMicrophone}
-              onMicrophoneSelect={chooseMicrophone}
-              onPowerChange={setPower}
-            />
-            {wakeLockSupported() && (
-              <label className="local-check full">
+            <div className="broadcast-settings-panel">
+              <h2 id="cameraSettingsTitle">Camera settings</h2>
+              {retryCount > 0 && (
+                <p className="local-hint" role="status">
+                  {retryCount} reconnect{retryCount === 1 ? '' : 's'} so far
+                </p>
+              )}
+              <div className="local-field">
+                <label htmlFor="activeDeviceName">Device name</label>
                 <input
-                  checked={wakeLockEnabled}
-                  type="checkbox"
-                  onChange={(event) => {
-                    const enabled = event.target.checked;
-                    wakeLockEnabledRef.current = enabled;
-                    setWakeLockEnabled(enabled);
-                    try {
-                      localStorage.setItem(WAKE_LOCK_KEY, String(enabled));
-                    } catch {
-                      // Camera Mode still works with a session-only preference.
-                    }
-                    if (!enabled) {
-                      void wakeLockRef.current?.release();
-                      wakeLockRef.current = null;
-                    } else if (state !== 'offline') {
-                      void acquireWakeLock();
-                    }
-                  }}
+                  id="activeDeviceName"
+                  value={deviceName}
+                  maxLength={100}
+                  disabled={clipBusy}
+                  onChange={(event) => setDeviceName(event.target.value)}
                 />
-                <span>Keep this device awake while Camera Mode is active</span>
-              </label>
-            )}
-            <div className="heading-actions">
-              <button
-                type="button"
-                onClick={() => void registerAndStart()}
+              </div>
+              <div className="local-field">
+                <label htmlFor="activeCameraSelect">Camera</label>
+                <select
+                  id="activeCameraSelect"
+                  value={selectedKey}
+                  onChange={(event) => setSelectedKey(event.target.value)}
+                  disabled={clipBusy}
+                >
+                  {inputs.map((input) => (
+                    <option key={input.deviceId} value={input.deviceId}>
+                      {input.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="local-field">
+                <label htmlFor="activeCameraName">Camera name</label>
+                <input
+                  id="activeCameraName"
+                  value={sourceNames[selectedKey] ?? ''}
+                  maxLength={100}
+                  disabled={clipBusy}
+                  onChange={(event) =>
+                    setSourceNames((current) => ({
+                      ...current,
+                      [selectedKey]: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <CameraPowerFields
+                idPrefix="active"
                 disabled={clipBusy}
-              >
-                Save changes
-              </button>
-              <button className="secondary" onClick={onBack} type="button">
-                Back to dashboard
-              </button>
-            </div>
-            <div className="local-hint">
-              Saving briefly reconnects this camera to apply changes.
+                microphone={microphone}
+                power={power}
+                microphoneId={microphoneId}
+                microphones={microphones}
+                onMicrophoneChange={changeMicrophone}
+                onMicrophoneSelect={chooseMicrophone}
+                onPowerChange={setPower}
+              />
+              {wakeLockSupported() && (
+                <label className="local-check full">
+                  <input
+                    checked={wakeLockEnabled}
+                    type="checkbox"
+                    onChange={(event) => {
+                      const enabled = event.target.checked;
+                      wakeLockEnabledRef.current = enabled;
+                      setWakeLockEnabled(enabled);
+                      try {
+                        localStorage.setItem(WAKE_LOCK_KEY, String(enabled));
+                      } catch {
+                        // Camera Mode still works with a session-only preference.
+                      }
+                      if (!enabled) {
+                        void wakeLockRef.current?.release();
+                        wakeLockRef.current = null;
+                      } else if (state !== 'offline') {
+                        void acquireWakeLock();
+                      }
+                    }}
+                  />
+                  <span>
+                    Keep this device awake while Camera Mode is active
+                  </span>
+                </label>
+              )}
+              <div className="heading-actions">
+                <button
+                  type="button"
+                  onClick={() => void registerAndStart()}
+                  disabled={clipBusy}
+                >
+                  Save changes
+                </button>
+                <button className="secondary" onClick={onBack} type="button">
+                  Back to dashboard
+                </button>
+              </div>
+              <div className="local-hint">
+                Saving briefly reconnects this camera to apply changes.
+              </div>
             </div>
           </ModalDialog>
         )}

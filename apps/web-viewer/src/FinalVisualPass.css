@@ -390,13 +390,14 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 6px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
+  padding: 8px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 999px;
-  background: rgba(15, 17, 20, 0.58);
-  font-size: 12px;
+  background: rgba(8, 12, 20, 0.82);
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+  font-size: 13px;
   font-weight: 750;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   backdrop-filter: blur(10px);
 }
 .broadcast-live-dot {
@@ -418,12 +419,24 @@
   height: 44px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
   border-radius: 50%;
-  background: rgba(18, 20, 24, 0.58);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.55),
+    0 3px 16px rgba(0, 0, 0, 0.6);
   color: #fff;
   cursor: pointer;
   backdrop-filter: blur(12px);
+}
+.broadcast-icon-button svg {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+}
+.broadcast-icon-button:hover,
+.broadcast-icon-button[aria-pressed='true'],
+.broadcast-icon-button[aria-expanded='true'] {
+  background: rgba(255, 255, 255, 0.34);
+  border-color: #fff;
 }
 .broadcast-stop {
   display: inline-flex;
@@ -432,9 +445,10 @@
   gap: 9px;
   min-height: 48px;
   padding: 0 20px;
-  border: 1px solid rgba(248, 113, 113, 0.3);
+  border: 1.5px solid rgba(254, 202, 202, 0.85);
   border-radius: 999px;
-  background: rgba(127, 29, 29, 0.72);
+  background: rgba(185, 28, 28, 0.92);
+  box-shadow: 0 3px 16px rgba(0, 0, 0, 0.6);
   color: #fff;
   font-size: 13px;
   font-weight: 750;
@@ -500,40 +514,72 @@
   backdrop-filter: blur(12px);
 }
 .broadcast-settings {
-  position: absolute;
-  top: 70px;
-  right: 18px;
-  z-index: 8;
-  width: min(360px, calc(100vw - 36px));
-  padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 13px;
-  background: rgba(17, 19, 23, 0.88);
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(16px);
-}
-.broadcast-settings label {
-  display: block;
-  margin-bottom: 7px;
-  font-size: 12px;
-  font-weight: 700;
-}
-.broadcast-settings select {
-  width: 100%;
-  min-height: 42px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid #6a778b;
-  background: #172334;
+  /* The dialog itself is the full-screen frame; the panel inside is the card. */
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 70px 18px 18px !important;
   color: #fff;
 }
-.broadcast-settings .heading-actions {
+.broadcast-settings-panel {
+  box-sizing: border-box;
+  width: min(380px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 14px;
+  background: rgba(14, 20, 32, 0.97);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+  color: #fff;
+}
+.broadcast-settings-panel h2 {
+  margin: 0;
+  font-size: 17px;
+  color: #fff;
+}
+.broadcast-settings-panel .local-field {
+  display: grid;
+  gap: 6px;
+}
+.broadcast-settings-panel
+  .local-field
+  input:not([type='checkbox'], [type='radio']),
+.broadcast-settings-panel .local-field select {
+  width: 100%;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid #8a9bb3;
+  background-color: #172334;
+  color: #fff;
+}
+.broadcast-settings-panel .local-hint,
+.broadcast-settings-panel .local-check span,
+.broadcast-settings-panel fieldset legend {
+  color: #d4e0ed;
+}
+.broadcast-settings-panel * {
+  color-scheme: dark;
+}
+.broadcast-settings-panel .local-field label,
+.broadcast-settings-panel label,
+.broadcast-settings-panel legend {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.broadcast-settings-panel .heading-actions {
   display: flex;
   gap: 8px;
   margin-top: 14px;
   flex-wrap: wrap;
 }
-.broadcast-settings button {
+.broadcast-settings-panel button {
+  font: inherit;
+  font-weight: 700;
   min-height: 38px;
   padding: 0 12px;
   border-radius: 8px;
@@ -592,7 +638,8 @@
 .video-settings-button:focus-visible,
 .broadcast-icon-button:focus-visible,
 .broadcast-stop:focus-visible {
-  outline: 2px solid var(--accent-base);
+  outline: 3px solid #fff;
+  box-shadow: 0 0 0 5px rgba(0, 0, 0, 0.7);
   outline-offset: 2px;
 }
 
@@ -624,8 +671,11 @@
     font-size: 17px !important;
   }
   .broadcast-settings {
-    right: 12px;
-    width: calc(100vw - 24px);
+    align-items: flex-start;
+    padding: 64px 12px 12px !important;
+  }
+  .broadcast-settings-panel {
+    width: 100%;
   }
   .broadcast-footer {
     align-items: stretch;
