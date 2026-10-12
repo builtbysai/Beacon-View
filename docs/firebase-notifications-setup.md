@@ -50,7 +50,9 @@ now installed and active on the Oracle VM.
 On the Oracle VM:
 
 1. Create `/etc/beacon/secrets` owned by root and readable only by the service process.
-2. Place the key at `/etc/beacon/secrets/firebase-fcm-sender.json` with mode `0600`.
+2. Place the key at `/etc/beacon/secrets/firebase-fcm-sender.json`, owned by uid 1000 (the backend's `node` user; on the
+   VM that is the unused `opc` account) with mode `0400`. A root-owned `0600` file cannot be read by the container and
+   every send fails with EACCES (found 2026-10-12).
 3. Set `GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/firebase-fcm-sender.json` and
    `FIREBASE_PROJECT_ID=beacon-view-158ad` in `/etc/beacon/production.env`.
 4. Mount only the host file from step 2 read-only at that container path by including

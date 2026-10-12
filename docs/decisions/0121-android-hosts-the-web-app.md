@@ -95,3 +95,7 @@ from inside the WebView so the session cookie lands there.
 ### Picture in picture (added after alpha15)
 
 A WebView cannot float a video, so the app floats its whole window (`enterPip`) and the page, told by the `pip` event, shows only the picture while the window is small (`html.android-pip`). The live view arms `pipReady` so the window also floats on its own when the person leaves the app, as it does in a browser. Checked on an emulator; the picture itself needs a real camera to confirm.
+
+### Phone alerts (found on a real phone after alpha17)
+
+Three things stopped alerts, none visible on an emulator: the app asked Firebase for a token while its manifest had the installation-id-only mode on (the call is disabled in that mode; the server sends to registration tokens, so the manifest switch was removed), the app never asked Android for the notification permission (it now asks when alerts are turned on), and the production backend had been recreated without the Firebase key mount and with a key file the container could not read (see `docs/release-procedure.md` and `docs/firebase-notifications-setup.md`). A real alert was then delivered from production to the Pixel.

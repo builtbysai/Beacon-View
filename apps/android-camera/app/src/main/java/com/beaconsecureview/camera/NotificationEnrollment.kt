@@ -53,11 +53,10 @@ internal suspend fun firebaseMessagingToken(): String {
     val messaging = FirebaseMessaging.getInstance()
     messaging.isAutoInitEnabled = true
     try {
-        messaging.register().await()
         return messaging.token.await()
     } catch (error: Throwable) {
         messaging.isAutoInitEnabled = false
-        runCatching { messaging.unregister().await() }
+        runCatching { messaging.deleteToken().await() }
         throw error
     }
 }
@@ -69,7 +68,7 @@ internal suspend fun stopFirebaseMessaging(context: Context): String? {
     consent.disable()
     val messaging = FirebaseMessaging.getInstance()
     messaging.isAutoInitEnabled = false
-    runCatching { messaging.unregister().await() }
+    runCatching { messaging.deleteToken().await() }
     return subscriptionId
 }
 

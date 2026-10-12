@@ -37,7 +37,7 @@ Layout on the VM:
    ```bash
    C="sudo docker compose --project-name beacon-secureview-cloud \
      --env-file /etc/beacon/production.env --env-file /etc/beacon/backup.env \
-     --file infrastructure/cloud/compose.yaml"
+     --file infrastructure/cloud/compose.yaml      --file infrastructure/cloud/compose.notifications.yaml"
    $C build backend migrate migrate-verify web
    $C up -d postgres
    $C run --rm --interactive=false migrate
@@ -46,6 +46,10 @@ Layout on the VM:
    ```
 
    `migrate-verify` is mandatory: migrations have printed success while missing schema work.
+
+   Always include `compose.notifications.yaml`. It mounts the Firebase sender key into the backend; without it the
+   container starts, looks healthy, and every phone alert silently fails. After a backend deploy check that
+   `sudo docker inspect beacon-secureview-cloud-backend-1` lists `/run/secrets/firebase-fcm-sender.json`.
 
 5. Check `https://beacon.builtbysai.com/ready` and `/version.json` (it names the new entry script and is served with
    `no-store`), then record the release:
