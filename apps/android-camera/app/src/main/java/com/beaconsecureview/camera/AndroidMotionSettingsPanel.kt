@@ -3,6 +3,9 @@ package com.beaconsecureview.camera
 import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -71,7 +74,7 @@ internal fun AndroidMotionSettingsPanel(
                     MotionSettingRow("Camera", "Choose the source to configure.") {
                         Column(horizontalAlignment = Alignment.End) {
                             OutlinedButton(enabled = !busy, onClick = { sourceMenuOpen = true }) {
-                                Text(activeSource?.name ?: "Camera")
+                                Text(activeSource?.name ?: "Camera", maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             DropdownMenu(expanded = sourceMenuOpen, onDismissRequest = { sourceMenuOpen = false }) {
                                 settings.forEach { item ->
@@ -204,11 +207,12 @@ private fun MotionSettingRow(
         horizontalArrangement = Arrangement.spacedBy(BeaconSpacing.Md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f).widthIn(min = 110.dp)) {
             Text(title, fontWeight = FontWeight.Bold)
             Text(supportingText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        control()
+        // A long camera or option name must not take the whole row and squeeze the label to a sliver.
+        Box(modifier = Modifier.widthIn(max = 170.dp)) { control() }
     }
 }
 

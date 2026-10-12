@@ -53,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -414,7 +415,11 @@ internal fun AndroidLiveView(
             modifier = Modifier.fillMaxSize(),
         )
         Row(
-            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp),
+            modifier =
+                Modifier.align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .background(Brush.verticalGradient(listOf(BeaconVideoOverlay, Color.Transparent)))
+                    .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 28.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -426,13 +431,29 @@ internal fun AndroidLiveView(
             BeaconStatusPill(
                 if (state == StreamingState.Connected) "LIVE" else "CONNECTING",
                 if (state == StreamingState.Connected) BeaconDarkColorScheme.error else BeaconVideoMuted,
+                onDark = true,
             )
             if (canRecord && (recordingBusy || manualRecording != null)) {
                 ManualRecordingBadge(recordingBusy, manualRecording, recordingElapsedSeconds)
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(camera.deviceName, color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(camera.name, color = BeaconVideoMuted, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    camera.deviceName,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (camera.name != camera.deviceName) {
+                    Text(
+                        camera.name,
+                        color = Color.White.copy(alpha = 0.85f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             IconButton(onClick = onDevice) {
                 Icon(Icons.Outlined.Settings, "Camera settings", tint = Color.White)
@@ -441,7 +462,11 @@ internal fun AndroidLiveView(
         val overlay = liveOverlay(state, camera.privacyMode, reconnectAttempt)
         if (overlay != null) {
             Column(
-                modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                modifier =
+                    Modifier.align(Alignment.Center)
+                        .padding(24.dp)
+                        .background(BeaconVideoOverlay, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -450,8 +475,13 @@ internal fun AndroidLiveView(
                     color = Color.White,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
-                Text(overlay.detail, color = BeaconVideoMuted)
+                Text(
+                    overlay.detail,
+                    color = Color.White.copy(alpha = 0.85f),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
             }
         }
         Column(

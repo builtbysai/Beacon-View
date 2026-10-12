@@ -133,7 +133,7 @@ internal val BeaconTypography =
         titleLarge = TextStyle(fontFamily = BeaconInter, fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold),
         titleMedium = TextStyle(fontFamily = BeaconInter, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold),
         titleSmall = TextStyle(fontFamily = BeaconInter, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold),
-        bodyLarge = TextStyle(fontFamily = BeaconInter, fontSize = 16.sp, lineHeight = 25.sp),
+        bodyLarge = TextStyle(fontFamily = BeaconInter, fontSize = 15.sp, lineHeight = 22.sp),
         bodyMedium = TextStyle(fontFamily = BeaconInter, fontSize = 14.sp, lineHeight = 21.sp),
         bodySmall = TextStyle(fontFamily = BeaconInter, fontSize = 12.sp, lineHeight = 18.sp),
         labelLarge = TextStyle(fontFamily = BeaconInter, fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold),
@@ -283,20 +283,28 @@ internal fun BeaconPanel(
     }
 }
 
+/** [onDark] is for pills drawn over live video or a dark screen: a solid dark backing, a light border and a lightened label. */
 @Composable
 internal fun BeaconStatusPill(
     label: String,
     color: Color,
     modifier: Modifier = Modifier,
+    onDark: Boolean = false,
 ) {
-    Surface(modifier = modifier, shape = RoundedCornerShape(999.dp), color = color.copy(alpha = 0.14f)) {
+    val textColor = if (onDark) androidx.compose.ui.graphics.lerp(color, Color.White, 0.5f) else color
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(999.dp),
+        color = if (onDark) Color(0xD9030B17) else color.copy(alpha = 0.14f),
+        border = if (onDark) androidx.compose.foundation.BorderStroke(1.dp, Color(0x80FFFFFF)) else null,
+    ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Box(modifier = Modifier.size(7.dp).background(color, CircleShape))
-            Text(label, color = color, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text(label, color = textColor, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
         }
     }
 }

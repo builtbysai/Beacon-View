@@ -743,7 +743,7 @@ private fun CameraRuntimeStatus(runtime: CameraRuntimeState) {
             runtime.activeViewers == 0 &&
             (runtime.device == DeviceLifecycle.Idle || runtime.device == DeviceLifecycle.Online)
     if (!compactOnline) {
-        BeaconStatusPill(cameraRuntimeLabel(runtime), cameraRuntimeColor(runtime))
+        BeaconStatusPill(cameraRuntimeLabel(runtime), cameraRuntimeColor(runtime), onDark = true)
         return
     }
     // The label is shown by default: a bare dot is easy to miss on a busy or dark picture. Tapping still collapses it.
