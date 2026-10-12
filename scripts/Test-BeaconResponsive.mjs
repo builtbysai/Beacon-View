@@ -14,7 +14,7 @@ assert(
 );
 const out = path.resolve('.beacon-dev/responsive-audit');
 mkdirSync(out, { recursive: true });
-import { cameras, devices, now, routes } from './qa-fixtures.mjs';
+import { cameras, devices, routes } from './qa-fixtures.mjs';
 const sizes = process.env.BEACON_QA_EXTENDED_ONLY
   ? []
   : [

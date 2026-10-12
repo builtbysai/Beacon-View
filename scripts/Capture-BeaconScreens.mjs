@@ -1,4 +1,5 @@
 // Screenshots of the web viewer's screens against offline fixtures, for visual review.
+/* global window */
 //   BEACON_QA_URL=http://127.0.0.1:5181 node scripts/Capture-BeaconScreens.mjs [screen ...]
 // Output: .beacon-dev/screens/<screen>-<width>.png (gitignored). With no arguments every screen is captured.
 // Optional: BEACON_QA_SIZES=390x844,1280x800  BEACON_QA_SCHEME=dark
