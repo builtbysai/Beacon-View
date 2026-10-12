@@ -50,3 +50,8 @@ Going public publishes every file and every commit forever, so this review came 
 AGPL-3.0-only. It keeps the code readable and self-hostable while requiring anyone who runs a modified hosted
 version to publish their changes, which leaves the option of a hosted product open. Dependencies are MIT, Apache or
 similarly permissive; none is copyleft-incompatible. Trademarks and the Beacon name and logo are not licensed.
+
+## Published (2026-10-12)
+
+The repository was made public by the owner after the cleanup above. Secret scanning, push protection and private
+vulnerability reporting are on, and `main` requires a pull request with no force pushes or deletions.
