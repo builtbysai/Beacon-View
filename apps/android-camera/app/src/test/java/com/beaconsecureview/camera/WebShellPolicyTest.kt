@@ -110,6 +110,7 @@ class WebShellNavigationTest {
         val script = WebShellPolicy.exchangeScript("c".repeat(40), verifier)
         assertTrue(script.contains("'/api/desktop/auth/google'"))
         assertTrue(script.contains("'x-beacon-desktop': '1'"))
+        assertTrue(script.contains("window.__beaconExchange"))
         assertTrue(script.contains(verifier))
         assertFailsWith<IllegalArgumentException> { WebShellPolicy.exchangeScript("c';alert(1);//", verifier) }
         assertFailsWith<IllegalArgumentException> { WebShellPolicy.exchangeScript("c".repeat(40), "short") }

@@ -231,18 +231,32 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
             return
         }
         val redeem = {
-            webView.evaluateJavascript(WebShellPolicy.exchangeScript(result.code, verifier)) { value ->
-                val destination =
-                    WebShellPolicy.exchangeDestination(value)
-                        ?: if (WebShellPolicy.exchangeNeedsLinking(value)) "/?googleSignIn=linkRequired" else "/?googleSignIn=failed"
-                webView.loadUrl(appOrigin + destination)
-            }
+            webView.evaluateJavascript(WebShellPolicy.exchangeScript(result.code, verifier), null)
+            awaitExchange(attemptsLeft = EXCHANGE_POLLS)
         }
         if (WebShellPolicy.isAppUrl(webView.url, appOrigin)) {
             redeem()
         } else {
             pendingRedeem = redeem
             webView.loadUrl("$appOrigin/")
+        }
+    }
+
+    /** Asks the page every quarter second for the answer to the sign-in request, and gives up after about 20 seconds. */
+    private fun awaitExchange(attemptsLeft: Int) {
+        webView.evaluateJavascript(WebShellPolicy.EXCHANGE_RESULT_SCRIPT) { value ->
+            if (value == null || value == "null") {
+                if (attemptsLeft > 0) {
+                    webView.postDelayed({ awaitExchange(attemptsLeft - 1) }, EXCHANGE_POLL_MS)
+                } else {
+                    webView.loadUrl("$appOrigin/?googleSignIn=failed")
+                }
+                return@evaluateJavascript
+            }
+            val destination =
+                WebShellPolicy.exchangeDestination(value)
+                    ?: if (WebShellPolicy.exchangeNeedsLinking(value)) "/?googleSignIn=linkRequired" else "/?googleSignIn=failed"
+            webView.loadUrl(appOrigin + destination)
         }
     }
 
@@ -494,5 +508,7 @@ class WebShellActivity : ComponentActivity(), NativeBridge.Host {
     private companion object {
         const val BRIDGE_NAME = "BeaconAndroid"
         const val WEB_PERMISSION_REQUEST = 4101
+        const val EXCHANGE_POLLS = 80
+        const val EXCHANGE_POLL_MS = 250L
     }
 }

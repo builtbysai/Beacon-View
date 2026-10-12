@@ -100,7 +100,10 @@ internal object WebShellPolicy {
     fun exchangeScript(code: String, verifier: String): String {
         require(handoffCode.matches(code) && verifierPattern.matches(verifier)) { "Invalid sign-in handoff" }
         val body = JSONObject.quote(JSONObject().put("code", code).put("verifier", verifier).toString())
+        // evaluateJavascript does not wait for a promise (it answers "{}" at once), so the answer is parked on the page
+        // and read back with EXCHANGE_RESULT_SCRIPT until it arrives.
         return """
+            window.__beaconExchange = null;
             fetch('/api/desktop/auth/google', {
               body: $body,
               cache: 'no-store',
@@ -108,11 +111,19 @@ internal object WebShellPolicy {
               headers: { 'content-type': 'application/json', 'x-beacon-desktop': '1' },
               method: 'POST',
             }).then(
-              async (response) => JSON.stringify({ ok: response.ok, body: await response.json().catch(() => null) }),
-              () => JSON.stringify({ ok: false, body: null }),
-            )
+              async (response) => {
+                window.__beaconExchange = JSON.stringify({ ok: response.ok, body: await response.json().catch(() => null) });
+              },
+              () => {
+                window.__beaconExchange = JSON.stringify({ ok: false, body: null });
+              },
+            );
+            true;
         """.trimIndent()
     }
+
+    /** Reads what [exchangeScript] parked on the page: the answer, or null while the request is still running. */
+    const val EXCHANGE_RESULT_SCRIPT = "window.__beaconExchange || null"
 
     /** The same-origin path the server chose after a successful exchange, or null (failed, or needs account linking). */
     fun exchangeDestination(result: String?): String? {
