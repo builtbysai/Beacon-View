@@ -1,0 +1,1163 @@
+[
+  {
+    "file": "web/live-more/2026-10-10-2259-live-more-390-first.png",
+    "when": "2026-10-10 22:59 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "live-more",
+    "purpose": "ll mangled the template literals (as the handoff notes warned), so I'll fix those two lines with the Edit tool",
+    "source": "live-more-390.png"
+  },
+  {
+    "file": "web/live-more/2026-10-10-2300-live-more-390-last.png",
+    "when": "2026-10-10 23:00 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "live-more",
+    "purpose": "e screen at 320px, which I already fixed. It also sits behind the \"Connecting\" overlay, so I'm fixing that now",
+    "source": "live-more-390.png"
+  },
+  {
+    "file": "web/live-more/2026-10-10-2300-live-more-1280.png",
+    "when": "2026-10-10 23:00 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "live-more",
+    "purpose": "e screen at 320px, which I already fixed. It also sits behind the \"Connecting\" overlay, so I'm fixing that now",
+    "source": "live-more-1280.png"
+  },
+  {
+    "file": "web/cameras-camera-0/2026-10-10-2300-cameras-camera-0-320.png",
+    "when": "2026-10-10 23:00 UTC",
+    "size": "320x740",
+    "platform": "web",
+    "screen": "cameras-camera-0",
+    "purpose": "e screen at 320px, which I already fixed. It also sits behind the \"Connecting\" overlay, so I'm fixing that now",
+    "source": "cameras-camera-0-320.png"
+  },
+  {
+    "file": "web/live-more/2026-10-10-2302-live-more-768.png",
+    "when": "2026-10-10 23:02 UTC",
+    "size": "768x1024",
+    "platform": "web",
+    "screen": "live-more",
+    "purpose": "e screen at 320px, which I already fixed. It also sits behind the \"Connecting\" overlay, so I'm fixing that now",
+    "source": "live-more-768.png"
+  },
+  {
+    "file": "web/misc/2026-10-11-0045-emu1.png",
+    "when": "2026-10-11 00:45 UTC",
+    "size": "900x2000",
+    "platform": "web",
+    "screen": "misc",
+    "purpose": " try the emulator: run the built backend image locally, seed an account and a camera, and sign in from the app",
+    "source": "emu1.png"
+  },
+  {
+    "file": "web/misc/2026-10-11-0046-emu2.png",
+    "when": "2026-10-11 00:46 UTC",
+    "size": "900x2000",
+    "platform": "web",
+    "screen": "misc",
+    "purpose": " try the emulator: run the built backend image locally, seed an account and a camera, and sign in from the app",
+    "source": "emu2.png"
+  },
+  {
+    "file": "web/misc/2026-10-11-0047-emu3.png",
+    "when": "2026-10-11 00:47 UTC",
+    "size": "900x2000",
+    "platform": "web",
+    "screen": "misc",
+    "purpose": "Quick update: the app is running in the emulator and I'm signing in with the seeded account",
+    "source": "emu3.png"
+  },
+  {
+    "file": "web/misc/2026-10-11-0049-emu4.png",
+    "when": "2026-10-11 00:49 UTC",
+    "size": "900x2000",
+    "platform": "web",
+    "screen": "misc",
+    "purpose": "Quick update: the app is running in the emulator and I'm signing in with the seeded account",
+    "source": "emu4.png"
+  },
+  {
+    "file": "web/misc/2026-10-11-0049-emu5.png",
+    "when": "2026-10-11 00:49 UTC",
+    "size": "900x2000",
+    "platform": "web",
+    "screen": "misc",
+    "purpose": "Quick update: the app is running in the emulator and I'm signing in with the seeded account",
+    "source": "emu5.png"
+  },
+  {
+    "file": "web/misc/2026-10-11-0049-emu6.png",
+    "when": "2026-10-11 00:49 UTC",
+    "size": "900x2000",
+    "platform": "web",
+    "screen": "misc",
+    "purpose": "Quick update: the app is running in the emulator and I'm signing in with the seeded account",
+    "source": "emu6.png"
+  },
+  {
+    "file": "web/misc/2026-10-11-0050-emu7.png",
+    "when": "2026-10-11 00:50 UTC",
+    "size": "900x2000",
+    "platform": "web",
+    "screen": "misc",
+    "purpose": "pping the tile does nothing for an offline camera, so I'll try the \"Review\" link (V86 says it opens live view)",
+    "source": "emu7.png"
+  },
+  {
+    "file": "web/misc/2026-10-11-0051-emu8.png",
+    "when": "2026-10-11 00:51 UTC",
+    "size": "900x2000",
+    "platform": "web",
+    "screen": "misc",
+    "purpose": "ile the camera is offline. I'll hold a fake camera connection open from a script so the camera shows as online",
+    "source": "emu8.png"
+  },
+  {
+    "file": "web/misc/2026-10-11-0051-emu9.png",
+    "when": "2026-10-11 00:51 UTC",
+    "size": "900x2000",
+    "platform": "web",
+    "screen": "misc",
+    "purpose": "ile the camera is offline. I'll hold a fake camera connection open from a script so the camera shows as online",
+    "source": "emu9.png"
+  },
+  {
+    "file": "web/misc/2026-10-11-0051-emu10.png",
+    "when": "2026-10-11 00:51 UTC",
+    "size": "900x2000",
+    "platform": "web",
+    "screen": "misc",
+    "purpose": "The Android bar now shows the four controls: Audio, Talk, Record and More. I'll open More",
+    "source": "emu10.png"
+  },
+  {
+    "file": "web/settings/2026-10-12-0518-settings-1280-first.png",
+    "when": "2026-10-12 05:18 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "settings",
+    "purpose": "Adding the Android banner as its own file, then wiring it above the page switch",
+    "source": "settings-1280.png"
+  },
+  {
+    "file": "web/settings/2026-10-12-0618-settings-1280-last.png",
+    "when": "2026-10-12 06:18 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "settings",
+    "purpose": "Now the landing page, settings and dark mode",
+    "source": "settings-1280.png"
+  },
+  {
+    "file": "web/settings-notifications/2026-10-12-0521-settings-notifications-1280-first.png",
+    "when": "2026-10-12 05:21 UTC",
+    "size": "1280x1700",
+    "platform": "web",
+    "screen": "settings-notifications",
+    "purpose": "Rewriting the settings page structure with grouped sections and a shared section frame",
+    "source": "settings-notifications-1280.png"
+  },
+  {
+    "file": "web/settings-notifications/2026-10-12-0521-settings-notifications-1280-last.png",
+    "when": "2026-10-12 05:21 UTC",
+    "size": "1280x1100",
+    "platform": "web",
+    "screen": "settings-notifications",
+    "purpose": "Rewriting the settings page structure with grouped sections and a shared section frame",
+    "source": "settings-notifications-1280.png"
+  },
+  {
+    "file": "web/settings-notifications/2026-10-12-0521-settings-notifications-390.png",
+    "when": "2026-10-12 05:21 UTC",
+    "size": "390x2000",
+    "platform": "web",
+    "screen": "settings-notifications",
+    "purpose": "Rewriting the settings page structure with grouped sections and a shared section frame",
+    "source": "settings-notifications-390.png"
+  },
+  {
+    "file": "web/camera-mode/2026-10-12-0525-camera-mode-1280.png",
+    "when": "2026-10-12 05:25 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "camera-mode",
+    "purpose": "Rewriting the settings page structure with grouped sections and a shared section frame",
+    "source": "camera-mode-1280.png"
+  },
+  {
+    "file": "web/add-camera/2026-10-12-0532-add-camera-1280.png",
+    "when": "2026-10-12 05:32 UTC",
+    "size": "1280x900",
+    "platform": "web",
+    "screen": "add-camera",
+    "purpose": "Rewriting the settings page structure with grouped sections and a shared section frame",
+    "source": "add-camera-1280.png"
+  },
+  {
+    "file": "web/add-device-mobile/2026-10-12-0532-add-device-mobile-1280.png",
+    "when": "2026-10-12 05:32 UTC",
+    "size": "1280x900",
+    "platform": "web",
+    "screen": "add-device-mobile",
+    "purpose": "Rewriting the settings page structure with grouped sections and a shared section frame",
+    "source": "add-device-mobile-1280.png"
+  },
+  {
+    "file": "web/add-device-computer/2026-10-12-0533-add-device-computer-1280-first.png",
+    "when": "2026-10-12 05:33 UTC",
+    "size": "1280x900",
+    "platform": "web",
+    "screen": "add-device-computer",
+    "purpose": "Rewriting the settings page structure with grouped sections and a shared section frame",
+    "source": "add-device-computer-1280.png"
+  },
+  {
+    "file": "web/add-device-computer/2026-10-12-0614-add-device-computer-1280-last.png",
+    "when": "2026-10-12 06:14 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "add-device-computer",
+    "purpose": "Reviewing more screens: Add device (computer, iPhone), the landing page, diagnostics and the Camera Mode setup",
+    "source": "add-device-computer-1280.png"
+  },
+  {
+    "file": "web/add-device-mobile/2026-10-12-0538-add-device-mobile-390-first.png",
+    "when": "2026-10-12 05:38 UTC",
+    "size": "390x1500",
+    "platform": "web",
+    "screen": "add-device-mobile",
+    "purpose": "Rewriting the settings page structure with grouped sections and a shared section frame",
+    "source": "add-device-mobile-390.png"
+  },
+  {
+    "file": "web/add-device-mobile/2026-10-12-0538-add-device-mobile-390-last.png",
+    "when": "2026-10-12 05:38 UTC",
+    "size": "390x1500",
+    "platform": "web",
+    "screen": "add-device-mobile",
+    "purpose": "Rewriting the settings page structure with grouped sections and a shared section frame",
+    "source": "add-device-mobile-390.png"
+  },
+  {
+    "file": "web/landing/2026-10-12-0542-landing-1280-first.png",
+    "when": "2026-10-12 05:42 UTC",
+    "size": "582x2000",
+    "platform": "web",
+    "screen": "landing",
+    "purpose": "Rewriting the Android add-device page to use the same three-way vocabulary as the web",
+    "source": "landing-1280.png"
+  },
+  {
+    "file": "web/landing/2026-10-12-0542-landing-1280-last.png",
+    "when": "2026-10-12 05:42 UTC",
+    "size": "780x2000",
+    "platform": "web",
+    "screen": "landing",
+    "purpose": "Rewriting the Android add-device page to use the same three-way vocabulary as the web",
+    "source": "landing-1280.png"
+  },
+  {
+    "file": "web/download-section/2026-10-12-0544-download-section-1280.png",
+    "when": "2026-10-12 05:44 UTC",
+    "size": "1265x855",
+    "platform": "web",
+    "screen": "download-section",
+    "purpose": "Building the shared app-downloads component: a pure options module, the component, styles, and tests",
+    "source": "download-section-1280.png"
+  },
+  {
+    "file": "web/cm-live-desktop/2026-10-12-0606-cm-live-desktop-first.png",
+    "when": "2026-10-12 06:06 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "cm-live-desktop",
+    "purpose": "Now the Camera Mode screen: capturing it to see why its settings are hard to see on the black background",
+    "source": "cm-live-desktop.png"
+  },
+  {
+    "file": "web/cm-live-desktop/2026-10-12-0607-cm-live-desktop-last.png",
+    "when": "2026-10-12 06:07 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "cm-live-desktop",
+    "purpose": "Now the Camera Mode screen: capturing it to see why its settings are hard to see on the black background",
+    "source": "cm-live-desktop.png"
+  },
+  {
+    "file": "web/cm-settings-mobile/2026-10-12-0610-cm-settings-mobile-first.png",
+    "when": "2026-10-12 06:10 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "cm-settings-mobile",
+    "purpose": "Now re-capture to verify",
+    "source": "cm-settings-mobile.png"
+  },
+  {
+    "file": "web/cm-settings-mobile/2026-10-12-0611-cm-settings-mobile-last.png",
+    "when": "2026-10-12 06:11 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "cm-settings-mobile",
+    "purpose": " are still invisible, the select is white, and the mobile panel is bottom-aligned. Finding what overrides them",
+    "source": "cm-settings-mobile.png"
+  },
+  {
+    "file": "web/cm-settings-desktop/2026-10-12-0610-cm-settings-desktop-first.png",
+    "when": "2026-10-12 06:10 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "cm-settings-desktop",
+    "purpose": "screenshot on mobile is badly broken, though: dark text on dark and a collapsed layout. I'll look at that next",
+    "source": "cm-settings-desktop.png"
+  },
+  {
+    "file": "web/cm-settings-desktop/2026-10-12-0611-cm-settings-desktop-last.png",
+    "when": "2026-10-12 06:11 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "cm-settings-desktop",
+    "purpose": "Now close the wrapper, then restyle the CSS",
+    "source": "cm-settings-desktop.png"
+  },
+  {
+    "file": "web/dashboard/2026-10-12-0613-dashboard-1280.png",
+    "when": "2026-10-12 06:13 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "dashboard",
+    "purpose": "Camera Mode is committed. Next is the screen-by-screen review, starting with a fresh capture of every screen",
+    "source": "dashboard-1280.png"
+  },
+  {
+    "file": "web/cameras/2026-10-12-0613-cameras-390.png",
+    "when": "2026-10-12 06:13 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "cameras",
+    "purpose": "Camera Mode is committed. Next is the screen-by-screen review, starting with a fresh capture of every screen",
+    "source": "cameras-390.png"
+  },
+  {
+    "file": "web/add-device-this/2026-10-12-0613-add-device-this-390.png",
+    "when": "2026-10-12 06:13 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "add-device-this",
+    "purpose": "Camera Mode is committed. Next is the screen-by-screen review, starting with a fresh capture of every screen",
+    "source": "add-device-this-390.png"
+  },
+  {
+    "file": "web/activity/2026-10-12-0613-activity-1280.png",
+    "when": "2026-10-12 06:13 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "activity",
+    "purpose": "/events`, not `/activity`, so the capture was showing Home. I'm fixing the script and adding more states to it",
+    "source": "activity-1280.png"
+  },
+  {
+    "file": "web/wall/2026-10-12-0613-wall-390-first.png",
+    "when": "2026-10-12 06:13 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "wall",
+    "purpose": "/events`, not `/activity`, so the capture was showing Home. I'm fixing the script and adding more states to it",
+    "source": "wall-390.png"
+  },
+  {
+    "file": "web/wall/2026-10-12-0614-wall-390-last.png",
+    "when": "2026-10-12 06:14 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "wall",
+    "purpose": "Fixed. Now the wall tile overlay that covers camera names",
+    "source": "wall-390.png"
+  },
+  {
+    "file": "web/trust/2026-10-12-0613-trust-1280.png",
+    "when": "2026-10-12 06:13 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "trust",
+    "purpose": "/events`, not `/activity`, so the capture was showing Home. I'm fixing the script and adding more states to it",
+    "source": "trust-1280.png"
+  },
+  {
+    "file": "web/settings/2026-10-12-0613-settings-390.png",
+    "when": "2026-10-12 06:13 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "settings",
+    "purpose": "/events`, not `/activity`, so the capture was showing Home. I'm fixing the script and adding more states to it",
+    "source": "settings-390.png"
+  },
+  {
+    "file": "web/activity/2026-10-12-0614-activity-390.png",
+    "when": "2026-10-12 06:14 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "activity",
+    "purpose": "Reset filters lands alone on a second grid row with no styling. I'll make it a quiet text button, left-aligned",
+    "source": "activity-390.png"
+  },
+  {
+    "file": "web/add-device-ios/2026-10-12-0614-add-device-ios-390.png",
+    "when": "2026-10-12 06:14 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "add-device-ios",
+    "purpose": "Reviewing more screens: Add device (computer, iPhone), the landing page, diagnostics and the Camera Mode setup",
+    "source": "add-device-ios-390.png"
+  },
+  {
+    "file": "web/diagnostics/2026-10-12-0614-diagnostics-1280.png",
+    "when": "2026-10-12 06:14 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "diagnostics",
+    "purpose": "Reviewing more screens: Add device (computer, iPhone), the landing page, diagnostics and the Camera Mode setup",
+    "source": "diagnostics-1280.png"
+  },
+  {
+    "file": "web/cm-setup-mobile/2026-10-12-0614-cm-setup-mobile.png",
+    "when": "2026-10-12 06:14 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "cm-setup-mobile",
+    "purpose": "Reviewing more screens: Add device (computer, iPhone), the landing page, diagnostics and the Camera Mode setup",
+    "source": "cm-setup-mobile.png"
+  },
+  {
+    "file": "web/guest/2026-10-12-0613-guest-390.png",
+    "when": "2026-10-12 06:13 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "guest",
+    "purpose": "I is running on the PR. Meanwhile I'll start the guest and shared page review, checking what those pages fetch",
+    "source": "guest-390.png"
+  },
+  {
+    "file": "web/shared/2026-10-12-0613-shared-390.png",
+    "when": "2026-10-12 06:13 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "shared",
+    "purpose": "I is running on the PR. Meanwhile I'll start the guest and shared page review, checking what those pages fetch",
+    "source": "shared-390.png"
+  },
+  {
+    "file": "web/pair/2026-10-12-0613-pair-390.png",
+    "when": "2026-10-12 06:13 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "pair",
+    "purpose": "I is running on the PR. Meanwhile I'll start the guest and shared page review, checking what those pages fetch",
+    "source": "pair-390.png"
+  },
+  {
+    "file": "web/join/2026-10-12-0613-join-1280.png",
+    "when": "2026-10-12 06:13 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "join",
+    "purpose": "I is running on the PR. Meanwhile I'll start the guest and shared page review, checking what those pages fetch",
+    "source": "join-1280.png"
+  },
+  {
+    "file": "web/shared/2026-10-12-0614-shared-1280-first.png",
+    "when": "2026-10-12 06:14 UTC",
+    "size": "390x844",
+    "platform": "web",
+    "screen": "shared",
+    "purpose": "hese utility pages were lost in an earlier CSS consolidation. I'll rebuild them with the current design tokens",
+    "source": "shared-1280.png"
+  },
+  {
+    "file": "web/shared/2026-10-12-0614-shared-1280-last.png",
+    "when": "2026-10-12 06:14 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "shared",
+    "purpose": "hese utility pages were lost in an earlier CSS consolidation. I'll rebuild them with the current design tokens",
+    "source": "shared-1280.png"
+  },
+  {
+    "file": "web/pair/2026-10-12-0614-pair-1280.png",
+    "when": "2026-10-12 06:14 UTC",
+    "size": "1280x800",
+    "platform": "web",
+    "screen": "pair",
+    "purpose": "Much better. Checking dark mode and PR #126's CI",
+    "source": "pair-1280.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0637-and-launch-first.png",
+    "when": "2026-10-12 06:37 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "A local test account exists (local dev only). Booting the emulator and building the debug app",
+    "source": "and-launch.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0638-and-launch-last.png",
+    "when": "2026-10-12 06:38 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "The emulator's System UI is still busy after booting. I'll tell it to wait and give it time",
+    "source": "and-launch.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0638-and-fresh.png",
+    "when": "2026-10-12 06:38 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "nch looks wrong, though it may be left over from an old install. I'll clear the app data and relaunch to check",
+    "source": "and-fresh.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0639-and-signin-filled-first.png",
+    "when": "2026-10-12 06:39 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "nch looks wrong, though it may be left over from an old install. I'll clear the app data and relaunch to check",
+    "source": "and-signin-filled.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0639-and-signin-filled-last.png",
+    "when": "2026-10-12 06:39 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "The email field lost characters. That's `adb` typing flakiness, not the app. Retyping it",
+    "source": "and-signin-filled.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0640-and-home.png",
+    "when": "2026-10-12 06:40 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "The email field lost characters. That's `adb` typing flakiness, not the app. Retyping it",
+    "source": "and-home.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0640-and-add1.png",
+    "when": "2026-10-12 06:40 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "Now the new Add a device flow on Android",
+    "source": "and-add1.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0640-and-add3-first.png",
+    "when": "2026-10-12 06:40 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "Now the new Add a device flow on Android",
+    "source": "and-add3.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0640-and-add3-last.png",
+    "when": "2026-10-12 06:40 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "Now the new Add a device flow on Android",
+    "source": "and-add3.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0641-and-menu.png",
+    "when": "2026-10-12 06:41 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "I'm fixing small Android layout issues and reviewing the remaining screens. Opening the menu and Settings next",
+    "source": "and-menu.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0641-and-set3-first.png",
+    "when": "2026-10-12 06:41 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "I'm fixing small Android layout issues and reviewing the remaining screens. Opening the menu and Settings next",
+    "source": "and-set3.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0641-and-set3-last.png",
+    "when": "2026-10-12 06:41 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "I'm fixing small Android layout issues and reviewing the remaining screens. Opening the menu and Settings next",
+    "source": "and-set3.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0643-and-activity-first.png",
+    "when": "2026-10-12 06:43 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "Now the low-contrast labels on the welcome card",
+    "source": "and-activity.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0643-and-activity-last.png",
+    "when": "2026-10-12 06:43 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "Now the low-contrast labels on the welcome card",
+    "source": "and-activity.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0646-and-set4-first.png",
+    "when": "2026-10-12 06:46 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "It builds and the unit tests pass. Reinstalling to check the fixes on the emulator",
+    "source": "and-set4.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0646-and-set4-last.png",
+    "when": "2026-10-12 06:46 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "It builds and the unit tests pass. Reinstalling to check the fixes on the emulator",
+    "source": "and-set4.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0647-and-this1.png",
+    "when": "2026-10-12 06:47 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "That was the Settings page, which has no Add device button. Going via Home instead",
+    "source": "and-this1.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0647-and-this2.png",
+    "when": "2026-10-12 06:47 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "Those layout fixes worked. Now \"This device\" to see the camera setup",
+    "source": "and-this2.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0647-and-cam1.jpg",
+    "when": "2026-10-12 06:47 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "Those layout fixes worked. Now \"This device\" to see the camera setup",
+    "source": "and-cam1.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0649-and-cam3-first.jpg",
+    "when": "2026-10-12 06:49 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "a screen works, but the top-left status indicator is just a tiny dark circle with no label. Checking that code",
+    "source": "and-cam3.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0649-and-cam3-last.jpg",
+    "when": "2026-10-12 06:49 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "a screen works, but the top-left status indicator is just a tiny dark circle with no label. Checking that code",
+    "source": "and-cam3.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0700-and-cam5.jpg",
+    "when": "2026-10-12 07:00 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "The build is still running in the background. Waiting for it",
+    "source": "and-cam5.png"
+  },
+  {
+    "file": "android/first-android-review/2026-10-12-0715-and-cam6.jpg",
+    "when": "2026-10-12 07:15 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "first-android-review",
+    "purpose": "Build, tests and lint pass. Installing it and checking the status chip",
+    "source": "and-cam6.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1226-m-start-first.png",
+    "when": "2026-10-12 12:26 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "stays the paired camera and a second emulator acts as the monitor. Starting the local stack and both emulators",
+    "source": "m-start.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1227-m-start-last.png",
+    "when": "2026-10-12 12:27 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "lator hit the same System UI hang, and its screen is a different size (840\u00d71800). Tapping Wait and relaunching",
+    "source": "m-start.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1227-m-signin.png",
+    "when": "2026-10-12 12:27 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "lator hit the same System UI hang, and its screen is a different size (840\u00d71800). Tapping Wait and relaunching",
+    "source": "m-signin.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1228-m-home-first.png",
+    "when": "2026-10-12 12:28 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "lator hit the same System UI hang, and its screen is a different size (840\u00d71800). Tapping Wait and relaunching",
+    "source": "m-home.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1231-m-home-last.png",
+    "when": "2026-10-12 12:31 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "Both fields are filled. Tapping Sign in",
+    "source": "m-home.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1229-m-signin2.png",
+    "when": "2026-10-12 12:29 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "The email field got junk typed into it. Clearing it and retyping step by step",
+    "source": "m-signin2.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1229-m-signin3.png",
+    "when": "2026-10-12 12:29 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "The email field got junk typed into it. Clearing it and retyping step by step",
+    "source": "m-signin3.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1231-m-home2.png",
+    "when": "2026-10-12 12:31 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "Both fields are filled. Tapping Sign in",
+    "source": "m-home2.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1232-m-live1.jpg",
+    "when": "2026-10-12 12:32 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": " home screen looks right at this narrower width. Opening the live view, which is the screen I haven't seen yet",
+    "source": "m-live1.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1232-m-live2.png",
+    "when": "2026-10-12 12:32 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": " home screen looks right at this narrower width. Opening the live view, which is the screen I haven't seen yet",
+    "source": "m-live2.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1233-m-live4.jpg",
+    "when": "2026-10-12 12:33 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "While that builds, I'll look at the live view's More sheet on the running build",
+    "source": "m-live4.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1249-m-now.png",
+    "when": "2026-10-12 12:49 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "d (it fell back to compiling without the Kotlin daemon, which was slow). Installing it on the monitor emulator",
+    "source": "m-now.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1250-m-live5.jpg",
+    "when": "2026-10-12 12:50 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "d (it fell back to compiling without the Kotlin daemon, which was slow). Installing it on the monitor emulator",
+    "source": "m-live5.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1250-m-more.png",
+    "when": "2026-10-12 12:50 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "The header now holds together with a long name. Next the More sheet",
+    "source": "m-more.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1250-m-dev2-first.png",
+    "when": "2026-10-12 12:50 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "The More sheet is clear. Now the camera settings page behind the gear",
+    "source": "m-dev2.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1250-m-dev2-last.png",
+    "when": "2026-10-12 12:50 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "The More sheet is clear. Now the camera settings page behind the gear",
+    "source": "m-dev2.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1251-m-dev4-first.png",
+    "when": "2026-10-12 12:51 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "While that builds, I'll look further down this device page on the running app",
+    "source": "m-dev4.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1251-m-dev4-last.png",
+    "when": "2026-10-12 12:51 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "While that builds, I'll look further down this device page on the running app",
+    "source": "m-dev4.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1253-m-dev7.png",
+    "when": "2026-10-12 12:53 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "The build is running. I'll install and re-check the Motion panel and the source rows when it finishes",
+    "source": "m-dev7.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1254-m-home3.png",
+    "when": "2026-10-12 12:54 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "ifted with the smaller body text, so my taps hit the wrong thing. Going back to Home to find the right buttons",
+    "source": "m-home3.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1254-m-cams.png",
+    "when": "2026-10-12 12:54 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "ifted with the smaller body text, so my taps hit the wrong thing. Going back to Home to find the right buttons",
+    "source": "m-cams.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1255-m-cardmenu.png",
+    "when": "2026-10-12 12:55 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "ifted with the smaller body text, so my taps hit the wrong thing. Going back to Home to find the right buttons",
+    "source": "m-cardmenu.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1255-m-dev8-first.png",
+    "when": "2026-10-12 12:55 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "ifted with the smaller body text, so my taps hit the wrong thing. Going back to Home to find the right buttons",
+    "source": "m-dev8.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1255-m-dev8-last.png",
+    "when": "2026-10-12 12:55 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "ifted with the smaller body text, so my taps hit the wrong thing. Going back to Home to find the right buttons",
+    "source": "m-dev8.png"
+  },
+  {
+    "file": "android/camera-emulator-review/2026-10-12-1256-c-paused.png",
+    "when": "2026-10-12 12:56 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "camera-emulator-review",
+    "purpose": "The Motion panel and the source rows are fixed. Now the camera's paused state on the other emulator",
+    "source": "c-paused.png"
+  },
+  {
+    "file": "android/camera-emulator-review/2026-10-12-1259-c-paused2.png",
+    "when": "2026-10-12 12:59 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "camera-emulator-review",
+    "purpose": "Tests, lint and the build pass. Installing on both emulators to check the camera screens",
+    "source": "c-paused2.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1300-m-menu.png",
+    "when": "2026-10-12 13:00 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": " #129. In the meantime I'll look at the remaining Android screens, Activity and Clips, on the monitor emulator",
+    "source": "m-menu.png"
+  },
+  {
+    "file": "android/monitor-emulator-review/2026-10-12-1301-m-home5.png",
+    "when": "2026-10-12 13:01 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "monitor-emulator-review",
+    "purpose": "you yet\" for the household owner, which is wrong. It may just be loading after the restart, so I'll look again",
+    "source": "m-home5.png"
+  },
+  {
+    "file": "android/webview-shell/2026-10-12-1311-w-1-first.jpg",
+    "when": "2026-10-12 13:11 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-shell",
+    "purpose": "cy tests pass and the debug build succeeds. Installing and launching the WebView shell on the monitor emulator",
+    "source": "w-1.png"
+  },
+  {
+    "file": "android/webview-shell/2026-10-12-1313-w-1-last.png",
+    "when": "2026-10-12 13:13 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-shell",
+    "purpose": "The build failed in 7 seconds, so the old APK was installed. Checking the error",
+    "source": "w-1.png"
+  },
+  {
+    "file": "android/webview-shell/2026-10-12-1313-w-2.png",
+    "when": "2026-10-12 13:13 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-shell",
+    "purpose": "The page is blank. Checking the WebView's console and network logs",
+    "source": "w-2.png"
+  },
+  {
+    "file": "android/webview-shell/2026-10-12-1314-w-3.png",
+    "when": "2026-10-12 13:14 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-shell",
+    "purpose": "pp itself is loading (its own splash). The Vite dev server is slow over the emulator, so I'll give it a moment",
+    "source": "w-3.png"
+  },
+  {
+    "file": "android/webview-shell/2026-10-12-1314-w-5.png",
+    "when": "2026-10-12 13:14 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-shell",
+    "purpose": " signed out, it shows the marketing landing page, which the app should skip later. Trying the sign-in flow now",
+    "source": "w-5.png"
+  },
+  {
+    "file": "android/webview-shell/2026-10-12-1314-w-6.png",
+    "when": "2026-10-12 13:14 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-shell",
+    "purpose": " signed out, it shows the marketing landing page, which the app should skip later. Trying the sign-in flow now",
+    "source": "w-6.png"
+  },
+  {
+    "file": "android/webview-shell/2026-10-12-1315-w-7.png",
+    "when": "2026-10-12 13:15 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-shell",
+    "purpose": "The web sign-in screen is showing, exactly as in the browser. Signing in with the test account",
+    "source": "w-7.png"
+  },
+  {
+    "file": "android/webview-shell/2026-10-12-1315-w-8.jpg",
+    "when": "2026-10-12 13:15 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-shell",
+    "purpose": "The dashboard is the web app, identical to the browser. Now the critical test: live video through the WebView",
+    "source": "w-8.png"
+  },
+  {
+    "file": "android/webview-bridge-camera-setup/2026-10-12-1404-x-1.png",
+    "when": "2026-10-12 14:04 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-bridge-camera-setup",
+    "purpose": "While those run, I'm building the debug app with the bridge so I can test the real flow on the emulators",
+    "source": "x-1.png"
+  },
+  {
+    "file": "android/webview-bridge-camera-setup/2026-10-12-1404-x-2.png",
+    "when": "2026-10-12 14:04 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-bridge-camera-setup",
+    "purpose": "The launcher now routes straight into the web app. Waiting for the dev server to finish loading",
+    "source": "x-2.png"
+  },
+  {
+    "file": "android/webview-bridge-camera-setup/2026-10-12-1405-x-3.png",
+    "when": "2026-10-12 14:05 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-bridge-camera-setup",
+    "purpose": "rsisted and the dashboard shows. Opening the new \"This phone\" settings section by deep link to test the bridge",
+    "source": "x-3.png"
+  },
+  {
+    "file": "android/webview-bridge-camera-setup/2026-10-12-1405-x-4.png",
+    "when": "2026-10-12 14:05 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-bridge-camera-setup",
+    "purpose": "he phone's camera state from the native side. Now the full flow: set up this phone as a camera from the web UI",
+    "source": "x-4.png"
+  },
+  {
+    "file": "android/webview-bridge-camera-setup/2026-10-12-1406-x-5.png",
+    "when": "2026-10-12 14:06 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-bridge-camera-setup",
+    "purpose": "he phone's camera state from the native side. Now the full flow: set up this phone as a camera from the web UI",
+    "source": "x-5.png"
+  },
+  {
+    "file": "android/webview-bridge-camera-setup/2026-10-12-1406-x-6.png",
+    "when": "2026-10-12 14:06 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-bridge-camera-setup",
+    "purpose": "he phone's camera state from the native side. Now the full flow: set up this phone as a camera from the web UI",
+    "source": "x-6.png"
+  },
+  {
+    "file": "android/webview-bridge-camera-setup/2026-10-12-1406-x-7.png",
+    "when": "2026-10-12 14:06 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-bridge-camera-setup",
+    "purpose": "The app-specific wording shows. Starting the camera from the web UI",
+    "source": "x-7.png"
+  },
+  {
+    "file": "android/webview-bridge-camera-setup/2026-10-12-1406-x-8.png",
+    "when": "2026-10-12 14:06 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-bridge-camera-setup",
+    "purpose": "button paired the phone natively and opened the camera screen, which is now asking for permission. Granting it",
+    "source": "x-8.png"
+  },
+  {
+    "file": "android/webview-bridge-camera-setup/2026-10-12-1407-x-9.jpg",
+    "when": "2026-10-12 14:07 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "webview-bridge-camera-setup",
+    "purpose": "button paired the phone natively and opened the camera screen, which is now asking for permission. Granting it",
+    "source": "x-9.png"
+  },
+  {
+    "file": "android/slimmed-app-check/2026-10-12-1432-y-2-first.jpg",
+    "when": "2026-10-12 14:32 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "slimmed-app-check",
+    "purpose": "erything passes (tests, lint, build). Installing the slimmed app on both emulators to verify the real behavior",
+    "source": "y-2.png"
+  },
+  {
+    "file": "android/slimmed-app-check/2026-10-12-1432-y-2-last.jpg",
+    "when": "2026-10-12 14:32 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "slimmed-app-check",
+    "purpose": "erything passes (tests, lint, build). Installing the slimmed app on both emulators to verify the real behavior",
+    "source": "y-2.png"
+  },
+  {
+    "file": "android/slimmed-app-check/2026-10-12-1433-y-3.jpg",
+    "when": "2026-10-12 14:33 UTC",
+    "size": "900x2000",
+    "platform": "android",
+    "screen": "slimmed-app-check",
+    "purpose": "Both paired phones open straight to the native camera screen. Testing the gear menu's \"Open Beacon\" entry",
+    "source": "y-3.png"
+  },
+  {
+    "file": "android/slimmed-app-check/2026-10-12-1433-y-4.jpg",
+    "when": "2026-10-12 14:33 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "slimmed-app-check",
+    "purpose": "Both paired phones open straight to the native camera screen. Testing the gear menu's \"Open Beacon\" entry",
+    "source": "y-4.png"
+  },
+  {
+    "file": "android/slimmed-app-check/2026-10-12-1434-y-5.png",
+    "when": "2026-10-12 14:34 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "slimmed-app-check",
+    "purpose": "s \"Open Beacon\". Tapping it, then checking that the web app's \"This phone\" section reflects the running camera",
+    "source": "y-5.png"
+  },
+  {
+    "file": "android/status-bar-live-snapshot/2026-10-12-1501-z-1.png",
+    "when": "2026-10-12 15:01 UTC",
+    "size": "840x1800",
+    "platform": "android",
+    "screen": "status-bar-live-snapshot",
+    "purpose": "e clean. Installing the latest build and testing the status bar, live view and a snapshot save on the emulator",
+    "source": "z-1.png"
+  }
+]
