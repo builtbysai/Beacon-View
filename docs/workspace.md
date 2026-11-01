@@ -27,3 +27,9 @@ No production deployment is part of workspace publication. Existing `beacon-orac
 The old audit, archive and migration directories have been removed. Use this guide, the roadmap and development-status.md for current work. Never recover occupied ports by stopping their owners. Back up before installs/moves/cleanup and test restoration; GitHub protects pushed source, not ignored secrets, databases or enrolled identities.
 
 Last validated checkpoint: [development-status.md](development-status.md). This records the actual checks and remaining acceptance gates.
+
+## Credential rotation checkpoint
+
+On November 1, 2026, the owner-authorized Resend handover replaced the sending key in the production backend and its alert configuration, verified delivered test mail and readiness, and revoked the old provider keys. Both products retained their exact running backend image IDs; no source release or database migration accompanied this refresh. The external private root's ROTATION.md and CREDENTIALS.csv track the remaining credential families.
+
+Credential-only Compose recreation now includes `/etc/beacon/runtime-backend-image.override.yaml`, a root-owned override that pins the existing backend by image ID with pulls disabled. Preserve this pin when refreshing credentials using the current container's Compose labels. For an intentional code release, explicitly select the new image and update or remove the pin rather than carrying an old image into the release. Never print resolved Compose environment or container credentials into logs.
