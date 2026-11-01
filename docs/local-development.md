@@ -1,4 +1,4 @@
-> Workspace migration: [workspace-handoff.md](workspace-handoff.md) gives the current D: paths and external secret/state configuration. Older C: path examples below are historical.
+> Workspace migration: [workspace.md](workspace.md) gives the current D: paths and external secret/state configuration. Older C: path examples below are historical.
 
 # Local development
 

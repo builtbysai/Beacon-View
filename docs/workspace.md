@@ -1,6 +1,6 @@
-# View workspace and development handoff
+# Beacon View development workspace
 
-Owner-authorized October 31, 2026 maintenance makes the copied workspace independent of `C:/Dev`; no new product milestone or media feature is part of it. The product is Beacon View, its GitHub origin is Beacon-View, and its local folder remains Beacon-SecureView. Historical package/Compose/application identifiers remain compatible.
+Beacon View is the camera product. This checkout is D:/Dev/Beacon-SecureView and its GitHub repository is Beacon-View. Local package, application and Compose identifiers keep their existing names.
 
 ## Run and validate
 
@@ -10,7 +10,7 @@ Dependencies are hoisted copies; injected workspace packages are not deduplicate
 
 `pnpm check` runs formatting/lint/types/tests/build; Android unit/lint/build checks are separate. Physical-device, privacy shutdown and direct/forced-relay streaming acceptance must be reported separately. See `testing-policy.md`; protect realistic regressions without coverage/count targets.
 
-Current private configuration is `view/backend.env`; signing/deployment recovery material is under `signing-and-deployment`, with update signing key `signing-and-deployment/update-signing-key.pem`. `view/legacy-update-signing-key.pem` is a preserved older-location copy, not permission to rotate keys. Installed desktop browser sessions remain in their runtime profile. `.beacon-dev` was historical scratch/evidence; consult the maintenance manifest before relying on old loose scripts or absolute paths.
+Current private configuration is `view/backend.env`; signing/deployment recovery material is under `signing-and-deployment`, with update signing key `signing-and-deployment/update-signing-key.pem`. The byte-identical legacy-location key copy was removed; keep using the canonical signing key without rotation. Installed desktop browser sessions remain in their runtime profile. Obsolete migration scratch and loose acceptance scripts have been removed. Use the maintained scripts in this checkout.
 
 Read `roadmap.md` for approved product scope and `product-build-brief.md` as historical context. Work on a feature branch. No naming migration, production restart or cloud deployment was performed by this workspace change.
 
@@ -24,6 +24,6 @@ Development credentials, local deployment-config copies, signing material, SSH k
 
 No production deployment is part of workspace publication. Existing `beacon-oracle` SSH access remains strict-host-key-checked over Tailscale. Server configuration stays root-owned under `/etc/beacon*`; never render secret-bearing Compose/environment output into reports. Shared Oracle ingress and independent View/Remote relays require coordinated changes. Current committed source need not equal the running backend or downloaded native binaries.
 
-The private audit/maintenance directories record inventory, hashes, backup and cleanup evidence. Treat old handoffs and C-path examples as historical unless explicitly updated. Never recover occupied ports by stopping their owners. Back up before installs/moves/cleanup and test restoration; GitHub protects pushed source, not ignored secrets, databases or enrolled identities.
+The old audit, archive and migration directories have been removed. Use this guide, the roadmap and development-status.md for current work. Never recover occupied ports by stopping their owners. Back up before installs/moves/cleanup and test restoration; GitHub protects pushed source, not ignored secrets, databases or enrolled identities.
 
-Current maintenance evidence: [workspace-validation-2026-11-01.md](workspace-validation-2026-11-01.md). This records the actual checks and remaining acceptance gates.
+Last validated checkpoint: [development-status.md](development-status.md). This records the actual checks and remaining acceptance gates.

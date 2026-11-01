@@ -1,6 +1,6 @@
-> Windows workspace: start with [the current workspace handoff](docs/workspace-handoff.md) for private-secret paths, setup and validation.
-
 # Beacon View
+
+Start development with [docs/workspace.md](docs/workspace.md). See [docs/roadmap.md](docs/roadmap.md) for scope and [docs/development-status.md](docs/development-status.md) for validation and remaining gates.
 
 Beacon View turns a spare Android phone, tablet or computer into a private security camera you can watch from any
 browser, phone or computer. Live video goes device to viewer over WebRTC; the server only introduces the two sides,

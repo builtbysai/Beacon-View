@@ -1,4 +1,6 @@
-# Workspace migration validation — November 1, 2026
+# Development status
+
+Last verified: November 1, 2026. Re-run the relevant checks after future changes.
 
 ## Dependency audit follow-up
 
@@ -14,4 +16,4 @@ Android `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug` passed using 
 
 Fresh copied dependencies have no active source/dependency directory reparse points. The backend honors an explicit external BEACON_ENV_FILE without overriding process environment values and fails before application/database startup when the configured file is missing. That failure was verified against source; an earlier smoke against stale build output was not treated as current-code evidence. The updated environment verifier passed with the private configuration and installed tools. Local development database dumps restored successfully into an isolated disposable database. The stopped local Coturn container was recreated, not started, to replace its C-path bind mount with D:/Dev; its volume was preserved.
 
-The inherited test suite was retained; no test-count/coverage target or unrelated feature was added. Staged secret scanning, final diff review and independent encrypted backup are publication/cleanup gates. See workspace-handoff.md and the external maintenance completion record for final publication/cleanup details. Direct/forced-relay media, privacy shutdown and physical-device acceptance remain separate from these checks.
+The inherited test suite was retained; no test-count/coverage target or unrelated feature was added. Staged secret scanning, final diff review and independent encrypted backup are publication/cleanup gates. See workspace.md for final publication/cleanup details. Direct/forced-relay media, privacy shutdown and physical-device acceptance remain separate from these checks.
