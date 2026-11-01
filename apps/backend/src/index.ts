@@ -15,10 +15,14 @@ import { startPresenceActivityJob } from './presence-activity-job.js';
 import { startRecordingRecoveryJob } from './recording-recovery.js';
 import { HouseholdEventHub } from './household-events.js';
 
-loadEnvironment({
+const environmentFile = process.env.BEACON_ENV_FILE;
+const environmentResult = loadEnvironment({
   override: false,
-  path: fileURLToPath(new URL('../.env', import.meta.url)),
+  path: environmentFile ?? fileURLToPath(new URL('../.env', import.meta.url)),
 });
+if (environmentFile && environmentResult.error) {
+  throw new Error('Cannot load the configured BEACON_ENV_FILE');
+}
 
 const config = parseConfig(process.env);
 const store = createPostgresStore(config);

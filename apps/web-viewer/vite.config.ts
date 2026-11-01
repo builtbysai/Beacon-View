@@ -30,6 +30,8 @@ export default defineConfig(({ mode }) => {
     server: createDevelopmentServerConfig(environment),
     test: {
       environment: 'jsdom',
+      // Keep DOM workers bounded on development disks and shared CI hosts.
+      maxWorkers: 2,
       setupFiles: './src/test/setup.ts',
     },
   };

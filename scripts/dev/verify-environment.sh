@@ -17,7 +17,9 @@ if command -v docker >/dev/null 2>&1; then
   if docker compose version >/dev/null 2>&1; then echo 'OK   docker compose'; else echo 'MISS docker compose'; fail=1; fi
   if docker info >/dev/null 2>&1; then echo 'OK   docker daemon'; else echo 'MISS docker daemon access'; fail=1; fi
 fi
-if [ -f apps/backend/.env ]; then echo 'OK   apps/backend/.env'; else echo 'MISS apps/backend/.env (copy the example)'; fail=1; fi
+environment_file="${BEACON_ENV_FILE:-apps/backend/.env}"
+if command -v cygpath >/dev/null 2>&1; then environment_file="$(cygpath -u "$environment_file")"; fi
+if [ -f "$environment_file" ]; then echo 'OK   backend environment file'; else echo 'MISS backend environment file (set BEACON_ENV_FILE or create a private local .env from the example)'; fail=1; fi
 if [ -n "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}" ]; then echo 'OK   Android SDK path set'; else echo 'INFO Android SDK path not set'; fi
 if [ -f apps/android-camera/app/google-services.json ]; then echo 'INFO optional Firebase Android client config present'; else echo 'INFO optional Firebase Android client config absent'; fi
 if [ -x apps/android-camera/gradlew ]; then echo 'OK   Gradle wrapper executable'; else echo 'MISS Gradle wrapper executable'; fail=1; fi

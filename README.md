@@ -1,3 +1,5 @@
+> Windows workspace: start with [the current workspace handoff](docs/workspace-handoff.md) for private-secret paths, setup and validation.
+
 # Beacon View
 
 Beacon View turns a spare Android phone, tablet or computer into a private security camera you can watch from any

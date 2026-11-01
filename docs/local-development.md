@@ -1,3 +1,5 @@
+> Workspace migration: [workspace-handoff.md](workspace-handoff.md) gives the current D: paths and external secret/state configuration. Older C: path examples below are historical.
+
 # Local development
 
 ## Prerequisites
@@ -9,6 +11,8 @@
 `bash scripts/dev/verify-environment.sh` checks the tools, Docker access and the backend `.env` and says what is missing.
 
 ## Run it
+
+On the migrated Windows workspace, first dot-source `. ./scripts/Enter-Workspace.ps1` to select the existing private backend environment file. Do not copy an example over that file. A new clone can use the local `.env` fallback below or set `BEACON_ENV_FILE` to its own private file.
 
 ```sh
 pnpm install --frozen-lockfile
