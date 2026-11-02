@@ -10,7 +10,7 @@ Dependencies are hoisted copies; injected workspace packages are not deduplicate
 
 `pnpm check` runs formatting/lint/types/tests/build; Android unit/lint/build checks are separate. Physical-device, privacy shutdown and direct/forced-relay streaming acceptance must be reported separately. See `testing-policy.md`; protect realistic regressions without coverage/count targets.
 
-Current private configuration is `view/local/backend.env`; production recovery copies are under `view/production`, with update signing key `view/signing/update-private-key.pem`. The byte-identical legacy-location key copy was removed; keep the canonical signing key until its update-trust migration is planned. Installed desktop browser sessions remain in their runtime profile. Obsolete migration scratch and loose acceptance scripts have been removed. Use the maintained scripts in this checkout.
+Current private configuration is `view/local/backend.env`; production recovery copies are under `view/production`, with update signing key `view/signing/update-private-key.pem`. The byte-identical legacy-location key copy was removed; the canonical signing key and source public pin were refreshed November 1, with fresh development installs required. Installed desktop browser sessions remain in their runtime profile. Obsolete migration scratch and loose acceptance scripts have been removed. Use the maintained scripts in this checkout.
 
 Read `roadmap.md` for approved product scope and `product-build-brief.md` as historical context. Work on a feature branch. No naming migration, production restart or cloud deployment was performed by this workspace change.
 
@@ -30,7 +30,7 @@ Last validated checkpoint: [development-status.md](development-status.md). This 
 
 ## Credential rotation checkpoint
 
-On November 1, 2026, the owner-authorized Resend handover replaced the sending key in the production backend and its alert configuration, verified delivered test mail and readiness, and revoked the old provider keys. Both products retained their exact running backend image IDs; no source release or database migration accompanied this refresh. The external private root's ROTATION.md and CREDENTIALS.csv track the remaining credential families.
+On November 1, 2026, the owner-authorized Resend handover replaced the sending key in the production backend and its alert configuration, verified delivered test mail and readiness, and revoked the old provider keys. Both products retained their exact running backend image IDs; no source release or database migration accompanied this refresh. The external private root's ROTATION.md and CREDENTIALS.csv record completion of all inventoried credential families.
 
 Credential-only Compose recreation now includes `/etc/beacon/runtime-backend-image.override.yaml`, a root-owned override that pins the existing backend by image ID with pulls disabled. Preserve this pin when refreshing credentials using the current container's Compose labels. For an intentional code release, explicitly select the new image and update or remove the pin rather than carrying an old image into the release. Never print resolved Compose environment or container credentials into logs.
 

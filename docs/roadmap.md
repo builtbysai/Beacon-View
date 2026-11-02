@@ -1,15 +1,19 @@
 # Beacon delivery roadmap
 
-Updated October 12, 2026. This is the single current scope authority. Release gates are in
+Reviewed November 2, 2026 against the current checkout and GitHub issues, PRs, branches and Actions. This is the single current scope authority. Release gates are in
 [pre-deployment-readiness.md](pre-deployment-readiness.md); the testing rules are in
 [testing-policy.md](testing-policy.md); every significant decision is an ADR in [decisions](decisions/). Older dated
 plans, handoffs and audits were removed on October 12; git history keeps them.
 
 ## Where Beacon View is
 
-A private alpha running on one Oracle Cloud VM at `https://beacon.builtbysai.com`, with the web app and installable
-PWA, an Android camera and viewer app (sideloaded, `0.1.0-alpha19`, which shows the web app inside the app), a Windows, Mac and Linux desktop app (unsigned,
-with signed update feeds) and iOS as a web app. The repository is public under AGPL-3.0 (ADR 0119).
+An owner-only development alpha is reachable at `https://beacon.builtbysai.com`; the owner confirmed there are no external production users. It includes the web/PWA viewer, the Android native camera with a WebView viewer, desktop shells and iOS through the web. This is not a public-beta readiness claim. The repository is public under AGPL-3.0 (ADR 0119).
+
+The current development branch is `codex/portable-workspace` at `d44a8ae`, ahead of `main` (`2e17cc7`) by six maintenance commits before this documentation review. Those commits are pushed, but there is no open PR. They include portable development, dependency patches and replacement signing trust. Running service images were deliberately preserved during credential maintenance; pushed source, hosted services and installed/downloaded native apps are different checkpoints.
+
+The last recorded Android release is `0.1.0-alpha19`. The October 12 release log proves live view, PiP, fullscreen, snapshots, remote Pause/Resume and an FCM heads-up alert on a Pixel viewer with an emulator camera. It explicitly excludes Listen/Talk, forced-relay media and a physical rear camera. September 26 comments on issue #21 contain additional partial two-device evidence, not closure of the complete checklist. These historical passes must be repeated where fresh signing identities/installations affect them.
+
+November 1–2 maintenance completed the inventoried credential rotations, external private-file organization, backup/restore verification and obsolete-artifact cleanup. New desktop update and Android signing identities intentionally require fresh development installs; the owner accepted re-enrollment. No new View backend code or native application release was deployed during that maintenance. The private credential register is complete; key rotation is no longer a prerequisite task to repeat.
 
 Shipped, in outline (the ADR number has the detail):
 
@@ -24,20 +28,35 @@ Shipped, in outline (the ADR number has the detail):
 - Own TURN relay under Beacon View control (ADR 0114), encrypted off-site backups with a restore drill, monitor and
   [runbook](runbook-outage-and-recovery.md).
 
+## Next work, in order
+
+1. **Integrate the maintenance branch before another release.** Prepare a PR from `codex/portable-workspace` to `main`, run the required `validate` and `secrets` checks and the relevant Android/PostgreSQL jobs, then follow the release procedure for an explicitly chosen image. The October 26 scheduled dependency audit on `main` failed with high-severity advisories; the November 1 branch patches passed local validation, but have not cleared `main`'s audit. Re-run the audit against the proposed release and assess the recorded moderate development-tool advisory. Do not disable checks or accidentally retain an old runtime image pin during an intentional code release.
+2. **Rebuild with the new signing trust and complete viewer acceptance ([#21](https://github.com/builtbysai/Beacon-View/issues/21)).** Freshly install/re-pair the Android camera/viewer and rebuild desktop feeds/installers using the new update key. Work through the remaining real-media matrix: direct and forced TURN, browser Camera Mode, Listen/Talk including teardown, actual rear-camera switching, revocation/reconnect, Google Drive clip states and mobile/desktop layouts. September evidence of a lingering speaker AudioTrack needs explicit teardown re-check; it is not proof of lingering microphone capture. Record device/build/network and observed results; do not mark #21 closed from a build or health check.
+3. **Scope the next Activity milestone ([#20](https://github.com/builtbysai/Beacon-View/issues/20)).** Decide whether one unified feed or the existing separate views is desired. The backend already records many audit-event types and name snapshots; the current client access-history type still exposes a narrow event union. Map the missing presentation/API fields first, retain household authorization, pagination and retention, and avoid inventing a second audit system. This design decision precedes implementation.
+4. **Close the release gates below before broadening availability.** Keep device, accessibility, capacity, legal/store and security-review evidence separate from maintenance checks. Do not start deferred features as part of this roadmap review.
+
+## GitHub checkpoint — November 2, 2026
+
+- Open owner-created issues: [#21 physical-device Live Viewer QA](https://github.com/builtbysai/Beacon-View/issues/21) and [#20 Activity metadata](https://github.com/builtbysai/Beacon-View/issues/20); both include September 26 follow-up comments that narrow the remaining work.
+- [#19 contextual Camera Settings](https://github.com/builtbysai/Beacon-View/issues/19) and [#22 Browser Camera Mode active settings](https://github.com/builtbysai/Beacon-View/issues/22) are closed. Do not reintroduce them as unimplemented tasks.
+- Latest merged PR: [#143 design screenshots](https://github.com/builtbysai/Beacon-View/pull/143), October 13. [#142](https://github.com/builtbysai/Beacon-View/pull/142) records the partial alpha19 device pass. No open PRs, GitHub Releases or milestones were listed at review.
+- GitHub Dependabot-alert API access was unavailable for this repository; no zero-alert claim is made.
+- Latest Actions run: [October 26 dependency audit, failed](https://github.com/builtbysai/Beacon-View/actions/runs/40327508879), on `main` at `2e17cc7`. The latest main CI run on October 13 passed. Feature-branch pushes alone do not trigger the PR/main CI workflow.
+
 ## Open: needs the owner or a device
 
-| Item                                                        | What is needed                                                                                                                          |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Physical acceptance on a phone (N1, N2)                     | Privacy and recovery, front and rear switching, denied permissions, Google account flows, Listen and Talk, on a real phone and network. |
-| Chromecast (ADR 0097, [guide](google-cast-registration.md)) | The receiver is registered (`E850DDA7`, unpublished). Register a test device by serial, prove playback and revocation, then publish.    |
-| Windows code-signing certificate and Mac notarization       | Owner purchase and Apple account; until then installers show a first-launch warning.                                                    |
-| Google Play (see [android-release.md](android-release.md))  | Account identity review and phone verification, an upload key, then store listing and data safety.                                      |
-| Legal and trust copy (N7)                                   | Owner and reviewer approve the [drafts](legal/) and name the operator, contact, region and retention.                                   |
-| Domain and sender identity (N4)                             | Owner decision; plan TLS, OAuth, Android app-links and rollback before any DNS change.                                                  |
-| Accessibility pass (N8)                                     | Automated axe check is clean on 120 states; still needed: keyboard, screen reader and reduced-motion check on real browsers/devices.    |
-| Capacity limits (N9)                                        | Measure older-device decode, CPU, heat, battery and bandwidth; record safe viewer limits.                                               |
-| MFA and passkeys                                            | Approved in principle; needs the recovery decision (can a passkey be the only credential) first.                                        |
-| GitHub review rule                                          | `main` needs a pull request and green `validate` and `secrets` checks; no second reviewer is required.                                  |
+| Item                                                        | What is needed                                                                                                                                           |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Physical acceptance on a phone (N1, N2)                     | Complete issue #21 after fresh signing/install; retain the partial September/October evidence and record the remaining real-device/network checks.       |
+| Chromecast (ADR 0097, [guide](google-cast-registration.md)) | The receiver is registered (`E850DDA7`, unpublished). Register a test device by serial, prove playback and revocation, then publish.                     |
+| Windows code-signing certificate and Mac notarization       | View desktop Authenticode/notarization remain separate owner/account decisions; Remote's self-signed certificate does not solve View distribution trust. |
+| Google Play (see [android-release.md](android-release.md))  | Account identity review and phone verification, an upload key, then store listing and data safety.                                                       |
+| Legal and trust copy (N7)                                   | Owner and reviewer approve the [drafts](legal/) and name the operator, contact, region and retention.                                                    |
+| Domain and sender identity (N4)                             | Owner decision; plan TLS, OAuth, Android app-links and rollback before any DNS change.                                                                   |
+| Accessibility pass (N8)                                     | Automated axe check is clean on 120 states; still needed: keyboard, screen reader and reduced-motion check on real browsers/devices.                     |
+| Capacity limits (N9)                                        | Measure older-device decode, CPU, heat, battery and bandwidth; record safe viewer limits.                                                                |
+| MFA and passkeys                                            | Approved in principle; needs the recovery decision (can a passkey be the only credential) first.                                                         |
+| GitHub review rule                                          | `main` requires a pull request and green `validate` and `secrets` checks; verified at review, with no second reviewer required.                          |
 
 ## Deferred: each needs its own approved milestone
 
