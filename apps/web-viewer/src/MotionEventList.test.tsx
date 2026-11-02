@@ -205,7 +205,7 @@ describe('Activity timeline', () => {
     fireEvent.change(screen.getByLabelText('Sort activity'), {
       target: { value: 'old' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /^Household/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Motion \d+$/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
     expect(await screen.findByText('reset')).toBeVisible();
     expect(screen.getByRole('searchbox')).toHaveValue('');
@@ -215,6 +215,147 @@ describe('Activity timeline', () => {
       'aria-pressed',
       'true',
     );
+  });
+
+  it('queries recording history beyond the default timeline and keeps filters on later pages', async () => {
+    localStorage.setItem('motion-test:camera', 'camera-one');
+    localStorage.setItem('motion-test:time', 'all');
+    const householdEvent = (
+      id: string,
+      eventType: string,
+      occurredAt: string,
+    ) => ({
+      id,
+      eventType,
+      occurredAt,
+      cameraSourceId: 'camera-one',
+      deviceName: 'Hallway phone',
+      sourceName: 'Rear camera',
+      metadata: {},
+    });
+    const fetch = vi.fn((url: string) => {
+      const params = new URL(url, 'https://beacon.test').searchParams;
+      if (!url.startsWith('/api/activity'))
+        return Promise.resolve(response([event('motion-only')]));
+      const recordings = params
+        .getAll('eventType')
+        .includes('recording_failed');
+      return Promise.resolve({
+        ...response([]),
+        json: () =>
+          Promise.resolve({
+            events: !recordings
+              ? []
+              : params.get('offset') === '0'
+                ? [
+                    householdEvent(
+                      'failed-clip',
+                      'recording_failed',
+                      new Date().toISOString(),
+                    ),
+                  ]
+                : [
+                    householdEvent(
+                      'ready-clip',
+                      'recording_available',
+                      new Date(Date.now() - 60_000).toISOString(),
+                    ),
+                  ],
+            total: recordings ? 2 : 0,
+          }),
+      });
+    });
+    vi.stubGlobal('fetch', fetch);
+    render(<MotionEventList {...props} includeHouseholdActivity />);
+    await screen.findByText('motion-only');
+    const initialMotionCalls = fetch.mock.calls.filter(([url]) =>
+      url.startsWith('/api/motion-events'),
+    ).length;
+    fireEvent.click(screen.getByRole('button', { name: /^Recordings/ }));
+    await screen.findByText('Recording failed');
+    expect(screen.queryByText('motion-only')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    await screen.findByText('Recording available');
+    const pages = fetch.mock.calls
+      .map(([url]) => new URL(url, 'https://beacon.test'))
+      .filter(
+        (url) =>
+          url.pathname === '/api/activity' && url.searchParams.has('eventType'),
+      );
+    expect(pages.map((url) => url.searchParams.get('offset'))).toEqual([
+      '0',
+      '1',
+    ]);
+    for (const page of pages) {
+      expect(page.searchParams.get('cameraId')).toBe('camera-one');
+      expect(page.searchParams.has('since')).toBe(false);
+      expect(page.searchParams.getAll('eventType')).toContain(
+        'recording_available',
+      );
+      expect(page.searchParams.getAll('eventType')).not.toContain(
+        'device_offline',
+      );
+    }
+    expect(
+      fetch.mock.calls.filter(([url]) => url.startsWith('/api/motion-events')),
+    ).toHaveLength(initialMotionCalls);
+  });
+
+  it('returns to authorized motion history when a selected security filter loses administrator access', async () => {
+    const fetch = vi.fn((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/activity')
+          ? {
+              ...response([]),
+              json: () =>
+                Promise.resolve({
+                  events: [
+                    {
+                      id: 'privacy-event',
+                      eventType: 'privacy_enabled',
+                      occurredAt: new Date().toISOString(),
+                      metadata: {},
+                    },
+                  ],
+                  total: 1,
+                }),
+            }
+          : response([event('allowed-motion', new Date().toISOString())]),
+      ),
+    );
+    vi.stubGlobal('fetch', fetch);
+    const view = render(
+      <MotionEventList {...props} includeHouseholdActivity />,
+    );
+    await screen.findByText('allowed-motion');
+    fireEvent.click(screen.getByRole('button', { name: /^Security/ }));
+    await waitFor(() =>
+      expect(
+        fetch.mock.calls.some(([url]) =>
+          new URL(url, 'https://beacon.test').searchParams
+            .getAll('eventType')
+            .includes('privacy_enabled'),
+        ),
+      ).toBe(true),
+    );
+    await screen.findByText('Privacy mode enabled');
+    const privateCalls = fetch.mock.calls.filter(([url]) =>
+      url.startsWith('/api/activity'),
+    ).length;
+    view.rerender(
+      <MotionEventList {...props} includeHouseholdActivity={false} />,
+    );
+    await screen.findByText('allowed-motion');
+    expect(screen.queryByText('Privacy mode enabled')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^Security/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /^Motion \d+$/ }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      fetch.mock.calls.filter(([url]) => url.startsWith('/api/activity')),
+    ).toHaveLength(privateCalls);
   });
 
   it('restores a saved legacy week filter as seven days', async () => {

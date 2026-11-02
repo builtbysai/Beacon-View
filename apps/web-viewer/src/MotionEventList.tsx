@@ -57,10 +57,86 @@ interface CameraOption {
 }
 
 const kinds = [
-  { id: 'all', label: 'All' },
-  { id: 'motion', label: 'Motion' },
-  { id: 'system', label: 'Household' },
-] as const;
+  { id: 'all', label: 'All', eventTypes: [] },
+  { id: 'motion', label: 'Motion', eventTypes: [] },
+  {
+    id: 'recordings',
+    label: 'Recordings',
+    eventTypes: [
+      'recording_requested',
+      'recording_available',
+      'recording_failed',
+      'recording_deleted',
+      'recording_share_link_created',
+      'recording_share_link_revoked',
+    ],
+  },
+  {
+    id: 'devices',
+    label: 'Devices',
+    eventTypes: [
+      'camera_source_added',
+      'camera_source_deleted',
+      'camera_source_updated',
+      'camera_updated',
+      'device_paired',
+      'device_reconnected',
+      'device_deleted',
+      'device_self_removed',
+      'device_self_disconnected',
+      'device_updated',
+      'device_offline',
+      'device_recovered',
+    ],
+  },
+  {
+    id: 'security',
+    label: 'Security',
+    eventTypes: [
+      'device_credential_revoked',
+      'live_view_started',
+      'live_view_rejected',
+      'privacy_enabled',
+      'privacy_disabled',
+      'household_camera_grants_changed',
+      'household_member_revoked',
+      'household_member_removed',
+      'camera_access_left',
+      'household_invitation_revoked',
+    ],
+  },
+  {
+    id: 'system',
+    label: 'Household',
+    eventTypes: [
+      'household_invitation_created',
+      'household_invitation_resent',
+      'household_invitation_accepted',
+      'household_invitation_revoked',
+      'motion_settings_changed',
+      'motion_history_cleared',
+      'motion_retention_changed',
+      'notification_preference_changed',
+      'notification_subscription_created',
+      'notification_subscription_revoked',
+      'household_mode_changed',
+      'household_mode_settings_changed',
+    ],
+  },
+];
+
+function matchesKind(event: ActivityEvent, kind: string): boolean {
+  if (kind === 'all') return true;
+  if (kind === 'motion') return isMotionEvent(event);
+  return (
+    !isMotionEvent(event) &&
+    Boolean(
+      kinds
+        .find((item) => item.id === kind)
+        ?.eventTypes.includes(event.eventType),
+    )
+  );
+}
 
 /** What a clip attached to a motion event looks like right now, and
  * whether it can be opened yet -- the shared recording states, worded as
@@ -118,6 +194,8 @@ const activityLabels: Record<string, string> = {
   recording_available: 'Recording available',
   recording_failed: 'Recording failed',
   recording_deleted: 'Recording deleted',
+  recording_share_link_created: 'Recording share link created',
+  recording_share_link_revoked: 'Recording share link revoked',
   live_view_started: 'Live view started',
   live_view_rejected: 'Live view rejected',
   motion_settings_changed: 'Motion settings changed',
@@ -229,6 +307,7 @@ export function MotionEventList({
   const pending = useRef(false);
   const controller = useRef<AbortController | null>(null);
   const query = useRef('');
+  const activityQuery = useRef('');
   const activityOffset = useRef(0);
   const status = useRef<HTMLElement>(null);
 
@@ -274,15 +353,18 @@ export function MotionEventList({
     setLoadFailed(false);
     try {
       const [motionPage, activityPage] = await Promise.all([
-        next !== null || !append || cursor !== null
+        (kindFilter === 'all' || kindFilter === 'motion') &&
+        (next !== null || !append || cursor !== null)
           ? request<EventPage>(
               `/api/motion-events?${query.current}${next ? `&cursor=${encodeURIComponent(next)}` : ''}`,
               { signal: abort.signal },
             )
           : Promise.resolve<EventPage>({ events: [], nextCursor: null }),
-        includeHouseholdActivity && (!append || activityHasMore)
+        includeHouseholdActivity &&
+        kindFilter !== 'motion' &&
+        (!append || activityHasMore)
           ? request<HouseholdEventPage>(
-              `/api/activity?${query.current}&offset=${append ? activityOffset.current : 0}`,
+              `/api/activity?${activityQuery.current}&offset=${append ? activityOffset.current : 0}`,
               { signal: abort.signal },
             )
           : Promise.resolve<HouseholdEventPage>({
@@ -333,6 +415,18 @@ export function MotionEventList({
     const since = activitySince(timeFilter, sinceDate);
     if (since) filters.set('since', since);
     query.current = filters.toString();
+    for (const eventType of kinds.find((kind) => kind.id === kindFilter)
+      ?.eventTypes ?? []) {
+      filters.append('eventType', eventType);
+    }
+    activityQuery.current = filters.toString();
+    if (
+      !includeHouseholdActivity &&
+      kindFilter !== 'all' &&
+      kindFilter !== 'motion'
+    ) {
+      setKindFilter('motion');
+    }
     setEvents(null);
     setCursor(null);
     setActivityHasMore(false);
@@ -351,6 +445,7 @@ export function MotionEventList({
     cameraFilter,
     timeFilter,
     sinceDate,
+    kindFilter,
     refreshRevision,
     clearRevision,
     includeHouseholdActivity,
@@ -401,9 +496,7 @@ export function MotionEventList({
       );
     }
     if (kindFilter !== 'all') {
-      result = result.filter((event) =>
-        kindFilter === 'motion' ? isMotionEvent(event) : !isMotionEvent(event),
-      );
+      result = result.filter((event) => matchesKind(event, kindFilter));
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -476,11 +569,12 @@ export function MotionEventList({
 
   // Calculate counts per kind
   const kindCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: events?.length ?? 0 };
-    counts.motion = events?.filter(isMotionEvent).length ?? 0;
-    counts.system =
-      events?.filter((event) => !isMotionEvent(event)).length ?? 0;
-    return counts;
+    return Object.fromEntries(
+      kinds.map((kind) => [
+        kind.id,
+        events?.filter((event) => matchesKind(event, kind.id)).length ?? 0,
+      ]),
+    );
   }, [events]);
 
   return (
@@ -593,8 +687,8 @@ export function MotionEventList({
       </section>
 
       <p id="activity-search-help" className="activity-filter-help">
-        Camera and time filters apply to saved history. Search, event type,
-        counts, and sorting apply to loaded events.
+        Camera, time and event-type filters apply to saved history. Search,
+        counts and sorting apply to loaded events.
         {(cursor || activityHasMore) &&
           ' Load more to check additional events in this time range.'}
         {timeFilter === 'since' &&
@@ -602,19 +696,26 @@ export function MotionEventList({
       </p>
 
       <div className="events-chips">
-        {kinds.map((k) => {
-          const count = kindCounts[k.id] ?? 0;
-          return (
-            <button
-              key={k.id}
-              className={`events-chip ${kindFilter === k.id ? 'on' : ''}`}
-              onClick={() => setKindFilter(k.id)}
-              aria-pressed={kindFilter === k.id}
-            >
-              {k.label} <span className="n">{count}</span>
-            </button>
-          );
-        })}
+        {kinds
+          .filter(
+            (kind) =>
+              includeHouseholdActivity ||
+              kind.id === 'all' ||
+              kind.id === 'motion',
+          )
+          .map((k) => {
+            const count = kindCounts[k.id] ?? 0;
+            return (
+              <button
+                key={k.id}
+                className={`events-chip ${kindFilter === k.id ? 'on' : ''}`}
+                onClick={() => setKindFilter(k.id)}
+                aria-pressed={kindFilter === k.id}
+              >
+                {k.label} <span className="n">{count}</span>
+              </button>
+            );
+          })}
       </div>
 
       <div className="events-resultbar">

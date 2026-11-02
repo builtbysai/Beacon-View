@@ -3,6 +3,14 @@
   min-width: 0;
 }
 
+/* Keep every category discoverable when the unified feed is used on a phone. */
+.activity-v3-container .events-chips {
+  flex-wrap: wrap;
+  overflow-x: visible;
+  margin-inline: 0;
+  padding-inline: 0;
+}
+
 .activity-v3-container .page-heading {
   align-items: center;
   margin-bottom: 18px;

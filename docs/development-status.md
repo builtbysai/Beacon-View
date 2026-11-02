@@ -1,6 +1,14 @@
 # Development status
 
-Last verified: November 1, 2026. Re-run the relevant checks after future changes.
+Latest web development validation: November 2, 2026. Earlier backend/Android/build records below are from November 1; re-run relevant checks after future changes.
+
+## Unified Activity filter slice
+
+The owner chose one feed with category filters. The implementation extends the existing merged motion/household timeline and uses the existing event-type query contract; there is no backend, SQL, schema, retention or authorization change. The Recordings category queries saved lifecycle history rather than filtering only the initial loaded page. Household-only filters avoid motion requests; camera/date filters and household offsets survive pagination. Viewers/guests never request household categories, and loss of administrator eligibility clears private details/history and returns to Motion.
+
+Focused Activity/pagination/role-downgrade regressions, the full web suite, ESLint, web typechecking and the web production build passed. The existing reset workflow now selects its authorized Motion filter; new regressions protect historical recording discovery and a selected Security filter during role loss. No tests were removed; the existing realistic merge/retry/history coverage remains.
+
+Isolated Edge fixtures at 390px and 1280px exercised category navigation and filtered requests with all API traffic mocked, media blocked and no live service access. All category controls fit after wrapping. Automated WCAG checks passed once transitions settled; an initial contrast scan during the color transition was rerun against the settled state. This does not establish screen-reader, physical-device or real-media acceptance. Temporary screenshots and the owned local preview are cleaned up after inspection. See ADR 0124. Issue #20 remains open for richer per-event details and combined-flow acceptance; no deployment was performed.
 
 ## Dependency audit follow-up
 
