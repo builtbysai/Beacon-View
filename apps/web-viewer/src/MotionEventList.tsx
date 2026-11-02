@@ -9,6 +9,7 @@ import {
   localActivityDate,
 } from './activity-filters';
 import { recordingStatusLabels, recordingStatusTone } from './recording-status';
+import { activityDetails } from './activity-details';
 import './EventsShared.css';
 import './MotionEventList.css';
 
@@ -288,6 +289,10 @@ export function MotionEventList({
   const [confirmClear, setConfirmClear] = useState(false);
   const [drawerEvent, setDrawerEvent] = useState<ActivityEvent | null>(null);
   const [showLearn, setShowLearn] = useState(false);
+  const drawerDetails =
+    drawerEvent && !isMotionEvent(drawerEvent)
+      ? activityDetails(drawerEvent.eventType, drawerEvent.metadata)
+      : null;
 
   const [search, setSearch] = useState('');
   const [cameraFilter, setCameraFilter] = useState(() =>
@@ -940,6 +945,12 @@ export function MotionEventList({
                   {activityLabel(drawerEvent).replace(' detected', '')}
                 </span>
               </div>
+              {drawerDetails?.facts.map((fact) => (
+                <div className="activity-v3-fact" key={fact.label}>
+                  <span>{fact.label}</span>
+                  <span>{fact.value}</span>
+                </div>
+              ))}
               {isMotionEvent(drawerEvent) && (
                 <div className="activity-v3-fact">
                   <span>Motion intensity</span>
@@ -963,6 +974,12 @@ export function MotionEventList({
                 Motion is based on visual changes in the camera view. Lighting,
                 shadows, reflections, or moving objects can trigger it. A motion
                 event does not mean Beacon identified a person or object.
+              </div>
+            )}
+
+            {drawerDetails?.explanation && (
+              <div className="activity-v3-explain">
+                {drawerDetails.explanation}
               </div>
             )}
 

@@ -47,3 +47,18 @@ settled. No live account, camera, media or production service was used.
 Issue #20 remains open for richer per-event recording/sharing detail where the
 current contract lacks it and end-to-end acceptance of the combined product
 flow. This UI slice does not close physical-device issue #21 or release gates.
+
+## Follow-up: readable historical details
+
+The November 2 detail slice interprets existing lifecycle/failure codes and share
+expiry in the drawer. It never prints arbitrary metadata, share URLs/tokens or
+unknown provider errors. Known failure reasons have readable descriptions;
+unknown reasons and malformed calendar dates fall back safely. A successful
+audit insert/report does not mean a recording succeeded. Available/deleted/link
+events describe what happened at that time, not live clip/link availability.
+Existing rejected-view reason labels are reused. No backend payload, schema,
+retention or permission changed.
+
+Workflow regressions and isolated phone/desktop drawer/accessibility checks
+passed. Device-originated failure audit coverage and richer lifecycle/source
+context remain backend work, with atomicity/idempotency/database checks required.

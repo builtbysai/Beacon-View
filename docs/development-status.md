@@ -2,6 +2,14 @@
 
 Latest web development validation: November 2, 2026. Earlier backend/Android/build records below are from November 1; re-run relevant checks after future changes.
 
+## Recording and sharing event details
+
+The detail drawer now renders allowlisted lifecycle outcomes and recording failure reasons from the existing contract, plus the expiry originally set for a share link. It makes no current-availability claim and exposes no share URL/token or raw provider reason. Unknown failure codes and malformed/calendar-invalid expiry strings get safe fallbacks. Audit success is not treated as recording success. Live-view rejection details reuse the existing reason-label function.
+
+Meaningful workflow regressions cover failure-report display with an audit-success flag, raw/prototype-name reason rejection, historical expiry, hidden sensitive metadata and drawer dismissal. Existing role-downgrade protection remains. The focused workflows and full web suite passed; calendar-validation hardening then passed its focused rerun and typecheck. Lint and the final web build passed. Isolated Edge fixtures at 390px and 1280px checked the recording/share drawers, layout and automated WCAG rules with API calls intercepted and no real media. Screenshots were inspected and the owned preview/temporary images cleaned up.
+
+No backend/schema/auth/retention change or deployment occurred. Inspection identified the next backend gap: device-originated failures currently update state/log a reason without a household audit event, and lifecycle/share entries can lack source context. Do not claim the feed contains complete device-failure history until atomic scoped audit coverage and database regressions are implemented.
+
 ## Unified Activity filter slice
 
 The owner chose one feed with category filters. The implementation extends the existing merged motion/household timeline and uses the existing event-type query contract; there is no backend, SQL, schema, retention or authorization change. The Recordings category queries saved lifecycle history rather than filtering only the initial loaded page. Household-only filters avoid motion requests; camera/date filters and household offsets survive pagination. Viewers/guests never request household categories, and loss of administrator eligibility clears private details/history and returns to Motion.

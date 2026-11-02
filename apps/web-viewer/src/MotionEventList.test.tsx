@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MotionEventList } from './MotionEventList';
@@ -357,6 +358,114 @@ describe('Activity timeline', () => {
       fetch.mock.calls.filter(([url]) => url.startsWith('/api/activity')),
     ).toHaveLength(privateCalls);
   });
+
+  it.each([
+    ['upload_failed', 'The clip could not be uploaded.'],
+    [
+      'private-provider-error-with-sensitive-data',
+      'No recognized reason was recorded.',
+    ],
+    ['__proto__', 'No recognized reason was recorded.'],
+  ])(
+    'shows a safe failure reason for %s without treating audit success as clip success',
+    async (reason, message) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((url: string) =>
+          Promise.resolve(
+            url.startsWith('/api/activity')
+              ? {
+                  ...response([]),
+                  json: () =>
+                    Promise.resolve({
+                      events: [
+                        {
+                          id: 'failure-detail',
+                          eventType: 'recording_failed',
+                          occurredAt: new Date().toISOString(),
+                          success: true,
+                          metadata: {
+                            reason,
+                            token: 'sensitive-share-token',
+                            providerError:
+                              'private-provider-error-with-sensitive-data',
+                          },
+                        },
+                      ],
+                      total: 1,
+                    }),
+                }
+              : response([]),
+          ),
+        ),
+      );
+      render(<MotionEventList {...props} includeHouseholdActivity />);
+      fireEvent.click(await screen.findByText('Recording failed'));
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getByText('Recorded outcome')).toBeVisible();
+      expect(
+        within(dialog).getAllByText('Recording failed').length,
+      ).toBeGreaterThan(0);
+      expect(dialog).toHaveTextContent(message);
+      expect(dialog.innerHTML).not.toContain('sensitive-share-token');
+      expect(dialog.innerHTML).not.toContain(
+        'private-provider-error-with-sensitive-data',
+      );
+      expect(within(dialog).queryByText('Succeeded')).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    '2030-03-10T12:00:00.000Z',
+    'https://private.example/sensitive-share-token',
+    '2030-02-30T12:00:00.000Z',
+  ])(
+    'describes share expiry as historical information and never exposes share metadata (%s)',
+    async (expiresAt) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((url: string) =>
+          Promise.resolve(
+            url.startsWith('/api/activity')
+              ? {
+                  ...response([]),
+                  json: () =>
+                    Promise.resolve({
+                      events: [
+                        {
+                          id: 'share-detail',
+                          eventType: 'recording_share_link_created',
+                          occurredAt: new Date().toISOString(),
+                          metadata: {
+                            expiresAt,
+                            token: 'sensitive-share-token',
+                            url: 'https://private.example/sensitive-share-token',
+                          },
+                        },
+                      ],
+                      total: 1,
+                    }),
+                }
+              : response([]),
+          ),
+        ),
+      );
+      render(<MotionEventList {...props} includeHouseholdActivity />);
+      fireEvent.click(await screen.findByText('Recording share link created'));
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getByText('Recorded link expiry')).toBeVisible();
+      expect(dialog).toHaveTextContent('may have expired or been revoked');
+      expect(dialog).toHaveTextContent(
+        expiresAt === '2030-03-10T12:00:00.000Z' ? '2030' : 'Not recorded',
+      );
+      expect(dialog.innerHTML).not.toContain('sensitive-share-token');
+      expect(dialog.innerHTML).not.toContain('private.example');
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'Back to activity' }),
+      );
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    },
+  );
 
   it('restores a saved legacy week filter as seven days', async () => {
     localStorage.setItem('motion-test:time', 'week');
