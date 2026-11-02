@@ -11,5 +11,7 @@ if (-not (Test-Path -LiteralPath $PrivateRoot -PathType Container)) {
 $PrivateRoot = [IO.Path]::GetFullPath($PrivateRoot)
 $env:BEACON_PRIVATE_DIR = $PrivateRoot
 $env:BEACON_ENV_FILE = Join-Path $PrivateRoot 'view\local\backend.env'
+$env:COMPOSE_ENV_FILES = $env:BEACON_ENV_FILE
 $env:BEACON_UPDATE_SIGNING_KEY = Join-Path $PrivateRoot 'view\signing\update-private-key.pem'
+$env:BEACON_DEBUG_KEYSTORE = Join-Path $PrivateRoot 'view\signing\android\alpha-debug.keystore'
 Write-Host 'Development secret paths configured. No secret values were displayed.'

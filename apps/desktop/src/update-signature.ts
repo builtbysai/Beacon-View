@@ -8,7 +8,7 @@ import { createPublicKey, verify } from 'node:crypto';
  * app carries the matching public key and acts only on a feed that verifies.
  */
 const UPDATE_SIGNING_PUBLIC_KEY =
-  'tehdjGrvyI3nTJmZat+4BXt7FkOuY+xpnzq3yu389vQ=';
+  'f2WzuJ+/fRIYz8ccFusZlfF7ym3ACTTko/JkLr5qRWQ=';
 
 // SubjectPublicKeyInfo prefix for a raw 32-byte Ed25519 public key.
 const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');

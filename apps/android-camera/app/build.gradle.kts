@@ -90,6 +90,14 @@ android {
     // The upload key is created and kept by the owner (docs/android-release.md). It is read from the
     // environment so it never lands in the repository; without it the release build is unsigned, as before.
     signingConfigs {
+        providers.environmentVariable("BEACON_DEBUG_KEYSTORE").orNull?.let { debugKeystore ->
+            getByName("debug") {
+                storeFile = file(debugKeystore)
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
         val uploadKeystore = providers.environmentVariable("BEACON_UPLOAD_KEYSTORE").orNull
         if (uploadKeystore != null) {
             create("release") {
